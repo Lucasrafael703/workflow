@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Notificações{% endblock %}
+{% block content %}
+<h1>Notificações</h1>
+<form method="post" action="{% url 'notification-mark-all-read' %}" style="margin-bottom:12px;">
+    {% csrf_token %}
+    <button type="submit" class="btn">Marcar todas como lidas</button>
+</form>
+<div class="card">
+    <ul class="timeline">
+        {% for n in notifications %}
+        <li>
+            <div class="when">{{ n.created_at|date:"d/m/Y H:i" }} {% if not n.is_read %}<strong>(nova)</strong>{% endif %}</div>
+            <strong>{{ n.title }}</strong>
+            <p>{{ n.message }}</p>
+            <div class="actions-row">
+                {% if n.url %}
+                <form method="post" action="{% url 'notification-mark-read' n.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn">Abrir</button>
+                </form>
+                {% elif not n.is_read %}
+                <form method="post" action="{% url 'notification-mark-read' n.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn">Marcar como lida</button>
+                </form>
+                {% endif %}
+            </div>
+        </li>
+        {% empty %}
+        <li class="muted">Você não tem notificações.</li>
+        {% endfor %}
+    </ul>
+</div>
+{% if is_paginated %}
+<div class="actions-row">
+    {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}">« Anterior</a>{% endif %}
+    <span class="muted">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}">Próxima »</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

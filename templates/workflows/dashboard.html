@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h1>Olá, {{ user.get_username }}</h1>
+
+<h2>O que eu tenho para fazer</h2>
+<div class="stat-grid">
+    <div class="stat-card"><div class="value">{{ my_pending_count }}</div><div class="label">Minhas atividades em aberto</div></div>
+    <div class="stat-card"><div class="value">{{ my_overdue|length }}</div><div class="label">Minhas atividades atrasadas</div></div>
+    <div class="stat-card"><div class="value">{{ my_urgent|length }}</div><div class="label">Minhas atividades urgentes/altas</div></div>
+    <div class="stat-card"><div class="value">{{ claimable_count }}</div><div class="label">Disponíveis para assumir no meu grupo</div></div>
+</div>
+<p><a class="btn" href="{% url 'my-activities' %}">Ver minhas atividades »</a></p>
+
+{% if my_overdue %}
+<div class="card">
+    <h2>Atrasadas</h2>
+    <table>
+        <thead><tr><th>Processo</th><th>Atividade</th><th>Prazo</th></tr></thead>
+        <tbody>
+        {% for step in my_overdue %}
+        <tr>
+            <td><a href="{% url 'process-detail' step.process.pk %}">{{ step.process.title }}</a></td>
+            <td><a href="{% url 'activity-detail' step.pk %}">{{ step.name }}</a></td>
+            <td>{{ step.deadline_at|date:"d/m/Y H:i" }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if show_aggregate %}
+<h2>Visão geral</h2>
+<div class="stat-grid">
+    <div class="stat-card"><div class="value">{{ processes_active }}</div><div class="label">Processos ativos</div></div>
+    <div class="stat-card"><div class="value">{{ processes_finalized }}</div><div class="label">Processos concluídos</div></div>
+    <div class="stat-card"><div class="value">{{ processes_cancelled }}</div><div class="label">Processos perdidos/cancelados</div></div>
+    <div class="stat-card"><div class="value">{{ activities_overdue_count }}</div><div class="label">Atividades atrasadas</div></div>
+    <div class="stat-card"><div class="value">{{ activities_in_progress_count }}</div><div class="label">Atividades em andamento</div></div>
+</div>
+
+<div class="card">
+    <h2>Atividades por grupo</h2>
+    <table>
+        <thead><tr><th>Grupo</th><th>Pendentes</th><th>Atrasadas</th></tr></thead>
+        <tbody>
+        {% for row in activities_by_group %}
+        <tr><td>{{ row.group.name }}</td><td>{{ row.pending }}</td><td>{{ row.overdue }}</td></tr>
+        {% empty %}
+        <tr><td colspan="3" class="muted">Sem atividades em aberto.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endblock %}

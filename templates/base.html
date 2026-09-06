@@ -1,0 +1,45 @@
+{% load static %}<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Gestão de Processos{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/app.css' %}">
+</head>
+<body>
+{% if user.is_authenticated %}
+<header class="topbar">
+    <div class="topbar__brand"><a href="{% url 'dashboard' %}">Gestão de Processos</a></div>
+    <nav class="topbar__nav">
+        <a href="{% url 'dashboard' %}">Dashboard</a>
+        <a href="{% url 'demand-list' %}">Demandas</a>
+        <a href="{% url 'process-list' %}">Processos</a>
+        <a href="{% url 'my-activities' %}">Minhas Atividades</a>
+        <a href="{% url 'notification-list' %}">Notificações
+            {% if unread_notifications_count %}<span class="badge">{{ unread_notifications_count }}</span>{% endif %}
+        </a>
+        {% if user.is_staff %}<a href="{% url 'admin:index' %}">Admin</a>{% endif %}
+    </nav>
+    <div class="topbar__user">
+        <span>{{ user.get_username }}</span>
+        <form method="post" action="{% url 'logout' %}">
+            {% csrf_token %}
+            <button type="submit" class="link-button">Sair</button>
+        </form>
+    </div>
+</header>
+{% endif %}
+
+<main class="container">
+    {% if messages %}
+    <ul class="messages">
+        {% for message in messages %}
+        <li class="message message--{{ message.tags }}">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+</main>
+</body>
+</html>

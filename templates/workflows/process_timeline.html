@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Timeline · {{ process.title }}{% endblock %}
+{% block content %}
+<h1>Timeline — {{ process.title }}</h1>
+<p><a href="{% url 'process-detail' process.pk %}">« Voltar ao processo</a></p>
+<div class="card">
+    <ul class="timeline">
+        {% for entry in entries %}
+        <li>
+            <div class="when">{{ entry.timestamp|date:"d/m/Y H:i" }}</div>
+            <strong>{{ entry.get_action_display }}</strong>
+            {% if entry.step %} — {{ entry.step.name }}{% endif %}
+            {% if entry.user %} · {{ entry.user }}{% endif %}
+            {% if entry.reason %}<div class="muted">{{ entry.reason }}</div>{% endif %}
+            {% if entry.field_name %}<div class="muted">{{ entry.field_name }}: {{ entry.old_value }} → {{ entry.new_value }}</div>{% endif %}
+        </li>
+        {% empty %}
+        <li class="muted">Sem eventos registrados ainda.</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endblock %}

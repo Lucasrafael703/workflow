@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Minhas Atividades{% endblock %}
+{% block content %}
+<h1>Minhas Atividades</h1>
+<div class="card">
+    <table>
+        <thead><tr><th>Processo</th><th>Atividade</th><th>Grupo</th><th>Status</th><th>Prioridade</th><th>Prazo</th></tr></thead>
+        <tbody>
+        {% for step in activities %}
+        <tr>
+            <td><a href="{% url 'process-detail' step.process.pk %}">{{ step.process.title }}</a></td>
+            <td><a href="{% url 'activity-detail' step.pk %}">{{ step.name }}</a></td>
+            <td>{{ step.responsible_group.name }}</td>
+            <td><span class="tag tag--{{ step.status }}">{{ step.get_status_display }}</span></td>
+            <td><span class="tag tag--{{ step.priority }}">{{ step.get_priority_display }}</span></td>
+            <td>
+                {% if step.deadline_at %}{{ step.deadline_at|date:"d/m/Y H:i" }}
+                    {% if step.is_overdue %}<span class="tag tag--overdue">atrasada</span>{% endif %}
+                {% else %}—{% endif %}
+            </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="muted">Nenhuma atividade pendente para você no momento.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% if is_paginated %}
+<div class="actions-row">
+    {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}">« Anterior</a>{% endif %}
+    <span class="muted">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}">Próxima »</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

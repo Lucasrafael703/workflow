@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Demandas{% endblock %}
+{% block content %}
+<h1>Demandas</h1>
+<p><a class="btn btn--primary" href="{% url 'demand-create' %}">+ Nova demanda</a></p>
+<div class="card">
+    <table>
+        <thead><tr><th>Protocolo</th><th>Cliente</th><th>Canal</th><th>Responsável</th><th>Entrada</th><th>Decisão</th></tr></thead>
+        <tbody>
+        {% for demand in demands %}
+        <tr>
+            <td><a href="{% url 'demand-detail' demand.pk %}">{{ demand.protocol }}</a></td>
+            <td>{{ demand.client_name }}</td>
+            <td>{{ demand.get_communication_channel_display }}</td>
+            <td>{{ demand.created_by }}</td>
+            <td>{{ demand.created_at|date:"d/m/Y" }}</td>
+            <td>{% if demand.decision %}<span class="tag">{{ demand.decision.get_status_display }}</span>{% else %}<span class="muted">pendente</span>{% endif %}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="muted">Nenhuma demanda registrada.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% if is_paginated %}
+<div class="actions-row">
+    {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}">« Anterior</a>{% endif %}
+    <span class="muted">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}">Próxima »</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

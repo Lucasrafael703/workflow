@@ -1,0 +1,9 @@
+Uma atividade está atrasada.
+
+Processo: {{ process.title }}
+Atividade: {{ step.name }}
+Grupo responsável: {{ step.responsible_group.name }}
+Prazo: {{ step.deadline_at|date:"d/m/Y H:i" }}
+Status atual: {{ step.get_status_display }}
+
+Acesse o sistema para regularizar esta atividade.

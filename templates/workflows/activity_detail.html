@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}{{ step.name }}{% endblock %}
+{% block content %}
+<h1>{{ step.name }} <span class="tag tag--{{ step.status }}">{{ step.get_status_display }}</span></h1>
+<p class="muted">
+    Processo: <a href="{% url 'process-detail' step.process.pk %}">{{ step.process.title }}</a>
+    · Grupo: {{ step.responsible_group.name }}
+    · Prioridade: <span class="tag tag--{{ step.priority }}">{{ step.get_priority_display }}</span>
+</p>
+
+<div class="card">
+    <h2>Detalhes</h2>
+    <p>{{ step.description|default:"Sem descrição adicional." }}</p>
+    <table>
+        <tr><th>Liberada em</th><td>{{ step.released_at|date:"d/m/Y H:i"|default:"—" }}</td></tr>
+        <tr><th>Prazo</th><td>{{ step.deadline_at|date:"d/m/Y H:i"|default:"—" }}
+            {% if step.is_overdue %}<span class="tag tag--overdue">atrasada</span>{% endif %}</td></tr>
+        <tr><th>Assumida por</th><td>{{ step.assigned_to|default:"—" }} {% if step.assigned_at %}em {{ step.assigned_at|date:"d/m/Y H:i" }}{% endif %}</td></tr>
+        <tr><th>Concluída em</th><td>{{ step.completed_at|date:"d/m/Y H:i"|default:"—" }} {% if step.completed_by %}por {{ step.completed_by }}{% endif %}</td></tr>
+        <tr><th>Observações</th><td>{{ step.observations|default:"—" }}</td></tr>
+    </table>
+</div>
+
+<div class="card">
+    <h2>Ações</h2>
+    <div class="actions-row">
+        {% if can_claim %}
+        <form method="post" action="{% url 'activity-claim' step.pk %}">{% csrf_token %}<button class="btn btn--primary" type="submit">Assumir atividade</button></form>
+        {% endif %}
+
+        {% if can_unblock %}
+        <form method="post" action="{% url 'activity-unblock' step.pk %}">{% csrf_token %}<button class="btn" type="submit">Desbloquear</button></form>
+        {% endif %}
+    </div>
+
+    {% if can_complete %}
+    <form method="post" action="{% url 'activity-complete' step.pk %}" style="margin-top:12px;">
+        {% csrf_token %}
+        <div class="form-row"><label>Observações de conclusão (opcional)</label>{{ complete_form.observations }}</div>
+        <button type="submit" class="btn btn--primary">Concluir atividade</button>
+    </form>
+    {% endif %}
+
+    {% if can_block %}
+    <form method="post" action="{% url 'activity-block' step.pk %}" style="margin-top:12px;">
+        {% csrf_token %}
+        <div class="form-row"><label>Motivo do bloqueio</label>{{ block_form.observations }}</div>
+        <button type="submit" class="btn">Bloquear atividade</button>
+    </form>
+    {% endif %}
+
+    {% if can_reopen %}
+    <form method="post" action="{% url 'activity-reopen' step.pk %}" style="margin-top:12px;">
+        {% csrf_token %}
+        <div class="form-row"><label>Motivo da reabertura</label>{{ reopen_form.motivo }}</div>
+        <button type="submit" class="btn">Reabrir atividade</button>
+    </form>
+    {% endif %}
+
+    {% if can_cancel %}
+    <form method="post" action="{% url 'activity-cancel' step.pk %}" style="margin-top:12px;">
+        {% csrf_token %}
+        <div class="form-row"><label>Motivo do cancelamento</label>{{ cancel_form.motivo }}</div>
+        <button type="submit" class="btn btn--danger">Cancelar atividade</button>
+    </form>
+    {% endif %}
+
+    {% if not can_claim and not can_complete and not can_reopen and not can_block and not can_unblock and not can_cancel %}
+    <p class="muted">Nenhuma ação disponível para você nesta atividade no momento.</p>
+    {% endif %}
+</div>
+{% endblock %}

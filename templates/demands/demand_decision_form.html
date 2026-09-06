@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Decisão · {{ demand.protocol }}{% endblock %}
+{% block content %}
+<h1>Qualificar demanda {{ demand.protocol }}</h1>
+<p class="muted"><a href="{% url 'demand-detail' demand.pk %}">« Voltar para a demanda</a></p>
+<div class="card" style="max-width:640px;">
+    <form method="post">
+        {% csrf_token %}
+        {% for field in form %}
+        <div class="form-row">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<div class="helptext">{{ field.help_text }}</div>{% endif %}
+            {% if field.errors %}<ul class="errorlist">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+        </div>
+        {% endfor %}
+        {% if form.non_field_errors %}<ul class="errorlist">{% for e in form.non_field_errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+        <button type="submit" class="btn btn--primary">Registrar decisão</button>
+    </form>
+</div>
+{% endblock %}

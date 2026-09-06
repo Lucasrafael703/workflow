@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}{% if object %}Editar demanda{% else %}Nova demanda{% endif %}{% endblock %}
+{% block content %}
+<h1>{% if object %}Editar demanda {{ object.protocol }}{% else %}Nova demanda{% endif %}</h1>
+<form method="post">
+    {% csrf_token %}
+    {% for legend, fields in form.fieldsets %}
+    <fieldset>
+        <legend>{{ legend }}</legend>
+        {% for field in fields %}
+        <div class="form-row">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<div class="helptext">{{ field.help_text }}</div>{% endif %}
+            {% if field.errors %}<ul class="errorlist">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+        </div>
+        {% endfor %}
+    </fieldset>
+    {% endfor %}
+    {% if form.non_field_errors %}<ul class="errorlist">{% for e in form.non_field_errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+    <button type="submit" class="btn btn--primary">Salvar demanda</button>
+</form>
+{% endblock %}
