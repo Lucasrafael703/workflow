@@ -2,16 +2,27 @@
 {% block title %}Reabrir atividade — LPS{% endblock %}
 
 {% block content %}
-<p class="muted"><a href="{% url 'activity-detail' activity.pk %}">← {{ activity.title }}</a></p>
-<h1>Reabrir atividade</h1>
-<p class="muted">A reabertura fica registrada no histórico com o motivo informado.</p>
+<div class="modal-backdrop">
+    <div class="modal">
+        <div class="modal__head">
+            <div>
+                <h2>Reabrir atividade</h2>
+                <div class="sub">{{ activity.title }}</div>
+            </div>
+            <a href="{% url 'activity-detail' activity.pk %}" class="modal__close" title="Fechar">&times;</a>
+        </div>
 
-<form method="post" class="card" style="max-width:560px">
-    {% csrf_token %}
-    {% include "activities/_form_fields.html" %}
-    <div class="actions-row">
-        <button type="submit" class="btn btn--primary">Reabrir</button>
-        <a href="{% url 'activity-detail' activity.pk %}" class="btn">Voltar</a>
+        <form method="post">
+            {% csrf_token %}
+            <div class="modal__body">
+                <p class="muted">A reabertura fica registrada no histórico com o motivo informado.</p>
+                {% include "activities/_form_fields.html" %}
+            </div>
+            <div class="modal__foot">
+                <a href="{% url 'activity-detail' activity.pk %}" class="btn">Voltar</a>
+                <button type="submit" class="btn btn--primary">Reabrir atividade</button>
+            </div>
+        </form>
     </div>
-</form>
+</div>
 {% endblock %}

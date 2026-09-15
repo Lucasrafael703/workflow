@@ -7,33 +7,131 @@
     <link rel="stylesheet" href="{% static 'css/app.css' %}">
 </head>
 <body>
+{% include "_icons.html" %}
+
 {% if user.is_authenticated %}
-<header class="topbar">
-    <div class="topbar__brand"><a href="{% url 'home' %}">LPS</a></div>
-    <nav class="topbar__nav">
-        <a href="{% url 'home' %}">Home</a>
-        <a href="{% url 'activity-list' %}">Minhas atividades</a>
-        <a href="{% url 'task-list' %}">Minhas tarefas</a>
-        <a href="{% url 'queue' %}">Fila</a>
-        <a href="{% url 'notification-list' %}">Notificações
-            {% if unread_notifications_count %}<span class="badge">{{ unread_notifications_count }}</span>{% endif %}
+{# Estrutura fixa: o menu e o cabeçalho permanecem enquanto o centro muda. #}
+<div class="app">
+    <input type="checkbox" id="nav-toggle" hidden>
+    <label for="nav-toggle" class="nav-scrim" aria-hidden="true"></label>
+
+    <aside class="sidebar">
+        <div class="sidebar__brand">
+            <span class="sidebar__logo">LPS</span>
+            <a href="{% url 'home' %}">LPS</a>
+        </div>
+
+        {% if lps_org %}
+        <div class="sidebar__org">
+            <div class="name">{{ lps_org.name }}</div>
+            <div class="sub">Organização atual</div>
+        </div>
+        {% endif %}
+
+        <nav class="sidebar__nav">
+            <div class="sidebar__section">Operação</div>
+
+            <a href="{% url 'home' %}" class="nav-item {% if nav_active == 'home' %}is-active{% endif %}">
+                <span class="nav-item__icon">{% include "_icon.html" with name="home" %}</span>
+                <span class="nav-item__label">Home</span>
+            </a>
+            <a href="{% url 'activity-list' %}" class="nav-item {% if nav_active == 'activities' %}is-active{% endif %}">
+                <span class="nav-item__icon">{% include "_icon.html" with name="activity" %}</span>
+                <span class="nav-item__label">Minhas atividades</span>
+            </a>
+            <a href="{% url 'task-list' %}" class="nav-item {% if nav_active == 'tasks' %}is-active{% endif %}">
+                <span class="nav-item__icon">{% include "_icon.html" with name="task" %}</span>
+                <span class="nav-item__label">Minhas tarefas</span>
+                {% if lps_open_tasks %}<span class="nav-count nav-count--quiet">{{ lps_open_tasks }}</span>{% endif %}
+            </a>
+            <a href="{% url 'queue' %}" class="nav-item {% if nav_active == 'queue' %}is-active{% endif %}">
+                <span class="nav-item__icon">{% include "_icon.html" with name="queue" %}</span>
+                <span class="nav-item__label">Fila</span>
+            </a>
+            <a href="{% url 'notification-list' %}" class="nav-item {% if nav_active == 'notifications' %}is-active{% endif %}">
+                <span class="nav-item__icon">{% include "_icon.html" with name="bell" %}</span>
+                <span class="nav-item__label">Notificações</span>
+                {% if unread_notifications_count %}<span class="nav-count">{{ unread_notifications_count }}</span>{% endif %}
+            </a>
+
+            {% if lps_nav.management or lps_nav.cadastros or lps_nav.users or lps_nav.security %}
+            <div class="sidebar__section">Gestão</div>
+
+            {% if lps_nav.management %}
+            <a href="{% url 'management' %}" class="nav-item {% if nav_active == 'management' %}is-active{% endif %}">
+                <span class="nav-item__icon">{% include "_icon.html" with name="chart" %}</span>
+                <span class="nav-item__label">Visão do gestor</span>
+            </a>
+            {% endif %}
+            {% if lps_nav.cadastros %}
+            <a href="{% url 'cadastros' %}" class="nav-item {% if nav_active == 'cadastros' %}is-active{% endif %}">
+                <span class="nav-item__icon">{% include "_icon.html" with name="folder" %}</span>
+                <span class="nav-item__label">Cadastros</span>
+            </a>
+            {% endif %}
+            {% if lps_nav.users %}
+            <a href="{% url 'user-list' %}" class="nav-item {% if nav_active == 'users' %}is-active{% endif %}">
+                <span class="nav-item__icon">{% include "_icon.html" with name="users" %}</span>
+                <span class="nav-item__label">Usuários</span>
+            </a>
+            {% endif %}
+            {% if lps_nav.security %}
+            <a href="{% url 'permissions' %}" class="nav-item {% if nav_active == 'permissions' %}is-active{% endif %}">
+                <span class="nav-item__icon">{% include "_icon.html" with name="shield" %}</span>
+                <span class="nav-item__label">Perfis e permissões</span>
+            </a>
+            {% endif %}
+            {% endif %}
+        </nav>
+
+        <div class="sidebar__footer">
+            <a href="{% url 'settings' %}" class="nav-item {% if nav_active == 'settings' %}is-active{% endif %}">
+                <span class="nav-item__icon">{% include "_icon.html" with name="settings" %}</span>
+                <span class="nav-item__label">Configurações</span>
+            </a>
+        </div>
+    </aside>
+
+    <header class="topbar">
+        <label for="nav-toggle" class="sidebar__toggle" title="Menu">{% include "_icon.html" with name="menu" %}</label>
+
+        <div class="topbar__spacer"></div>
+
+        <a href="{% url 'notification-list' %}" class="topbar__icon" title="Notificações">
+            {% include "_icon.html" with name="bell" %}
+            {% if unread_notifications_count %}<span class="dot">{{ unread_notifications_count }}</span>{% endif %}
         </a>
-        {% if lps_nav.management %}<a href="{% url 'management' %}">Gestão</a>{% endif %}
-        {% if lps_nav.cadastros %}<a href="{% url 'cadastros' %}">Cadastros</a>{% endif %}
-        <a href="{% url 'settings' %}">Configurações</a>
-    </nav>
-    <div class="topbar__user">
-        <a href="{% url 'profile' %}">{{ user.get_username }}</a>
-        <form method="post" action="{% url 'logout' %}">
-            {% csrf_token %}
-            <button type="submit" class="link-button">Sair</button>
-        </form>
+
+        <div class="topbar__user">
+            <a href="{% url 'profile' %}" class="avatar" title="Meu perfil">{{ user.get_username|slice:":2"|upper }}</a>
+            <span class="who">
+                <strong>{{ user.get_full_name|default:user.get_username }}</strong>
+                <span>{{ user.profile.organization.name|default:"Sem organização" }}</span>
+            </span>
+            <form method="post" action="{% url 'logout' %}">
+                {% csrf_token %}
+                <button type="submit" class="link-button">Sair</button>
+            </form>
+        </div>
+    </header>
+
+    <div class="content">
+        {% block timerbar %}{% endblock %}
+
+        <div class="container">
+            {% if messages %}
+            <ul class="messages">
+                {% for message in messages %}
+                <li class="message message--{{ message.tags }}">{{ message }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% block content %}{% endblock %}
+        </div>
     </div>
-</header>
-{% endif %}
-
-{% block timerbar %}{% endblock %}
-
+</div>
+{% else %}
 <main class="container">
     {% if messages %}
     <ul class="messages">
@@ -42,9 +140,11 @@
         {% endfor %}
     </ul>
     {% endif %}
-
-    {% block content %}{% endblock %}
+    {% block anon_content %}{% endblock %}
 </main>
+{% endif %}
+
+{% if user.is_authenticated %}<script src="{% static 'js/shell.js' %}"></script>{% endif %}
 {% block scripts %}{% endblock %}
 </body>
 </html>

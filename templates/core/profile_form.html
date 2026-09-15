@@ -2,15 +2,30 @@
 {% block title %}Perfil de acesso — LPS{% endblock %}
 
 {% block content %}
-<p class="muted"><a href="{% url 'permissions' %}">← Perfis e permissões</a></p>
-<h1>Perfil de acesso</h1>
+<div class="modal-backdrop">
+    <div class="modal">
+        <div class="modal__head">
+            <div>
+                <h2>Perfil de acesso</h2>
+                <div class="sub">Um perfil responde: o que esta pessoa pode fazer?</div>
+            </div>
+            <a href="{% url 'permissions' %}" class="modal__close" title="Fechar">&times;</a>
+        </div>
 
-<form method="post" class="card" style="max-width:640px">
-    {% csrf_token %}
-    {% include "activities/_form_fields.html" %}
-    <div class="actions-row">
-        <button type="submit" class="btn btn--primary">Salvar perfil</button>
-        <a href="{% url 'permissions' %}" class="btn">Cancelar</a>
+        <form method="post">
+            {% csrf_token %}
+            <div class="modal__body">
+                {% include "activities/_form_fields.html" %}
+                <p class="muted small" style="margin:0">
+                    <strong>Onde</strong> ela pode fazer é definido ao atribuir o perfil a alguém,
+                    na tela de acessos do usuário.
+                </p>
+            </div>
+            <div class="modal__foot">
+                <a href="{% url 'permissions' %}" class="btn">Cancelar</a>
+                <button type="submit" class="btn btn--primary">Salvar perfil</button>
+            </div>
+        </form>
     </div>
-</form>
+</div>
 {% endblock %}

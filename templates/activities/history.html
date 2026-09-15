@@ -2,7 +2,12 @@
 {% block title %}Histórico — LPS{% endblock %}
 
 {% block content %}
-<h1>Histórico</h1>
+<div class="page-head">
+    <div class="page-head__text">
+        <h1>Histórico</h1>
+        <p class="sub">Tudo que aconteceu, em ordem, com autor e horário. O registro não é editável.</p>
+    </div>
+</div>
 
 <nav class="tabs">
     <a href="?" class="{% if not event %}is-active{% endif %}">Todos</a>
@@ -13,18 +18,20 @@
     <a href="?event=tempo" class="{% if event == 'tempo' %}is-active{% endif %}">Tempo</a>
 </nav>
 
-<div class="card">
-    {% include "activities/_timeline.html" with entries=entries %}
+<div class="card card--flush">
+    <div class="card__body">
+        {% include "activities/_timeline.html" with entries=entries %}
+    </div>
 </div>
 
 {% if is_paginated %}
-<div class="actions-row">
+<div class="pagination">
     {% if page_obj.has_previous %}
-    <a class="btn" href="?event={{ event }}&page={{ page_obj.previous_page_number }}">Anterior</a>
+    <a class="btn btn--sm" href="?event={{ event }}&page={{ page_obj.previous_page_number }}">Anterior</a>
     {% endif %}
-    <span class="muted">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+    <span class="muted small">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
     {% if page_obj.has_next %}
-    <a class="btn" href="?event={{ event }}&page={{ page_obj.next_page_number }}">Próxima</a>
+    <a class="btn btn--sm" href="?event={{ event }}&page={{ page_obj.next_page_number }}">Próxima</a>
     {% endif %}
 </div>
 {% endif %}

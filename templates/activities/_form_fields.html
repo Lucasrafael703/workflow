@@ -1,9 +1,20 @@
-{{ form.non_field_errors }}
+{% if form.non_field_errors %}
+<ul class="messages">
+    {% for error in form.non_field_errors %}<li class="message message--error">{{ error }}</li>{% endfor %}
+</ul>
+{% endif %}
 {% for field in form %}
-<div class="form-row">
-    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+{# Checkbox tem o rótulo ao lado; os demais campos, acima (Zoonor §11). #}
+<div class="form-row{% if field.field.widget.input_type == 'checkbox' %} form-row--check{% endif %}">
+    {% if field.field.widget.input_type == 'checkbox' %}
+    <label for="{{ field.id_for_label }}">{{ field }} {{ field.label }}</label>
+    {% else %}
+    <label for="{{ field.id_for_label }}">
+        {{ field.label }}{% if field.field.required %} <span class="req">*</span>{% endif %}
+    </label>
     {{ field }}
+    {% endif %}
     {% if field.help_text %}<div class="helptext">{{ field.help_text }}</div>{% endif %}
-    {{ field.errors }}
+    {% if field.errors %}<ul class="errorlist">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
 </div>
 {% endfor %}

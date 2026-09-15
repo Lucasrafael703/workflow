@@ -2,10 +2,13 @@
 {% block title %}{{ activity.title }} — LPS{% endblock %}
 
 {% block content %}
-<div class="section-head">
-    <div>
-        <h1 style="margin-bottom:6px">{{ activity.title }}</h1>
-        <div class="muted">
+<div class="page-head">
+    <div class="page-head__text">
+        <div class="breadcrumb">
+            <a href="{% url 'activity-list' %}">Atividades</a><span>›</span>{{ activity.title|truncatechars:48 }}
+        </div>
+        <h1>{{ activity.title }}</h1>
+        <div class="sub">
             <span class="tag tag--{{ activity.status }}">{{ activity.get_status_display }}</span>
             · Dono: <strong>{{ activity.owner.get_username }}</strong>
             {% if activity.requested_deadline %}
@@ -15,17 +18,19 @@
             {% if activity.site %} · Obra: {{ activity.site.name }}{% endif %}
         </div>
     </div>
-    <div class="actions-row">
+    <div class="page-head__actions">
         {% if activity.status != "CONCLUIDA" and activity.status != "CANCELADA" %}
-        <a href="{% url 'task-create' activity.pk %}" class="btn btn--primary">Adicionar tarefa</a>
         <a href="{% url 'activity-edit' activity.pk %}" class="btn">Editar</a>
+        <a href="{% url 'task-create' activity.pk %}" class="btn btn--primary">
+            {% include "_icon.html" with name="plus" %} Adicionar tarefa
+        </a>
         {% endif %}
     </div>
 </div>
 
 <nav class="tabs">
     <a href="?tab=visao-geral" class="{% if tab == 'visao-geral' %}is-active{% endif %}">Visão geral</a>
-    <a href="?tab=tarefas" class="{% if tab == 'tarefas' %}is-active{% endif %}">Tarefas ({{ tasks_total }})</a>
+    <a href="?tab=tarefas" class="{% if tab == 'tarefas' %}is-active{% endif %}">Tarefas <span class="count">({{ tasks_total }})</span></a>
     <a href="?tab=historico" class="{% if tab == 'historico' %}is-active{% endif %}">Histórico</a>
     <a href="?tab=conversa" class="{% if tab == 'conversa' %}is-active{% endif %}">Conversa</a>
 </nav>
@@ -34,104 +39,145 @@
     {% include "activities/_tasks_block.html" %}
 
 {% elif tab == "historico" %}
-    <div class="card">
-        <h2>Histórico</h2>
-        {% include "activities/_timeline.html" with entries=history %}
+    <div class="card card--flush">
+        <div class="card__head"><h2>Linha do tempo</h2></div>
+        <div class="card__body">{% include "activities/_timeline.html" with entries=history %}</div>
     </div>
     {% if owner_changes %}
-    <div class="card">
-        <h2>Mudanças de dono</h2>
-        <ul class="list-reset">
-            {% for change in owner_changes %}
-            <li>{{ change.previous_owner.get_username }} → <strong>{{ change.new_owner.get_username }}</strong>
-                <span class="muted">por {{ change.changed_by.get_username }} em {{ change.changed_at|date:"d/m/Y H:i" }}</span></li>
-            {% endfor %}
-        </ul>
+    <div class="card card--flush">
+        <div class="card__head"><h2>Mudanças de dono</h2></div>
+        <div class="card__body">
+            <ul class="list-rows">
+                {% for change in owner_changes %}
+                <li>{{ change.previous_owner.get_username }} → <strong>{{ change.new_owner.get_username }}</strong>
+                    <div class="muted small">por {{ change.changed_by.get_username }} em {{ change.changed_at|date:"d/m/Y H:i" }}</div></li>
+                {% endfor %}
+            </ul>
+        </div>
     </div>
     {% endif %}
 
 {% elif tab == "conversa" %}
-    <div class="card">
-        <div class="context-banner">Você está comentando na atividade: {{ activity.title }}</div>
-        {% if activity_messages %}
-        <ul class="chat">
-            {% for message in activity_messages %}
-            <li>
-                <span class="who">{{ message.author.get_username }}</span>
-                <span class="when">{{ message.created_at|date:"d/m/Y H:i" }}</span>
-                <div>{{ message.body|linebreaksbr }}</div>
-            </li>
-            {% endfor %}
-        </ul>
-        {% else %}
-        <p class="muted">Nenhuma mensagem ainda.</p>
-        {% endif %}
+    <div class="card card--flush">
+        <div class="card__head"><h2>Conversa</h2></div>
+        <div class="card__body">
+            <div class="context-banner">
+                {% include "_icon.html" with name="info" %}
+                <span>Você está comentando na atividade <strong>{{ activity.title }}</strong>.</span>
+            </div>
 
-        <form method="post" action="{% url 'activity-message' activity.pk %}">
-            {% csrf_token %}
-            <div class="form-row">{{ message_form.body }}</div>
-            <button type="submit" class="btn btn--primary">Enviar</button>
-        </form>
-        <p class="muted" style="margin-top:8px">
-            Uma mensagem não altera prazo, status ou responsável. Para isso, use a ação correspondente na tarefa.
-        </p>
+            {% if activity_messages %}
+            <ul class="chat">
+                {% for message in activity_messages %}
+                <li>
+                    <span class="avatar">{{ message.author.get_username|slice:":2"|upper }}</span>
+                    <div>
+                        <span class="who">{{ message.author.get_username }}</span>
+                        <span class="when">{{ message.created_at|date:"d/m/Y H:i" }}</span>
+                        <div class="body">{{ message.body|linebreaksbr }}</div>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <div class="empty-state" style="padding:28px 10px">
+                <div class="empty-state__icon">{% include "_icon.html" with name="activity" %}</div>
+                <h3>Nenhuma mensagem ainda</h3>
+                <p style="margin-bottom:0">Use a conversa para alinhar contexto. Decisões que mudam prazo ou status têm ação própria.</p>
+            </div>
+            {% endif %}
+
+            <form method="post" action="{% url 'activity-message' activity.pk %}" style="margin-top:16px">
+                {% csrf_token %}
+                <div class="form-row">{{ message_form.body }}</div>
+                <div class="form-foot">
+                    <button type="submit" class="btn btn--primary">Enviar mensagem</button>
+                </div>
+            </form>
+            <p class="muted small" style="margin:0">
+                Uma mensagem não altera prazo, status ou responsável. Para isso, use a ação correspondente na tarefa.
+            </p>
+        </div>
     </div>
 
 {% else %}
     <div class="split">
         <div>
-            <div class="card">
-                <h2>Visão geral</h2>
-                {% if activity.description %}<p>{{ activity.description|linebreaksbr }}</p>{% endif %}
-                <p><strong>Progresso:</strong> {{ tasks_done }} de {{ tasks_total }} tarefas concluídas</p>
-                {% if sectors_involved %}
-                <p><strong>Setores envolvidos:</strong> {{ sectors_involved|join:" → " }}</p>
-                {% endif %}
-                <p class="muted">Criada por {{ activity.created_by.get_username }} em {{ activity.created_at|date:"d/m/Y H:i" }}
-                {% if activity.first_action_at %} · Primeira ação em {{ activity.first_action_at|date:"d/m/Y H:i" }}{% endif %}</p>
-                {% if activity.status == "CANCELADA" %}
-                <p class="message message--warning">Cancelada em {{ activity.cancelled_at|date:"d/m/Y H:i" }}. Motivo: {{ activity.cancelled_reason }}</p>
-                {% elif activity.status == "CONCLUIDA" %}
-                <p class="message message--success">Concluída em {{ activity.completed_at|date:"d/m/Y H:i" }} por {{ activity.completed_by.get_username }}.</p>
-                {% endif %}
+            <div class="card card--flush">
+                <div class="card__head"><h2>Visão geral</h2></div>
+                <div class="card__body">
+                    {% if activity.description %}<p>{{ activity.description|linebreaksbr }}</p>{% endif %}
+
+                    {# Progresso em contagem, nunca porcentagem (doc 09 §62) #}
+                    <div class="summary-item" style="border:none;padding-left:0">
+                        <div style="flex:1">
+                            <div class="k">Progresso</div>
+                            <div class="v">{{ tasks_done }} de {{ tasks_total }} tarefas concluídas</div>
+                            {% if tasks_total %}
+                            <div class="progress"><div class="progress__bar" style="width:{% widthratio tasks_done tasks_total 100 %}%"></div></div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {% if sectors_involved %}
+                    <p><strong>Setores envolvidos:</strong> {{ sectors_involved|join:" → " }}</p>
+                    {% endif %}
+
+                    <p class="muted small">
+                        Criada por {{ activity.created_by.get_username }} em {{ activity.created_at|date:"d/m/Y H:i" }}
+                        {% if activity.first_action_at %} · Primeira ação em {{ activity.first_action_at|date:"d/m/Y H:i" }}{% endif %}
+                    </p>
+
+                    {% if activity.status == "CANCELADA" %}
+                    <p class="message message--warning">Cancelada em {{ activity.cancelled_at|date:"d/m/Y H:i" }}. Motivo: {{ activity.cancelled_reason }}</p>
+                    {% elif activity.status == "CONCLUIDA" %}
+                    <p class="message message--success">Concluída em {{ activity.completed_at|date:"d/m/Y H:i" }} por {{ activity.completed_by.get_username }}.</p>
+                    {% endif %}
+                </div>
             </div>
 
-            <div class="card">
-                <h2>Situação atual</h2>
-                {% if open_tasks %}
-                <ul class="list-reset">
-                    {% for task in open_tasks %}
-                    <li>
-                        <a href="{% url 'task-detail' task.pk %}">{{ task.title }}</a>
-                        <span class="tag tag--{{ task.status }}">{{ task.get_status_display }}</span>
-                        <div class="muted">
-                            {{ task.sector.name }}
-                            {% if task.queue_info %} · Posição {{ task.queue_info.position }} de {{ task.queue_info.total }}{% endif %}
-                            {% if task.committed_deadline %} · Comprometido: {{ task.committed_deadline|date:"d/m/Y H:i" }}{% endif %}
-                        </div>
-                    </li>
-                    {% endfor %}
-                </ul>
-                {% else %}
-                <p class="muted">Nenhuma tarefa em aberto.</p>
-                {% endif %}
+            <div class="card card--flush">
+                <div class="card__head"><h2>Situação atual</h2></div>
+                <div class="card__body">
+                    {% if open_tasks %}
+                    <ul class="list-rows">
+                        {% for task in open_tasks %}
+                        <li>
+                            <a href="{% url 'task-detail' task.pk %}" class="title">{{ task.title }}</a>
+                            <span class="tag tag--{{ task.status }}">{{ task.get_status_display }}</span>
+                            <div class="muted small">
+                                {{ task.sector.name }}
+                                {% if task.queue_info %} · Posição {{ task.queue_info.position }} de {{ task.queue_info.total }}{% endif %}
+                                {% if task.committed_deadline %} · Comprometido: {{ task.committed_deadline|date:"d/m/Y H:i" }}{% endif %}
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="muted" style="margin:0">Nenhuma tarefa em aberto.</p>
+                    {% endif %}
+                </div>
             </div>
         </div>
 
         <div>
-            <div class="card">
-                <h2>Ações</h2>
-                <div class="actions-row">
+            <div class="card card--flush">
+                <div class="card__head"><h2>Ações</h2></div>
+                <div class="card__body">
                     {% if activity.status != "CONCLUIDA" and activity.status != "CANCELADA" %}
-                        <form method="post" action="{% url 'activity-complete' activity.pk %}"
-                              onsubmit="return confirm('Confirmar conclusão: o resultado “{{ activity.title|escapejs }}” foi alcançado?');">
-                            {% csrf_token %}
-                            <button type="submit" class="btn btn--primary">Concluir atividade</button>
-                        </form>
-                        {% if can_change_owner %}<a href="{% url 'activity-change-owner' activity.pk %}" class="btn">Alterar dono</a>{% endif %}
-                        {% if can_cancel %}<a href="{% url 'activity-cancel' activity.pk %}" class="btn btn--danger">Cancelar</a>{% endif %}
+                    <form method="post" action="{% url 'activity-complete' activity.pk %}"
+                          onsubmit="return confirm('Confirmar conclusão: o resultado “{{ activity.title|escapejs }}” foi alcançado?');">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn--primary btn--block">Concluir atividade</button>
+                    </form>
+                    <div class="actions-row" style="margin-top:8px">
+                        {% if can_change_owner %}<a href="{% url 'activity-change-owner' activity.pk %}" class="btn btn--sm">Alterar dono</a>{% endif %}
+                        {% if can_cancel %}<a href="{% url 'activity-cancel' activity.pk %}" class="btn btn--sm btn--danger">Cancelar</a>{% endif %}
+                    </div>
                     {% elif activity.status == "CONCLUIDA" and can_reopen %}
-                        <a href="{% url 'activity-reopen' activity.pk %}" class="btn">Reabrir</a>
+                    <a href="{% url 'activity-reopen' activity.pk %}" class="btn btn--block">Reabrir atividade</a>
+                    {% else %}
+                    <p class="muted" style="margin:0">Nenhuma ação disponível nesta situação.</p>
                     {% endif %}
                 </div>
             </div>

@@ -2,104 +2,137 @@
 {% block title %}Perfis e permissões — LPS{% endblock %}
 
 {% block content %}
-<div class="section-head">
-    <h1>Perfis e permissões</h1>
-    <a href="{% url 'profile-create' %}" class="btn btn--primary">+ Novo perfil</a>
+<div class="page-head">
+    <div class="page-head__text">
+        <h1>Perfis e permissões</h1>
+        <p class="sub">Um perfil responde: o que esta pessoa pode fazer? <strong>Onde</strong> ela pode fazer
+            é definido ao atribuir o perfil, na tela de acessos do usuário.</p>
+    </div>
+    <div class="page-head__actions">
+        <a href="{% url 'profile-create' %}" class="btn btn--primary">
+            {% include "_icon.html" with name="plus" %} Novo perfil
+        </a>
+    </div>
 </div>
-<p class="muted">
-    Um perfil responde: o que esta pessoa pode fazer? <strong>Onde</strong> ela pode fazer
-    é definido ao atribuir o perfil a alguém, na tela de acessos do usuário.
-</p>
 
 <div class="split">
     <div>
         {% if profile %}
-        <form method="get" class="filters">
+        <form method="get">
             <input type="hidden" name="profile" value="{{ profile.pk }}">
-            <div class="form-row">
-                <label for="q">Buscar ação</label>
-                <input type="search" id="q" name="q" value="{{ search }}" placeholder="Ex.: fila">
-            </div>
-            <div class="form-row">
-                <label for="show">Mostrar</label>
+            <div class="toolbar">
+                <div class="toolbar__search">
+                    {% include "_icon.html" with name="search" %}
+                    <input type="search" name="q" value="{{ search }}" placeholder="Buscar ação. Ex.: fila">
+                </div>
+                <label class="inline" for="show">Mostrar</label>
                 <select id="show" name="show">
                     <option value="todas" {% if show == 'todas' %}selected{% endif %}>Todas</option>
                     <option value="autorizadas" {% if show == 'autorizadas' %}selected{% endif %}>Autorizadas</option>
                     <option value="nao-autorizadas" {% if show == 'nao-autorizadas' %}selected{% endif %}>Não autorizadas</option>
                 </select>
+                <button type="submit" class="btn">Filtrar</button>
             </div>
-            <button type="submit" class="btn">Filtrar</button>
         </form>
 
-        <form method="post" action="{% url 'permissions-update' profile.pk %}" class="card">
+        <form method="post" action="{% url 'permissions-update' profile.pk %}">
             {% csrf_token %}
-            <div class="section-head">
-                <h2>{{ profile.name }}</h2>
-                <a href="{% url 'profile-edit' profile.pk %}">Editar dados</a>
-            </div>
-            {% if profile.description %}<p class="muted">{{ profile.description }}</p>{% endif %}
-
-            {% for block in blocks %}
-            <fieldset>
-                <legend>{{ block.group.name }}</legend>
-                {% for row in block.rows %}
-                <div class="form-row" style="margin-bottom:10px">
-                    {# Só o que está na tela pode ser desmarcado: com filtro ativo,
-                       o resto precisa ser preservado. #}
-                    <input type="hidden" name="visible" value="{{ row.action.pk }}">
-                    <label style="font-weight:normal">
-                        <input type="checkbox" name="actions" value="{{ row.action.pk }}"
-                               style="width:auto" {% if row.granted %}checked{% endif %}>
-                        {{ row.action.name }}
-                        {% if row.action.is_sensitive %}<span class="tag tag--ALTA">sensível</span>{% endif %}
-                        <code class="muted" style="font-size:11px">{{ row.action.key }}</code>
-                    </label>
-                    <div class="helptext">{{ row.action.description }}</div>
+            <div class="card card--flush">
+                <div class="card__head">
+                    <div>
+                        <h2>{{ profile.name }}</h2>
+                        {% if profile.description %}<div class="muted small">{{ profile.description }}</div>{% endif %}
+                    </div>
+                    <a href="{% url 'profile-edit' profile.pk %}">Editar dados</a>
                 </div>
-                {% endfor %}
-            </fieldset>
-            {% empty %}
-            <p class="muted">Nenhuma ação encontrada para este filtro.</p>
-            {% endfor %}
 
-            <button type="submit" class="btn btn--primary">Salvar permissões</button>
+                <div class="card__body">
+                    {% for block in blocks %}
+                    <div class="form-section">
+                        <div class="form-section__head">
+                            <span class="form-section__num">{{ forloop.counter }}</span>
+                            <div><h3>{{ block.group.name }}</h3></div>
+                        </div>
+
+                        {% for row in block.rows %}
+                        {# Só o que está na tela pode ser desmarcado: com filtro ativo,
+                           o resto precisa ser preservado. #}
+                        <input type="hidden" name="visible" value="{{ row.action.pk }}">
+                        <div class="form-row form-row--check" style="margin-bottom:10px">
+                            <label>
+                                <input type="checkbox" name="actions" value="{{ row.action.pk }}"
+                                       {% if row.granted %}checked{% endif %}>
+                                <span>
+                                    {{ row.action.name }}
+                                    {% if row.action.is_sensitive %}<span class="tag tag--ALTA">sensível</span>{% endif %}
+                                </span>
+                            </label>
+                            <div class="helptext">
+                                {{ row.action.description }}
+                                <code style="font-size:11px">{{ row.action.key }}</code>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% empty %}
+                    <div class="empty-state">
+                        <div class="empty-state__icon">{% include "_icon.html" with name="search" %}</div>
+                        <h3>Nenhuma ação encontrada</h3>
+                        <p>Ajuste a busca ou o filtro para ver outras ações.</p>
+                        <a href="?profile={{ profile.pk }}" class="btn">Limpar filtros</a>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="card__foot" style="text-align:right">
+                    <button type="submit" class="btn btn--primary">Salvar permissões</button>
+                </div>
+            </div>
         </form>
         {% else %}
-        <div class="card empty-state">
-            <p>Nenhum perfil cadastrado ainda.</p>
-            <a href="{% url 'profile-create' %}" class="btn btn--primary">Criar primeiro perfil</a>
+        <div class="card">
+            <div class="empty-state">
+                <div class="empty-state__icon">{% include "_icon.html" with name="shield" %}</div>
+                <h3>Nenhum perfil cadastrado</h3>
+                <p>Um perfil agrupa as ações que um tipo de função precisa. Ex.: Colaborador, Gestor de Setor.</p>
+                <a href="{% url 'profile-create' %}" class="btn btn--primary">Criar primeiro perfil</a>
+            </div>
         </div>
         {% endif %}
     </div>
 
     <div>
-        <div class="card">
-            <h2>Perfis</h2>
-            <ul class="list-reset">
-                {% for item in profiles %}
-                <li>
-                    <a href="?profile={{ item.pk }}" {% if profile and item.pk == profile.pk %}style="font-weight:700"{% endif %}>{{ item.name }}</a>
-                    <span class="muted">{{ item.user_count }} atribuição{{ item.user_count|pluralize:"ões" }}</span>
-                </li>
-                {% empty %}
-                <li class="muted">Nenhum perfil.</li>
-                {% endfor %}
-            </ul>
+        <div class="card card--flush">
+            <div class="card__head"><h2>Perfis</h2></div>
+            <div class="card__body">
+                <ul class="list-rows">
+                    {% for item in profiles %}
+                    <li>
+                        <a href="?profile={{ item.pk }}" {% if profile and item.pk == profile.pk %}style="font-weight:700"{% endif %}>{{ item.name }}</a>
+                        <div class="muted small">{{ item.user_count }} atribuição{{ item.user_count|pluralize:"ões" }}</div>
+                    </li>
+                    {% empty %}
+                    <li class="muted">Nenhum perfil.</li>
+                    {% endfor %}
+                </ul>
+            </div>
         </div>
 
         {% if profile %}
-        <div class="card">
-            <h2>Quem possui este perfil</h2>
-            <ul class="list-reset">
-                {% for assignment in assignments %}
-                <li>
-                    <a href="{% url 'user-access' assignment.user.pk %}">{{ assignment.user.get_username }}</a>
-                    <div class="muted">{{ assignment.scope.label }}</div>
-                </li>
-                {% empty %}
-                <li class="muted">Ninguém possui este perfil ainda.</li>
-                {% endfor %}
-            </ul>
+        <div class="card card--flush">
+            <div class="card__head"><h2>Quem possui este perfil</h2></div>
+            <div class="card__body">
+                <ul class="list-rows">
+                    {% for assignment in assignments %}
+                    <li>
+                        <a href="{% url 'user-access' assignment.user.pk %}">{{ assignment.user.get_username }}</a>
+                        <div class="muted small">{{ assignment.scope.label }}</div>
+                    </li>
+                    {% empty %}
+                    <li class="muted">Ninguém possui este perfil ainda.</li>
+                    {% endfor %}
+                </ul>
+            </div>
         </div>
         {% endif %}
     </div>

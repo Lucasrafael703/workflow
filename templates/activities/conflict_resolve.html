@@ -2,24 +2,37 @@
 {% block title %}Resolver conflito de prazo — LPS{% endblock %}
 
 {% block content %}
-<p class="muted"><a href="{% url 'task-detail' conflict.task.pk %}">← {{ conflict.task.title }}</a></p>
-<h1>Resolver conflito de prazo</h1>
+<div class="modal-backdrop">
+    <div class="modal">
+        <div class="modal__head">
+            <div>
+                <h2>Resolver conflito de prazo</h2>
+                <div class="sub">{{ conflict.task.title }}</div>
+            </div>
+            <a href="{% url 'task-detail' conflict.task.pk %}" class="modal__close" title="Fechar">&times;</a>
+        </div>
 
-<div class="card">
-    <p><strong>Prazo proposto:</strong> {{ conflict.proposal.proposed_deadline|date:"d/m/Y H:i" }}
-       — recusado pelo dono da atividade.</p>
-    {% if conflict.proposal.decision_note %}
-    <p class="muted">Motivo da recusa: {{ conflict.proposal.decision_note }}</p>
-    {% endif %}
-    <p class="muted">Conflito aberto em {{ conflict.opened_at|date:"d/m/Y H:i" }}.</p>
-</div>
+        <form method="post">
+            {% csrf_token %}
+            <div class="modal__body">
+                <div class="attention attention--danger">
+                    <div class="attention__title">
+                        Prazo proposto: {{ conflict.proposal.proposed_deadline|date:"d/m/Y H:i" }}
+                    </div>
+                    <div class="muted small">Recusado pelo dono da atividade.</div>
+                    {% if conflict.proposal.decision_note %}
+                    <div class="muted small">Motivo da recusa: {{ conflict.proposal.decision_note }}</div>
+                    {% endif %}
+                    <div class="muted small">Conflito aberto em {{ conflict.opened_at|date:"d/m/Y H:i" }}.</div>
+                </div>
 
-<form method="post" class="card" style="max-width:560px">
-    {% csrf_token %}
-    {% include "activities/_form_fields.html" %}
-    <div class="actions-row">
-        <button type="submit" class="btn btn--primary">Registrar decisão</button>
-        <a href="{% url 'task-detail' conflict.task.pk %}" class="btn">Voltar</a>
+                {% include "activities/_form_fields.html" %}
+            </div>
+            <div class="modal__foot">
+                <a href="{% url 'task-detail' conflict.task.pk %}" class="btn">Voltar</a>
+                <button type="submit" class="btn btn--primary">Registrar decisão</button>
+            </div>
+        </form>
     </div>
-</form>
+</div>
 {% endblock %}

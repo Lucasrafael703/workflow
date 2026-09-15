@@ -2,15 +2,26 @@
 {% block title %}{{ title }} — LPS{% endblock %}
 
 {% block content %}
-<p class="muted"><a href="{% url 'cadastros' %}?tab={{ tab }}">← Cadastros</a></p>
-<h1>{% if instance %}Editar {{ title|lower }}{% else %}Novo: {{ title|lower }}{% endif %}</h1>
+<div class="modal-backdrop">
+    <div class="modal">
+        <div class="modal__head">
+            <div>
+                <h2>{% if instance %}Editar {{ title|lower }}{% else %}Novo: {{ title|lower }}{% endif %}</h2>
+                <div class="sub">Cadastros › {{ title }}</div>
+            </div>
+            <a href="{% url 'cadastros' %}?tab={{ tab }}" class="modal__close" title="Fechar">&times;</a>
+        </div>
 
-<form method="post" class="card" style="max-width:520px">
-    {% csrf_token %}
-    {% include "activities/_form_fields.html" %}
-    <div class="actions-row">
-        <button type="submit" class="btn btn--primary">Salvar</button>
-        <a href="{% url 'cadastros' %}?tab={{ tab }}" class="btn">Cancelar</a>
+        <form method="post">
+            {% csrf_token %}
+            <div class="modal__body">
+                {% include "activities/_form_fields.html" %}
+            </div>
+            <div class="modal__foot">
+                <a href="{% url 'cadastros' %}?tab={{ tab }}" class="btn">Cancelar</a>
+                <button type="submit" class="btn btn--primary">Salvar {{ title|lower }}</button>
+            </div>
+        </form>
     </div>
-</form>
+</div>
 {% endblock %}

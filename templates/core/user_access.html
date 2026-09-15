@@ -2,109 +2,138 @@
 {% block title %}Acessos de {{ target.get_username }} — LPS{% endblock %}
 
 {% block content %}
-<p class="muted"><a href="{% url 'user-list' %}">← Usuários</a></p>
-<div class="section-head">
-    <h1>Acessos de {{ target.get_full_name|default:target.get_username }}</h1>
-    <a href="{% url 'user-edit' target.pk %}" class="btn">Dados e setores</a>
+<div class="page-head">
+    <div class="page-head__text">
+        <div class="breadcrumb">
+            <a href="{% url 'user-list' %}">Usuários</a><span>›</span>{{ target.get_username }}<span>›</span>Acessos
+        </div>
+        <h1>Acessos de {{ target.get_full_name|default:target.get_username }}</h1>
+        <p class="sub">Quem pode o quê, onde, e por qual origem.</p>
+    </div>
+    <div class="page-head__actions">
+        <a href="{% url 'user-edit' target.pk %}" class="btn">Dados e setores</a>
+    </div>
 </div>
 
 <div class="split">
     <div>
-        <div class="card">
-            <h2>Perfis atribuídos</h2>
-            <p class="muted">Cada atribuição vale dentro de um escopo — é isso que responde “onde”.</p>
+        <div class="card card--flush">
+            <div class="card__head">
+                <h2>Perfis atribuídos</h2>
+                <span class="muted small">Cada atribuição vale dentro de um escopo</span>
+            </div>
             {% if assignments %}
-            <table class="responsive">
-                <thead><tr><th>Perfil</th><th>Onde vale</th><th></th></tr></thead>
-                <tbody>
-                {% for assignment in assignments %}
-                <tr>
-                    <td data-label="Perfil">{{ assignment.profile.name }}</td>
-                    <td data-label="Onde vale">{{ assignment.scope.label }}</td>
-                    <td data-label="">
-                        <form method="post" action="{% url 'user-access-remove' target.pk assignment.pk %}"
-                              onsubmit="return confirm('Remover o perfil {{ assignment.profile.name|escapejs }} em {{ assignment.scope.label|escapejs }}?');">
-                            {% csrf_token %}
-                            <button type="submit" class="link-button">Remover</button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
+            <div class="table-wrap">
+                <table class="responsive">
+                    <thead><tr><th>Perfil</th><th>Onde vale</th><th class="col-actions">Ações</th></tr></thead>
+                    <tbody>
+                    {% for assignment in assignments %}
+                    <tr>
+                        <td data-label="Perfil"><span class="title">{{ assignment.profile.name }}</span></td>
+                        <td data-label="Onde vale">{{ assignment.scope.label }}</td>
+                        <td data-label="Ações" class="col-actions">
+                            <form method="post" action="{% url 'user-access-remove' target.pk assignment.pk %}"
+                                  onsubmit="return confirm('Remover o perfil {{ assignment.profile.name|escapejs }} em {{ assignment.scope.label|escapejs }}?');">
+                                {% csrf_token %}
+                                <button type="submit" class="link-button">Remover</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
             {% else %}
-            <p class="muted">Nenhum perfil atribuído. Sem concessão válida, tudo é negado.</p>
+            <div class="card__body">
+                <p class="muted" style="margin:0">Nenhum perfil atribuído. Sem concessão válida, tudo é negado.</p>
+            </div>
             {% endif %}
 
-            <form method="post" style="margin-top:16px">
-                {% csrf_token %}
-                <h3 style="font-size:14px">Atribuir perfil</h3>
-                {% include "activities/_form_fields.html" %}
-                <button type="submit" class="btn btn--primary">Atribuir</button>
-            </form>
+            <div class="card__foot">
+                <form method="post">
+                    {% csrf_token %}
+                    <h3>Atribuir perfil</h3>
+                    {% include "activities/_form_fields.html" %}
+                    <button type="submit" class="btn btn--primary">Atribuir perfil</button>
+                </form>
+            </div>
         </div>
 
-        <div class="card">
-            <h2>Concessões diretas</h2>
-            <p class="muted">Para exceções pontuais. O caminho normal é o perfil.</p>
+        <div class="card card--flush">
+            <div class="card__head">
+                <h2>Concessões diretas</h2>
+                <span class="muted small">Exceções pontuais</span>
+            </div>
             {% if direct_grants %}
-            <table class="responsive">
-                <thead><tr><th>Ação</th><th>Onde vale</th><th></th></tr></thead>
-                <tbody>
-                {% for grant in direct_grants %}
-                <tr>
-                    <td data-label="Ação">{{ grant.action.name }}
-                        <div class="muted"><code>{{ grant.action.key }}</code></div></td>
-                    <td data-label="Onde vale">{{ grant.scope.label }}</td>
-                    <td data-label="">
-                        <form method="post" action="{% url 'user-grant-remove' target.pk grant.pk %}">
-                            {% csrf_token %}
-                            <button type="submit" class="link-button">Remover</button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
+            <div class="table-wrap">
+                <table class="responsive">
+                    <thead><tr><th>Ação</th><th>Onde vale</th><th class="col-actions">Ações</th></tr></thead>
+                    <tbody>
+                    {% for grant in direct_grants %}
+                    <tr>
+                        <td data-label="Ação">
+                            <span class="title">{{ grant.action.name }}</span>
+                            <div class="muted small"><code>{{ grant.action.key }}</code></div>
+                        </td>
+                        <td data-label="Onde vale">{{ grant.scope.label }}</td>
+                        <td data-label="Ações" class="col-actions">
+                            <form method="post" action="{% url 'user-grant-remove' target.pk grant.pk %}">
+                                {% csrf_token %}
+                                <button type="submit" class="link-button">Remover</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
             {% else %}
-            <p class="muted">Nenhuma concessão direta.</p>
+            <div class="card__body">
+                <p class="muted" style="margin:0">Nenhuma concessão direta. O caminho normal é o perfil.</p>
+            </div>
             {% endif %}
 
-            <form method="post" action="{% url 'user-grant' target.pk %}" style="margin-top:16px">
-                {% csrf_token %}
-                <h3 style="font-size:14px">Conceder ação</h3>
-                {% include "activities/_form_fields.html" with form=grant_form %}
-                <button type="submit" class="btn">Conceder</button>
-            </form>
+            <div class="card__foot">
+                <form method="post" action="{% url 'user-grant' target.pk %}">
+                    {% csrf_token %}
+                    <h3>Conceder ação avulsa</h3>
+                    {% include "activities/_form_fields.html" with form=grant_form %}
+                    <button type="submit" class="btn">Conceder ação</button>
+                </form>
+            </div>
         </div>
     </div>
 
     <div>
-        <div class="card">
-            <h2>Acesso efetivo</h2>
-            <p class="muted">
-                O que esta pessoa pode fazer hoje, e de onde vem cada permissão.
-            </p>
-            {% if unrestricted %}
-            <p class="message message--warning">
-                Administrador da plataforma: possui acesso irrestrito, independentemente
-                dos perfis abaixo.
-            </p>
-            {% endif %}
-            {% if effective_actions %}
-            <ul class="list-reset">
-                {% for row in effective_actions %}
-                <li>
-                    {{ row.action.name }}
-                    <div class="muted">
-                        {{ row.scope.label }} · via {{ row.origin_name }}
-                    </div>
-                </li>
-                {% endfor %}
-            </ul>
-            {% else %}
-            <p class="muted">Nenhuma permissão efetiva. Tudo negado por padrão.</p>
-            {% endif %}
+        <div class="card card--flush">
+            <div class="card__head"><h2>Acesso efetivo</h2></div>
+            <div class="card__body">
+                <p class="muted small">O que esta pessoa pode fazer hoje, e de onde vem cada permissão.</p>
+
+                {% if unrestricted %}
+                <div class="message message--warning">
+                    <strong>Administrador da plataforma</strong>
+                    <div class="small">Possui acesso irrestrito, independentemente dos perfis ao lado.</div>
+                </div>
+                {% endif %}
+
+                {% if effective_actions %}
+                <ul class="list-rows">
+                    {% for row in effective_actions %}
+                    <li>
+                        {{ row.action.name }}
+                        <div class="muted small">{{ row.scope.label }} · via {{ row.origin_name }}</div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <div class="empty-state" style="padding:26px 10px">
+                    <div class="empty-state__icon">{% include "_icon.html" with name="shield" %}</div>
+                    <h3>Nenhuma permissão efetiva</h3>
+                    <p style="margin-bottom:0">Tudo negado por padrão. Atribua um perfil para liberar o acesso.</p>
+                </div>
+                {% endif %}
+            </div>
         </div>
     </div>
 </div>

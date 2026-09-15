@@ -11,10 +11,14 @@
             — <a href="{% url 'task-detail' entry.task.pk %}">{{ entry.task.title }}</a>
             {% endif %}
         </div>
-        {% if entry.reason %}<div class="muted">Motivo: {{ entry.reason }}</div>{% endif %}
+        {% if entry.reason %}<div class="muted small">Motivo: {{ entry.reason }}</div>{% endif %}
     </li>
     {% endfor %}
 </ul>
 {% else %}
-<p class="muted">Sem histórico.</p>
+<div class="empty-state" style="padding:28px 10px">
+    <div class="empty-state__icon">{% include "_icon.html" with name="clock" %}</div>
+    <h3>Sem histórico ainda</h3>
+    <p style="margin-bottom:0">Cada ação registrada aparece aqui em ordem, com autor e horário.</p>
+</div>
 {% endif %}
