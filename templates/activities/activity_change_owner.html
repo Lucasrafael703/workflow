@@ -2,17 +2,30 @@
 {% block title %}Alterar dono — LPS{% endblock %}
 
 {% block content %}
-<p class="muted"><a href="{% url 'activity-detail' activity.pk %}">← {{ activity.title }}</a></p>
-<h1>Alterar dono da atividade</h1>
-<p class="muted">Dono atual: <strong>{{ activity.owner.get_username }}</strong>.
-   A atividade continua com um único dono; a troca fica registrada.</p>
+<div class="modal-backdrop">
+    <div class="modal">
+        <div class="modal__head">
+            <div>
+                <h2>Alterar dono da atividade</h2>
+                <div class="sub">{{ activity.title }}</div>
+            </div>
+            <a href="{% url 'activity-detail' activity.pk %}" class="modal__close" title="Fechar">&times;</a>
+        </div>
 
-<form method="post" class="card" style="max-width:480px">
-    {% csrf_token %}
-    {% include "activities/_form_fields.html" %}
-    <div class="actions-row">
-        <button type="submit" class="btn btn--primary">Transferir</button>
-        <a href="{% url 'activity-detail' activity.pk %}" class="btn">Voltar</a>
+        <form method="post">
+            {% csrf_token %}
+            <div class="modal__body">
+                <p class="muted">
+                    Dono atual: <strong>{{ activity.owner.get_username }}</strong>.
+                    A atividade continua com um único dono; a troca fica registrada no histórico.
+                </p>
+                {% include "activities/_form_fields.html" %}
+            </div>
+            <div class="modal__foot">
+                <a href="{% url 'activity-detail' activity.pk %}" class="btn">Voltar</a>
+                <button type="submit" class="btn btn--primary">Transferir atividade</button>
+            </div>
+        </form>
     </div>
-</form>
+</div>
 {% endblock %}

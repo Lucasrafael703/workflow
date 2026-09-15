@@ -176,12 +176,31 @@ class HomeView(OrganizationRequiredMixin, TemplateView):
             .order_by("requested_deadline", "-created_at")[:6]
         )
 
+        pending = pending_items(user, org)
+
+        # Cartões do topo: só número que leva a uma ação (Benchmark §8.3).
+        my_open = Task.objects.filter(
+            activity__organization=org,
+            executors__user=user,
+            executors__removed_at__isnull=True,
+        ).exclude(status__in=[Task.Status.CONCLUIDA, Task.Status.CANCELADA]).distinct()
+
+        summary = {
+            "open_tasks": my_open.count(),
+            "overdue": my_open.filter(
+                committed_deadline__lt=timezone.now(),
+            ).exclude(status=Task.Status.CONCLUIDA).count(),
+            "blocked": my_open.filter(status=Task.Status.BLOQUEADA).count(),
+            "waiting_decision": pending["proposals"].count() + pending["conflicts"].count(),
+        }
+
         context.update(
             {
                 "active_session": session,
                 "active_task": session.task if session else None,
                 "next_tasks": next_tasks,
-                "pending": pending_items(user, org),
+                "pending": pending,
+                "summary": summary,
                 "followed_activities": followed,
                 "unread_notifications": user.notifications.filter(is_read=False)[:5],
                 "my_sectors": my_sectors,
@@ -244,13 +263,23 @@ class ActivityListView(OrganizationRequiredMixin, ListView):
                 done_tasks=Count("tasks", filter=Q(tasks__status=Task.Status.CONCLUIDA), distinct=True),
             )
             .distinct()
-            .order_by("requested_deadline", "-created_at")
+            .order_by(*self._ordering())
         )
+
+    ORDERINGS = {
+        "prazo": ("requested_deadline", "-created_at"),
+        "recentes": ("-created_at",),
+        "titulo": ("title",),
+    }
+
+    def _ordering(self):
+        return self.ORDERINGS.get(self.request.GET.get("ordem"), self.ORDERINGS["prazo"])
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["tab"] = self.request.GET.get("tab", "minhas")
         context["search"] = self.request.GET.get("q", "")
+        context["ordem"] = self.request.GET.get("ordem", "prazo")
         context["sectors"] = Sector.objects.filter(organization=self.organization, is_active=True)
         context["selected_sector"] = self.request.GET.get("sector", "")
         context["can_view_all"] = can(self.request.user, catalog.ATIVIDADE_VISUALIZAR_TODAS)
@@ -285,8 +314,17 @@ class ActivityCreateView(OrganizationRequiredMixin, FormView):
             form.add_error(None, str(exc))
             return self.form_invalid(form)
 
+        # Ação encadeada: criar e já abrir a primeira tarefa (Benchmark §6).
+        if "salvar_e_tarefas" in self.request.POST:
+            messages.success(self.request, "Atividade criada. Agora defina a primeira tarefa.")
+            return redirect("task-create", activity_pk=activity.pk)
+
         messages.success(self.request, "Atividade criada. Próximo passo: adicionar a primeira tarefa.")
         return redirect("activity-detail", pk=activity.pk)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        return context
 
 
 class ActivityDetailView(OrganizationRequiredMixin, DetailView):
@@ -495,6 +533,30 @@ class TaskListView(OrganizationRequiredMixin, ListView):
         else:
             queryset = queryset.filter(status__in=OPEN_TASK_STATUSES)
 
+        # Visões salvas por condição operacional, no lugar de segmentações
+        # comerciais (Benchmark §3: atrasadas, bloqueadas, devolvidas).
+        view = self.request.GET.get("filtro")
+        if view == "atrasadas":
+            queryset = queryset.filter(committed_deadline__lt=timezone.now()).exclude(
+                status=Task.Status.CONCLUIDA
+            )
+        elif view == "bloqueadas":
+            queryset = queryset.filter(status=Task.Status.BLOQUEADA)
+        elif view == "devolvidas":
+            queryset = queryset.filter(status=Task.Status.DEVOLVIDA)
+        elif view == "em-execucao":
+            queryset = queryset.filter(status=Task.Status.EM_EXECUCAO)
+
+        search = self.request.GET.get("q", "").strip()
+        if search:
+            queryset = queryset.filter(
+                Q(title__icontains=search) | Q(activity__title__icontains=search)
+            )
+
+        sector = self.request.GET.get("sector")
+        if sector:
+            queryset = queryset.filter(sector_id=sector)
+
         return (
             queryset.select_related("activity", "sector")
             .distinct()
@@ -505,6 +567,10 @@ class TaskListView(OrganizationRequiredMixin, ListView):
         context = super().get_context_data(**kwargs)
         context["tab"] = self.request.GET.get("tab", "minhas")
         context["status"] = self.request.GET.get("status", "abertas")
+        context["view_filter"] = self.request.GET.get("filtro", "")
+        context["search"] = self.request.GET.get("q", "")
+        context["sectors"] = Sector.objects.filter(organization=self.organization, is_active=True)
+        context["selected_sector"] = self.request.GET.get("sector", "")
         return context
 
 

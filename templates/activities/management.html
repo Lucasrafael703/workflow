@@ -1,124 +1,183 @@
 {% extends "base.html" %}
-{% block title %}Gestão — LPS{% endblock %}
+{% block title %}Visão do gestor — LPS{% endblock %}
 
 {% block content %}
-<h1>Visão do gestor</h1>
-<p class="muted">O que precisa de decisão agora. Cada bloco abre o detalhe por trás do número.</p>
+<div class="page-head">
+    <div class="page-head__text">
+        <h1>Visão do gestor</h1>
+        <p class="sub">O que precisa de decisão agora. Cada bloco abre o detalhe por trás do número.</p>
+    </div>
+    <div class="page-head__actions">
+        <a href="{% url 'history' %}" class="btn">Abrir histórico</a>
+    </div>
+</div>
 
+{# Indicadores voltados à decisão, não à exibição de totais (Benchmark §10) #}
 <div class="stat-grid">
-    <div class="stat-card"><div class="value">{{ open_total }}</div><div class="label">Tarefas abertas</div></div>
-    <div class="stat-card"><div class="value">{{ overdue_count }}</div><div class="label">Atrasadas</div></div>
-    <div class="stat-card"><div class="value">{{ blocked_count }}</div><div class="label">Bloqueadas</div></div>
-    <div class="stat-card"><div class="value">{{ conflicts|length }}</div><div class="label">Conflitos de prazo</div></div>
+    <a href="{% url 'task-list' %}?tab=setor" class="stat-card">
+        <div class="stat-card__icon stat-card__icon--info">{% include "_icon.html" with name="task" %}</div>
+        <div class="value">{{ open_total }}</div>
+        <div class="label">Tarefas abertas</div>
+        <div class="hint">Trabalho em circulação</div>
+    </a>
+    <a href="{% url 'task-list' %}?tab=setor&filtro=atrasadas" class="stat-card">
+        <div class="stat-card__icon stat-card__icon--danger">{% include "_icon.html" with name="alert" %}</div>
+        <div class="value">{{ overdue_count }}</div>
+        <div class="label">Atrasadas</div>
+        <div class="hint">Prazo comprometido vencido</div>
+    </a>
+    <a href="{% url 'task-list' %}?tab=setor&filtro=bloqueadas" class="stat-card">
+        <div class="stat-card__icon stat-card__icon--warning">{% include "_icon.html" with name="block" %}</div>
+        <div class="value">{{ blocked_count }}</div>
+        <div class="label">Bloqueadas</div>
+        <div class="hint">Esperando alguém ou algo</div>
+    </a>
+    <div class="stat-card">
+        <div class="stat-card__icon stat-card__icon--primary">{% include "_icon.html" with name="alert" %}</div>
+        <div class="value">{{ conflicts|length }}</div>
+        <div class="label">Conflitos de prazo</div>
+        <div class="hint">Precisam de decisão</div>
+    </div>
 </div>
 
 <div class="split">
     <div>
-        <div class="card">
-            <h2>Filas por setor</h2>
+        <div class="card card--flush">
+            <div class="card__head"><h2>Filas por setor</h2></div>
             {% if sectors %}
-            <table class="responsive">
-                <thead><tr><th>Setor</th><th>Na fila</th><th></th></tr></thead>
-                <tbody>
-                {% for sector in sectors %}
-                <tr>
-                    <td data-label="Setor">{{ sector.name }}</td>
-                    <td data-label="Na fila">{{ sector.queue_size }}</td>
-                    <td data-label=""><a href="{% url 'queue-sector' sector.pk %}">Ver fila</a></td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
+            <div class="table-wrap">
+                <table class="responsive">
+                    <thead><tr><th>Setor</th><th>Na fila</th><th class="col-actions">Ações</th></tr></thead>
+                    <tbody>
+                    {% for sector in sectors %}
+                    <tr>
+                        <td data-label="Setor"><span class="title">{{ sector.name }}</span></td>
+                        <td data-label="Na fila">{{ sector.queue_size }}</td>
+                        <td data-label="Ações" class="col-actions"><a href="{% url 'queue-sector' sector.pk %}">Ver fila</a></td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
             {% else %}
-            <p class="muted">Nenhum setor cadastrado.</p>
+            <div class="card__body"><p class="muted" style="margin:0">Nenhum setor cadastrado.</p></div>
             {% endif %}
         </div>
 
-        <div class="card">
-            <h2>Atrasos</h2>
-            {% if overdue_tasks %}
-            <ul class="list-reset">
+        <div class="card card--flush">
+            <div class="card__head">
+                <h2>Atrasos</h2>
+                <a href="{% url 'task-list' %}?tab=setor&filtro=atrasadas">Ver todas</a>
+            </div>
+            <div class="card__body">
+                {% if overdue_tasks %}
                 {% for task in overdue_tasks %}
-                <li>
-                    <a href="{% url 'task-detail' task.pk %}">{{ task.title }}</a>
-                    <span class="tag tag--overdue">Atrasada</span>
-                    <div class="muted">{{ task.sector.name }} · Prazo comprometido {{ task.committed_deadline|date:"d/m/Y H:i" }}
-                        · Dono: {{ task.activity.owner.get_username }}</div>
-                </li>
+                <div class="attention attention--danger">
+                    <div class="attention__title">
+                        <a href="{% url 'task-detail' task.pk %}">{{ task.title }}</a>
+                        <span class="tag tag--overdue">Atrasada</span>
+                    </div>
+                    <div class="muted small">
+                        {{ task.sector.name }} · Prazo comprometido {{ task.committed_deadline|date:"d/m/Y H:i" }}
+                        · Dono: {{ task.activity.owner.get_username }}
+                    </div>
+                </div>
                 {% endfor %}
-            </ul>
-            {% else %}
-            <p class="muted">Nenhuma tarefa atrasada.</p>
-            {% endif %}
+                {% else %}
+                <div class="empty-state" style="padding:26px 10px">
+                    <div class="empty-state__icon">{% include "_icon.html" with name="check" %}</div>
+                    <h3>Nenhuma tarefa atrasada</h3>
+                    <p style="margin-bottom:0">Todos os prazos comprometidos estão sendo cumpridos.</p>
+                </div>
+                {% endif %}
+            </div>
         </div>
 
-        <div class="card">
-            <h2>Bloqueios</h2>
-            {% if blocked_tasks %}
-            <ul class="list-reset">
+        <div class="card card--flush">
+            <div class="card__head">
+                <h2>Bloqueios por motivo</h2>
+                <a href="{% url 'task-list' %}?tab=setor&filtro=bloqueadas">Ver todas</a>
+            </div>
+            <div class="card__body">
+                {% if blocked_tasks %}
                 {% for task in blocked_tasks %}
-                <li>
-                    <a href="{% url 'task-detail' task.pk %}">{{ task.title }}</a>
-                    <div class="muted">{{ task.sector.name }}
-                        {% for block in task.blocks.all %}{% if not block.ended_at %} · {{ block.reason }}{% endif %}{% endfor %}</div>
-                </li>
+                <div class="attention attention--warning">
+                    <div class="attention__title"><a href="{% url 'task-detail' task.pk %}">{{ task.title }}</a></div>
+                    <div class="muted small">{{ task.sector.name }}{% for block in task.blocks.all %}{% if not block.ended_at %} · {{ block.reason }}{% endif %}{% endfor %}</div>
+                </div>
                 {% endfor %}
-            </ul>
-            {% else %}
-            <p class="muted">Nenhuma tarefa bloqueada.</p>
-            {% endif %}
+                {% else %}
+                <div class="empty-state" style="padding:26px 10px">
+                    <div class="empty-state__icon">{% include "_icon.html" with name="check" %}</div>
+                    <h3>Nenhuma tarefa bloqueada</h3>
+                    <p style="margin-bottom:0">Nada esperando terceiros no momento.</p>
+                </div>
+                {% endif %}
+            </div>
         </div>
     </div>
 
     <div>
-        <div class="card">
-            <h2>Conflitos de prazo</h2>
-            {% if conflicts %}
-            <ul class="list-reset">
+        <div class="card card--flush">
+            <div class="card__head"><h2>Conflitos de prazo</h2></div>
+            <div class="card__body">
+                {% if conflicts %}
                 {% for conflict in conflicts %}
-                <li>
-                    <a href="{% url 'task-detail' conflict.task.pk %}">{{ conflict.task.title }}</a>
-                    <div class="muted">Aberto em {{ conflict.opened_at|date:"d/m/Y H:i" }}</div>
+                <div class="attention attention--danger">
+                    <div class="attention__title"><a href="{% url 'task-detail' conflict.task.pk %}">{{ conflict.task.title }}</a></div>
+                    <div class="muted small">Aberto em {{ conflict.opened_at|date:"d/m/Y H:i" }}</div>
                     {% if can_resolve_conflicts %}
-                    <a href="{% url 'conflict-resolve' conflict.pk %}" class="btn">Registrar decisão</a>
-                    {% endif %}
-                </li>
-                {% endfor %}
-            </ul>
-            {% else %}
-            <p class="muted">Nenhum conflito aberto.</p>
-            {% endif %}
-        </div>
-
-        <div class="card">
-            <h2>Capacidade (hoje)</h2>
-            <p>Entraram: <strong>{{ entered_today }}</strong></p>
-            <p>Concluídas: <strong>{{ completed_today }}</strong></p>
-            <p class="muted">Fila atual: {{ open_total }} tarefas abertas.</p>
-        </div>
-
-        <div class="card">
-            <h2>Sem avanço</h2>
-            {% if stalled_activities %}
-            <ul class="list-reset">
-                {% for activity in stalled_activities %}
-                <li>
-                    <a href="{% url 'activity-detail' activity.pk %}">{{ activity.title }}</a>
-                    <div class="muted">
-                        {% if activity.first_action_at %}Sem ação recente{% else %}Ainda sem primeira ação{% endif %}
-                        · criada em {{ activity.created_at|date:"d/m/Y" }}
+                    <div class="actions-row" style="margin-top:8px">
+                        <a href="{% url 'conflict-resolve' conflict.pk %}" class="btn btn--sm btn--primary">Registrar decisão</a>
                     </div>
-                </li>
+                    {% endif %}
+                </div>
                 {% endfor %}
-            </ul>
-            {% else %}
-            <p class="muted">Nenhuma atividade parada.</p>
-            {% endif %}
+                {% else %}
+                <p class="muted" style="margin:0">Nenhum conflito aberto.</p>
+                {% endif %}
+            </div>
         </div>
 
-        <div class="card">
-            <h2>Histórico geral</h2>
-            <a href="{% url 'history' %}" class="btn">Abrir histórico</a>
+        <div class="card card--flush">
+            <div class="card__head"><h2>Movimento de hoje</h2></div>
+            <div class="card__body">
+                <ul class="list-rows">
+                    <li style="display:flex;justify-content:space-between">
+                        <span class="muted">Entraram na fila</span><strong>{{ entered_today }}</strong>
+                    </li>
+                    <li style="display:flex;justify-content:space-between">
+                        <span class="muted">Concluídas</span><strong>{{ completed_today }}</strong>
+                    </li>
+                    <li style="display:flex;justify-content:space-between">
+                        <span class="muted">Abertas no total</span><strong>{{ open_total }}</strong>
+                    </li>
+                </ul>
+                <p class="muted small" style="margin:12px 0 0">
+                    Comparar o que entra com o que sai mostra se a fila está crescendo.
+                </p>
+            </div>
+        </div>
+
+        <div class="card card--flush">
+            <div class="card__head"><h2>Sem avanço</h2></div>
+            <div class="card__body">
+                {% if stalled_activities %}
+                <ul class="list-rows">
+                    {% for activity in stalled_activities %}
+                    <li>
+                        <a href="{% url 'activity-detail' activity.pk %}">{{ activity.title }}</a>
+                        <div class="muted small">
+                            {% if activity.first_action_at %}Sem ação recente{% else %}Ainda sem primeira ação{% endif %}
+                            · criada em {{ activity.created_at|date:"d/m/Y" }}
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="muted" style="margin:0">Nenhuma atividade parada.</p>
+                {% endif %}
+            </div>
         </div>
     </div>
 </div>

@@ -1,40 +1,45 @@
 {# Lista de tarefas da atividade. Símbolo sempre acompanhado de texto (doc 09 §66). #}
-<div class="card">
-    <div class="section-head">
+<div class="card card--flush">
+    <div class="card__head">
         <h2>Tarefas</h2>
         {% if activity.status != "CONCLUIDA" and activity.status != "CANCELADA" %}
-        <a href="{% url 'task-create' activity.pk %}" class="btn">+ Adicionar</a>
+        <a href="{% url 'task-create' activity.pk %}">+ Adicionar</a>
         {% endif %}
     </div>
 
     {% if tasks %}
-    <ul class="list-reset">
-        {% for task in tasks %}
-        <li>
-            <div>
-                {% if task.status == "CONCLUIDA" %}✓
-                {% elif task.status == "EM_EXECUCAO" %}●
-                {% elif task.status == "CANCELADA" %}×
-                {% else %}○{% endif %}
-                <a href="{% url 'task-detail' task.pk %}">{{ task.title }}</a>
-                <span class="tag tag--{{ task.status }}">{{ task.get_status_display }}</span>
-            </div>
-            <div class="muted">
-                {{ task.sector.name }}
-                {% if task.active_executors %}
-                    · {% for executor in task.active_executors %}{{ executor.user.get_username }}{% if not forloop.last %}, {% endif %}{% endfor %}
-                {% else %}
-                    · Sem executor
-                {% endif %}
-                {% if task.queue_info %} · Posição {{ task.queue_info.position }} de {{ task.queue_info.total }}{% endif %}
-                {% if task.requested_deadline %} · Prazo {{ task.requested_deadline|date:"d/m/Y H:i" }}{% endif %}
-            </div>
-        </li>
-        {% endfor %}
-    </ul>
+    <div class="card__body">
+        <ul class="list-rows">
+            {% for task in tasks %}
+            <li>
+                <div>
+                    {% if task.status == "CONCLUIDA" %}<span class="dot-state dot-state--success"></span>
+                    {% elif task.status == "EM_EXECUCAO" %}<span class="dot-state dot-state--success"></span>
+                    {% elif task.status == "BLOQUEADA" %}<span class="dot-state dot-state--danger"></span>
+                    {% elif task.status == "DEVOLVIDA" %}<span class="dot-state dot-state--warning"></span>
+                    {% else %}<span class="dot-state"></span>{% endif %}
+                    <a href="{% url 'task-detail' task.pk %}" class="title">{{ task.title }}</a>
+                    <span class="tag tag--{{ task.status }}">{{ task.get_status_display }}</span>
+                </div>
+                <div class="muted small">
+                    {{ task.sector.name }}
+                    {% if task.active_executors %}
+                        · {% for executor in task.active_executors %}{{ executor.user.get_username }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                    {% else %}
+                        · Sem executor
+                    {% endif %}
+                    {% if task.queue_info %} · Posição {{ task.queue_info.position }} de {{ task.queue_info.total }}{% endif %}
+                    {% if task.requested_deadline %} · Prazo {{ task.requested_deadline|date:"d/m/Y H:i" }}{% endif %}
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
     {% else %}
     <div class="empty-state">
-        <p>Esta atividade ainda não possui tarefas.</p>
+        <div class="empty-state__icon">{% include "_icon.html" with name="task" %}</div>
+        <h3>Ainda sem tarefas</h3>
+        <p>As tarefas são os passos até o resultado. Cada uma tem um setor responsável e pode ter executores diferentes.</p>
         {% if activity.status != "CONCLUIDA" and activity.status != "CANCELADA" %}
         <a href="{% url 'task-create' activity.pk %}" class="btn btn--primary">Adicionar primeira tarefa</a>
         {% endif %}

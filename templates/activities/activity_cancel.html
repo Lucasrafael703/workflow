@@ -2,16 +2,30 @@
 {% block title %}Cancelar atividade — LPS{% endblock %}
 
 {% block content %}
-<p class="muted"><a href="{% url 'activity-detail' activity.pk %}">← {{ activity.title }}</a></p>
-<h1>Cancelar atividade</h1>
-<p class="muted">O cancelamento preserva todo o histórico — nada é apagado.</p>
+<div class="modal-backdrop">
+    <div class="modal">
+        <div class="modal__head">
+            <div>
+                <h2>Cancelar atividade</h2>
+                <div class="sub">{{ activity.title }}</div>
+            </div>
+            <a href="{% url 'activity-detail' activity.pk %}" class="modal__close" title="Fechar">&times;</a>
+        </div>
 
-<form method="post" class="card" style="max-width:560px">
-    {% csrf_token %}
-    {% include "activities/_form_fields.html" %}
-    <div class="actions-row">
-        <button type="submit" class="btn btn--danger">Cancelar atividade</button>
-        <a href="{% url 'activity-detail' activity.pk %}" class="btn">Voltar</a>
+        <form method="post">
+            {% csrf_token %}
+            <div class="modal__body">
+                <div class="message message--warning">
+                    O cancelamento preserva todo o histórico — nada é apagado. A atividade deixa de
+                    aparecer nas listas de trabalho em aberto.
+                </div>
+                {% include "activities/_form_fields.html" %}
+            </div>
+            <div class="modal__foot">
+                <a href="{% url 'activity-detail' activity.pk %}" class="btn">Voltar</a>
+                <button type="submit" class="btn btn--danger">Cancelar atividade</button>
+            </div>
+        </form>
     </div>
-</form>
+</div>
 {% endblock %}

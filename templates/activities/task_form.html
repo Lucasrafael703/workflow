@@ -2,18 +2,73 @@
 {% block title %}{% if is_edit %}Editar tarefa{% else %}Adicionar tarefa{% endif %} — LPS{% endblock %}
 
 {% block content %}
-<p class="muted"><a href="{% url 'activity-detail' activity.pk %}">← {{ activity.title }}</a></p>
-<h1>{% if is_edit %}Editar tarefa{% else %}Adicionar tarefa{% endif %}</h1>
+<div class="page-head">
+    <div class="page-head__text">
+        <div class="breadcrumb">
+            <a href="{% url 'activity-list' %}">Atividades</a><span>›</span>
+            <a href="{% url 'activity-detail' activity.pk %}">{{ activity.title|truncatechars:42 }}</a><span>›</span>
+            {% if is_edit %}Editar tarefa{% else %}Nova tarefa{% endif %}
+        </div>
+        <h1>{% if is_edit %}Editar tarefa{% else %}Adicionar tarefa{% endif %}</h1>
+        <p class="sub">A tarefa é um passo da atividade. Ela pertence a um setor e pode ter vários executores.</p>
+    </div>
+</div>
 
-<form method="post" class="card" style="max-width:560px">
+<form method="post">
     {% csrf_token %}
-    {% include "activities/_form_fields.html" %}
-    <div class="actions-row">
-        <button type="submit" class="btn btn--primary">Salvar</button>
-        {% if not is_edit %}
-        <button type="submit" name="save_and_add" value="1" class="btn">Salvar e adicionar outra</button>
-        {% endif %}
-        <a href="{% if is_edit %}{% url 'task-detail' task.pk %}{% else %}{% url 'activity-detail' activity.pk %}{% endif %}" class="btn">Cancelar</a>
+    <div class="form-layout">
+        <div>
+            <div class="form-section">
+                <div class="form-section__head">
+                    <span class="form-section__num">1</span>
+                    <div>
+                        <h3>Dados da tarefa</h3>
+                        <div class="sub">O setor define em qual fila ela entra.</div>
+                    </div>
+                </div>
+                {% include "activities/_form_fields.html" %}
+            </div>
+
+            <div class="form-foot form-foot--split">
+                <a href="{% if is_edit %}{% url 'task-detail' task.pk %}{% else %}{% url 'activity-detail' activity.pk %}{% endif %}" class="btn btn--ghost">Cancelar</a>
+                <div class="actions-row">
+                    {% if not is_edit %}
+                    <button type="submit" name="save_and_add" value="1" class="btn">Salvar e adicionar outra</button>
+                    {% endif %}
+                    <button type="submit" class="btn btn--primary">
+                        {% if is_edit %}Salvar alterações{% else %}Adicionar tarefa{% endif %}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <aside class="summary-panel">
+            <h3>Atividade</h3>
+            <div class="summary-item">
+                <div>
+                    <div class="k">Resultado esperado</div>
+                    <div class="v">{{ activity.title }}</div>
+                </div>
+            </div>
+            <div class="summary-item">
+                <div>
+                    <div class="k">Dono</div>
+                    <div class="v">{{ activity.owner.get_username }}</div>
+                </div>
+            </div>
+            <div class="summary-item">
+                <div>
+                    <div class="k">Prazo da atividade</div>
+                    <div class="v">
+                        {% if activity.requested_deadline %}{{ activity.requested_deadline|date:"d/m/Y H:i" }}
+                        {% else %}<span class="muted">Sem prazo</span>{% endif %}
+                    </div>
+                </div>
+            </div>
+            <p class="muted small" style="margin:12px 0 0">
+                O prazo solicitado é o que você pede. O setor responde com um prazo comprometido.
+            </p>
+        </aside>
     </div>
 </form>
 {% endblock %}

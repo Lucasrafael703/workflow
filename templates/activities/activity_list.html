@@ -2,9 +2,16 @@
 {% block title %}Minhas atividades — LPS{% endblock %}
 
 {% block content %}
-<div class="section-head">
-    <h1>Minhas atividades</h1>
-    <a href="{% url 'activity-create' %}" class="btn btn--primary">+ Nova atividade</a>
+<div class="page-head">
+    <div class="page-head__text">
+        <h1>Atividades{% if page_obj %} <span class="muted">({{ page_obj.paginator.count }})</span>{% endif %}</h1>
+        <p class="sub">O resultado que precisa acontecer. As tarefas são os passos até lá.</p>
+    </div>
+    <div class="page-head__actions">
+        <a href="{% url 'activity-create' %}" class="btn btn--primary">
+            {% include "_icon.html" with name="plus" %} Nova atividade
+        </a>
+    </div>
 </div>
 
 <nav class="tabs">
@@ -16,66 +23,102 @@
     {% endif %}
 </nav>
 
-<form method="get" class="filters">
+{# Busca, ordenação e filtros: mesmos comandos, mesma posição, em toda lista. #}
+<form method="get">
     <input type="hidden" name="tab" value="{{ tab }}">
-    <div class="form-row">
-        <label for="q">Buscar</label>
-        <input type="search" id="q" name="q" value="{{ search }}" placeholder="Buscar atividades…">
-    </div>
-    <div class="form-row">
-        <label for="sector">Setor</label>
+    <div class="toolbar">
+        <div class="toolbar__search">
+            {% include "_icon.html" with name="search" %}
+            <input type="search" name="q" value="{{ search }}" placeholder="Buscar por título, dono ou obra…">
+        </div>
+        <label class="inline" for="sector">Setor</label>
         <select id="sector" name="sector">
             <option value="">Todos</option>
             {% for sector in sectors %}
             <option value="{{ sector.pk }}" {% if selected_sector == sector.pk|stringformat:"s" %}selected{% endif %}>{{ sector.name }}</option>
             {% endfor %}
         </select>
+        <label class="inline" for="ordem">Ordenar por</label>
+        <select id="ordem" name="ordem">
+            <option value="prazo" {% if ordem == 'prazo' %}selected{% endif %}>Prazo mais próximo</option>
+            <option value="recentes" {% if ordem == 'recentes' %}selected{% endif %}>Mais recentes</option>
+            <option value="titulo" {% if ordem == 'titulo' %}selected{% endif %}>Título A-Z</option>
+        </select>
+        <button type="submit" class="btn">Aplicar</button>
+        {% if search or selected_sector %}
+        <a href="?tab={{ tab }}" class="btn btn--ghost">Limpar</a>
+        {% endif %}
     </div>
-    <button type="submit" class="btn">Filtrar</button>
 </form>
 
 {% if activities %}
-<table class="responsive">
-    <thead>
-        <tr>
-            <th>Atividade</th><th>Dono</th><th>Progresso</th><th>Prazo</th><th>Status</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for activity in activities %}
-        <tr>
-            <td data-label="Atividade">
-                <a href="{% url 'activity-detail' activity.pk %}">{{ activity.title }}</a>
-                {% if activity.site %}<div class="muted">{{ activity.site.name }}</div>{% endif %}
-            </td>
-            <td data-label="Dono">{{ activity.owner.get_username }}</td>
-            <td data-label="Progresso">{{ activity.done_tasks }} de {{ activity.total_tasks }} tarefas</td>
-            <td data-label="Prazo">
-                {% if activity.requested_deadline %}{{ activity.requested_deadline|date:"d/m/Y H:i" }}
-                {% else %}<span class="muted">Sem prazo</span>{% endif %}
-            </td>
-            <td data-label="Status"><span class="tag tag--{{ activity.status }}">{{ activity.get_status_display }}</span></td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+<div class="card card--flush">
+    <div class="table-wrap">
+        <table class="responsive">
+            <thead>
+                <tr>
+                    <th>Atividade</th><th>Dono</th><th>Progresso</th><th>Prazo</th><th>Situação</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for activity in activities %}
+                <tr>
+                    <td data-label="Atividade">
+                        <a href="{% url 'activity-detail' activity.pk %}" class="title">{{ activity.title }}</a>
+                        {% if activity.site %}<div class="muted small">{{ activity.site.name }}</div>{% endif %}
+                    </td>
+                    <td data-label="Dono">{{ activity.owner.get_username }}</td>
+                    <td data-label="Progresso">
+                        {{ activity.done_tasks }} de {{ activity.total_tasks }} tarefas
+                        {% if activity.total_tasks %}
+                        <div class="progress">
+                            <div class="progress__bar" style="width:{% widthratio activity.done_tasks activity.total_tasks 100 %}%"></div>
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td data-label="Prazo">
+                        {% if activity.requested_deadline %}{{ activity.requested_deadline|date:"d/m/Y H:i" }}
+                        {% else %}<span class="muted">Sem prazo</span>{% endif %}
+                    </td>
+                    <td data-label="Situação"><span class="tag tag--{{ activity.status }}">{{ activity.get_status_display }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
 
 {% if is_paginated %}
-<div class="actions-row">
+<div class="pagination">
     {% if page_obj.has_previous %}
-    <a class="btn" href="?tab={{ tab }}&q={{ search }}&page={{ page_obj.previous_page_number }}">Anterior</a>
+    <a class="btn btn--sm" href="?tab={{ tab }}&q={{ search }}&page={{ page_obj.previous_page_number }}">Anterior</a>
     {% endif %}
-    <span class="muted">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+    <span class="muted small">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
     {% if page_obj.has_next %}
-    <a class="btn" href="?tab={{ tab }}&q={{ search }}&page={{ page_obj.next_page_number }}">Próxima</a>
+    <a class="btn btn--sm" href="?tab={{ tab }}&q={{ search }}&page={{ page_obj.next_page_number }}">Próxima</a>
     {% endif %}
 </div>
 {% endif %}
 
+<div class="hint-bar">
+    {% include "_icon.html" with name="info" %}
+    <span><strong>Dica:</strong> clique em uma atividade para ver tarefas, prazos, conversa e a linha do tempo completa.</span>
+</div>
+
 {% else %}
-<div class="card empty-state">
-    <p>Você ainda não possui atividades nesta visão.</p>
-    <a href="{% url 'activity-create' %}" class="btn btn--primary">Criar primeira atividade</a>
+<div class="card">
+    <div class="empty-state">
+        <div class="empty-state__icon">{% include "_icon.html" with name="activity" %}</div>
+        {% if search or selected_sector %}
+        <h3>Nenhuma atividade encontrada</h3>
+        <p>Ajuste a busca ou os filtros para localizar outra atividade.</p>
+        <a href="?tab={{ tab }}" class="btn">Limpar filtros</a>
+        {% else %}
+        <h3>Você ainda não possui atividades nesta visão</h3>
+        <p>Comece registrando o que precisa ser resolvido. Depois você adiciona as tarefas e define quem executa cada passo.</p>
+        <a href="{% url 'activity-create' %}" class="btn btn--primary">Criar primeira atividade</a>
+        {% endif %}
+    </div>
 </div>
 {% endif %}
 {% endblock %}

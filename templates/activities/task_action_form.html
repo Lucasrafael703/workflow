@@ -1,16 +1,49 @@
 {% extends "base.html" %}
 {% block title %}{{ title }} — LPS{% endblock %}
 
-{% block content %}
-<p class="muted"><a href="{% url 'task-detail' task.pk %}">← {{ task.title }}</a></p>
-<h1>{{ title }}</h1>
+{% comment %}
+Ação rápida apresentada como janela sobre a tarefa: o contexto de onde a pessoa
+veio continua visível atrás (Benchmark §8.6). Sem JS, continua sendo uma página
+normal com POST — o fundo é decorativo e o "fechar" é um link de verdade.
+{% endcomment %}
 
-<form method="post" class="card" style="max-width:560px">
-    {% csrf_token %}
-    {% include "activities/_form_fields.html" %}
-    <div class="actions-row">
-        <button type="submit" class="btn btn--primary">{{ submit_label }}</button>
-        <a href="{% url 'task-detail' task.pk %}" class="btn">Voltar</a>
+{% block content %}
+<div class="modal-backdrop">
+    <div class="modal">
+        <div class="modal__head">
+            <div>
+                <h2>{{ title }}</h2>
+                <div class="sub">{{ task.title }}</div>
+            </div>
+            <a href="{% url 'task-detail' task.pk %}" class="modal__close" title="Fechar">&times;</a>
+        </div>
+
+        <form method="post">
+            {% csrf_token %}
+            <div class="modal__body">
+                {% if form.non_field_errors %}
+                <ul class="messages">
+                    {% for error in form.non_field_errors %}<li class="message message--error">{{ error }}</li>{% endfor %}
+                </ul>
+                {% endif %}
+
+                {% for field in form %}
+                <div class="form-row">
+                    <label for="{{ field.id_for_label }}">
+                        {{ field.label }}{% if field.field.required %} <span class="req">*</span>{% endif %}
+                    </label>
+                    {{ field }}
+                    {% if field.help_text %}<div class="helptext">{{ field.help_text }}</div>{% endif %}
+                    {% if field.errors %}<ul class="errorlist">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="modal__foot">
+                <a href="{% url 'task-detail' task.pk %}" class="btn">Cancelar</a>
+                <button type="submit" class="btn btn--primary">{{ submit_label }}</button>
+            </div>
+        </form>
     </div>
-</form>
+</div>
 {% endblock %}

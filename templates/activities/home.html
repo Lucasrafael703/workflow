@@ -7,88 +7,173 @@
 <div class="timerbar">
     <span class="timerbar__clock" data-started-at="{{ active_session.started_at.isoformat }}">--:--:--</span>
     <span>em <a href="{% url 'task-detail' active_session.task.pk %}">{{ active_session.task.title }}</a></span>
+    <span class="timerbar__spacer"></span>
     <form method="post" action="{% url 'task-pause' active_session.task.pk %}">
-        {% csrf_token %}<button type="submit" class="btn">Pausar</button>
+        {% csrf_token %}<button type="submit" class="btn btn--sm">Pausar</button>
     </form>
     <form method="post" action="{% url 'task-complete' active_session.task.pk %}">
-        {% csrf_token %}<button type="submit" class="btn">Concluir</button>
+        {% csrf_token %}<button type="submit" class="btn btn--sm">Concluir</button>
     </form>
 </div>
 {% endif %}
 {% endblock %}
 
 {% block content %}
-<div class="section-head">
-    <h1>O que precisa da sua atenção agora</h1>
-    <a href="{% url 'activity-create' %}" class="btn btn--primary">+ Nova atividade</a>
+<div class="page-head">
+    <div class="page-head__text">
+        <h1>Olá, {{ user.get_short_name|default:user.get_username }}!</h1>
+        <p class="sub">Aqui está o que precisa da sua atenção agora.</p>
+    </div>
+    <div class="page-head__actions">
+        <a href="{% url 'activity-create' %}" class="btn btn--primary">
+            {% include "_icon.html" with name="plus" %} Nova atividade
+        </a>
+    </div>
 </div>
 
-<div class="card">
-    <h2>Em execução agora</h2>
+{# Cartões clicáveis, apenas para informação acionável (Benchmark §8.3) #}
+<div class="stat-grid">
+    <a href="{% url 'task-list' %}" class="stat-card">
+        <div class="stat-card__icon stat-card__icon--info">{% include "_icon.html" with name="task" %}</div>
+        <div class="value">{{ summary.open_tasks }}</div>
+        <div class="label">Minhas tarefas em aberto</div>
+        <div class="hint">Trabalho sob sua responsabilidade</div>
+    </a>
+    <a href="{% url 'task-list' %}?filtro=atrasadas" class="stat-card">
+        <div class="stat-card__icon stat-card__icon--danger">{% include "_icon.html" with name="alert" %}</div>
+        <div class="value">{{ summary.overdue }}</div>
+        <div class="label">Atrasadas</div>
+        <div class="hint">Passaram do prazo comprometido</div>
+    </a>
+    <a href="{% url 'task-list' %}?filtro=bloqueadas" class="stat-card">
+        <div class="stat-card__icon stat-card__icon--warning">{% include "_icon.html" with name="block" %}</div>
+        <div class="value">{{ summary.blocked }}</div>
+        <div class="label">Bloqueadas</div>
+        <div class="hint">Dependem de alguém ou de algo</div>
+    </a>
+    <div class="stat-card">
+        <div class="stat-card__icon stat-card__icon--primary">{% include "_icon.html" with name="clock" %}</div>
+        <div class="value">{{ summary.waiting_decision }}</div>
+        <div class="label">Aguardando sua decisão</div>
+        <div class="hint">Prazos e conflitos para responder</div>
+    </div>
+</div>
+
+{# 1. Em execução agora — a primeira pergunta do colaborador (Benchmark §7.2) #}
+<div class="card card--flush">
+    <div class="card__head">
+        <h2>Em execução agora</h2>
+        {% if active_task %}<a href="{% url 'task-detail' active_task.pk %}">Abrir tarefa</a>{% endif %}
+    </div>
     {% if active_session %}
-        <div class="timer-hero">
-            <div class="timer-hero__clock" data-started-at="{{ active_session.started_at.isoformat }}">--:--:--</div>
-            <p><a href="{% url 'task-detail' active_task.pk %}">{{ active_task.title }}</a>
-               <span class="muted">— {{ active_task.activity.title }}</span></p>
-            <div class="actions-row" style="justify-content:center">
-                <form method="post" action="{% url 'task-pause' active_task.pk %}">
-                    {% csrf_token %}<button type="submit" class="btn btn--lg">Pausar</button>
-                </form>
-                <form method="post" action="{% url 'task-complete' active_task.pk %}">
-                    {% csrf_token %}<button type="submit" class="btn btn--lg btn--primary">Concluir</button>
-                </form>
-            </div>
+    <div class="timer-hero">
+        <div class="timer-hero__clock" data-started-at="{{ active_session.started_at.isoformat }}">--:--:--</div>
+        <div class="timer-hero__task">
+            <a href="{% url 'task-detail' active_task.pk %}">{{ active_task.title }}</a>
+            <div class="muted small">{{ active_task.activity.title }} · {{ active_task.sector.name }}</div>
         </div>
+        <div class="actions-row" style="justify-content:center">
+            <form method="post" action="{% url 'task-pause' active_task.pk %}">
+                {% csrf_token %}<button type="submit" class="btn btn--lg">Pausar</button>
+            </form>
+            <form method="post" action="{% url 'task-complete' active_task.pk %}">
+                {% csrf_token %}<button type="submit" class="btn btn--lg btn--primary">Concluir tarefa</button>
+            </form>
+        </div>
+    </div>
     {% else %}
-        <p class="muted">Nenhuma tarefa em execução.</p>
-        <a href="{% url 'task-list' %}" class="btn">Ver próximas tarefas</a>
+    <div class="empty-state">
+        <div class="empty-state__icon">{% include "_icon.html" with name="clock" %}</div>
+        <h3>Nenhum cronômetro rodando</h3>
+        <p>Quando você iniciar uma tarefa, o tempo aparece aqui e acompanha você em todas as telas.</p>
+        <a href="{% url 'task-list' %}" class="btn btn--primary">Ver próximas tarefas</a>
+    </div>
     {% endif %}
 </div>
 
 <div class="split">
     <div>
-        <div class="card">
-            <div class="section-head">
+        {# 2. Próxima ação #}
+        <div class="card card--flush">
+            <div class="card__head">
                 <h2>Próximas tarefas</h2>
                 <a href="{% url 'task-list' %}">Ver todas</a>
             </div>
             {% if next_tasks %}
-            <ul class="list-reset">
-                {% for task in next_tasks %}
-                <li>
-                    <a href="{% url 'task-detail' task.pk %}">{{ task.title }}</a>
-                    <span class="tag tag--{{ task.status }}">{{ task.get_status_display }}</span>
-                    <div class="muted">
-                        {{ task.sector.name }} ·
-                        {% if task.requested_deadline %}Prazo {{ task.requested_deadline|date:"d/m/Y H:i" }}
-                        {% else %}Sem prazo{% endif %}
-                    </div>
-                </li>
-                {% endfor %}
-            </ul>
+            <div class="table-wrap">
+                <table class="responsive">
+                    <thead>
+                        <tr><th>Tarefa</th><th>Setor</th><th>Prazo</th><th>Situação</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for task in next_tasks %}
+                        <tr>
+                            <td data-label="Tarefa">
+                                <a href="{% url 'task-detail' task.pk %}" class="title">{{ task.title }}</a>
+                                <div class="muted small">{{ task.activity.title }}</div>
+                            </td>
+                            <td data-label="Setor">{{ task.sector.name }}</td>
+                            <td data-label="Prazo">
+                                {% if task.committed_deadline %}{{ task.committed_deadline|date:"d/m/Y H:i" }}
+                                {% elif task.requested_deadline %}<span class="muted">{{ task.requested_deadline|date:"d/m/Y H:i" }}</span>
+                                {% else %}<span class="muted">Sem prazo</span>{% endif %}
+                            </td>
+                            <td data-label="Situação"><span class="tag tag--{{ task.status }}">{{ task.get_status_display }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
             {% else %}
-            <p class="muted">Nenhuma tarefa aguardando você.</p>
+            <div class="empty-state">
+                <div class="empty-state__icon">{% include "_icon.html" with name="check" %}</div>
+                <h3>Nada aguardando você</h3>
+                <p>Nenhuma tarefa liberada para você no momento.</p>
+            </div>
             {% endif %}
         </div>
 
-        <div class="card">
-            <h2>Atividades que acompanho</h2>
+        {# 5. Atividades que acompanho #}
+        <div class="card card--flush">
+            <div class="card__head">
+                <h2>Atividades que acompanho</h2>
+                <a href="{% url 'activity-list' %}">Ver todas</a>
+            </div>
             {% if followed_activities %}
-            <ul class="list-reset">
-                {% for activity in followed_activities %}
-                <li>
-                    <a href="{% url 'activity-detail' activity.pk %}">{{ activity.title }}</a>
-                    <span class="tag tag--{{ activity.status }}">{{ activity.get_status_display }}</span>
-                    <div class="muted">
-                        {{ activity.done_tasks }} de {{ activity.total_tasks }} tarefas concluídas
-                        {% if activity.requested_deadline %} · Prazo {{ activity.requested_deadline|date:"d/m/Y" }}{% endif %}
-                    </div>
-                </li>
-                {% endfor %}
-            </ul>
+            <div class="table-wrap">
+                <table class="responsive">
+                    <thead>
+                        <tr><th>Atividade</th><th>Progresso</th><th>Prazo</th><th>Situação</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for activity in followed_activities %}
+                        <tr>
+                            <td data-label="Atividade">
+                                <a href="{% url 'activity-detail' activity.pk %}" class="title">{{ activity.title }}</a>
+                            </td>
+                            <td data-label="Progresso">
+                                {{ activity.done_tasks }} de {{ activity.total_tasks }} tarefas
+                                {% if activity.total_tasks %}
+                                <div class="progress">
+                                    <div class="progress__bar" style="width:{% widthratio activity.done_tasks activity.total_tasks 100 %}%"></div>
+                                </div>
+                                {% endif %}
+                            </td>
+                            <td data-label="Prazo">
+                                {% if activity.requested_deadline %}{{ activity.requested_deadline|date:"d/m/Y" }}
+                                {% else %}<span class="muted">Sem prazo</span>{% endif %}
+                            </td>
+                            <td data-label="Situação"><span class="tag tag--{{ activity.status }}">{{ activity.get_status_display }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
             {% else %}
             <div class="empty-state">
-                <p>Você ainda não possui atividades em aberto.</p>
+                <div class="empty-state__icon">{% include "_icon.html" with name="activity" %}</div>
+                <h3>Você ainda não possui atividades</h3>
+                <p>Uma atividade é o resultado que precisa acontecer. As tarefas são os passos até lá.</p>
                 <a href="{% url 'activity-create' %}" class="btn btn--primary">Criar primeira atividade</a>
             </div>
             {% endif %}
@@ -96,62 +181,76 @@
     </div>
 
     <div>
-        <div class="card">
-            <h2>Pendências</h2>
-            {% if pending.proposals or pending.conflicts %}
-                {% for proposal in pending.proposals %}
-                <div style="margin-bottom:12px">
-                    <strong>Novo prazo aguardando sua decisão</strong>
-                    <div class="muted">
-                        {{ proposal.task.title }} — proposto por {{ proposal.proposed_by.get_username }}
-                        para {{ proposal.proposed_deadline|date:"d/m/Y H:i" }}
+        {# 3. "Preciso fazer alguma coisa?" — exceções que exigem resposta #}
+        <div class="card card--flush">
+            <div class="card__head"><h2>Preciso fazer alguma coisa?</h2></div>
+            <div class="card__body">
+                {% if pending.proposals or pending.conflicts %}
+                    {% for proposal in pending.proposals %}
+                    <div class="attention attention--warning">
+                        <div class="attention__title">Novo prazo aguardando sua decisão</div>
+                        <div class="muted small">
+                            {{ proposal.task.title }} — {{ proposal.proposed_by.get_username }}
+                            propôs {{ proposal.proposed_deadline|date:"d/m/Y H:i" }}
+                        </div>
+                        <div class="actions-row" style="margin-top:8px">
+                            <form method="post" action="{% url 'deadline-accept' proposal.pk %}">
+                                {% csrf_token %}<button type="submit" class="btn btn--primary btn--sm">Aceitar</button>
+                            </form>
+                            <a href="{% url 'task-detail' proposal.task.pk %}" class="btn btn--sm">Analisar</a>
+                        </div>
                     </div>
-                    <div class="actions-row">
-                        <form method="post" action="{% url 'deadline-accept' proposal.pk %}">
-                            {% csrf_token %}<button type="submit" class="btn btn--primary">Aceitar</button>
-                        </form>
-                        <a href="{% url 'task-detail' proposal.task.pk %}" class="btn">Analisar</a>
+                    {% endfor %}
+                    {% for conflict in pending.conflicts %}
+                    <div class="attention attention--danger">
+                        <div class="attention__title">Conflito de prazo</div>
+                        <div class="muted small">{{ conflict.task.title }} — aberto {{ conflict.opened_at|date:"d/m/Y H:i" }}</div>
+                        <div class="actions-row" style="margin-top:8px">
+                            <a href="{% url 'task-detail' conflict.task.pk %}" class="btn btn--sm">Analisar</a>
+                        </div>
                     </div>
+                    {% endfor %}
+                {% else %}
+                <div class="empty-state" style="padding:26px 10px">
+                    <div class="empty-state__icon">{% include "_icon.html" with name="check" %}</div>
+                    <h3>Tudo sob controle</h3>
+                    <p style="margin-bottom:0">Nenhuma pendência importante agora.</p>
                 </div>
-                {% endfor %}
-                {% for conflict in pending.conflicts %}
-                <div style="margin-bottom:12px">
-                    <strong>Conflito de prazo</strong>
-                    <div class="muted">{{ conflict.task.title }} — aberto {{ conflict.opened_at|date:"d/m/Y H:i" }}</div>
-                    <div class="actions-row">
-                        <a href="{% url 'task-detail' conflict.task.pk %}" class="btn">Analisar</a>
-                    </div>
-                </div>
-                {% endfor %}
-            {% else %}
-            <p class="muted">Nada aguardando sua decisão.</p>
-            {% endif %}
+                {% endif %}
+            </div>
         </div>
 
-        <div class="card">
-            <div class="section-head">
+        <div class="card card--flush">
+            <div class="card__head">
                 <h2>Notificações</h2>
                 <a href="{% url 'notification-list' %}">Ver todas</a>
             </div>
-            {% if unread_notifications %}
-            <ul class="list-reset">
-                {% for n in unread_notifications %}
-                <li><strong>{{ n.title }}</strong><div class="muted">{{ n.message }}</div></li>
-                {% endfor %}
-            </ul>
-            {% else %}
-            <p class="muted">Nenhuma notificação nova.</p>
-            {% endif %}
+            <div class="card__body">
+                {% if unread_notifications %}
+                <ul class="list-rows">
+                    {% for n in unread_notifications %}
+                    <li>
+                        <strong>{{ n.title }}</strong>
+                        <div class="muted small">{{ n.message }}</div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="muted" style="margin:0">Nenhuma notificação nova.</p>
+                {% endif %}
+            </div>
         </div>
 
         {% if my_sectors %}
-        <div class="card">
-            <h2>Filas dos meus setores</h2>
-            <ul class="list-reset">
-                {% for sector in my_sectors %}
-                <li><a href="{% url 'queue-sector' sector.pk %}">{{ sector.name }}</a></li>
-                {% endfor %}
-            </ul>
+        <div class="card card--flush">
+            <div class="card__head"><h2>Minhas filas</h2></div>
+            <div class="card__body">
+                <ul class="list-rows">
+                    {% for sector in my_sectors %}
+                    <li><a href="{% url 'queue-sector' sector.pk %}">{{ sector.name }}</a></li>
+                    {% endfor %}
+                </ul>
+            </div>
         </div>
         {% endif %}
     </div>

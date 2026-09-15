@@ -1,16 +1,26 @@
-<ul class="timeline">
+<ul class="list-rows">
     {% for n in items %}
     <li>
-        <div class="when">{{ n.created_at|date:"d/m/Y H:i" }}{% if not n.is_read %} · <strong>nova</strong>{% endif %}</div>
-        <strong>{{ n.title }}</strong>
-        <p>{{ n.message }}</p>
-        <div class="actions-row">
-            <form method="post" action="{% url 'notification-mark-read' n.pk %}">
-                {% csrf_token %}
-                <button type="submit" class="btn {% if actionable %}btn--primary{% endif %}">
-                    {% if actionable %}Analisar{% elif n.task_id or n.activity_id or n.url %}Abrir{% else %}Marcar como lida{% endif %}
-                </button>
-            </form>
+        <div style="display:flex;gap:12px;align-items:flex-start">
+            <span class="stat-card__icon {% if actionable %}stat-card__icon--warning{% else %}stat-card__icon--info{% endif %}"
+                  style="margin:0;flex:0 0 32px">
+                {% if actionable %}{% include "_icon.html" with name="alert" %}
+                {% else %}{% include "_icon.html" with name="info" %}{% endif %}
+            </span>
+            <div style="flex:1">
+                <strong>{{ n.title }}</strong>
+                {% if not n.is_read %}<span class="tag tag--ABERTA">nova</span>{% endif %}
+                <div class="muted small">{{ n.created_at|date:"d/m/Y H:i" }}</div>
+                <p style="margin:4px 0 0">{{ n.message }}</p>
+                <div class="actions-row" style="margin-top:8px">
+                    <form method="post" action="{% url 'notification-mark-read' n.pk %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn--sm {% if actionable %}btn--primary{% endif %}">
+                            {% if actionable %}Analisar{% elif n.task_id or n.activity_id or n.url %}Abrir{% else %}Marcar como lida{% endif %}
+                        </button>
+                    </form>
+                </div>
+            </div>
         </div>
     </li>
     {% endfor %}

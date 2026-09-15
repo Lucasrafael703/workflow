@@ -2,12 +2,17 @@
 {% block title %}Notificações — LPS{% endblock %}
 
 {% block content %}
-<div class="section-head">
-    <h1>Notificações</h1>
-    <form method="post" action="{% url 'notification-mark-all-read' %}">
-        {% csrf_token %}
-        <button type="submit" class="btn">Marcar todas como lidas</button>
-    </form>
+<div class="page-head">
+    <div class="page-head__text">
+        <h1>Notificações</h1>
+        <p class="sub">O que exige resposta vem primeiro; o resto é informativo.</p>
+    </div>
+    <div class="page-head__actions">
+        <form method="post" action="{% url 'notification-mark-all-read' %}">
+            {% csrf_token %}
+            <button type="submit" class="btn">Marcar todas como lidas</button>
+        </form>
+    </div>
 </div>
 
 <nav class="tabs">
@@ -17,28 +22,45 @@
 </nav>
 
 {% if action_required %}
-<div class="card">
-    <h2>Ação necessária</h2>
-    {% include "notifications/_items.html" with items=action_required actionable=True %}
+<div class="card card--flush">
+    <div class="card__head">
+        <h2>Ação necessária</h2>
+        <span class="muted small">Precisam de uma resposta sua</span>
+    </div>
+    <div class="card__body">
+        {% include "notifications/_items.html" with items=action_required actionable=True %}
+    </div>
 </div>
 {% endif %}
 
 {% if informative %}
-<div class="card">
-    <h2>Informativo</h2>
-    {% include "notifications/_items.html" with items=informative actionable=False %}
+<div class="card card--flush">
+    <div class="card__head">
+        <h2>Informativo</h2>
+        <span class="muted small">Para você ficar sabendo</span>
+    </div>
+    <div class="card__body">
+        {% include "notifications/_items.html" with items=informative actionable=False %}
+    </div>
 </div>
 {% endif %}
 
 {% if not action_required and not informative %}
-<div class="card empty-state"><p>Você não tem notificações.</p></div>
+<div class="card">
+    <div class="empty-state">
+        <div class="empty-state__icon">{% include "_icon.html" with name="bell" %}</div>
+        <h3>Nenhuma notificação</h3>
+        <p>Você é avisado quando um prazo for proposto, uma tarefa devolvida ou algo precisar da sua decisão.</p>
+        <a href="{% url 'home' %}" class="btn">Voltar para a Home</a>
+    </div>
+</div>
 {% endif %}
 
 {% if is_paginated %}
-<div class="actions-row">
-    {% if page_obj.has_previous %}<a class="btn" href="?filter={{ filter }}&page={{ page_obj.previous_page_number }}">Anterior</a>{% endif %}
-    <span class="muted">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
-    {% if page_obj.has_next %}<a class="btn" href="?filter={{ filter }}&page={{ page_obj.next_page_number }}">Próxima</a>{% endif %}
+<div class="pagination">
+    {% if page_obj.has_previous %}<a class="btn btn--sm" href="?filter={{ filter }}&page={{ page_obj.previous_page_number }}">Anterior</a>{% endif %}
+    <span class="muted small">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}<a class="btn btn--sm" href="?filter={{ filter }}&page={{ page_obj.next_page_number }}">Próxima</a>{% endif %}
 </div>
 {% endif %}
 {% endblock %}

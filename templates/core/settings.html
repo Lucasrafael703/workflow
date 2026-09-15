@@ -2,52 +2,70 @@
 {% block title %}Configurações — LPS{% endblock %}
 
 {% block content %}
-<h1>Configurações</h1>
-<p class="muted">Como a LPS se comporta. O que existe na organização fica em
-   <a href="{% url 'cadastros' %}">Cadastros</a>.</p>
+<div class="page-head">
+    <div class="page-head__text">
+        <h1>Configurações</h1>
+        <p class="sub">Como a LPS se comporta. O que existe na organização fica em
+            <a href="{% url 'cadastros' %}">Cadastros</a>.</p>
+    </div>
+</div>
 
 <div class="split">
     <div>
-        <form method="post" class="card">
+        <form method="post">
             {% csrf_token %}
-            <h2>Minhas notificações</h2>
-            <p class="muted">Eventos obrigatórios (conclusão da sua atividade, devolução e conflito de prazo)
-               são sempre enviados e não podem ser desligados.</p>
-            {% include "activities/_form_fields.html" %}
-            <button type="submit" class="btn btn--primary">Salvar preferências</button>
+            <div class="card card--flush">
+                <div class="card__head"><h2>Minhas notificações</h2></div>
+                <div class="card__body">
+                    <p class="muted small">Eventos obrigatórios (conclusão da sua atividade, devolução e
+                       conflito de prazo) são sempre enviados e não podem ser desligados.</p>
+                    {% include "activities/_form_fields.html" %}
+                </div>
+                <div class="card__foot" style="text-align:right">
+                    <button type="submit" class="btn btn--primary">Salvar preferências</button>
+                </div>
+            </div>
         </form>
 
-        <div class="card">
-            <h2>Fluxos</h2>
-            <p class="muted">
-                No D0 o fluxo de uma atividade é a própria lista ordenada de tarefas, com
-                dependências simples — sem editor visual. Monte o fluxo dentro da atividade,
-                definindo a ordem e o campo “Depende de” de cada tarefa.
-            </p>
-            <a href="{% url 'activity-list' %}" class="btn">Ir para as atividades</a>
+        <div class="card card--flush">
+            <div class="card__head"><h2>Fluxos</h2></div>
+            <div class="card__body">
+                <p class="muted">
+                    O fluxo de uma atividade é a própria lista ordenada de tarefas, com
+                    dependências simples — sem editor visual. Monte o fluxo dentro da atividade,
+                    definindo a ordem e o campo “Depende de” de cada tarefa.
+                </p>
+                <a href="{% url 'activity-list' %}" class="btn">Ir para as atividades</a>
+            </div>
         </div>
     </div>
 
     <div>
-        <div class="card">
-            <h2>Escalonamento</h2>
-            <p class="muted">
-                Quando o dono recusa um prazo proposto, a LPS registra o conflito e avisa os
-                responsáveis automaticamente. O motor completo de escalonamento por níveis
-                entra em uma etapa posterior.
-            </p>
+        <div class="card card--flush">
+            <div class="card__head"><h2>Escalonamento</h2></div>
+            <div class="card__body">
+                <p class="muted" style="margin:0">
+                    Quando o dono recusa um prazo proposto, a LPS registra o conflito e avisa os
+                    responsáveis automaticamente. O motor completo de escalonamento por níveis
+                    entra em uma etapa posterior.
+                </p>
+            </div>
         </div>
 
-        <div class="card">
-            <h2>Setores ativos</h2>
-            <ul class="list-reset">
-                {% for sector in sectors %}
-                <li><a href="{% url 'queue-sector' sector.pk %}">{{ sector.name }}</a></li>
-                {% empty %}
-                <li class="muted">Nenhum setor cadastrado.</li>
-                {% endfor %}
-            </ul>
-            <a href="{% url 'sector-create' %}" class="btn">+ Novo setor</a>
+        <div class="card card--flush">
+            <div class="card__head">
+                <h2>Setores ativos</h2>
+                <a href="{% url 'sector-create' %}">+ Novo</a>
+            </div>
+            <div class="card__body">
+                <ul class="list-rows">
+                    {% for sector in sectors %}
+                    <li><a href="{% url 'queue-sector' sector.pk %}">{{ sector.name }}</a></li>
+                    {% empty %}
+                    <li class="muted">Nenhum setor cadastrado.</li>
+                    {% endfor %}
+                </ul>
+            </div>
         </div>
     </div>
 </div>

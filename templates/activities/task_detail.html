@@ -7,20 +7,24 @@
 <div class="timerbar">
     <span class="timerbar__clock" data-started-at="{{ my_open_session.started_at.isoformat }}">--:--:--</span>
     <span>em {{ task.title }}</span>
+    <span class="timerbar__spacer"></span>
     <form method="post" action="{% url 'task-pause' task.pk %}">
-        {% csrf_token %}<button type="submit" class="btn">Pausar</button>
+        {% csrf_token %}<button type="submit" class="btn btn--sm">Pausar</button>
     </form>
 </div>
 {% endif %}
 {% endblock %}
 
 {% block content %}
-<p class="muted"><a href="{% url 'activity-detail' activity.pk %}">← {{ activity.title }}</a></p>
-
-<div class="section-head">
-    <div>
-        <h1 style="margin-bottom:6px">{{ task.title }}</h1>
-        <div class="muted">
+<div class="page-head">
+    <div class="page-head__text">
+        <div class="breadcrumb">
+            <a href="{% url 'activity-list' %}">Atividades</a><span>›</span>
+            <a href="{% url 'activity-detail' activity.pk %}">{{ activity.title|truncatechars:38 }}</a><span>›</span>
+            {{ task.title|truncatechars:32 }}
+        </div>
+        <h1>{{ task.title }}</h1>
+        <div class="sub">
             <span class="tag tag--{{ task.status }}">{{ task.get_status_display }}</span>
             · Setor: <strong>{{ task.sector.name }}</strong>
             {% if queue_info %} · <span class="position-pill">Posição {{ queue_info.position }} de {{ queue_info.total }}</span>{% endif %}
@@ -44,226 +48,258 @@
 <div class="split">
     <div>
         {# Uma única ação primária por vez; o resto fica em "Mais ações" (doc 09 §71) #}
-        <div class="card">
-            <h2>O que fazer agora</h2>
-            {% if task.status == "CONCLUIDA" %}
-                <p class="message message--success">Concluída em {{ task.completed_at|date:"d/m/Y H:i" }}
-                   {% if task.completed_by %}por {{ task.completed_by.get_username }}{% endif %}.</p>
-            {% elif task.status == "CANCELADA" %}
-                <p class="muted">Tarefa cancelada em {{ task.cancelled_at|date:"d/m/Y H:i" }}.</p>
-            {% elif open_block %}
-                <form method="post" action="{% url 'task-unblock' task.pk %}">
-                    {% csrf_token %}<button type="submit" class="btn btn--primary btn--lg">Resolver bloqueio</button>
-                </form>
-            {% elif my_open_session %}
-                <div class="timer-hero">
-                    <div class="timer-hero__clock" data-started-at="{{ my_open_session.started_at.isoformat }}">--:--:--</div>
-                    <div class="actions-row" style="justify-content:center">
-                        <form method="post" action="{% url 'task-pause' task.pk %}">
-                            {% csrf_token %}<button type="submit" class="btn btn--lg">Pausar</button>
-                        </form>
-                        <form method="post" action="{% url 'task-complete' task.pk %}">
-                            {% csrf_token %}<button type="submit" class="btn btn--lg btn--primary">Concluir</button>
-                        </form>
+        <div class="card card--flush">
+            <div class="card__head"><h2>O que fazer agora</h2></div>
+            <div class="card__body">
+                {% if task.status == "CONCLUIDA" %}
+                    <p class="message message--success" style="margin:0">Concluída em {{ task.completed_at|date:"d/m/Y H:i" }}
+                       {% if task.completed_by %}por {{ task.completed_by.get_username }}{% endif %}.</p>
+                {% elif task.status == "CANCELADA" %}
+                    <p class="muted" style="margin:0">Tarefa cancelada em {{ task.cancelled_at|date:"d/m/Y H:i" }}.</p>
+                {% elif open_block %}
+                    <form method="post" action="{% url 'task-unblock' task.pk %}">
+                        {% csrf_token %}<button type="submit" class="btn btn--primary btn--lg">Resolver bloqueio</button>
+                    </form>
+                {% elif my_open_session %}
+                    <div class="timer-hero">
+                        <div class="timer-hero__clock" data-started-at="{{ my_open_session.started_at.isoformat }}">--:--:--</div>
+                        <div class="actions-row" style="justify-content:center">
+                            <form method="post" action="{% url 'task-pause' task.pk %}">
+                                {% csrf_token %}<button type="submit" class="btn btn--lg">Pausar</button>
+                            </form>
+                            <form method="post" action="{% url 'task-complete' task.pk %}">
+                                {% csrf_token %}<button type="submit" class="btn btn--lg btn--primary">Concluir tarefa</button>
+                            </form>
+                        </div>
                     </div>
-                </div>
-            {% elif is_executor %}
-                <form method="post" action="{% url 'task-start' task.pk %}">
-                    {% csrf_token %}<button type="submit" class="btn btn--primary btn--lg">Iniciar</button>
-                </form>
-                <p class="muted" style="margin-top:8px">Iniciar esta tarefa pausa automaticamente qualquer outra que você esteja executando.</p>
-            {% elif can_assume %}
-                <form method="post" action="{% url 'task-assume' task.pk %}">
-                    {% csrf_token %}<button type="submit" class="btn btn--primary btn--lg">Assumir</button>
-                </form>
-            {% else %}
-                <p class="muted">Sem executor definido. Você não possui permissão para assumir esta tarefa.</p>
-            {% endif %}
+                {% elif is_executor %}
+                    <form method="post" action="{% url 'task-start' task.pk %}">
+                        {% csrf_token %}<button type="submit" class="btn btn--primary btn--lg">Iniciar tarefa</button>
+                    </form>
+                    <p class="muted small" style="margin:10px 0 0">Iniciar esta tarefa pausa automaticamente qualquer outra que você esteja executando.</p>
+                {% elif can_assume %}
+                    <form method="post" action="{% url 'task-assume' task.pk %}">
+                        {% csrf_token %}<button type="submit" class="btn btn--primary btn--lg">Assumir tarefa</button>
+                    </form>
+                {% else %}
+                    <p class="muted" style="margin:0">Sem executor definido. Você não possui permissão para assumir esta tarefa.</p>
+                {% endif %}
 
-            {% if task.status != "CONCLUIDA" and task.status != "CANCELADA" %}
-            <details style="margin-top:16px">
-                <summary style="cursor:pointer; font-weight:600">Mais ações</summary>
-                <div class="actions-row">
-                    <a href="{% url 'task-return' task.pk %}" class="btn">Devolver</a>
-                    <a href="{% url 'task-move' task.pk %}" class="btn">Enviar para outro setor</a>
-                    {% if not open_block %}<a href="{% url 'task-block' task.pk %}" class="btn">Registrar bloqueio</a>{% endif %}
-                    <a href="{% url 'deadline-propose' task.pk %}" class="btn">Propor novo prazo</a>
-                    <a href="{% url 'task-manual-time' task.pk %}" class="btn">Adicionar tempo</a>
-                    <a href="{% url 'task-edit' task.pk %}" class="btn">Editar</a>
-                    <a href="{% url 'task-cancel' task.pk %}" class="btn btn--danger">Cancelar tarefa</a>
-                </div>
-            </details>
-            {% endif %}
+                {% if task.status != "CONCLUIDA" and task.status != "CANCELADA" %}
+                <details class="disclosure" style="margin-top:16px">
+                    <summary>Mais ações</summary>
+                    <div class="disclosure__body">
+                        <div class="actions-row">
+                            <a href="{% url 'task-return' task.pk %}" class="btn btn--sm">Devolver</a>
+                            <a href="{% url 'task-move' task.pk %}" class="btn btn--sm">Enviar para outro setor</a>
+                            {% if not open_block %}<a href="{% url 'task-block' task.pk %}" class="btn btn--sm">Registrar bloqueio</a>{% endif %}
+                            <a href="{% url 'deadline-propose' task.pk %}" class="btn btn--sm">Propor novo prazo</a>
+                            <a href="{% url 'task-manual-time' task.pk %}" class="btn btn--sm">Adicionar tempo</a>
+                            <a href="{% url 'task-edit' task.pk %}" class="btn btn--sm">Editar</a>
+                            <a href="{% url 'task-cancel' task.pk %}" class="btn btn--sm btn--danger">Cancelar tarefa</a>
+                        </div>
+                    </div>
+                </details>
+                {% endif %}
+            </div>
         </div>
 
         {% if task.description %}
-        <div class="card"><h2>Descrição</h2><p>{{ task.description|linebreaksbr }}</p></div>
+        <div class="card card--flush">
+            <div class="card__head"><h2>Descrição</h2></div>
+            <div class="card__body"><p style="margin:0">{{ task.description|linebreaksbr }}</p></div>
+        </div>
         {% endif %}
 
-        <div class="card" id="prazo">
-            <h2>Prazo</h2>
-            <div class="deadline-compare">
-                <div>
-                    <div class="muted" title="Quando quem pediu precisa da entrega">Prazo solicitado</div>
-                    <strong>{% if task.requested_deadline %}{{ task.requested_deadline|date:"d/m/Y H:i" }}{% else %}Não informado{% endif %}</strong>
+        <div class="card card--flush" id="prazo">
+            <div class="card__head"><h2>Prazo</h2></div>
+            <div class="card__body">
+                <div class="deadline-compare">
+                    <div>
+                        <div class="k" title="Quando quem pediu precisa da entrega">Prazo solicitado</div>
+                        <div class="v">{% if task.requested_deadline %}{{ task.requested_deadline|date:"d/m/Y H:i" }}{% else %}<span class="muted">Não informado</span>{% endif %}</div>
+                    </div>
+                    <div>
+                        <div class="k" title="Quando o setor responsável se compromete a entregar">Prazo comprometido</div>
+                        <div class="v">{% if task.committed_deadline %}{{ task.committed_deadline|date:"d/m/Y H:i" }}{% else %}<span class="muted">Ainda não comprometido</span>{% endif %}</div>
+                    </div>
                 </div>
-                <div>
-                    <div class="muted" title="Quando o setor responsável se compromete a entregar">Prazo comprometido</div>
-                    <strong>{% if task.committed_deadline %}{{ task.committed_deadline|date:"d/m/Y H:i" }}{% else %}Ainda não comprometido{% endif %}</strong>
-                </div>
-            </div>
 
-            {% if pending_proposal %}
-            <div class="message message--warning" style="margin-top:12px">
-                <strong>Novo prazo proposto:</strong> {{ pending_proposal.proposed_deadline|date:"d/m/Y H:i" }}
-                <div class="muted">Por {{ pending_proposal.proposed_by.get_username }} em {{ pending_proposal.proposed_at|date:"d/m/Y H:i" }} — aguardando decisão do dono.</div>
-                {% if is_owner %}
-                <form method="post" action="{% url 'deadline-accept' pending_proposal.pk %}" style="display:inline">
-                    {% csrf_token %}<button type="submit" class="btn btn--primary">Aceitar</button>
-                </form>
-                <form method="post" action="{% url 'deadline-reject' pending_proposal.pk %}" style="display:inline">
-                    {% csrf_token %}
-                    <input type="text" name="note" placeholder="Motivo da recusa" style="padding:6px">
-                    <button type="submit" class="btn btn--danger">Recusar</button>
-                </form>
-                {% endif %}
-            </div>
-            {% endif %}
-
-            {% for conflict in conflicts %}
-                {% if conflict.status == "ABERTO" %}
-                <div class="message message--error" style="margin-top:12px">
-                    <strong>Prazo em conflito</strong> — aberto em {{ conflict.opened_at|date:"d/m/Y H:i" }}.
-                    {% if can_resolve_conflict %}
-                    <a href="{% url 'conflict-resolve' conflict.pk %}" class="btn">Registrar decisão</a>
-                    {% else %}
-                    <div class="muted">Aguardando decisão dos responsáveis.</div>
+                {% if pending_proposal %}
+                <div class="message message--warning" style="margin-top:14px">
+                    <strong>Novo prazo proposto:</strong> {{ pending_proposal.proposed_deadline|date:"d/m/Y H:i" }}
+                    <div class="small">Por {{ pending_proposal.proposed_by.get_username }} em {{ pending_proposal.proposed_at|date:"d/m/Y H:i" }} — aguardando decisão do dono.</div>
+                    {% if is_owner %}
+                    <div class="actions-row" style="margin-top:10px">
+                        <form method="post" action="{% url 'deadline-accept' pending_proposal.pk %}">
+                            {% csrf_token %}<button type="submit" class="btn btn--sm btn--primary">Aceitar</button>
+                        </form>
+                        <form method="post" action="{% url 'deadline-reject' pending_proposal.pk %}" class="actions-row">
+                            {% csrf_token %}
+                            <input type="text" name="note" placeholder="Motivo da recusa"
+                                   style="padding:6px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font:inherit">
+                            <button type="submit" class="btn btn--sm btn--danger">Recusar</button>
+                        </form>
+                    </div>
                     {% endif %}
                 </div>
-                {% else %}
-                <p class="muted" style="margin-top:8px">Conflito resolvido em {{ conflict.resolved_at|date:"d/m/Y H:i" }}: {{ conflict.resolution_note }}</p>
                 {% endif %}
-            {% endfor %}
 
-            {% if proposals %}
-            <h3 style="font-size:14px; margin-top:16px">Histórico de prazos</h3>
-            <ul class="list-reset">
-                {% for proposal in proposals %}
-                <li>
-                    {{ proposal.proposed_deadline|date:"d/m/Y H:i" }}
-                    <span class="tag tag--{{ proposal.status }}">{{ proposal.get_status_display }}</span>
-                    <span class="muted">proposto por {{ proposal.proposed_by.get_username }}
-                    {% if proposal.decided_at %} · decidido em {{ proposal.decided_at|date:"d/m/Y H:i" }}{% endif %}
-                    {% if proposal.decision_note %} · {{ proposal.decision_note }}{% endif %}</span>
-                </li>
+                {% for conflict in conflicts %}
+                    {% if conflict.status == "ABERTO" %}
+                    <div class="message message--error" style="margin-top:12px">
+                        <strong>Prazo em conflito</strong> — aberto em {{ conflict.opened_at|date:"d/m/Y H:i" }}.
+                        {% if can_resolve_conflict %}
+                        <div class="actions-row" style="margin-top:8px">
+                            <a href="{% url 'conflict-resolve' conflict.pk %}" class="btn btn--sm">Registrar decisão</a>
+                        </div>
+                        {% else %}
+                        <div class="small">Aguardando decisão dos responsáveis.</div>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <p class="muted small" style="margin-top:8px">Conflito resolvido em {{ conflict.resolved_at|date:"d/m/Y H:i" }}: {{ conflict.resolution_note }}</p>
+                    {% endif %}
                 {% endfor %}
-            </ul>
-            {% endif %}
+
+                {% if proposals %}
+                <h3 style="margin-top:18px">Histórico de prazos</h3>
+                <ul class="list-rows">
+                    {% for proposal in proposals %}
+                    <li>
+                        <strong>{{ proposal.proposed_deadline|date:"d/m/Y H:i" }}</strong>
+                        <span class="tag tag--{{ proposal.status }}">{{ proposal.get_status_display }}</span>
+                        <div class="muted small">proposto por {{ proposal.proposed_by.get_username }}
+                        {% if proposal.decided_at %} · decidido em {{ proposal.decided_at|date:"d/m/Y H:i" }}{% endif %}
+                        {% if proposal.decision_note %} · {{ proposal.decision_note }}{% endif %}</div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+            </div>
         </div>
 
-        <div class="card" id="conversa">
-            <h2>Conversa</h2>
-            <div class="context-banner">Você está comentando na tarefa: {{ task.title }}</div>
-            {% if task_messages %}
-            <ul class="chat">
-                {% for message in task_messages %}
-                <li>
-                    <span class="who">{{ message.author.get_username }}</span>
-                    <span class="when">{{ message.created_at|date:"d/m/Y H:i" }}</span>
-                    <div>{{ message.body|linebreaksbr }}</div>
-                </li>
-                {% endfor %}
-            </ul>
-            {% else %}
-            <p class="muted">Nenhuma mensagem ainda.</p>
-            {% endif %}
-            <form method="post" action="{% url 'task-message' task.pk %}">
-                {% csrf_token %}
-                <div class="form-row">{{ message_form.body }}</div>
-                <div class="actions-row">
-                    <button type="submit" class="btn btn--primary">Enviar</button>
-                    <a href="{% url 'deadline-propose' task.pk %}" class="btn">Propor novo prazo</a>
+        <div class="card card--flush" id="conversa">
+            <div class="card__head"><h2>Conversa</h2></div>
+            <div class="card__body">
+                <div class="context-banner">
+                    {% include "_icon.html" with name="info" %}
+                    <span>Você está comentando na tarefa <strong>{{ task.title }}</strong>.</span>
                 </div>
-            </form>
+                {% if task_messages %}
+                <ul class="chat">
+                    {% for message in task_messages %}
+                    <li>
+                        <span class="avatar">{{ message.author.get_username|slice:":2"|upper }}</span>
+                        <div>
+                            <span class="who">{{ message.author.get_username }}</span>
+                            <span class="when">{{ message.created_at|date:"d/m/Y H:i" }}</span>
+                            <div class="body">{{ message.body|linebreaksbr }}</div>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="muted">Nenhuma mensagem ainda.</p>
+                {% endif %}
+                <form method="post" action="{% url 'task-message' task.pk %}">
+                    {% csrf_token %}
+                    <div class="form-row">{{ message_form.body }}</div>
+                    <div class="form-foot form-foot--split">
+                        <a href="{% url 'deadline-propose' task.pk %}" class="btn">Propor novo prazo</a>
+                        <button type="submit" class="btn btn--primary">Enviar mensagem</button>
+                    </div>
+                </form>
+            </div>
         </div>
 
-        <div class="card">
-            <h2>Histórico</h2>
-            {% include "activities/_timeline.html" with entries=history %}
+        <div class="card card--flush">
+            <div class="card__head"><h2>Linha do tempo</h2></div>
+            <div class="card__body">{% include "activities/_timeline.html" with entries=history %}</div>
         </div>
     </div>
 
     <div>
-        <div class="card">
-            <h2>Executores</h2>
-            {% if executors %}
-            <ul class="list-reset">
-                {% for executor in executors %}
-                <li>
-                    {{ executor.user.get_username }}
-                    {% if can_assign %}
-                    <form method="post" action="{% url 'task-executor-remove' task.pk executor.user.pk %}" style="display:inline">
-                        {% csrf_token %}<button type="submit" class="link-button">remover</button>
-                    </form>
-                    {% endif %}
-                </li>
-                {% endfor %}
-            </ul>
-            <p class="muted">Horas-homem totais: {{ man_hours|duration_hm }}</p>
-            {% else %}
-            <p class="muted">Sem executor.</p>
-            {% endif %}
+        <div class="card card--flush">
+            <div class="card__head"><h2>Executores</h2></div>
+            <div class="card__body">
+                {% if executors %}
+                <ul class="list-rows">
+                    {% for executor in executors %}
+                    <li style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+                        <span>{{ executor.user.get_username }}</span>
+                        {% if can_assign %}
+                        <form method="post" action="{% url 'task-executor-remove' task.pk executor.user.pk %}">
+                            {% csrf_token %}<button type="submit" class="link-button">remover</button>
+                        </form>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                <p class="muted small" style="margin:10px 0 0">Horas-homem totais: <strong>{{ man_hours|duration_hm }}</strong></p>
+                {% else %}
+                <p class="muted" style="margin:0">Sem executor.</p>
+                {% endif %}
 
-            {% if can_assign %}
-            <form method="post" action="{% url 'task-executor-add' task.pk %}">
-                {% csrf_token %}
-                <div class="form-row">{{ executor_form.user }}</div>
-                <button type="submit" class="btn">Atribuir executor</button>
-            </form>
-            {% endif %}
+                {% if can_assign %}
+                <form method="post" action="{% url 'task-executor-add' task.pk %}" style="margin-top:14px">
+                    {% csrf_token %}
+                    <div class="form-row">{{ executor_form.user }}</div>
+                    <button type="submit" class="btn btn--block">Atribuir executor</button>
+                </form>
+                {% endif %}
+            </div>
         </div>
 
-        <div class="card">
-            <h2>Tempo registrado</h2>
-            {% if sessions %}
-            <ul class="list-reset">
-                {% for session in sessions %}
-                <li>
-                    {{ session.started_at|date:"d/m H:i" }}–{% if session.ended_at %}{{ session.ended_at|date:"H:i" }}{% else %}em andamento{% endif %}
-                    <strong>{{ session.duration|duration_hm }}</strong>
-                    <div class="muted">{{ session.user.get_username }}{% if session.is_manual %} · Lançado manualmente{% endif %}</div>
-                </li>
-                {% endfor %}
-            </ul>
-            {% else %}
-            <p class="muted">Nenhum tempo registrado.</p>
-            {% endif %}
+        <div class="card card--flush">
+            <div class="card__head"><h2>Tempo registrado</h2></div>
+            <div class="card__body">
+                {% if sessions %}
+                <ul class="list-rows">
+                    {% for session in sessions %}
+                    <li>
+                        <strong>{{ session.duration|duration_hm }}</strong>
+                        <span class="muted small">
+                            {{ session.started_at|date:"d/m H:i" }}–{% if session.ended_at %}{{ session.ended_at|date:"H:i" }}{% else %}em andamento{% endif %}
+                        </span>
+                        <div class="muted small">{{ session.user.get_username }}{% if session.is_manual %} · Lançado manualmente{% endif %}</div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="muted" style="margin:0">Nenhum tempo registrado.</p>
+                {% endif %}
+            </div>
         </div>
 
         {% if returns %}
-        <div class="card">
-            <h2>Devoluções</h2>
-            <ul class="list-reset">
-                {% for item in returns %}
-                <li>
-                    {{ item.from_sector.name }} → {{ item.to_sector.name }}
-                    <div class="muted">{{ item.reason.name }}{% if item.observation %} — {{ item.observation }}{% endif %}</div>
-                    <div class="muted">{{ item.returned_by.get_username }} em {{ item.returned_at|date:"d/m/Y H:i" }}</div>
-                </li>
-                {% endfor %}
-            </ul>
+        <div class="card card--flush">
+            <div class="card__head"><h2>Devoluções</h2></div>
+            <div class="card__body">
+                <ul class="list-rows">
+                    {% for item in returns %}
+                    <li>
+                        <strong>{{ item.from_sector.name }} → {{ item.to_sector.name }}</strong>
+                        <div class="muted small">{{ item.reason.name }}{% if item.observation %} — {{ item.observation }}{% endif %}</div>
+                        <div class="muted small">{{ item.returned_by.get_username }} em {{ item.returned_at|date:"d/m/Y H:i" }}</div>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
         </div>
         {% endif %}
 
         {% if transfers %}
-        <div class="card">
-            <h2>Por onde passou</h2>
-            <ul class="list-reset">
-                {% for transfer in transfers %}
-                <li>{% if transfer.from_sector %}{{ transfer.from_sector.name }} → {% endif %}{{ transfer.to_sector.name }}
-                    <div class="muted">{{ transfer.moved_at|date:"d/m/Y H:i" }}</div></li>
-                {% endfor %}
-            </ul>
+        <div class="card card--flush">
+            <div class="card__head"><h2>Por onde passou</h2></div>
+            <div class="card__body">
+                <ul class="list-rows">
+                    {% for transfer in transfers %}
+                    <li>{% if transfer.from_sector %}{{ transfer.from_sector.name }} → {% endif %}<strong>{{ transfer.to_sector.name }}</strong>
+                        <div class="muted small">{{ transfer.moved_at|date:"d/m/Y H:i" }}</div></li>
+                    {% endfor %}
+                </ul>
+            </div>
         </div>
         {% endif %}
     </div>

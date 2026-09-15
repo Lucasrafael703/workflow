@@ -1,18 +1,51 @@
 {% extends "base.html" %}
-{% block title %}Meu perfil{% endblock %}
+{% block title %}Meu perfil — LPS{% endblock %}
+
 {% block content %}
-<h1>Meu perfil</h1>
-<div class="card" style="max-width:480px;">
-    <form method="post">
-        {% csrf_token %}
-        {% for field in form %}
-        <div class="form-row">
-            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-            {{ field }}
-            {% if field.errors %}<ul class="errorlist">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+<div class="page-head">
+    <div class="page-head__text">
+        <h1>Meu perfil</h1>
+        <p class="sub">Seus dados e a organização em que você trabalha.</p>
+    </div>
+</div>
+
+<div class="split">
+    <div>
+        <form method="post">
+            {% csrf_token %}
+            <div class="card card--flush">
+                <div class="card__head"><h2>Meus dados</h2></div>
+                <div class="card__body">
+                    {% include "activities/_form_fields.html" %}
+                </div>
+                <div class="card__foot" style="text-align:right">
+                    <button type="submit" class="btn btn--primary">Salvar</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <div>
+        <div class="card card--flush">
+            <div class="card__head"><h2>Acesso</h2></div>
+            <div class="card__body">
+                <div class="summary-item">
+                    <div>
+                        <div class="k">Usuário</div>
+                        <div class="v">{{ user.get_username }}</div>
+                    </div>
+                </div>
+                <div class="summary-item">
+                    <div>
+                        <div class="k">Organização</div>
+                        <div class="v">{{ user.profile.organization.name|default:"Sem organização" }}</div>
+                    </div>
+                </div>
+                <p class="muted small" style="margin:12px 0 0">
+                    Suas permissões são definidas por um administrador, em Usuários › Acessos.
+                </p>
+            </div>
         </div>
-        {% endfor %}
-        <button type="submit" class="btn btn--primary">Salvar</button>
-    </form>
+    </div>
 </div>
 {% endblock %}

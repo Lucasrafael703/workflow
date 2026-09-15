@@ -1,46 +1,118 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}{% if is_edit %}Editar atividade{% else %}Nova atividade{% endif %} — LPS{% endblock %}
 
 {% block content %}
-<h1>{% if is_edit %}Editar atividade{% else %}Nova atividade{% endif %}</h1>
-
-<form method="post" class="card" style="max-width:640px">
-    {% csrf_token %}
-    {{ form.non_field_errors }}
-
-    {# Progressive disclosure: o essencial à vista, o resto em "Mais opções" (doc 09 §315) #}
-    {% for field in form %}
-        {% if field.name == "title" or field.name == "owner" or field.name == "requested_deadline" %}
-        <div class="form-row">
-            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-            {{ field }}
-            {% if field.help_text %}<div class="helptext">{{ field.help_text }}</div>{% endif %}
-            {{ field.errors }}
+<div class="page-head">
+    <div class="page-head__text">
+        <div class="breadcrumb">
+            <a href="{% url 'activity-list' %}">Atividades</a><span>›</span>
+            {% if is_edit %}{{ activity.title }}{% else %}Nova atividade{% endif %}
         </div>
-        {% endif %}
-    {% endfor %}
+        <h1>{% if is_edit %}Editar atividade{% else %}Nova atividade{% endif %}</h1>
+        <p class="sub">Descreva o resultado esperado. Os passos vêm depois, como tarefas.</p>
+    </div>
+</div>
 
-    <details {% if is_edit %}open{% endif %}>
-        <summary style="cursor:pointer; font-weight:600; margin-bottom:12px">Mais opções</summary>
-        {% for field in form %}
-            {% if field.name != "title" and field.name != "owner" and field.name != "requested_deadline" %}
-            <div class="form-row">
-                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-                {{ field }}
-                {% if field.help_text %}<div class="helptext">{{ field.help_text }}</div>{% endif %}
-                {{ field.errors }}
+<form method="post" id="activity-form">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+    <ul class="messages">
+        {% for error in form.non_field_errors %}<li class="message message--error">{{ error }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+
+    <div class="form-layout">
+        <div>
+            {# O essencial primeiro; o resto sob demanda (doc 09 §43-56). #}
+            <div class="form-section">
+                <div class="form-section__head">
+                    <span class="form-section__num">1</span>
+                    <div>
+                        <h3>O essencial</h3>
+                        <div class="sub">Preencha isto e a atividade já existe.</div>
+                    </div>
+                </div>
+
+                {% for field in form %}
+                    {% if field.name == "title" or field.name == "owner" or field.name == "requested_deadline" %}
+                    <div class="form-row">
+                        <label for="{{ field.id_for_label }}">
+                            {{ field.label }}{% if field.field.required %} <span class="req">*</span>{% endif %}
+                        </label>
+                        {{ field }}
+                        {% if field.help_text %}<div class="helptext">{{ field.help_text }}</div>{% endif %}
+                        {% if field.errors %}<ul class="errorlist">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                    </div>
+                    {% endif %}
+                {% endfor %}
             </div>
-            {% endif %}
-        {% endfor %}
-    </details>
 
-    <div class="actions-row">
-        <button type="submit" class="btn btn--primary">{% if is_edit %}Salvar{% else %}Criar{% endif %}</button>
-        {% if is_edit %}
-        <a href="{% url 'activity-detail' activity.pk %}" class="btn">Cancelar</a>
-        {% else %}
-        <a href="{% url 'activity-list' %}" class="btn">Cancelar</a>
-        {% endif %}
+            <details class="disclosure" {% if is_edit %}open{% endif %}>
+                <summary>Mais opções — empresa, obra, centro de custo e descrição</summary>
+                <div class="disclosure__body">
+                    {% for field in form %}
+                        {% if field.name != "title" and field.name != "owner" and field.name != "requested_deadline" %}
+                        <div class="form-row">
+                            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                            {{ field }}
+                            {% if field.help_text %}<div class="helptext">{{ field.help_text }}</div>{% endif %}
+                            {% if field.errors %}<ul class="errorlist">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </details>
+
+            {# Uma ação principal e, no máximo, uma continuação lógica (Benchmark §8.7) #}
+            <div class="form-foot form-foot--split">
+                <a href="{% if is_edit %}{% url 'activity-detail' activity.pk %}{% else %}{% url 'activity-list' %}{% endif %}" class="btn btn--ghost">Cancelar</a>
+                <div class="actions-row">
+                    {% if not is_edit %}
+                    <button type="submit" name="salvar_e_tarefas" value="1" class="btn">Criar e adicionar tarefas</button>
+                    {% endif %}
+                    <button type="submit" class="btn btn--primary">
+                        {% if is_edit %}Salvar alterações{% else %}Criar atividade{% endif %}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        {# Resumo do que será criado, atualizado enquanto a pessoa digita #}
+        <aside class="summary-panel">
+            <h3>Resumo da atividade</h3>
+            <div class="summary-item">
+                <div>
+                    <div class="k">Resultado esperado</div>
+                    <div class="v" data-summary="title">Descreva o que precisa ser resolvido</div>
+                </div>
+            </div>
+            <div class="summary-item">
+                <div>
+                    <div class="k">Dono</div>
+                    <div class="v" data-summary="owner">—</div>
+                </div>
+            </div>
+            <div class="summary-item">
+                <div>
+                    <div class="k">Prazo solicitado</div>
+                    <div class="v" data-summary="requested_deadline">Sem prazo</div>
+                </div>
+            </div>
+            <div class="summary-item">
+                <div>
+                    <div class="k">Tarefas</div>
+                    <div class="v">Definidas no próximo passo</div>
+                </div>
+            </div>
+            <p class="muted small" style="margin:12px 0 0">
+                O dono responde pelo resultado. Cada tarefa pode ter executores de setores diferentes.
+            </p>
+        </aside>
     </div>
 </form>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/form-summary.js' %}"></script>
 {% endblock %}
