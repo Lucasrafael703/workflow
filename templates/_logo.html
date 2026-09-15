@@ -1,0 +1,24 @@
+{% comment %}
+Marca da LPS: dois blocos em perspectiva formando um "L".
+Desenhada em SVG para ficar nítida em qualquer tamanho e para poder trocar
+de cor conforme o fundo.
+
+Parâmetros:
+  variant — "color" (padrão, sobre fundo claro) ou "light" (sobre fundo escuro)
+  size    — altura do símbolo em px (padrão 32)
+  wordmark— se verdadeiro, desenha "LPS" ao lado do símbolo
+{% endcomment %}
+<span class="logo logo--{{ variant|default:'color' }}" style="--logo-size:{{ size|default:32 }}px">
+    <svg class="logo__mark" viewBox="0 0 120 120" role="img"
+         aria-label="LPS">
+        {# Bloco escuro da esquerda: a base do "L" #}
+        <path class="logo__face logo__face--dark" d="M8 50.5 L36 40 L36 107.5 L8 118 Z"/>
+        {# Torre central, em azul médio #}
+        <path class="logo__face logo__face--mid" d="M44 14 L76 2 L76 66 L44 78 Z"/>
+        {# Pé do "L", ligando a base à torre #}
+        <path class="logo__face logo__face--mid" d="M44 86 L76 74 L76 106 L44 118 Z"/>
+        {# Lateral clara, dando a profundidade #}
+        <path class="logo__face logo__face--light" d="M84 26 L112 40 L112 104 L84 118 Z"/>
+    </svg>
+    {% if wordmark %}<span class="logo__word">LPS</span>{% endif %}
+</span>

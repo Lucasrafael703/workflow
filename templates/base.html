@@ -17,8 +17,9 @@
 
     <aside class="sidebar">
         <div class="sidebar__brand">
-            <span class="sidebar__logo">LPS</span>
-            <a href="{% url 'home' %}">LPS</a>
+            <a href="{% url 'home' %}" aria-label="LPS — ir para a Home">
+                {% include "_logo.html" with variant="light" size=30 wordmark=True %}
+            </a>
         </div>
 
         {% if lps_org %}

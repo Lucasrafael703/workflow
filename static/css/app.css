@@ -5,47 +5,82 @@
    ========================================================================== */
 
 :root {
+    /* --- Cores da marca LPS ---------------------------------------------
+       Os três azuis do logotipo: o navy profundo da base, o azul médio da
+       torre e o azul claro da lateral. Tudo na interface deriva daqui. */
+    --brand-navy: #1b3a63;
+    --brand-navy-deep: #12294a;
+    --brand-blue: #1b62c4;
+    --brand-blue-light: #61a5f2;
+
     /* Superfícies */
-    --bg: #f4f6f8;
+    --bg: #f4f7fb;
     --surface: #ffffff;
-    --surface-alt: #f8fafb;
-    --border: #e3e8ee;
-    --border-strong: #cfd7e0;
+    --surface-alt: #f7fafd;
+    --border: #e1e8f0;
+    --border-strong: #c9d5e3;
 
     /* Texto */
-    --text: #16212e;
-    --text-2: #4d5c6d;
-    --muted: #7a8899;
+    --text: #15273f;
+    --text-2: #46586f;
+    /* Texto auxiliar também precisa ser lido: 4.5:1 ou mais sobre branco,
+       sobre --bg e sobre --surface-alt (WCAG AA). */
+    --muted: #607188;
 
-    /* Marca: navy no menu, turquesa na ação */
-    --nav-bg: #14243a;
-    --nav-bg-2: #1c3047;
-    --nav-text: #a9bacd;
+    /* Menu lateral: navy da marca */
+    --nav-bg: var(--brand-navy-deep);
+    --nav-bg-2: #1d3a62;
+    --nav-text: #a8bdd8;
     --nav-text-active: #ffffff;
 
-    --primary: #0f9b8e;
-    --primary-hover: #0c857a;
-    --primary-soft: #e6f6f4;
+    /* Ação principal: o azul da marca */
+    --primary: var(--brand-blue);
+    --primary-hover: #17529f;
+    --primary-soft: #e8f1fd;
 
     /* Estados — sempre acompanhados de texto, nunca cor sozinha (doc 09 §66) */
-    --danger: #d64550;
-    --danger-soft: #fdecec;
-    --warning: #c47f17;
-    --warning-soft: #fdf4e3;
-    --success: #1f9254;
-    --success-soft: #e6f6ec;
-    --info: #2a6fd6;
-    --info-soft: #e9f1fd;
-    --neutral-soft: #eef1f4;
+    --danger: #cf3b47;
+    --danger-soft: #fdecee;
+    --warning: #b8770f;
+    --warning-soft: #fdf3e0;
+    --success: #1b8a52;
+    --success-soft: #e5f5eb;
+    --info: var(--brand-blue);
+    --info-soft: #e8f1fd;
+    --neutral-soft: #eef2f7;
 
     --radius: 10px;
     --radius-sm: 7px;
-    --shadow: 0 1px 2px rgba(20, 36, 58, .06), 0 1px 3px rgba(20, 36, 58, .04);
-    --shadow-lg: 0 10px 30px rgba(20, 36, 58, .16);
+    --shadow: 0 1px 2px rgba(18, 41, 74, .06), 0 1px 3px rgba(18, 41, 74, .04);
+    --shadow-lg: 0 10px 30px rgba(18, 41, 74, .16);
 
     --sidebar-w: 236px;
     --topbar-h: 60px;
 }
+
+/* ==========================================================================
+   Logotipo
+   ========================================================================== */
+
+.logo { display: inline-flex; align-items: center; gap: .34em; line-height: 1; }
+.logo__mark { width: var(--logo-size, 32px); height: var(--logo-size, 32px); display: block; }
+.logo__word {
+    font-size: calc(var(--logo-size, 32px) * .92);
+    font-weight: 800;
+    letter-spacing: -.02em;
+    color: var(--brand-navy);
+}
+
+/* Sobre fundo claro: os três azuis do logotipo */
+.logo__face--dark { fill: var(--brand-navy); }
+.logo__face--mid { fill: var(--brand-blue); }
+.logo__face--light { fill: var(--brand-blue-light); }
+
+/* Sobre fundo escuro: branco e azul claro preservam a leitura da forma */
+.logo--light .logo__word { color: #fff; }
+.logo--light .logo__face--dark { fill: #ffffff; }
+.logo--light .logo__face--mid { fill: var(--brand-blue-light); }
+.logo--light .logo__face--light { fill: #ffffff; opacity: .55; }
 
 * { box-sizing: border-box; }
 
@@ -92,19 +127,11 @@ h3 { font-size: 13px; font-weight: 700; margin: 0 0 8px; }
 .sidebar__brand {
     display: flex;
     align-items: center;
-    gap: 10px;
     padding: 0 18px;
     height: var(--topbar-h);
     flex: 0 0 var(--topbar-h);
 }
-.sidebar__brand a { color: #fff; font-size: 17px; font-weight: 700; letter-spacing: .02em; }
-.sidebar__brand a:hover { text-decoration: none; }
-.sidebar__logo {
-    width: 28px; height: 28px; border-radius: 8px;
-    background: var(--primary); color: #fff;
-    display: inline-flex; align-items: center; justify-content: center;
-    font-weight: 800; font-size: 13px;
-}
+.sidebar__brand a:hover { text-decoration: none; opacity: .9; }
 
 /* Contexto: organização atual, como o seletor de empresa do Zoonor (§7.1) */
 .sidebar__org {
@@ -455,7 +482,7 @@ td .title:hover { color: var(--primary); }
     background: var(--primary-soft);
     border-radius: var(--radius-sm);
     padding: 10px 14px;
-    color: #10635c;
+    color: #1a4d8f;
     font-size: 12.5px;
     margin-top: 14px;
 }
@@ -481,9 +508,11 @@ td .title:hover { color: var(--primary); }
 .form-row input:focus, .form-row select:focus, .form-row textarea:focus,
 .toolbar input:focus, .toolbar select:focus {
     outline: none; border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(15, 155, 142, .14);
+    box-shadow: 0 0 0 3px rgba(27, 98, 196, .13);
 }
 .form-row textarea { min-height: 84px; resize: vertical; }
+/* O padrão do navegador é claro demais para ser lido (contraste < 3:1) */
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .form-row .helptext { color: var(--muted); font-size: 12px; margin-top: 4px; }
 .form-row .errorlist { color: var(--danger); font-size: 12px; list-style: none; padding: 0; margin: 5px 0 0; }
 .form-row--check > label { font-weight: 500; display: flex; align-items: center; gap: 8px; }
@@ -606,7 +635,7 @@ td .title:hover { color: var(--primary); }
 .timerbar {
     position: sticky; top: var(--topbar-h); z-index: 25;
     display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-    background: linear-gradient(90deg, #0f9b8e, #14b3a3);
+    background: linear-gradient(90deg, var(--brand-navy) 0%, var(--brand-blue) 100%);
     color: #fff;
     padding: 11px 24px;
 }
