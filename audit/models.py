@@ -6,14 +6,26 @@ class AuditLog(models.Model):
     class Action(models.TextChoices):
         CREATE = "CREATE", "Criação"
         UPDATE = "UPDATE", "Atualização"
-        CLAIM = "CLAIM", "Assumida"
-        COMPLETE = "COMPLETE", "Concluída"
-        REOPEN = "REOPEN", "Reaberta"
+        OWNER_CHANGED = "OWNER_CHANGED", "Dono alterado"
+        TASK_CREATED = "TASK_CREATED", "Tarefa criada"
+        EXECUTOR_ADDED = "EXECUTOR_ADDED", "Executor incluído"
+        EXECUTOR_REMOVED = "EXECUTOR_REMOVED", "Executor removido"
+        SESSION_STARTED = "SESSION_STARTED", "Sessão iniciada"
+        SESSION_PAUSED = "SESSION_PAUSED", "Sessão pausada"
+        SESSION_RESUMED = "SESSION_RESUMED", "Sessão retomada"
+        SECTOR_MOVED = "SECTOR_MOVED", "Movida de setor"
+        RETURNED = "RETURNED", "Devolvida"
+        QUEUE_POSITION_CHANGED = "QUEUE_POSITION_CHANGED", "Posição na fila alterada"
+        DEADLINE_PROPOSED = "DEADLINE_PROPOSED", "Prazo proposto"
+        DEADLINE_ACCEPTED = "DEADLINE_ACCEPTED", "Prazo aceito"
+        DEADLINE_REJECTED = "DEADLINE_REJECTED", "Prazo recusado"
+        CONFLICT_OPENED = "CONFLICT_OPENED", "Conflito de prazo aberto"
+        CONFLICT_RESOLVED = "CONFLICT_RESOLVED", "Conflito de prazo resolvido"
         BLOCK = "BLOCK", "Bloqueada"
         UNBLOCK = "UNBLOCK", "Desbloqueada"
+        COMPLETE = "COMPLETE", "Concluída"
+        REOPEN = "REOPEN", "Reaberta"
         CANCEL = "CANCEL", "Cancelada"
-        FINALIZE = "FINALIZE", "Finalizada"
-        DECIDE = "DECIDE", "Decisão registrada"
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -22,24 +34,21 @@ class AuditLog(models.Model):
         on_delete=models.SET_NULL,
         related_name="audit_entries",
     )
-    demand = models.ForeignKey(
-        "demands.Demand", verbose_name="demanda", null=True, on_delete=models.SET_NULL, related_name="audit_entries"
-    )
-    process = models.ForeignKey(
-        "workflows.Process",
-        verbose_name="processo",
-        null=True,
-        on_delete=models.SET_NULL,
-        related_name="audit_entries",
-    )
-    step = models.ForeignKey(
-        "workflows.ProcessStep",
+    activity = models.ForeignKey(
+        "activities.Activity",
         verbose_name="atividade",
         null=True,
         on_delete=models.SET_NULL,
         related_name="audit_entries",
     )
-    action = models.CharField("ação", max_length=12, choices=Action.choices)
+    task = models.ForeignKey(
+        "activities.Task",
+        verbose_name="tarefa",
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="audit_entries",
+    )
+    action = models.CharField("ação", max_length=24, choices=Action.choices)
     field_name = models.CharField("campo alterado", max_length=50, blank=True)
     old_value = models.TextField("valor anterior", blank=True)
     new_value = models.TextField("novo valor", blank=True)
@@ -50,7 +59,10 @@ class AuditLog(models.Model):
         verbose_name = "registro de auditoria"
         verbose_name_plural = "registros de auditoria"
         ordering = ["-timestamp"]
-        indexes = [models.Index(fields=["process", "timestamp"])]
+        indexes = [
+            models.Index(fields=["activity", "timestamp"]),
+            models.Index(fields=["task", "timestamp"]),
+        ]
 
     def __str__(self):
         return f"{self.get_action_display()} - {self.timestamp:%d/%m/%Y %H:%M}"

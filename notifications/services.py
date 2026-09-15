@@ -3,6 +3,7 @@ import logging
 from django.conf import settings
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
+from django.utils import timezone
 
 from .models import Notification
 
@@ -11,15 +12,15 @@ logger = logging.getLogger(__name__)
 
 class NotificationService:
     @staticmethod
-    def notify(users, event_type, title, message, process=None, step=None, url=""):
+    def notify(users, event_type, title, message, activity=None, task=None, url=""):
         """Cria uma notificação in-app para cada usuário em `users`."""
         users = list({u.id: u for u in users}.values())
         notifications = [
             Notification(
                 recipient=user,
                 event_type=event_type,
-                process=process,
-                step=step,
+                activity=activity,
+                task=task,
                 title=title,
                 message=message,
                 url=url,
@@ -30,8 +31,6 @@ class NotificationService:
 
     @staticmethod
     def mark_read(notification):
-        from django.utils import timezone
-
         if not notification.is_read:
             notification.is_read = True
             notification.read_at = timezone.now()
@@ -40,9 +39,7 @@ class NotificationService:
 
 
 class EmailService:
-    """Único ponto de envio de e-mail do sistema (django.core.mail, síncrono).
-    Chamado apenas para os dois eventos definidos pela regra de negócio:
-    liberação de atividade e atividade atrasada."""
+    """Único ponto de envio de e-mail do sistema (django.core.mail, síncrono)."""
 
     @staticmethod
     def _send(subject, template_prefix, context, recipients):
@@ -62,19 +59,10 @@ class EmailService:
             logger.exception("Falha ao enviar e-mail '%s' para %s", subject, emails)
 
     @classmethod
-    def send_step_released(cls, step, recipients):
+    def send_task_overdue(cls, task, recipients):
         cls._send(
-            subject=f"[{step.process.title}] Nova atividade liberada: {step.name}",
-            template_prefix="step_released",
-            context={"step": step, "process": step.process},
-            recipients=recipients,
-        )
-
-    @classmethod
-    def send_step_overdue(cls, step, recipients):
-        cls._send(
-            subject=f"[{step.process.title}] Atividade atrasada: {step.name}",
-            template_prefix="step_overdue",
-            context={"step": step, "process": step.process},
+            subject=f"[{task.activity.title}] Tarefa atrasada: {task.title}",
+            template_prefix="task_overdue",
+            context={"task": task, "activity": task.activity},
             recipients=recipients,
         )

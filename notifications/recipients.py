@@ -9,18 +9,23 @@ def _dedupe(*querysets):
     for qs in querysets:
         for user in qs:
             by_id[user.id] = user
-    return list(by_id.values())
+    return set(by_id.values())
 
 
 def resolve_admins():
-    return list(User.objects.filter(groups__name=settings.ADMIN_GROUP_NAME).distinct())
+    return set(User.objects.filter(groups__name=settings.ADMIN_GROUP_NAME).distinct())
 
 
-def resolve_group_and_admins(group):
-    """Usuários de um Group específico + membros do grupo de administradores
-    (settings.ADMIN_GROUP_NAME), sem duplicar quem estiver nos dois."""
+def resolve_sector_and_admins(sector):
+    """Usuários com participação ativa no setor (accounts.UserSector) + membros
+    do grupo de administradores (settings.ADMIN_GROUP_NAME), sem duplicar.
+
+    Retorna sempre um set, para permitir composição com `|` nos chamadores.
+    """
     admins = User.objects.filter(groups__name=settings.ADMIN_GROUP_NAME)
-    if group is None:
+    if sector is None:
         return _dedupe(admins)
-    members = User.objects.filter(groups=group)
+    members = User.objects.filter(
+        sector_memberships__sector=sector, sector_memberships__removed_at__isnull=True
+    )
     return _dedupe(admins, members)

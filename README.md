@@ -1,15 +1,14 @@
-# Sistema de Gestão de Demandas e Workflows
+# LPS — Plataforma de Gestão do Trabalho
 
-Aplicação Django para centralizar e orquestrar o processo comercial de
-orçamento/proposta de engenharia civil (e, futuramente, outros processos
-internos): Demanda → Processo → Atividades → Execução → Conclusão →
-Próxima Atividade → Histórico.
+Aplicação Django que implementa o núcleo D0 da LPS (ver `Regras/`): uma
+plataforma de gestão do trabalho multi-organização que organiza atividades e
+tarefas, torna filas e responsabilidades visíveis, registra o que acontece
+durante a execução e transforma esse histórico em informação para gestão.
 
 Construída apenas com recursos nativos do Django (auth, ORM, CBVs, Forms,
 Admin, `django.core.mail`, `django.contrib.messages`, signals, management
 commands) — a única dependência externa é `django-environ`, usada só para
-o parsing tipado de variáveis de ambiente (ver justificativa no plano do
-projeto).
+o parsing tipado de variáveis de ambiente.
 
 ## Setup local
 
@@ -19,9 +18,8 @@ venv\Scripts\activate          # Windows
 pip install -r requirements.txt
 copy .env.example .env         # e ajuste os valores
 python manage.py migrate
-python manage.py seed_groups_permissions
+python manage.py seed_lps_demo
 python manage.py createsuperuser
-python manage.py seed_demo_template   # opcional: cria o template de demonstração
 python manage.py runserver
 ```
 
@@ -31,17 +29,16 @@ python manage.py runserver
 
 ## Apps
 
-- `accounts` — `Profile` (1:1 com `User`), seed de grupos/permissões, login/logout (views nativas do Django).
-- `demands` — cadastro e qualificação de demandas comerciais (`Demand`, `DemandDecision`).
-- `workflows` — motor de workflow genérico: `ProcessTemplate`, `ProcessTemplateStep`, `Process`, `ProcessStep`, `Attachment`, `WorkflowService`.
-- `notifications` — `Notification`, inbox in-app, `EmailService` (e-mail restrito a dois eventos: liberação e atraso de atividade).
-- `audit` — `AuditLog`, histórico de todas as ações relevantes do workflow.
+- `core` — estrutura multi-tenant: `Organization`, `Company`, `Sector` (configurável, nunca fixo no código), `Site` (obra), `CostCenter`.
+- `accounts` — `Profile` (1:1 com `User`, vinculado a uma única `Organization`), `UserSector` (participação operacional em setores, separada de permissões).
+- `activities` — núcleo operacional da LPS: `Activity` (dono único), `Task` (setor, executores, sessões de trabalho), fila por setor (`QueueEntry`/`QueuePositionChange`), devolução (`TaskReturn`/`ReturnReason`), negociação de prazo (`DeadlineProposal`/`DeadlineConflict`), `ActivityService`/`TaskService`/`QueueService`/`DeadlineService`.
+- `notifications` — `Notification`, inbox in-app, `EmailService` (e-mail restrito ao evento de tarefa atrasada).
+- `audit` — `AuditLog`, histórico de todos os eventos relevantes (criação, mudança de dono, execução, devolução, fila, prazo, conclusão).
 
 ## Management commands
 
-- `seed_groups_permissions` — cria (idempotentemente) os grupos padrão (ADMIN, COMERCIAL, ENGENHARIA, SUPRIMENTOS, FINANCEIRO, PLANEJAMENTO, RH) e associa as permissões customizadas iniciais.
-- `seed_demo_template` — cria o template de demonstração "Orçamento Comercial - Engenharia Civil" com as 16 etapas da especificação.
-- `check_overdue_activities` — verifica atividades com prazo vencido e dispara notificação in-app + e-mail. **Deve ser agendado** periodicamente (Task Scheduler no Windows, cron no Linux) — o MVP não usa Celery/Redis, então este comando substitui um worker assíncrono.
+- `seed_lps_demo` — cria (idempotentemente) uma organização de demonstração, empresa, setores básicos e perfis (`Administrador`, `Gestor`, `Colaborador`) com as permissões correspondentes.
+- `check_overdue_tasks` — verifica tarefas com prazo comprometido vencido e dispara notificação in-app + e-mail. **Deve ser agendado** periodicamente (Task Scheduler no Windows, cron no Linux) — o MVP não usa Celery/Redis, então este comando substitui um worker assíncrono.
 
 ## Testes
 
@@ -49,7 +46,9 @@ python manage.py runserver
 python manage.py test
 ```
 
-Cobre as regras centrais do `WorkflowService`: liberação sequencial,
-bloqueio de conclusão fora de ordem ou por quem não assumiu a atividade,
-guarda de reabertura, permissões de cancelamento e não duplicação de
-notificações de atraso.
+Cobre as regras centrais do núcleo D0: dono único da atividade e auditoria
+de troca de dono, múltiplos executores com tempo individual (horas-homem),
+pausa automática de sessão ao iniciar outra tarefa, devolução com motivo
+obrigatório preservando histórico, posição e total de fila com reordenação
+auditada, negociação de prazo solicitado x comprometido com conflito
+registrado na recusa, e isolamento entre organizações.

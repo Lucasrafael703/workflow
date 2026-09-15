@@ -1,8 +1,0 @@
-Uma nova atividade foi liberada.
-
-Processo: {{ process.title }}
-Atividade: {{ step.name }}
-Grupo responsável: {{ step.responsible_group.name }}
-Prazo: {{ step.deadline_at|date:"d/m/Y H:i" }}
-
-Acesse o sistema para assumir e executar esta atividade.

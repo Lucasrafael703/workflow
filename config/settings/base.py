@@ -29,8 +29,8 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "accounts",
-    "demands",
-    "workflows",
+    "core",
+    "activities",
     "notifications",
     "audit",
 ]
@@ -105,7 +105,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Auth
 
 LOGIN_URL = "login"
-LOGIN_REDIRECT_URL = "dashboard"
+LOGIN_REDIRECT_URL = "notification-list"
 LOGOUT_REDIRECT_URL = "login"
 
 
