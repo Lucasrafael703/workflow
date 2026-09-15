@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Cancelar atividade — LPS{% endblock %}
+
+{% block content %}
+<p class="muted"><a href="{% url 'activity-detail' activity.pk %}">← {{ activity.title }}</a></p>
+<h1>Cancelar atividade</h1>
+<p class="muted">O cancelamento preserva todo o histórico — nada é apagado.</p>
+
+<form method="post" class="card" style="max-width:560px">
+    {% csrf_token %}
+    {% include "activities/_form_fields.html" %}
+    <div class="actions-row">
+        <button type="submit" class="btn btn--danger">Cancelar atividade</button>
+        <a href="{% url 'activity-detail' activity.pk %}" class="btn">Voltar</a>
+    </div>
+</form>
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Histórico — LPS{% endblock %}
+
+{% block content %}
+<h1>Histórico</h1>
+
+<nav class="tabs">
+    <a href="?" class="{% if not event %}is-active{% endif %}">Todos</a>
+    <a href="?event=tarefas" class="{% if event == 'tarefas' %}is-active{% endif %}">Tarefas</a>
+    <a href="?event=prazos" class="{% if event == 'prazos' %}is-active{% endif %}">Prazos</a>
+    <a href="?event=fila" class="{% if event == 'fila' %}is-active{% endif %}">Fila</a>
+    <a href="?event=devolucoes" class="{% if event == 'devolucoes' %}is-active{% endif %}">Devoluções</a>
+    <a href="?event=tempo" class="{% if event == 'tempo' %}is-active{% endif %}">Tempo</a>
+</nav>
+
+<div class="card">
+    {% include "activities/_timeline.html" with entries=entries %}
+</div>
+
+{% if is_paginated %}
+<div class="actions-row">
+    {% if page_obj.has_previous %}
+    <a class="btn" href="?event={{ event }}&page={{ page_obj.previous_page_number }}">Anterior</a>
+    {% endif %}
+    <span class="muted">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+    <a class="btn" href="?event={{ event }}&page={{ page_obj.next_page_number }}">Próxima</a>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

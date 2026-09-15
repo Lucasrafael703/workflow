@@ -9,16 +9,21 @@
 <body>
 {% if user.is_authenticated %}
 <header class="topbar">
-    <div class="topbar__brand"><a href="{% url 'notification-list' %}">LPS</a></div>
+    <div class="topbar__brand"><a href="{% url 'home' %}">LPS</a></div>
     <nav class="topbar__nav">
-        <a href="{% url 'profile' %}">Meu perfil</a>
+        <a href="{% url 'home' %}">Home</a>
+        <a href="{% url 'activity-list' %}">Minhas atividades</a>
+        <a href="{% url 'task-list' %}">Minhas tarefas</a>
+        <a href="{% url 'queue' %}">Fila</a>
         <a href="{% url 'notification-list' %}">Notificações
             {% if unread_notifications_count %}<span class="badge">{{ unread_notifications_count }}</span>{% endif %}
         </a>
-        {% if user.is_staff %}<a href="{% url 'admin:index' %}">Admin</a>{% endif %}
+        {% if perms.activities.can_view_full_queue %}<a href="{% url 'management' %}">Gestão</a>{% endif %}
+        <a href="{% url 'cadastros' %}">Cadastros</a>
+        <a href="{% url 'settings' %}">Configurações</a>
     </nav>
     <div class="topbar__user">
-        <span>{{ user.get_username }}</span>
+        <a href="{% url 'profile' %}">{{ user.get_username }}</a>
         <form method="post" action="{% url 'logout' %}">
             {% csrf_token %}
             <button type="submit" class="link-button">Sair</button>
@@ -26,6 +31,8 @@
     </div>
 </header>
 {% endif %}
+
+{% block timerbar %}{% endblock %}
 
 <main class="container">
     {% if messages %}
@@ -38,5 +45,6 @@
 
     {% block content %}{% endblock %}
 </main>
+{% block scripts %}{% endblock %}
 </body>
 </html>

@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
@@ -9,6 +10,7 @@ from notifications.services import NotificationService
 
 from .models import (
     Activity,
+    ActivityMessage,
     DeadlineConflict,
     DeadlineProposal,
     OwnerChangeLog,
@@ -18,9 +20,13 @@ from .models import (
     Task,
     TaskBlock,
     TaskExecutor,
+    TaskMessage,
     TaskReturn,
     WorkSession,
 )
+
+
+User = get_user_model()
 
 
 class ActivityError(Exception):
@@ -109,6 +115,41 @@ class ActivityService:
             message=f"O dono de '{activity.title}' passou de {previous_owner} para {new_owner}.",
             activity=activity,
         )
+        return activity
+
+    @staticmethod
+    @transaction.atomic
+    def update_activity(activity, user, **fields):
+        """Edita campos não sensíveis da atividade, auditando cada alteração.
+
+        Dono, conclusão e cancelamento possuem serviços próprios e não passam por aqui.
+        """
+        if activity.status in (Activity.Status.CONCLUIDA, Activity.Status.CANCELADA):
+            raise ActivityError("Não é possível editar uma atividade concluída ou cancelada.")
+
+        editable = {"title", "description", "requested_deadline", "company", "site", "cost_center"}
+        changed = []
+        for field, value in fields.items():
+            if field not in editable:
+                continue
+            old_value = getattr(activity, field)
+            if old_value == value:
+                continue
+            if field == "title" and not value:
+                raise ActivityError("Informe o resultado esperado da atividade.")
+            setattr(activity, field, value)
+            changed.append(field)
+            AuditService.log(
+                user=user,
+                action=AuditLog.Action.UPDATE,
+                activity=activity,
+                field_name=field,
+                old_value=old_value,
+                new_value=value,
+            )
+
+        if changed:
+            activity.save(update_fields=changed)
         return activity
 
     @staticmethod
@@ -250,6 +291,80 @@ class TaskService:
 
     @staticmethod
     @transaction.atomic
+    def update_task(task, user, **fields):
+        """Edita campos não sensíveis da tarefa, auditando cada alteração.
+
+        Setor, prazo comprometido, executores e transições de estado possuem
+        serviços próprios e não passam por aqui.
+        """
+        if task.status in (Task.Status.CONCLUIDA, Task.Status.CANCELADA):
+            raise ActivityError("Não é possível editar uma tarefa concluída ou cancelada.")
+
+        editable = {"title", "description", "requested_deadline", "order", "depends_on"}
+        changed = []
+        for field, value in fields.items():
+            if field not in editable:
+                continue
+            old_value = getattr(task, field)
+            if old_value == value:
+                continue
+            if field == "title" and not value:
+                raise ActivityError("Informe o título da tarefa.")
+            if field == "depends_on" and value is not None and value.pk == task.pk:
+                raise ActivityError("Uma tarefa não pode depender dela mesma.")
+            setattr(task, field, value)
+            changed.append(field)
+            AuditService.log(
+                user=user,
+                action=AuditLog.Action.UPDATE,
+                activity=task.activity,
+                task=task,
+                field_name=field,
+                old_value=old_value,
+                new_value=value,
+            )
+
+        if changed:
+            task.save(update_fields=changed)
+        return task
+
+    @staticmethod
+    @transaction.atomic
+    def log_manual_time(task, user, started_at, ended_at, logged_by):
+        """Apropriação posterior de tempo trabalhado (Regras 04 §110-113, §214).
+
+        Fica marcada como lançamento manual para diferenciar do tempo capturado
+        pelo timer, preservando a confiabilidade das métricas.
+        """
+        if started_at is None or ended_at is None:
+            raise ActivityError("Informe o início e o fim do período trabalhado.")
+        if ended_at <= started_at:
+            raise ActivityError("O fim do período precisa ser posterior ao início.")
+        if started_at > timezone.now():
+            raise ActivityError("Não é possível lançar tempo no futuro.")
+        # Tempo só pode ser apropriado a quem de fato executa a tarefa — do
+        # contrário as horas-homem deixam de refletir o trabalho real.
+        if not TaskService._is_active_executor(task, user):
+            raise ActivityError("Só é possível lançar tempo para um executor da tarefa.")
+
+        session = WorkSession.objects.create(
+            task=task, user=user, started_at=started_at, ended_at=ended_at, is_manual=True
+        )
+        ActivityService._register_first_action(task)
+        ActivityService._register_first_action(task.activity)
+
+        AuditService.log(
+            user=logged_by,
+            action=AuditLog.Action.SESSION_STARTED,
+            activity=task.activity,
+            task=task,
+            new_value=f"{started_at:%d/%m/%Y %H:%M} - {ended_at:%d/%m/%Y %H:%M}",
+            reason="Lançamento manual de tempo",
+        )
+        return session
+
+    @staticmethod
+    @transaction.atomic
     def add_executor(task, user, added_by):
         if TaskExecutor.objects.filter(task=task, user=user, removed_at__isnull=True).exists():
             raise ActivityError("Este usuário já é executor desta tarefa.")
@@ -368,6 +483,7 @@ class TaskService:
         if active_entry:
             active_entry.left_at = now
             active_entry.save(update_fields=["left_at"])
+            QueueService.renumber(active_entry.sector)
 
         AuditService.log(
             user=user, action=AuditLog.Action.COMPLETE, activity=task.activity, task=task, old_value=old_status, new_value=task.status
@@ -399,6 +515,7 @@ class TaskService:
         if active_entry:
             active_entry.left_at = timezone.now()
             active_entry.save(update_fields=["left_at"])
+            QueueService.renumber(active_entry.sector)
 
         AuditService.log(
             user=user, action=AuditLog.Action.CANCEL, activity=task.activity, task=task, old_value=old_status, new_value=task.status, reason=reason
@@ -474,6 +591,7 @@ class TaskService:
         if active_entry:
             active_entry.left_at = now
             active_entry.save(update_fields=["left_at"])
+            QueueService.renumber(old_sector)
 
         task.sector = new_sector
         task.status = Task.Status.EM_FILA
@@ -589,6 +707,39 @@ class QueueService:
         task.status = Task.Status.EM_FILA
         task.save(update_fields=["status"])
         return entry
+
+    @staticmethod
+    @transaction.atomic
+    def renumber(sector, previous_total=None):
+        """Fecha buracos de posição depois que uma tarefa deixa a fila (Regras 03 §83, §118).
+
+        A posição precisa ser confiável porque é o que o solicitante enxerga
+        ("4 de 17"); registra a mudança como automática, sem usuário.
+
+        `previous_total` é o tamanho da fila antes da saída — quando omitido,
+        assume-se que uma única entrada saiu.
+        """
+        active_entries = list(
+            QueueEntry.objects.filter(sector=sector, left_at__isnull=True).order_by("position")
+        )
+        new_total = len(active_entries)
+        old_total = previous_total if previous_total is not None else new_total + 1
+
+        for index, entry in enumerate(active_entries, start=1):
+            if entry.position == index:
+                continue
+            old_position = entry.position
+            entry.position = index
+            entry.save(update_fields=["position"])
+            QueuePositionChange.objects.create(
+                queue_entry=entry,
+                old_position=old_position,
+                new_position=index,
+                old_total=old_total,
+                new_total=new_total,
+                reason=QueuePositionChange.Reason.AUTOMATICA_CONCLUSAO,
+                changed_by=None,
+            )
 
     @staticmethod
     @transaction.atomic
@@ -746,3 +897,69 @@ class DeadlineService:
             user=user, action=AuditLog.Action.CONFLICT_RESOLVED, activity=conflict.task.activity, task=conflict.task, reason=resolution_note
         )
         return conflict
+
+
+class MessageService:
+    """Comunicação contextual (Regras 06).
+
+    Mensagem nunca altera dado oficial: para mudar prazo, devolver ou concluir
+    é preciso a ação estruturada correspondente (Regras 01 §6.14, 06 §137).
+    """
+
+    @staticmethod
+    def _truncate(text, limit=200):
+        text = " ".join(text.split())
+        return text if len(text) <= limit else f"{text[: limit - 1]}…"
+
+    @staticmethod
+    def _executors_of(task_queryset_filter):
+        return User.objects.filter(
+            tasks_executed__removed_at__isnull=True, **task_queryset_filter
+        ).distinct()
+
+    @staticmethod
+    @transaction.atomic
+    def post_activity_message(activity, author, body):
+        body = (body or "").strip()
+        if not body:
+            raise ActivityError("Escreva uma mensagem antes de enviar.")
+
+        message = ActivityMessage.objects.create(activity=activity, author=author, body=body)
+
+        recipients = {activity.owner, activity.created_by}
+        recipients.update(MessageService._executors_of({"tasks_executed__task__activity": activity}))
+        recipients = {u for u in recipients if u is not None and u.id != author.id}
+
+        if recipients:
+            NotificationService.notify(
+                users=recipients,
+                event_type=Notification.EventType.ACTIVITY_CREATED,
+                title="Nova mensagem na atividade",
+                message=MessageService._truncate(f"{author.get_username()}: {body}"),
+                activity=activity,
+            )
+        return message
+
+    @staticmethod
+    @transaction.atomic
+    def post_task_message(task, author, body):
+        body = (body or "").strip()
+        if not body:
+            raise ActivityError("Escreva uma mensagem antes de enviar.")
+
+        message = TaskMessage.objects.create(task=task, author=author, body=body)
+
+        recipients = {task.activity.owner}
+        recipients.update(MessageService._executors_of({"tasks_executed__task": task}))
+        recipients = {u for u in recipients if u is not None and u.id != author.id}
+
+        if recipients:
+            NotificationService.notify(
+                users=recipients,
+                event_type=Notification.EventType.TASK_ASSIGNED,
+                title="Nova mensagem na tarefa",
+                message=MessageService._truncate(f"{author.get_username()}: {body}"),
+                activity=task.activity,
+                task=task,
+            )
+        return message

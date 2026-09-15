@@ -1,42 +1,44 @@
 {% extends "base.html" %}
-{% block title %}Notificações{% endblock %}
+{% block title %}Notificações — LPS{% endblock %}
+
 {% block content %}
-<h1>Notificações</h1>
-<form method="post" action="{% url 'notification-mark-all-read' %}" style="margin-bottom:12px;">
-    {% csrf_token %}
-    <button type="submit" class="btn">Marcar todas como lidas</button>
-</form>
-<div class="card">
-    <ul class="timeline">
-        {% for n in notifications %}
-        <li>
-            <div class="when">{{ n.created_at|date:"d/m/Y H:i" }} {% if not n.is_read %}<strong>(nova)</strong>{% endif %}</div>
-            <strong>{{ n.title }}</strong>
-            <p>{{ n.message }}</p>
-            <div class="actions-row">
-                {% if n.url %}
-                <form method="post" action="{% url 'notification-mark-read' n.pk %}">
-                    {% csrf_token %}
-                    <button type="submit" class="btn">Abrir</button>
-                </form>
-                {% elif not n.is_read %}
-                <form method="post" action="{% url 'notification-mark-read' n.pk %}">
-                    {% csrf_token %}
-                    <button type="submit" class="btn">Marcar como lida</button>
-                </form>
-                {% endif %}
-            </div>
-        </li>
-        {% empty %}
-        <li class="muted">Você não tem notificações.</li>
-        {% endfor %}
-    </ul>
+<div class="section-head">
+    <h1>Notificações</h1>
+    <form method="post" action="{% url 'notification-mark-all-read' %}">
+        {% csrf_token %}
+        <button type="submit" class="btn">Marcar todas como lidas</button>
+    </form>
 </div>
+
+<nav class="tabs">
+    <a href="?" class="{% if not filter %}is-active{% endif %}">Todas</a>
+    <a href="?filter=nao-lidas" class="{% if filter == 'nao-lidas' %}is-active{% endif %}">Não lidas</a>
+    <a href="?filter=acao" class="{% if filter == 'acao' %}is-active{% endif %}">Ação necessária</a>
+</nav>
+
+{% if action_required %}
+<div class="card">
+    <h2>Ação necessária</h2>
+    {% include "notifications/_items.html" with items=action_required actionable=True %}
+</div>
+{% endif %}
+
+{% if informative %}
+<div class="card">
+    <h2>Informativo</h2>
+    {% include "notifications/_items.html" with items=informative actionable=False %}
+</div>
+{% endif %}
+
+{% if not action_required and not informative %}
+<div class="card empty-state"><p>Você não tem notificações.</p></div>
+{% endif %}
+
 {% if is_paginated %}
 <div class="actions-row">
-    {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}">« Anterior</a>{% endif %}
+    {% if page_obj.has_previous %}<a class="btn" href="?filter={{ filter }}&page={{ page_obj.previous_page_number }}">Anterior</a>{% endif %}
     <span class="muted">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
-    {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}">Próxima »</a>{% endif %}
+    {% if page_obj.has_next %}<a class="btn" href="?filter={{ filter }}&page={{ page_obj.next_page_number }}">Próxima</a>{% endif %}
 </div>
 {% endif %}
 {% endblock %}

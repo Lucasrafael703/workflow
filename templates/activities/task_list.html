@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Minhas tarefas — LPS{% endblock %}
+
+{% block content %}
+<h1>Minhas tarefas</h1>
+
+<nav class="tabs">
+    <a href="?tab=minhas" class="{% if tab == 'minhas' %}is-active{% endif %}">Atribuídas a mim</a>
+    <a href="?tab=setor" class="{% if tab == 'setor' %}is-active{% endif %}">Dos meus setores</a>
+    <a href="?tab={{ tab }}&status=concluidas" class="{% if status == 'concluidas' %}is-active{% endif %}">Concluídas</a>
+</nav>
+
+{% if tasks %}
+<table class="responsive">
+    <thead>
+        <tr><th>Tarefa</th><th>Atividade</th><th>Setor</th><th>Prazo</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+        {% for task in tasks %}
+        <tr>
+            <td data-label="Tarefa"><a href="{% url 'task-detail' task.pk %}">{{ task.title }}</a></td>
+            <td data-label="Atividade"><a href="{% url 'activity-detail' task.activity.pk %}">{{ task.activity.title }}</a></td>
+            <td data-label="Setor">{{ task.sector.name }}</td>
+            <td data-label="Prazo">
+                {% if task.committed_deadline %}{{ task.committed_deadline|date:"d/m/Y H:i" }}
+                {% elif task.requested_deadline %}{{ task.requested_deadline|date:"d/m/Y H:i" }} <span class="muted">(solicitado)</span>
+                {% else %}<span class="muted">Sem prazo</span>{% endif %}
+            </td>
+            <td data-label="Status"><span class="tag tag--{{ task.status }}">{{ task.get_status_display }}</span></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="card empty-state">
+    <p>Nenhuma tarefa nesta visão.</p>
+    <a href="{% url 'queue' %}" class="btn">Ver a fila do setor</a>
+</div>
+{% endif %}
+{% endblock %}

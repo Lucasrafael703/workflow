@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — LPS{% endblock %}
+
+{% block content %}
+<p class="muted"><a href="{% url 'task-detail' task.pk %}">← {{ task.title }}</a></p>
+<h1>{{ title }}</h1>
+
+<form method="post" class="card" style="max-width:560px">
+    {% csrf_token %}
+    {% include "activities/_form_fields.html" %}
+    <div class="actions-row">
+        <button type="submit" class="btn btn--primary">{{ submit_label }}</button>
+        <a href="{% url 'task-detail' task.pk %}" class="btn">Voltar</a>
+    </div>
+</form>
+{% endblock %}

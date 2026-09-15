@@ -1,0 +1,17 @@
+<ul class="timeline">
+    {% for n in items %}
+    <li>
+        <div class="when">{{ n.created_at|date:"d/m/Y H:i" }}{% if not n.is_read %} · <strong>nova</strong>{% endif %}</div>
+        <strong>{{ n.title }}</strong>
+        <p>{{ n.message }}</p>
+        <div class="actions-row">
+            <form method="post" action="{% url 'notification-mark-read' n.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="btn {% if actionable %}btn--primary{% endif %}">
+                    {% if actionable %}Analisar{% elif n.task_id or n.activity_id or n.url %}Abrir{% else %}Marcar como lida{% endif %}
+                </button>
+            </form>
+        </div>
+    </li>
+    {% endfor %}
+</ul>

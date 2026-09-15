@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Minhas atividades — LPS{% endblock %}
+
+{% block content %}
+<div class="section-head">
+    <h1>Minhas atividades</h1>
+    <a href="{% url 'activity-create' %}" class="btn btn--primary">+ Nova atividade</a>
+</div>
+
+<nav class="tabs">
+    <a href="?tab=minhas" class="{% if tab == 'minhas' %}is-active{% endif %}">Minhas</a>
+    <a href="?tab=participando" class="{% if tab == 'participando' %}is-active{% endif %}">Participando</a>
+    <a href="?tab=concluidas" class="{% if tab == 'concluidas' %}is-active{% endif %}">Concluídas</a>
+    {% if can_view_all %}
+    <a href="?tab=todas" class="{% if tab == 'todas' %}is-active{% endif %}">Todas que posso ver</a>
+    {% endif %}
+</nav>
+
+<form method="get" class="filters">
+    <input type="hidden" name="tab" value="{{ tab }}">
+    <div class="form-row">
+        <label for="q">Buscar</label>
+        <input type="search" id="q" name="q" value="{{ search }}" placeholder="Buscar atividades…">
+    </div>
+    <div class="form-row">
+        <label for="sector">Setor</label>
+        <select id="sector" name="sector">
+            <option value="">Todos</option>
+            {% for sector in sectors %}
+            <option value="{{ sector.pk }}" {% if selected_sector == sector.pk|stringformat:"s" %}selected{% endif %}>{{ sector.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <button type="submit" class="btn">Filtrar</button>
+</form>
+
+{% if activities %}
+<table class="responsive">
+    <thead>
+        <tr>
+            <th>Atividade</th><th>Dono</th><th>Progresso</th><th>Prazo</th><th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for activity in activities %}
+        <tr>
+            <td data-label="Atividade">
+                <a href="{% url 'activity-detail' activity.pk %}">{{ activity.title }}</a>
+                {% if activity.site %}<div class="muted">{{ activity.site.name }}</div>{% endif %}
+            </td>
+            <td data-label="Dono">{{ activity.owner.get_username }}</td>
+            <td data-label="Progresso">{{ activity.done_tasks }} de {{ activity.total_tasks }} tarefas</td>
+            <td data-label="Prazo">
+                {% if activity.requested_deadline %}{{ activity.requested_deadline|date:"d/m/Y H:i" }}
+                {% else %}<span class="muted">Sem prazo</span>{% endif %}
+            </td>
+            <td data-label="Status"><span class="tag tag--{{ activity.status }}">{{ activity.get_status_display }}</span></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% if is_paginated %}
+<div class="actions-row">
+    {% if page_obj.has_previous %}
+    <a class="btn" href="?tab={{ tab }}&q={{ search }}&page={{ page_obj.previous_page_number }}">Anterior</a>
+    {% endif %}
+    <span class="muted">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+    <a class="btn" href="?tab={{ tab }}&q={{ search }}&page={{ page_obj.next_page_number }}">Próxima</a>
+    {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="card empty-state">
+    <p>Você ainda não possui atividades nesta visão.</p>
+    <a href="{% url 'activity-create' %}" class="btn btn--primary">Criar primeira atividade</a>
+</div>
+{% endif %}
+{% endblock %}

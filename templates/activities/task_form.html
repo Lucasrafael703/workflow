@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}{% if is_edit %}Editar tarefa{% else %}Adicionar tarefa{% endif %} — LPS{% endblock %}
+
+{% block content %}
+<p class="muted"><a href="{% url 'activity-detail' activity.pk %}">← {{ activity.title }}</a></p>
+<h1>{% if is_edit %}Editar tarefa{% else %}Adicionar tarefa{% endif %}</h1>
+
+<form method="post" class="card" style="max-width:560px">
+    {% csrf_token %}
+    {% include "activities/_form_fields.html" %}
+    <div class="actions-row">
+        <button type="submit" class="btn btn--primary">Salvar</button>
+        {% if not is_edit %}
+        <button type="submit" name="save_and_add" value="1" class="btn">Salvar e adicionar outra</button>
+        {% endif %}
+        <a href="{% if is_edit %}{% url 'task-detail' task.pk %}{% else %}{% url 'activity-detail' activity.pk %}{% endif %}" class="btn">Cancelar</a>
+    </div>
+</form>
+{% endblock %}

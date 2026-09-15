@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Perfis e permissões — LPS{% endblock %}
+
+{% block content %}
+<div class="section-head">
+    <h1>Perfis e permissões</h1>
+    <a href="{% url 'profile-group-create' %}" class="btn btn--primary">+ Novo perfil</a>
+</div>
+<p class="muted">Um perfil responde: o que esta pessoa pode fazer? Participar de um setor
+   não concede permissão — os dois conceitos são separados.</p>
+
+<div class="split">
+    <div>
+        {% if group %}
+        <form method="get" class="filters">
+            <input type="hidden" name="group" value="{{ group.pk }}">
+            <div class="form-row">
+                <label for="q">Buscar ação</label>
+                <input type="search" id="q" name="q" value="{{ search }}" placeholder="Ex.: fila">
+            </div>
+            <button type="submit" class="btn">Buscar</button>
+        </form>
+
+        <form method="post" action="{% url 'permissions-update' group.pk %}" class="card">
+            {% csrf_token %}
+            {# Com busca ativa nem toda ação está na tela; informa quais foram
+               exibidas para não desmarcar o que ficou fora do filtro. #}
+            {% for block in blocks %}{% for row in block.rows %}
+            <input type="hidden" name="visible" value="{{ row.code }}">
+            {% endfor %}{% endfor %}
+            <div class="section-head">
+                <h2>{{ group.name }}</h2>
+                <a href="{% url 'profile-group-edit' group.pk %}">Renomear</a>
+            </div>
+
+            {% for block in blocks %}
+            <fieldset>
+                <legend>{{ block.label }}</legend>
+                {% for row in block.rows %}
+                <div class="form-row" style="margin-bottom:8px">
+                    <label style="font-weight:normal">
+                        <input type="checkbox" name="permissions" value="{{ row.code }}"
+                               style="width:auto" {% if row.granted %}checked{% endif %}>
+                        {{ row.label }}
+                        <code class="muted" style="font-size:11px">{{ row.code }}</code>
+                    </label>
+                    {% if row.description %}<div class="helptext">{{ row.description }}</div>{% endif %}
+                </div>
+                {% endfor %}
+            </fieldset>
+            {% empty %}
+            <p class="muted">Nenhuma ação encontrada para a busca.</p>
+            {% endfor %}
+
+            <button type="submit" class="btn btn--primary">Salvar permissões</button>
+        </form>
+        {% else %}
+        <div class="card empty-state">
+            <p>Nenhum perfil cadastrado ainda.</p>
+            <a href="{% url 'profile-group-create' %}" class="btn btn--primary">Criar primeiro perfil</a>
+        </div>
+        {% endif %}
+    </div>
+
+    <div>
+        <div class="card">
+            <h2>Perfis</h2>
+            <ul class="list-reset">
+                {% for item in groups %}
+                <li>
+                    <a href="?group={{ item.pk }}" {% if group and item.pk == group.pk %}style="font-weight:700"{% endif %}>{{ item.name }}</a>
+                    <span class="muted">{{ item.user_count }} usuário{{ item.user_count|pluralize }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        {% if group %}
+        <div class="card">
+            <h2>Usuários com este perfil</h2>
+            <ul class="list-reset">
+                {% for member in members %}
+                <li><a href="{% url 'user-edit' member.pk %}">{{ member.get_username }}</a></li>
+                {% empty %}
+                <li class="muted">Nenhum usuário vinculado.</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

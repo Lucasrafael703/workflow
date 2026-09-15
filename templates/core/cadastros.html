@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Cadastros — LPS{% endblock %}
+
+{% block content %}
+<h1>Cadastros</h1>
+<p class="muted">O que existe na sua organização. Como a LPS se comporta fica em
+   <a href="{% url 'settings' %}">Configurações</a>.</p>
+
+<nav class="tabs">
+    <a href="?tab=setores" class="{% if tab == 'setores' %}is-active{% endif %}">Setores</a>
+    <a href="?tab=empresas" class="{% if tab == 'empresas' %}is-active{% endif %}">Empresas</a>
+    <a href="?tab=obras" class="{% if tab == 'obras' %}is-active{% endif %}">Obras</a>
+    <a href="?tab=centros-de-custo" class="{% if tab == 'centros-de-custo' %}is-active{% endif %}">Centros de custo</a>
+    <a href="?tab=motivos" class="{% if tab == 'motivos' %}is-active{% endif %}">Motivos de devolução</a>
+    <a href="{% url 'user-list' %}">Usuários</a>
+    <a href="{% url 'permissions' %}">Perfis e permissões</a>
+</nav>
+
+<form method="get" class="filters">
+    <input type="hidden" name="tab" value="{{ tab }}">
+    <div class="form-row">
+        <label for="q">Buscar</label>
+        <input type="search" id="q" name="q" value="{{ search }}" placeholder="Buscar…">
+    </div>
+    <button type="submit" class="btn">Buscar</button>
+</form>
+
+{% if tab == "empresas" %}
+    <div class="section-head"><h2>Empresas</h2><a href="{% url 'company-create' %}" class="btn btn--primary">+ Nova empresa</a></div>
+    <table class="responsive">
+        <thead><tr><th>Nome</th><th>CNPJ/CPF</th><th>Situação</th><th></th></tr></thead>
+        <tbody>
+        {% for item in companies %}
+        <tr>
+            <td data-label="Nome">{{ item.name }}</td>
+            <td data-label="CNPJ/CPF">{{ item.document|default:"—" }}</td>
+            <td data-label="Situação">{% if item.is_active %}Ativa{% else %}<span class="muted">Inativa</span>{% endif %}</td>
+            <td data-label="">
+                <a href="{% url 'company-edit' item.pk %}">Editar</a>
+                {% include "core/_toggle_form.html" with tab="empresas" item=item %}
+            </td>
+        </tr>
+        {% empty %}<tr><td colspan="4" class="muted">Nenhuma empresa cadastrada.</td></tr>{% endfor %}
+        </tbody>
+    </table>
+
+{% elif tab == "obras" %}
+    <div class="section-head"><h2>Obras</h2><a href="{% url 'site-create' %}" class="btn btn--primary">+ Nova obra</a></div>
+    <table class="responsive">
+        <thead><tr><th>Nome</th><th>Empresa</th><th>Situação</th><th></th></tr></thead>
+        <tbody>
+        {% for item in sites %}
+        <tr>
+            <td data-label="Nome">{{ item.name }}</td>
+            <td data-label="Empresa">{{ item.company.name|default:"—" }}</td>
+            <td data-label="Situação">{% if item.is_active %}Ativa{% else %}<span class="muted">Inativa</span>{% endif %}</td>
+            <td data-label="">
+                <a href="{% url 'site-edit' item.pk %}">Editar</a>
+                {% include "core/_toggle_form.html" with tab="obras" item=item %}
+            </td>
+        </tr>
+        {% empty %}<tr><td colspan="4" class="muted">Nenhuma obra cadastrada.</td></tr>{% endfor %}
+        </tbody>
+    </table>
+
+{% elif tab == "centros-de-custo" %}
+    <div class="section-head"><h2>Centros de custo</h2><a href="{% url 'costcenter-create' %}" class="btn btn--primary">+ Novo centro de custo</a></div>
+    <table class="responsive">
+        <thead><tr><th>Nome</th><th>Obra</th><th>Situação</th><th></th></tr></thead>
+        <tbody>
+        {% for item in cost_centers %}
+        <tr>
+            <td data-label="Nome">{{ item.name }}</td>
+            <td data-label="Obra">{{ item.site.name|default:"—" }}</td>
+            <td data-label="Situação">{% if item.is_active %}Ativo{% else %}<span class="muted">Inativo</span>{% endif %}</td>
+            <td data-label="">
+                <a href="{% url 'costcenter-edit' item.pk %}">Editar</a>
+                {% include "core/_toggle_form.html" with tab="centros-de-custo" item=item %}
+            </td>
+        </tr>
+        {% empty %}<tr><td colspan="4" class="muted">Nenhum centro de custo cadastrado.</td></tr>{% endfor %}
+        </tbody>
+    </table>
+
+{% elif tab == "motivos" %}
+    <div class="section-head"><h2>Motivos de devolução</h2><a href="{% url 'returnreason-create' %}" class="btn btn--primary">+ Novo motivo</a></div>
+    <p class="muted">Toda devolução exige um motivo estruturado — é o que permite descobrir retrabalho recorrente.</p>
+    <table class="responsive">
+        <thead><tr><th>Motivo</th><th>Situação</th><th></th></tr></thead>
+        <tbody>
+        {% for item in return_reasons %}
+        <tr>
+            <td data-label="Motivo">{{ item.name }}</td>
+            <td data-label="Situação">{% if item.is_active %}Ativo{% else %}<span class="muted">Inativo</span>{% endif %}</td>
+            <td data-label="">
+                <a href="{% url 'returnreason-edit' item.pk %}">Editar</a>
+                {% include "core/_toggle_form.html" with tab="motivos" item=item %}
+            </td>
+        </tr>
+        {% empty %}<tr><td colspan="3" class="muted">Nenhum motivo cadastrado.</td></tr>{% endfor %}
+        </tbody>
+    </table>
+
+{% else %}
+    <div class="section-head"><h2>Setores</h2><a href="{% url 'sector-create' %}" class="btn btn--primary">+ Novo setor</a></div>
+    <table class="responsive">
+        <thead><tr><th>Nome</th><th>Descrição</th><th>Tarefas abertas</th><th>Situação</th><th></th></tr></thead>
+        <tbody>
+        {% for item in sectors %}
+        <tr>
+            <td data-label="Nome">{{ item.name }}</td>
+            <td data-label="Descrição">{{ item.description|default:"—" }}</td>
+            <td data-label="Tarefas abertas">{{ item.open_tasks }}</td>
+            <td data-label="Situação">{% if item.is_active %}Ativo{% else %}<span class="muted">Inativo</span>{% endif %}</td>
+            <td data-label="">
+                <a href="{% url 'sector-edit' item.pk %}">Editar</a>
+                {% include "core/_toggle_form.html" with tab="setores" item=item %}
+            </td>
+        </tr>
+        {% empty %}<tr><td colspan="5" class="muted">Nenhum setor cadastrado.</td></tr>{% endfor %}
+        </tbody>
+    </table>
+{% endif %}
+{% endblock %}

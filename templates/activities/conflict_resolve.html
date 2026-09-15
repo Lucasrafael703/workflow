@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Resolver conflito de prazo — LPS{% endblock %}
+
+{% block content %}
+<p class="muted"><a href="{% url 'task-detail' conflict.task.pk %}">← {{ conflict.task.title }}</a></p>
+<h1>Resolver conflito de prazo</h1>
+
+<div class="card">
+    <p><strong>Prazo proposto:</strong> {{ conflict.proposal.proposed_deadline|date:"d/m/Y H:i" }}
+       — recusado pelo dono da atividade.</p>
+    {% if conflict.proposal.decision_note %}
+    <p class="muted">Motivo da recusa: {{ conflict.proposal.decision_note }}</p>
+    {% endif %}
+    <p class="muted">Conflito aberto em {{ conflict.opened_at|date:"d/m/Y H:i" }}.</p>
+</div>
+
+<form method="post" class="card" style="max-width:560px">
+    {% csrf_token %}
+    {% include "activities/_form_fields.html" %}
+    <div class="actions-row">
+        <button type="submit" class="btn btn--primary">Registrar decisão</button>
+        <a href="{% url 'task-detail' conflict.task.pk %}" class="btn">Voltar</a>
+    </div>
+</form>
+{% endblock %}
