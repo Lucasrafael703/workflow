@@ -26,6 +26,16 @@ class AuditLog(models.Model):
         COMPLETE = "COMPLETE", "Concluída"
         REOPEN = "REOPEN", "Reaberta"
         CANCEL = "CANCEL", "Cancelada"
+        # Segurança: toda mudança no que alguém pode fazer deixa rastro
+        # (Regras 05 §41, doc 08 §30).
+        PROFILE_CREATED = "PROFILE_CREATED", "Perfil criado"
+        PROFILE_UPDATED = "PROFILE_UPDATED", "Perfil alterado"
+        PROFILE_ACTIONS_CHANGED = "PROFILE_ACTIONS_CHANGED", "Ações do perfil alteradas"
+        PROFILE_ASSIGNED = "PROFILE_ASSIGNED", "Perfil atribuído"
+        PROFILE_REVOKED = "PROFILE_REVOKED", "Perfil removido"
+        ACTION_GRANTED = "ACTION_GRANTED", "Concessão direta registrada"
+        ACTION_REVOKED = "ACTION_REVOKED", "Concessão direta removida"
+        SECTORS_CHANGED = "SECTORS_CHANGED", "Setores do usuário alterados"
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -47,6 +57,15 @@ class AuditLog(models.Model):
         null=True,
         on_delete=models.SET_NULL,
         related_name="audit_entries",
+    )
+    target_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="usuário afetado",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="security_audit_entries",
+        help_text="Preenchido em eventos de segurança, que não se referem a uma atividade.",
     )
     action = models.CharField("ação", max_length=24, choices=Action.choices)
     field_name = models.CharField("campo alterado", max_length=50, blank=True)

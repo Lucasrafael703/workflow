@@ -18,8 +18,8 @@
         <a href="{% url 'notification-list' %}">Notificações
             {% if unread_notifications_count %}<span class="badge">{{ unread_notifications_count }}</span>{% endif %}
         </a>
-        {% if perms.activities.can_view_full_queue %}<a href="{% url 'management' %}">Gestão</a>{% endif %}
-        <a href="{% url 'cadastros' %}">Cadastros</a>
+        {% if lps_nav.management %}<a href="{% url 'management' %}">Gestão</a>{% endif %}
+        {% if lps_nav.cadastros %}<a href="{% url 'cadastros' %}">Cadastros</a>{% endif %}
         <a href="{% url 'settings' %}">Configurações</a>
     </nav>
     <div class="topbar__user">

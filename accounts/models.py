@@ -36,10 +36,16 @@ class Profile(models.Model):
 
 
 class UserSector(models.Model):
-    """Participação operacional de um usuário em um setor (Regras 05 §24-26).
+    """Participação operacional de um usuário em um setor (Regras 05 §8, §10).
 
-    Separado de Group/Permission: indica "faz parte deste setor", não "pode fazer X".
+    Vínculo organizacional descreve **onde a pessoa atua**; autorização define
+    o que ela pode fazer. Participar de um setor — inclusive como gestor — não
+    concede capacidade alguma por si só (Regras 08 §14, doc 05 §45).
     """
+
+    class Role(models.TextChoices):
+        MEMBRO = "MEMBRO", "Membro"
+        GESTOR = "GESTOR", "Gestor"
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, verbose_name="usuário", on_delete=models.CASCADE, related_name="sector_memberships"
@@ -47,14 +53,22 @@ class UserSector(models.Model):
     sector = models.ForeignKey(
         "core.Sector", verbose_name="setor", on_delete=models.CASCADE, related_name="user_memberships"
     )
+    role = models.CharField("papel", max_length=6, choices=Role.choices, default=Role.MEMBRO)
     joined_at = models.DateTimeField("desde", auto_now_add=True)
     removed_at = models.DateTimeField("removido em", null=True, blank=True)
 
     class Meta:
         verbose_name = "participação em setor"
         verbose_name_plural = "participações em setores"
+        ordering = ["-joined_at"]
         constraints = [
-            models.UniqueConstraint(fields=["user", "sector"], name="unique_active_user_sector"),
+            # Só a participação ativa é única: sair e voltar a um setor gera um
+            # novo período, preservando o histórico anterior (Regras 08 §14).
+            models.UniqueConstraint(
+                fields=["user", "sector"],
+                condition=models.Q(removed_at__isnull=True),
+                name="unique_active_user_sector",
+            ),
         ]
 
     def __str__(self):

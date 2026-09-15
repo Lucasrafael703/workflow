@@ -1,28 +1,16 @@
 # 08 — Banco de Dados da LPS
 
-> Documento técnico-funcional para traduzir as decisões de produto da LPS em uma estrutura de dados coerente, auditável, multiempresa, segura e preparada para evolução.
+> Revisão técnico-funcional do banco de dados da LPS.
+>
+> Esta versão consolida as decisões do projeto sobre organizações, empresas, usuários, setores, perfis, ações, escopos, atividades, tarefas, filas, prazos, tempo, comunicação, notificações, escalonamento, auditoria e inteligência futura.
+>
+> O benchmark do Sienge foi usado para aprender sobre dinamismo de autorizações, não para reproduzir sua estrutura histórica.
 
 ---
 
-# 1. Objetivo deste documento
+## 1. Regra principal
 
-Este documento define a estrutura conceitual do banco de dados da LPS.
-
-Ele deve refletir as decisões já consolidadas nos documentos:
-
-```text
-01_VISAO_E_PRINCIPIOS_LPS.md
-02_ATIVIDADES_TAREFAS_E_FLUXOS.md
-03_FILAS_PRAZOS_E_ESCALONAMENTO.md
-04_AUDITORIA_TEMPO_E_METRICAS.md
-05_USUARIOS_SETORES_E_AUTORIZACOES.md
-06_NOTIFICACOES_E_COMUNICACAO.md
-07_INTELIGENCIA_E_RETROALIMENTACAO.md
-```
-
-Este documento não deve inventar o produto.
-
-A regra é:
+O banco deve seguir o produto.
 
 ```text
 NEGÓCIO
@@ -32,37 +20,33 @@ COMPORTAMENTO
 DADOS
 ```
 
-e não:
+Nunca o contrário.
 
-```text
-BANCO
-↓
-FUNCIONALIDADE INVENTADA
-```
+A LPS não deve criar tabelas ou complexidade apenas porque outro ERP possui determinada estrutura.
 
 ---
 
-# 2. Princípios de modelagem
+## 2. Princípios de modelagem
 
-O banco da LPS deve priorizar:
+O banco deve priorizar:
 
-- clareza;
-- rastreabilidade;
 - isolamento entre organizações;
-- integridade;
+- consistência;
+- rastreabilidade;
 - histórico;
-- simplicidade no D0;
-- possibilidade de evolução;
 - segurança;
+- simplicidade de operação;
+- configuração sem alteração de código;
+- baixo acoplamento entre módulos;
 - dados estruturados;
-- baixa duplicidade;
-- capacidade futura de análise.
+- evolução sem reescrever a base;
+- capacidade futura de análise e inteligência.
 
 ---
 
-# 3. Princípio mais importante
+## 3. Fatos antes de conclusões
 
-> **O banco deve registrar fatos operacionais, e não apenas o estado atual.**
+O banco deve registrar fatos operacionais.
 
 Exemplo insuficiente:
 
@@ -70,12 +54,12 @@ Exemplo insuficiente:
 tarefa.status = concluida
 ```
 
-Exemplo adequado:
+Exemplo correto:
 
 ```text
 status_atual = concluida
 +
-histórico:
+eventos:
 - criada
 - entrou na fila
 - iniciou
@@ -86,118 +70,90 @@ histórico:
 - concluiu
 ```
 
-O estado atual facilita a operação.
+O estado atual atende a operação.
 
-O histórico permite auditoria, métricas e inteligência.
+O histórico atende:
+
+- auditoria;
+- métricas;
+- investigação;
+- comparação;
+- previsões futuras.
 
 ---
 
-# 4. Banco relacional
+## 4. Tecnologia-base
 
-A LPS deve utilizar PostgreSQL como base relacional.
+A recomendação continua sendo PostgreSQL.
 
-A modelagem deve aproveitar:
+Pode ser operado em Supabase, Neon ou infraestrutura equivalente, desde que sejam preservados:
 
+- PostgreSQL relacional;
 - chaves estrangeiras;
-- restrições;
-- índices;
+- constraints;
 - transações;
-- RLS;
-- JSONB apenas onde realmente fizer sentido;
-- timestamps;
-- views;
-- funções quando necessárias.
+- índices;
+- Row Level Security — RLS, Segurança em Nível de Linha — quando aplicável;
+- funções seguras para operações críticas;
+- logs e auditoria.
 
-Evitar transformar o PostgreSQL em um repositório de JSON sem estrutura.
+A arquitetura não deve ficar dependente de um fornecedor específico sem necessidade.
 
 ---
 
-# 5. Identificadores
+## 5. Identificadores
 
-Padrão recomendado:
-
-```text
-UUID
-```
-
-para as chaves primárias dos registros principais.
+Registros principais usam `uuid`.
 
 Exemplo:
 
-```text
+```sql
 id uuid primary key
 ```
 
-Benefícios:
+Quando disponível, UUIDv7 é interessante para melhorar ordenação temporal e localidade de índice, mas não é requisito funcional do D0.
 
-- reduz colisão entre ambientes;
-- facilita integrações;
-- não expõe sequência simples;
-- funciona bem em arquitetura multiempresa.
+IDs internos nunca devem ser reutilizados.
 
 ---
 
-# 6. Organização como limite de segurança
+## 6. Organização é o tenant
 
-A organização é o principal limite de isolamento da LPS.
+`organizacao_id` define o limite máximo de segurança.
 
-Todo dado operacional pertencente a um cliente deve estar relacionado a:
+Regra:
 
-```text
-organizacao_id
-```
+> Nenhum relacionamento pode atravessar organizações.
 
-direta ou indiretamente.
-
-Para tabelas críticas e de alto volume, a recomendação é possuir:
-
-```text
-organizacao_id NOT NULL
-```
-
-explicitamente.
-
----
-
-# 7. Regra contra cruzamento entre organizações
-
-Nunca deve ser possível relacionar:
+Exemplo proibido:
 
 ```text
 atividade da Organização A
+→ setor da Organização B
 ```
 
-com:
-
-```text
-setor da Organização B
-```
-
-A aplicação e o banco precisam impedir isso.
+O banco precisa impedir esse cenário, não apenas a interface.
 
 ---
 
-# 8. Multiempresa
+## 7. Empresa é contexto interno
 
-Dentro de uma organização podem existir várias empresas operacionais.
-
-Estrutura conceitual:
+Uma organização pode possuir várias empresas.
 
 ```text
 ORGANIZAÇÃO
-↓
-EMPRESAS
-↓
-SETORES / OBRAS / CENTROS DE CUSTO / ATIVIDADES
+└── EMPRESAS
 ```
 
-A empresa operacional não é o mesmo conceito que a organização da LPS.
+Empresa não é tenant.
+
+Usuários da mesma organização podem possuir escopos diferentes por empresa.
 
 ---
 
-# 9. Schemas propostos
+## 8. Schemas
 
-A estrutura da LPS será dividida em schemas:
+Estrutura consolidada:
 
 ```text
 core
@@ -209,578 +165,360 @@ configuracoes
 auditoria
 ```
 
----
-
-# 10. Responsabilidade de cada schema
-
-## `core`
-
-Estrutura fundamental do tenant:
-
-- organizações;
-- empresas;
-- usuários;
-- setores;
-- vínculos estruturais.
-
-## `acessos`
-
-Autorização:
-
-- grupos de ações;
-- ações;
-- perfis;
-- perfil-ações;
-- usuário-perfis;
-- escopos;
-- concessões diretas.
-
-## `cadastros`
-
-Cadastros operacionais de apoio:
-
-- obras;
-- centros de custo;
-- clientes, quando a modelagem for fechada;
-- outros cadastros auxiliares que não pertençam ao motor da LPS.
-
-## `produtividade`
-
-Núcleo operacional:
-
-- atividades;
-- tarefas;
-- executores;
-- dependências;
-- sessões de tempo;
-- passagens entre setores;
-- filas;
-- posições;
-- devoluções;
-- bloqueios;
-- prazos;
-- escalonamentos.
-
-## `comunicacao`
-
-Comunicação contextual:
-
-- conversas;
-- mensagens;
-- participantes;
-- menções;
-- notificações;
-- preferências.
-
-## `configuracoes`
-
-Cadastros de comportamento:
-
-- tipos;
-- motivos;
-- modelos de fluxo;
-- regras de escalonamento;
-- regras de notificação;
-- parâmetros operacionais.
-
-## `auditoria`
-
-Rastro técnico e funcional:
-
-- eventos;
-- alterações;
-- ações administrativas;
-- integrações futuramente.
+Um schema futuro de `inteligencia` só deve surgir quando houver funcionalidades reais que justifiquem persistência própria.
 
 ---
 
-# 11. Convenções gerais de campos
+# PARTE A — CORE
 
-Tabelas mutáveis devem considerar, conforme necessidade:
+## 9. `core.organizacoes`
 
-```text
-id
-organizacao_id
-criado_em
-criado_por
-atualizado_em
-atualizado_por
-ativo
-```
+### Finalidade
 
-Nem toda tabela precisa possuir todos esses campos.
+Representar o tenant da LPS.
 
-Tabelas imutáveis de evento normalmente precisam de:
+### Campos principais
 
-```text
-id
-organizacao_id
-ocorrido_em
-usuario_id
-tipo_evento
-```
-
----
-
-# 12. Timestamps
-
-Recomendação técnica:
-
-```text
-timestamptz
-```
-
-armazenado de forma consistente.
-
-A interface converte para o fuso do usuário ou organização.
-
----
-
-# 13. Exclusão física
-
-Para dados operacionais com histórico:
-
-> evitar exclusão física.
-
-Preferir:
-
-- cancelar;
-- inativar;
-- arquivar;
-- encerrar.
-
-Exclusão física deve ser restrita a casos específicos.
-
----
-
-# 14. Campos de status
-
-Os status internos devem possuir códigos estáveis.
-
-Exemplo conceitual:
-
-```text
-aberta
-em_andamento
-bloqueada
-concluida
-cancelada
-```
-
-A lista final ainda não está fechada.
-
-Não definir centenas de status no banco antes da decisão funcional.
-
----
-
-# 15. Nome interno x nome apresentado
-
-Futuramente:
-
-```text
-codigo interno:
-em_andamento
-```
-
-pode ser exibido como:
-
-```text
-Em execução
-```
-
-ou outro rótulo configurado.
-
-A lógica não deve depender do texto exibido.
-
----
-
-# 16. Normalização de nomes
-
-Cadastros como setor devem impedir duplicidade óbvia.
-
-Exemplo:
-
-```text
-Financeiro
-FINANCEIRO
- financeiro
-```
-
-podem utilizar uma coluna ou índice de normalização.
-
-Não aplicar similaridade fuzzy como regra automática.
-
----
-
-# 17. Schema `core`
-
----
-
-# 18. `core.organizacoes`
-
-## Finalidade
-
-Representa o tenant principal da LPS.
-
-Exemplos:
-
-```text
-Biasi
-Instaladora X
-```
-
-## Campos principais
-
-| Campo | Tipo conceitual | Obrigatório | Observação |
+| Campo | Tipo | Obrigatório | Observação |
 |---|---|---:|---|
 | id | uuid | Sim | PK |
 | nome | text | Sim | Nome da organização |
-| slug | text | Sim | Identificador amigável/técnico |
-| ativo | boolean | Sim | Organização ativa |
-| criado_em | timestamptz | Sim | Criação |
-| atualizado_em | timestamptz | Sim | Última alteração |
+| slug | text | Sim | Identificador amigável |
+| ativo | boolean | Sim | Situação |
+| criado_em | timestamptz | Sim | Auditoria |
+| criado_por | uuid | Não | Administrador/plataforma |
 
-## Regras
-
-- `slug` único globalmente;
-- organização inativa não deve aceitar operação normal;
-- não excluir organização com histórico operacional sem processo próprio.
-
-## Índices
+### Índices
 
 ```text
 unique(slug)
 index(ativo)
 ```
 
-## Segurança
-
-É a raiz das políticas de RLS.
-
 ---
 
-# 19. `core.empresas`
+## 10. `core.empresas`
 
-## Finalidade
+### Finalidade
 
-Representa empresas operacionais dentro da organização.
+Representar empresas operacionais ou jurídicas dentro do tenant.
 
-## Campos principais
-
-| Campo | Tipo | Obrigatório | Observação |
-|---|---|---:|---|
-| id | uuid | Sim | PK |
-| organizacao_id | uuid | Sim | FK organização |
-| codigo | text | Não | Código interno |
-| razao_social | text | Não | Quando aplicável |
-| nome_fantasia | text | Sim | Nome operacional |
-| documento | text | Não | CNPJ/identificador |
-| ativo | boolean | Sim | Situação |
-| criado_em | timestamptz | Sim | Criação |
-| atualizado_em | timestamptz | Sim | Alteração |
-
-## Relacionamentos
-
-```text
-organizacao 1:N empresas
-```
-
-## Regras
-
-- empresa sempre pertence a uma organização;
-- documento pode ser único dentro da organização quando preenchido;
-- inativação preserva histórico.
-
-## Índices
-
-```text
-index(organizacao_id)
-unique(organizacao_id, codigo) where codigo is not null
-index(organizacao_id, ativo)
-```
-
-## Observação
-
-Uma mesma entidade jurídica pode futuramente assumir também papel de cliente.
-
-A modelagem genérica de entidades/papéis ainda não foi fechada e não deve ser inventada neste documento.
-
----
-
-# 20. `core.usuarios`
-
-## Finalidade
-
-Representa usuários da organização.
-
-## Campos principais
-
-| Campo | Tipo | Obrigatório | Observação |
-|---|---|---:|---|
-| id | uuid | Sim | PK interno |
-| organizacao_id | uuid | Sim | FK organização |
-| auth_user_id | uuid | Sim | Identidade do provedor de autenticação |
-| nome | text | Sim | Nome exibido |
-| email | text | Sim | Login/contato |
-| ativo | boolean | Sim | Situação |
-| criado_em | timestamptz | Sim | Criação |
-| atualizado_em | timestamptz | Sim | Alteração |
-
-## Regras
-
-- usuário pertence a uma única organização;
-- `auth_user_id` único;
-- usuário inativo preserva histórico;
-- e-mail deve ser único dentro da política adotada.
-
-## Índices
-
-```text
-unique(auth_user_id)
-index(organizacao_id, ativo)
-index(organizacao_id, email)
-```
-
-## Segurança
-
-O `auth_user_id` será usado para identificar o usuário autenticado nas políticas de segurança.
-
----
-
-# 21. `core.setores`
-
-## Finalidade
-
-Representa os setores configuráveis da empresa.
-
-Exemplos:
-
-```text
-Comercial
-Financeiro
-Almoxarifado
-Engenharia
-```
-
-## Campos principais
-
-| Campo | Tipo | Obrigatório | Observação |
-|---|---|---:|---|
-| id | uuid | Sim | PK |
-| organizacao_id | uuid | Sim | Tenant |
-| empresa_id | uuid | Sim no D0 | Empresa operacional |
-| nome | text | Sim | Nome |
-| nome_normalizado | text | Sim | Controle de duplicidade |
-| codigo | text | Não | Código opcional |
-| ativo | boolean | Sim | Situação |
-| criado_em | timestamptz | Sim | Criação |
-| criado_por | uuid | Sim | Usuário |
-| atualizado_em | timestamptz | Sim | Alteração |
-
-## Regras
-
-- setor é cadastro;
-- setor não é fixo no código;
-- duplicidade normalizada deve ser impedida dentro da empresa;
-- setores parecidos não são automaticamente duplicados;
-- inativação preserva histórico.
-
-## Índices
-
-```text
-unique(organizacao_id, empresa_id, nome_normalizado)
-index(organizacao_id, empresa_id, ativo)
-```
-
-## Segurança
-
-Criação e edição dependem de ações como:
-
-```text
-setor.criar
-setor.editar
-setor.inativar
-```
-
----
-
-# 22. `core.usuario_setores`
-
-## Finalidade
-
-Representa participação operacional de usuários nos setores.
-
-Não representa autorização completa.
-
-## Campos principais
-
-| Campo | Tipo | Obrigatório | Observação |
-|---|---|---:|---|
-| id | uuid | Sim | PK |
-| organizacao_id | uuid | Sim | Tenant |
-| usuario_id | uuid | Sim | FK usuário |
-| setor_id | uuid | Sim | FK setor |
-| eh_principal | boolean | Sim | Setor principal |
-| eh_gestor | boolean | Sim | Papel estrutural |
-| ativo | boolean | Sim | Vínculo atual |
-| entrou_em | timestamptz | Sim | Início |
-| saiu_em | timestamptz | Não | Fim |
-
-## Regras
-
-- usuário pode pertencer a vários setores;
-- um usuário pode possuir no máximo um setor principal ativo por empresa, se essa regra for adotada;
-- `eh_gestor` não concede autorização automaticamente;
-- histórico do vínculo precisa ser preservado.
-
-## Índices
-
-```text
-index(organizacao_id, usuario_id)
-index(organizacao_id, setor_id, ativo)
-```
-
----
-
-# 23. Regra importante sobre `usuario_setores`
-
-```text
-PARTICIPAÇÃO
-≠
-AUTORIZAÇÃO
-```
-
-Exemplo:
-
-```text
-Paulo participa do Comercial.
-```
-
-Mas pode visualizar Administrativo por perfil/escopo.
-
-Não adicionar Paulo ao Administrativo apenas para liberar acesso.
-
----
-
-# 24. Schema `acessos`
-
----
-
-# 25. Objetivo do schema `acessos`
-
-Permitir que a LPS responda:
-
-> Usuário X pode executar ação Y sobre objeto Z?
-
-Modelo conceitual:
-
-```text
-USUÁRIO
-+
-PERFIL
-+
-AÇÃO
-+
-ESCOPO
-=
-AUTORIZAÇÃO
-```
-
----
-
-# 26. `acessos.grupos_acoes`
-
-## Finalidade
-
-Organiza ações em grupos amigáveis.
-
-Exemplos:
-
-```text
-Gestão de Atividades
-Gestão de Tarefas
-Filas
-Cadastros
-Segurança
-Auditoria
-```
-
-## Campos principais
+### Campos principais
 
 | Campo | Tipo | Obrigatório |
 |---|---|---:|
 | id | uuid | Sim |
-| codigo | text | Sim |
+| organizacao_id | uuid | Sim |
+| codigo | text | Não |
+| nome | text | Sim |
+| documento | text | Não |
+| ativo | boolean | Sim |
+| criado_em | timestamptz | Sim |
+| criado_por | uuid | Sim |
+
+### Regras
+
+- pertence sempre a uma organização;
+- código pode ser amigável;
+- empresa inativa preserva histórico;
+- uma entidade poderá futuramente assumir também papel de cliente sem duplicar identidade desnecessariamente.
+
+### Índices
+
+```text
+unique(organizacao_id, codigo) where codigo is not null
+index(organizacao_id, ativo)
+```
+
+---
+
+## 11. `core.usuarios`
+
+### Finalidade
+
+Identidade de acesso da pessoa ou conta técnica.
+
+### Campos principais
+
+| Campo | Tipo | Obrigatório | Observação |
+|---|---|---:|---|
+| id | uuid | Sim | PK |
+| organizacao_id | uuid | Sim | Tenant |
+| auth_user_id | uuid | Não | Identidade do provedor de autenticação |
+| codigo | text | Não | Código humano opcional |
+| nome | text | Sim | Nome exibido |
+| email | citext/text | Sim | Login/comunicação |
+| ativo | boolean | Sim | Situação |
+| tipo | text | Sim | humano / integracao |
+| criado_em | timestamptz | Sim | Histórico |
+| atualizado_em | timestamptz | Sim | Histórico |
+
+### Regras
+
+- um usuário pertence a uma única organização;
+- inativar em vez de excluir quando houver histórico;
+- e-mail não deve ser usado como chave histórica;
+- `auth_user_id` não substitui o `id` de domínio;
+- contas técnicas devem ser identificadas explicitamente.
+
+### Índices
+
+```text
+unique(organizacao_id, email)
+index(organizacao_id, ativo)
+index(auth_user_id)
+```
+
+---
+
+## 12. Cargo ou função organizacional
+
+Não é necessário para o motor de segurança.
+
+Se entrar no D0 ou D1, usar tabela separada:
+
+```text
+core.cargos
+```
+
+Campos possíveis:
+
+```text
+id
+organizacao_id
+nome
+ativo
+```
+
+E no usuário:
+
+```text
+cargo_id nullable
+```
+
+Regra:
+
+> Cargo descreve a pessoa; não concede permissão automaticamente.
+
+---
+
+## 13. `core.setores`
+
+### Finalidade
+
+Estrutura operacional configurável da organização.
+
+### Campos principais
+
+| Campo | Tipo | Obrigatório |
+|---|---|---:|
+| id | uuid | Sim |
+| organizacao_id | uuid | Sim |
+| empresa_id | uuid | Não |
+| codigo | text | Não |
+| nome | text | Sim |
+| ativo | boolean | Sim |
+| criado_em | timestamptz | Sim |
+| criado_por | uuid | Sim |
+
+### Regras
+
+- não existem setores fixos no código;
+- setor pode ser corporativo ou vinculado a empresa conforme necessidade;
+- impedir apenas duplicidade exata normalizada dentro do mesmo contexto;
+- nomes semelhantes podem coexistir;
+- inativação preserva histórico.
+
+### Índices
+
+```text
+index(organizacao_id, ativo)
+index(empresa_id, ativo)
+```
+
+---
+
+## 14. `core.usuario_setores`
+
+### Finalidade
+
+Relacionar usuários aos setores em que participam operacionalmente.
+
+### Campos principais
+
+| Campo | Tipo | Obrigatório |
+|---|---|---:|
+| usuario_id | uuid | Sim |
+| setor_id | uuid | Sim |
+| papel | text | Não |
+| inicio_em | timestamptz/date | Não |
+| fim_em | timestamptz/date | Não |
+| criado_em | timestamptz | Sim |
+| criado_por | uuid | Sim |
+
+### Chave
+
+Pode usar chave composta ou `id` próprio se histórico de períodos for necessário.
+
+### Regra crítica
+
+```text
+usuario_setores != autorização
+```
+
+Pertencer ao setor não significa receber todas as capacidades sobre ele.
+
+---
+
+## 15. Gestores de setor
+
+Há duas opções técnicas aceitáveis.
+
+### Opção simples
+
+Usar `papel = gestor` em `core.usuario_setores`.
+
+### Opção mais explícita
+
+Criar:
+
+```text
+core.setor_gestores
+```
+
+com:
+
+```text
+setor_id
+usuario_id
+inicio_em
+fim_em
+```
+
+A segunda opção facilita histórico e múltiplos gestores.
+
+Para D0, ambas são válidas; evitar duplicar conceitos.
+
+Ser gestor não concede autorização automaticamente.
+
+---
+
+# PARTE B — ACESSOS
+
+## 16. Objetivo do schema `acessos`
+
+Permitir que a LPS resolva:
+
+```text
+QUEM
++
+AÇÃO
++
+ESCOPO
++
+ORIGEM
+```
+
+sem tabelas de autorização diferentes para cada módulo ou tipo de contexto.
+
+---
+
+## 17. Decisão arquitetural mais importante da revisão
+
+Não criar motores separados como:
+
+```text
+usuario_empresa_autorizacoes
+usuario_obra_autorizacoes
+usuario_setor_autorizacoes
+usuario_centro_custo_autorizacoes
+```
+
+A LPS deve usar um motor genérico de escopo.
+
+Empresa, setor, obra e centro de custo são **tipos de escopo**.
+
+Isso mantém o dinamismo sem copiar a fragmentação do benchmark.
+
+---
+
+## 18. `acessos.grupos_acoes`
+
+### Finalidade
+
+Organizar ações para a interface e administração.
+
+### Campos principais
+
+| Campo | Tipo | Obrigatório |
+|---|---|---:|
+| id | uuid | Sim |
+| chave | text | Sim |
 | nome | text | Sim |
 | descricao | text | Não |
 | ordem | integer | Sim |
 | ativo | boolean | Sim |
 
-## Regras
-
-- grupo organiza;
-- grupo não concede acesso;
-- código é estável.
-
-## Índices
+### Exemplos
 
 ```text
-unique(codigo)
-index(ativo, ordem)
+atividades
+tarefas
+filas
+prazos
+cadastros
+seguranca
+auditoria
+comunicacao
 ```
+
+Grupo não concede acesso.
 
 ---
 
-# 27. `acessos.acoes`
+## 19. `acessos.acoes`
 
-## Finalidade
+### Finalidade
 
-Representa capacidades reais da LPS.
+Catálogo atômico das capacidades reais da LPS.
 
-Exemplos:
+### Campos principais
 
-```text
-atividade.visualizar
-atividade.criar
-tarefa.devolver
-fila.reordenar
-setor.criar
-```
+| Campo | Tipo | Obrigatório | Observação |
+|---|---|---:|---|
+| id | uuid | Sim | PK |
+| grupo_id | uuid | Sim | Organização visual |
+| chave | text | Sim | Ex.: `fila.reordenar` |
+| nome | text | Sim | Nome amigável |
+| descricao | text | Sim | O que permite |
+| sensivel | boolean | Sim | UX/auditoria reforçada |
+| ativo | boolean | Sim | Situação |
+| criado_em | timestamptz | Sim | Histórico |
 
-## Campos principais
-
-| Campo | Tipo | Obrigatório |
-|---|---|---:|
-| id | uuid | Sim |
-| grupo_id | uuid | Sim |
-| codigo | text | Sim |
-| nome | text | Sim |
-| descricao | text | Não |
-| ativo | boolean | Sim |
-
-## Regras
-
-- `codigo` único;
-- novas ações começam negadas por padrão;
-- não vincular a botão específico;
-- ação deve representar capacidade de negócio.
-
-## Índices
+### Índices
 
 ```text
-unique(codigo)
+unique(chave)
 index(grupo_id, ativo)
 ```
 
+### Regra crítica
+
+Ação existe porque a aplicação possui comportamento correspondente.
+
+No D0, a organização não cria ações arbitrárias que o código desconhece.
+
+A organização configura **combinações** de ações através de perfis.
+
 ---
 
-# 28. `acessos.perfis`
+## 20. `acessos.perfis`
 
-## Finalidade
+### Finalidade
 
-Agrupa ações reutilizáveis.
+Conjunto configurável de capacidades.
 
-## Campos principais
+### Campos principais
 
 | Campo | Tipo | Obrigatório |
 |---|---|---:|
@@ -791,30 +529,27 @@ Agrupa ações reutilizáveis.
 | ativo | boolean | Sim |
 | criado_em | timestamptz | Sim |
 | criado_por | uuid | Sim |
+| atualizado_em | timestamptz | Sim |
+| atualizado_por | uuid | Sim |
 
-## Regras
-
-- perfil pertence à organização;
-- perfil não é cargo;
-- perfil não é setor;
-- perfil inativo preserva histórico.
-
-## Índices
+### Índices
 
 ```text
 unique(organizacao_id, nome)
 index(organizacao_id, ativo)
 ```
 
+Perfil é totalmente configurável pela organização.
+
 ---
 
-# 29. `acessos.perfil_acoes`
+## 21. `acessos.perfil_acoes`
 
-## Finalidade
+### Finalidade
 
-Relaciona perfis às ações permitidas.
+Marcar/desmarcar quais ações fazem parte de um perfil.
 
-## Campos principais
+### Campos principais
 
 | Campo | Tipo | Obrigatório |
 |---|---|---:|
@@ -823,44 +558,53 @@ Relaciona perfis às ações permitidas.
 | criado_em | timestamptz | Sim |
 | criado_por | uuid | Sim |
 
-## Chave
+### Chave
 
 ```text
 primary key(perfil_id, acao_id)
 ```
 
-## Regra
+Essa tabela é a base da UX de checkbox.
 
-O perfil define:
+Marcar:
 
-> o que pode fazer.
+```text
+INSERT perfil_acoes
+```
 
-O escopo será definido no vínculo do usuário com o perfil.
+Desmarcar:
+
+```text
+DELETE perfil_acoes
+```
+
+A auditoria registra ambas as operações.
 
 ---
 
-# 30. `acessos.escopos`
+## 22. `acessos.escopos`
 
-## Finalidade
+### Finalidade
 
-Define onde determinada concessão é válida.
+Representar onde uma concessão é válida.
 
-## Campos principais
+### Campos principais
 
 | Campo | Tipo | Obrigatório | Observação |
 |---|---|---:|---|
 | id | uuid | Sim | PK |
 | organizacao_id | uuid | Sim | Tenant |
 | tipo | text | Sim | Tipo do escopo |
-| empresa_id | uuid | Não | Empresa |
-| setor_id | uuid | Não | Setor |
-| obra_id | uuid | Não | Obra |
-| centro_custo_id | uuid | Não | Centro de custo |
-| relacao | text | Não | Ex.: próprias, atribuídas |
-| descricao | text | Não | Leitura humana |
+| empresa_id | uuid | Não | Quando aplicável |
+| setor_id | uuid | Não | Quando aplicável |
+| obra_id | uuid | Não | Quando aplicável |
+| centro_custo_id | uuid | Não | Quando aplicável |
+| relacao | text | Não | Escopo relacional |
+| nome_exibicao | text | Não | Leitura humana |
 | ativo | boolean | Sim | Situação |
+| criado_em | timestamptz | Sim | Histórico |
 
-## Tipos conceituais possíveis
+### Tipos iniciais
 
 ```text
 organizacao
@@ -872,47 +616,53 @@ relacional
 combinado
 ```
 
-## Regras
+### Relações canônicas possíveis
 
-- escopo nunca cruza organização;
-- campos aplicáveis dependem do tipo;
-- não criar escopos genéricos sem necessidade;
-- escopo precisa ser explicável.
+```text
+minhas_atividades
+minhas_tarefas
+meus_setores
+setores_gerenciados
+```
+
+### Regra
+
+O banco precisa validar coerência entre `tipo` e os campos preenchidos.
+
+Exemplo:
+
+```text
+tipo = setor
+→ setor_id obrigatório
+→ obra_id nulo
+```
 
 ---
 
-# 31. Escopos relacionais
+## 23. Por que não usar apenas `scope_type + scope_id`
 
-Alguns acessos dependem da relação do usuário com o objeto.
-
-Exemplos:
+Um par genérico como:
 
 ```text
-atividades das quais sou dono
-tarefas atribuídas a mim
-setores dos quais participo
-setores que gerencio
+scope_type
+scope_id
 ```
 
-Esses casos podem ser representados por:
+é simples, mas perde chaves estrangeiras reais para tabelas diferentes.
 
-```text
-relacao
-```
+Para o D0, campos explícitos em `acessos.escopos` são mais seguros e fáceis de validar.
 
-ou regra interna vinculada ao escopo.
-
-A implementação final deve privilegiar clareza.
+Caso o número de tipos de escopo cresça muito no futuro, a arquitetura pode ser reavaliada.
 
 ---
 
-# 32. `acessos.usuario_perfis`
+## 24. `acessos.usuario_perfis`
 
-## Finalidade
+### Finalidade
 
-Atribui um perfil a um usuário dentro de determinado escopo.
+Atribuir um perfil a um usuário dentro de determinado escopo.
 
-## Campos principais
+### Campos principais
 
 | Campo | Tipo | Obrigatório |
 |---|---|---:|
@@ -922,46 +672,62 @@ Atribui um perfil a um usuário dentro de determinado escopo.
 | perfil_id | uuid | Sim |
 | escopo_id | uuid | Sim |
 | ativo | boolean | Sim |
-| valido_de | timestamptz | Não |
-| valido_ate | timestamptz | Não |
 | criado_em | timestamptz | Sim |
 | criado_por | uuid | Sim |
 
-## Exemplo
+### Exemplo
 
 ```text
 Paulo
-Perfil: Gestor Comercial
-Escopo: Setor Comercial
++ Gestor Comercial
++ Setor Comercial
 ```
 
-Outro vínculo:
+### Índices
 
 ```text
-Paulo
-Perfil: Visualizador
-Escopo: Setor Administrativo
-```
-
-Isso evita criar perfis extremamente específicos.
-
-## Índices
-
-```text
-index(organizacao_id, usuario_id, ativo)
+index(usuario_id, ativo)
 index(perfil_id, ativo)
 index(escopo_id, ativo)
+unique(usuario_id, perfil_id, escopo_id) where ativo = true
 ```
 
 ---
 
-# 33. `acessos.usuario_acoes`
+## 25. Limitação consciente do D0
 
-## Finalidade
+No D0, todas as ações do perfil compartilham o escopo da atribuição.
 
-Concessões diretas excepcionais.
+Exemplo:
 
-## Campos principais
+```text
+Gestor Comercial
+aplicado ao Setor Comercial
+```
+
+Se o mesmo usuário precisar:
+
+```text
+ver atividades da empresa inteira
+mas reordenar somente Comercial
+```
+
+há duas formas simples:
+
+1. usar dois perfis diferentes;
+2. usar concessão direta para a exceção.
+
+Não criar um construtor de políticas complexo antes de existir necessidade real.
+
+---
+
+## 26. `acessos.usuario_acoes`
+
+### Finalidade
+
+Concessões diretas para exceções individuais.
+
+### Campos principais
 
 | Campo | Tipo | Obrigatório |
 |---|---|---:|
@@ -974,90 +740,129 @@ Concessões diretas excepcionais.
 | criado_em | timestamptz | Sim |
 | criado_por | uuid | Sim |
 
-## Regra
+### Regra
 
-Usar apenas para exceções.
+No D0, essa tabela representa apenas concessões positivas.
 
-Se muitas pessoas precisam da mesma concessão:
-
-> criar ou ajustar perfil.
-
----
-
-# 34. Avaliação conceitual da autorização
-
-```text
-1. usuário ativo?
-2. mesma organização?
-3. possui ação por perfil ou concessão direta?
-4. objeto está dentro do escopo?
-5. regra de negócio permite ação no estado atual?
-```
-
-Resultado:
-
-```text
-PERMITIR
-```
-
-ou:
+Sem concessão válida:
 
 ```text
 NEGAR
 ```
 
----
-
-# 35. RLS
-
-RLS significa:
-
-**Row Level Security — Segurança em Nível de Linha.**
-
-Deve ser utilizada como última barreira no PostgreSQL/Supabase.
-
-Objetivos:
-
-- impedir acesso entre organizações;
-- limitar registros ao escopo autorizado;
-- proteger dados mesmo se o front-end falhar.
+Não implementar DENY explícito inicialmente.
 
 ---
 
-# 36. A interface não é a barreira principal
+## 27. Permissão efetiva não deve ser gravada como fonte de verdade
 
-Ocultar:
+A permissão efetiva é derivada de:
 
 ```text
-botão Reordenar
+perfil_acoes
++
+usuario_perfis
++
+usuario_acoes
++
+escopos
++
+situação do usuário
++
+regra de negócio
 ```
 
-é UX.
+Pode existir uma `view` para facilitar consulta.
 
-A segurança precisa existir também em:
+Exemplo:
 
 ```text
-API
-Banco
+acessos.vw_permissoes_efetivas
+```
+
+Mas a view não substitui as tabelas de origem.
+
+---
+
+## 28. Pseudocálculo da autorização
+
+```text
+se usuario.ativo = false
+    negar
+
+se recurso.organizacao_id != usuario.organizacao_id
+    negar
+
+se existe perfil ativo do usuário
+   onde perfil possui a ação
+   e escopo contém o recurso
+    candidato = permitido
+
+se existe concessão direta ativa
+   da ação
+   em escopo que contém o recurso
+    candidato = permitido
+
+se nenhum candidato
+    negar
+
+se regra de negócio impedir a ação
+    negar
+
+permitir
 ```
 
 ---
 
-# 37. Schema `cadastros`
+## 29. Origem da permissão
+
+A consulta administrativa deve conseguir retornar:
+
+```text
+usuario
+acao
+escopo
+origem_tipo
+origem_id
+origem_nome
+```
+
+Exemplo:
+
+```text
+Paulo
+fila.reordenar
+Setor Comercial
+perfil
+Gestor Comercial
+```
+
+Não é necessário persistir isso como duplicação; pode ser produzido por view/consulta.
 
 ---
 
-# 38. `cadastros.obras`
+## 30. Auditoria de segurança
 
-## Finalidade
+Toda alteração em:
 
-Representa obras utilizadas no contexto operacional.
+```text
+perfis
+perfil_acoes
+usuario_perfis
+usuario_acoes
+escopos
+usuario_setores
+```
 
-Decisão consolidada:
+deverá gerar evento de auditoria.
 
-> obras e centros de custo serão tabelas separadas.
+---
 
-## Campos principais
+# PARTE C — CADASTROS
+
+## 31. `cadastros.obras`
+
+### Campos principais
 
 | Campo | Tipo | Obrigatório |
 |---|---|---:|
@@ -1066,45 +871,19 @@ Decisão consolidada:
 | empresa_id | uuid | Sim |
 | codigo | text | Não |
 | nome | text | Sim |
-| cliente_id | uuid | Não |
 | ativo | boolean | Sim |
 | criado_em | timestamptz | Sim |
-| atualizado_em | timestamptz | Sim |
+| criado_por | uuid | Sim |
 
-## Regras
+### Regra
 
-- obra pertence a uma empresa;
-- atividade pode existir sem obra;
-- obra inativa preserva histórico.
-
-## Índices
-
-```text
-index(organizacao_id, empresa_id, ativo)
-unique(organizacao_id, empresa_id, codigo) where codigo is not null
-```
+Obra é cadastro operacional, não sinônimo de centro de custo.
 
 ---
 
-# 39. `cadastros.centros_custo`
+## 32. `cadastros.centros_custo`
 
-## Finalidade
-
-Representa centros de custo.
-
-Pode existir:
-
-```text
-centro de custo independente
-```
-
-ou:
-
-```text
-centro de custo associado a obra
-```
-
-## Campos principais
+### Campos principais
 
 | Campo | Tipo | Obrigatório |
 |---|---|---:|
@@ -1115,159 +894,98 @@ centro de custo associado a obra
 | codigo | text | Não |
 | nome | text | Sim |
 | ativo | boolean | Sim |
-| criado_em | timestamptz | Sim |
 
-## Regras
+### Regras
 
-- centro de custo pode ou não estar associado a obra;
-- atividade pode vincular obra e centro de custo simultaneamente;
-- centro de custo não é obrigatório para toda atividade.
-
-## Índices
-
-```text
-index(organizacao_id, empresa_id, ativo)
-index(obra_id)
-unique(organizacao_id, empresa_id, codigo) where codigo is not null
-```
+- pode existir sem obra;
+- pode estar associado a obra;
+- atividade pode referenciar obra e centro de custo simultaneamente;
+- nenhuma atividade é obrigada a possuir obra.
 
 ---
 
-# 40. Cliente
+## 33. Cliente
 
-A modelagem definitiva de cliente ainda não está fechada.
+A modelagem definitiva de cliente ainda pode evoluir para um cadastro genérico de pessoas/entidades com múltiplos papéis.
 
-Existe requisito já conhecido:
+Não bloquear o D0 por isso.
 
-> uma entidade pode ser empresa operacional e também cliente.
-
-Por isso, evitar fechar rapidamente uma tabela que force duplicação conceitual.
-
-No D0, as opções técnicas a avaliar são:
-
-```text
-A. cadastros.clientes separado
-B. entidade genérica + papéis
-C. empresa podendo ser referenciada também como cliente
-```
-
-A decisão deve ser tomada quando o cadastro de clientes entrar efetivamente no escopo técnico.
+Atividade interna pode existir sem cliente.
 
 ---
 
-# 41. Área de negócio
+# PARTE D — PRODUTIVIDADE
 
-Decisão consolidada:
+## 34. `produtividade.atividades`
 
-```text
-fora do D0.
-```
+### Finalidade
 
-Não criar tabela agora.
+Representar o problema/resultado completo a ser entregue.
 
----
-
-# 42. Departamentos
-
-Decisão consolidada:
-
-```text
-não criar agora.
-```
-
-Setor atende o núcleo atual.
-
----
-
-# 43. Schema `produtividade`
-
-Este é o principal schema operacional da LPS.
-
----
-
-# 44. `produtividade.atividades`
-
-## Finalidade
-
-Representa o resultado/problema que precisa ser acompanhado até resolução.
-
-## Campos principais
+### Campos principais
 
 | Campo | Tipo | Obrigatório | Observação |
 |---|---|---:|---|
 | id | uuid | Sim | PK |
 | organizacao_id | uuid | Sim | Tenant |
-| empresa_id | uuid | Sim | Empresa |
-| tipo_atividade_id | uuid | Não | Tipo configurável |
-| titulo | text | Sim | Resultado resumido |
-| descricao | text | Não | Contexto |
-| dono_usuario_id | uuid | Sim | Único dono |
-| criado_por | uuid | Sim | Autor |
+| empresa_id | uuid | Sim | Contexto |
 | obra_id | uuid | Não | Opcional |
 | centro_custo_id | uuid | Não | Opcional |
-| status | text | Sim | Código interno |
-| prazo_solicitado | timestamptz | Não | Necessidade |
-| prazo_comprometido | timestamptz | Não | Compromisso atual |
-| primeira_acao_em | timestamptz | Não | Cache/derivável |
-| concluida_em | timestamptz | Não | Conclusão |
-| cancelada_em | timestamptz | Não | Cancelamento |
-| criado_em | timestamptz | Sim | Criação |
-| atualizado_em | timestamptz | Sim | Alteração |
+| tipo_atividade_id | uuid | Não | Configuração |
+| titulo | text | Sim | Identificação |
+| descricao | text | Não | Contexto |
+| dono_usuario_id | uuid | Sim | Um único dono |
+| impacto_declarado | text/jsonb | Não | Conforme desenho final |
+| prazo_solicitado_em | timestamptz | Não | Necessidade do dono/solicitante |
+| prazo_comprometido_em | timestamptz | Não | Compromisso vigente |
+| status | text | Sim | Estado atual canônico |
+| criado_em | timestamptz | Sim | Métrica |
+| criado_por | uuid | Sim | Auditoria |
+| concluido_em | timestamptz | Não | Resultado |
+| cancelado_em | timestamptz | Não | Quando aplicável |
 
-## Regras
+### Regras
 
-- exatamente um dono ativo;
-- obra opcional;
-- centro de custo opcional;
-- obra e centro de custo podem coexistir;
-- atividade pode existir sem obra;
-- conclusão não depende apenas de todas as tarefas, salvo regra configurada;
-- `prazo_solicitado` e `prazo_comprometido` são conceitos diferentes.
-
-## Índices
-
-```text
-index(organizacao_id, empresa_id, status)
-index(organizacao_id, dono_usuario_id, status)
-index(organizacao_id, prazo_comprometido)
-index(obra_id)
-index(centro_custo_id)
-index(tipo_atividade_id, status)
-```
-
-## Segurança
-
-RLS considera:
-
-- organização;
-- empresa;
-- dono;
-- escopos;
-- permissões.
+- uma atividade possui exatamente um dono atual;
+- dono não é lista;
+- obra é opcional;
+- centro de custo é opcional;
+- atividade pode ser interna;
+- status atual não substitui histórico.
 
 ---
 
-# 45. Histórico de dono
+## 35. Histórico do dono
 
-Não confiar apenas em:
+Mudança de dono precisa deixar evento de domínio/auditoria.
+
+Não basta atualizar:
 
 ```text
 dono_usuario_id
 ```
 
-A mudança de dono precisa ser registrada em auditoria.
+A LPS precisa saber:
 
-Se necessário para consultas frequentes, poderá existir tabela específica futura.
+```text
+quem era
+quem passou a ser
+quando
+quem alterou
+motivo, quando exigido
+```
+
+Pode existir tabela específica futura se consultas justificarem; no D0, evento estruturado pode ser suficiente.
 
 ---
 
-# 46. `produtividade.tarefas`
+## 36. `produtividade.tarefas`
 
-## Finalidade
+### Finalidade
 
-Representa unidades de trabalho dentro da atividade.
+Representar passos executáveis dentro da atividade.
 
-## Campos principais
+### Campos principais
 
 | Campo | Tipo | Obrigatório |
 |---|---|---:|
@@ -1275,131 +993,75 @@ Representa unidades de trabalho dentro da atividade.
 | organizacao_id | uuid | Sim |
 | atividade_id | uuid | Sim |
 | tipo_tarefa_id | uuid | Não |
+| setor_responsavel_id | uuid | Sim |
 | titulo | text | Sim |
 | descricao | text | Não |
-| setor_atual_id | uuid | Não |
 | status | text | Sim |
-| ordem_fluxo | numeric | Não |
-| prazo_solicitado | timestamptz | Não |
-| prazo_comprometido | timestamptz | Não |
-| criada_por | uuid | Sim |
-| criada_em | timestamptz | Sim |
-| primeira_acao_em | timestamptz | Não |
-| iniciada_em | timestamptz | Não |
-| concluida_em | timestamptz | Não |
-| cancelada_em | timestamptz | Não |
-| atualizado_em | timestamptz | Sim |
+| criado_em | timestamptz | Sim |
+| criado_por | uuid | Sim |
+| iniciado_em | timestamptz | Não |
+| concluido_em | timestamptz | Não |
 
-## Regras
+### Regra
 
-- tarefa pertence a uma única atividade;
-- pode nascer sem executor;
-- pode possuir vários executores;
-- pode mudar de setor;
-- `setor_atual_id` representa fotografia atual;
-- histórico de setores fica em tabela própria;
-- tarefa concluída não conclui automaticamente a atividade;
-- ordem pode mudar com auditoria.
+Uma tarefa possui um setor responsável atual.
 
-## Índices
-
-```text
-index(organizacao_id, atividade_id)
-index(organizacao_id, setor_atual_id, status)
-index(organizacao_id, prazo_comprometido)
-index(tipo_tarefa_id)
-```
+Uma atividade pode atravessar vários setores através de suas tarefas.
 
 ---
 
-# 47. `produtividade.tarefa_executores`
+## 37. `produtividade.tarefa_executores`
 
-## Finalidade
+### Finalidade
 
-Relaciona 0..N executores a uma tarefa.
+Permitir vários executores na mesma tarefa.
 
-## Campos principais
+### Campos principais
 
 | Campo | Tipo | Obrigatório |
 |---|---|---:|
-| id | uuid | Sim |
-| organizacao_id | uuid | Sim |
 | tarefa_id | uuid | Sim |
 | usuario_id | uuid | Sim |
-| atribuido_por | uuid | Sim |
 | atribuido_em | timestamptz | Sim |
 | removido_em | timestamptz | Não |
-| ativo | boolean | Sim |
+| atribuido_por | uuid | Sim |
 
-## Regras
+### Regra
 
-- múltiplos executores permitidos;
-- remoção não apaga histórico;
-- executor inativo permanece associado historicamente.
+Executor não é dono da atividade.
 
-## Índices
-
-```text
-index(tarefa_id, ativo)
-index(usuario_id, ativo)
-unique(tarefa_id, usuario_id) where ativo = true
-```
+Dois executores podem trabalhar simultaneamente e seus tempos são somados em horas-homem.
 
 ---
 
-# 48. `produtividade.tarefa_dependencias`
+## 38. `produtividade.tarefa_dependencias`
 
-## Finalidade
+### Finalidade
 
-Representa dependências entre tarefas.
+Representar dependências explícitas entre tarefas.
 
-## Campos principais
-
-| Campo | Tipo | Obrigatório |
-|---|---|---:|
-| id | uuid | Sim |
-| organizacao_id | uuid | Sim |
-| atividade_id | uuid | Sim |
-| tarefa_predecessora_id | uuid | Sim |
-| tarefa_sucessora_id | uuid | Sim |
-| tipo | text | Sim |
-| criada_em | timestamptz | Sim |
-| criada_por | uuid | Sim |
-
-## D0
-
-Tipo inicial:
+Campos:
 
 ```text
-fim_para_inicio
+id
+tarefa_id
+depende_de_tarefa_id
+tipo
+criado_em
+criado_por
 ```
 
-ou equivalente.
-
-## Regras
-
-- ambas as tarefas precisam pertencer à mesma atividade no D0;
-- impedir auto-dependência;
-- impedir duplicidade;
-- ciclos devem ser validados.
-
-## Índices
-
-```text
-index(tarefa_predecessora_id)
-index(tarefa_sucessora_id)
-unique(tarefa_predecessora_id, tarefa_sucessora_id)
-```
+No D0, não transformar isso em um motor BPM complexo.
 
 ---
 
-# 49. `produtividade.sessoes_tempo`
+## 39. `produtividade.sessoes_tempo`
 
-## Finalidade
+### Finalidade
 
-Registra períodos efetivos de trabalho de cada executor.
+Medir tempo real de trabalho de cada executor.
 
-## Campos principais
+### Campos principais
 
 | Campo | Tipo | Obrigatório |
 |---|---|---:|
@@ -1407,117 +1069,93 @@ Registra períodos efetivos de trabalho de cada executor.
 | organizacao_id | uuid | Sim |
 | tarefa_id | uuid | Sim |
 | usuario_id | uuid | Sim |
-| setor_id | uuid | Não |
 | inicio_em | timestamptz | Sim |
 | fim_em | timestamptz | Não |
 | origem | text | Sim |
-| lancada_em | timestamptz | Sim |
-| lancada_por | uuid | Sim |
 | observacao | text | Não |
+| criado_em | timestamptz | Sim |
 
-## `origem`
+### `origem`
 
 Exemplos:
 
 ```text
 timer
 manual
+correcao
 importacao
 ```
 
-## Regras
+### Regras
 
-- uma pessoa não deve possuir duas sessões ativas simultâneas no D0;
-- iniciar nova tarefa pode encerrar/pausar a sessão anterior;
-- lançamento manual precisa ser distinguível;
-- correções precisam de auditoria;
-- fim nunca pode ser anterior ao início.
-
-## Índices
-
-```text
-index(organizacao_id, usuario_id, inicio_em)
-index(tarefa_id, inicio_em)
-unique(usuario_id) where fim_em is null
-```
+- fim não pode ser anterior ao início;
+- sessão aberta tem `fim_em` nulo;
+- correção deve ser auditada;
+- regra sobre pausar automaticamente outra tarefa deve permanecer configurável/pendente até ser consolidada, não hardcoded prematuramente.
 
 ---
 
-# 50. Horas-homem
+## 40. Horas-homem
 
-Não precisa ser armazenado como valor principal.
+Derivadas pela soma das sessões.
 
-Pode ser derivado:
+Exemplo:
 
 ```text
-SUM(fim_em - inicio_em)
+Ryan: 1h30
+Jennifer: 1h30
+
+Horas-homem = 3h
 ```
 
-por:
-
-- tarefa;
-- atividade;
-- usuário;
-- setor.
+Mesmo que o tempo corrido tenha sido 1h30.
 
 ---
 
-# 51. `produtividade.passagens_setor`
+## 41. Movimentação entre setores
 
-## Finalidade
+Criar uma estrutura de histórico de passagem.
 
-Registra cada passagem de uma tarefa por um setor.
-
-Esse histórico é essencial para medir permanência e retornos.
-
-## Campos principais
-
-| Campo | Tipo | Obrigatório |
-|---|---|---:|
-| id | uuid | Sim |
-| organizacao_id | uuid | Sim |
-| tarefa_id | uuid | Sim |
-| setor_id | uuid | Sim |
-| entrada_em | timestamptz | Sim |
-| saida_em | timestamptz | Não |
-| entrada_por | uuid | Sim |
-| saida_por | uuid | Não |
-| tipo_saida | text | Não |
-| ordem_passagem | integer | Sim |
-
-## Exemplo
+Nome sugerido:
 
 ```text
-Engenharia — passagem 1
-Compras — passagem 2
-Engenharia — passagem 3
-Compras — passagem 4
+produtividade.passagens_setor
 ```
 
-## Regras
-
-- uma tarefa pode passar várias vezes pelo mesmo setor;
-- cada passagem é independente;
-- `tarefas.setor_atual_id` deve corresponder à passagem aberta atual;
-- no máximo uma passagem ativa por tarefa.
-
-## Índices
+Campos:
 
 ```text
-index(tarefa_id, ordem_passagem)
-index(setor_id, entrada_em)
-unique(tarefa_id) where saida_em is null
+id
+organizacao_id
+atividade_id
+tarefa_id
+setor_origem_id nullable
+setor_destino_id
+entrada_em
+saida_em nullable
+tipo_movimentacao
+motivo_id nullable
+movido_por
 ```
+
+Permite medir:
+
+- permanência por setor;
+- retornos;
+- gargalos;
+- tempo de trânsito.
 
 ---
 
-# 52. `produtividade.fila_itens`
+# PARTE E — FILAS
 
-## Finalidade
+## 42. `produtividade.fila_itens`
 
-Representa a presença atual de uma tarefa na fila operacional de um setor.
+### Finalidade
 
-## Campos principais
+Representar a posição atual da tarefa na fila do setor.
+
+### Campos principais
 
 | Campo | Tipo | Obrigatório |
 |---|---|---:|
@@ -1525,2044 +1163,1078 @@ Representa a presença atual de uma tarefa na fila operacional de um setor.
 | organizacao_id | uuid | Sim |
 | setor_id | uuid | Sim |
 | tarefa_id | uuid | Sim |
-| ordem | numeric | Sim |
+| posicao | integer/bigint | Sim |
 | entrou_em | timestamptz | Sim |
 | saiu_em | timestamptz | Não |
-| estado | text | Sim |
-| inserido_por | uuid | Não |
+| ativo | boolean | Sim |
 
-## Observação importante
+### Regra
 
-A coluna:
-
-```text
-ordem
-```
-
-define ordenação.
-
-A posição exibida:
+A fila precisa responder rapidamente:
 
 ```text
-4 de 17
-```
-
-pode ser calculada com:
-
-```text
-row_number()
-```
-
-sobre os itens ativos.
-
-Isso evita depender de renumerar todos os registros a cada alteração.
-
-## Regras
-
-- no máximo uma entrada ativa por tarefa/setor naquele momento;
-- fila é por setor;
-- tarefa bloqueada pode futuramente ter tratamento específico;
-- posição exata é derivada da ordem.
-
-## Índices
-
-```text
-index(organizacao_id, setor_id, estado, ordem)
-unique(tarefa_id) where saiu_em is null
+qual minha posição?
+quantos itens existem?
 ```
 
 ---
 
-# 53. `produtividade.fila_historico_posicoes`
+## 43. `produtividade.fila_historico_posicoes`
 
-## Finalidade
+### Finalidade
 
-Registra mudanças de posição percebidas pelo usuário.
+Registrar cada mudança de posição.
 
-Necessário para:
-
-- auditoria;
-- notificações;
-- análise.
-
-## Campos principais
-
-| Campo | Tipo | Obrigatório |
-|---|---|---:|
-| id | uuid | Sim |
-| organizacao_id | uuid | Sim |
-| tarefa_id | uuid | Sim |
-| setor_id | uuid | Sim |
-| posicao_anterior | integer | Não |
-| posicao_nova | integer | Sim |
-| total_anterior | integer | Não |
-| total_novo | integer | Sim |
-| causa | text | Sim |
-| alterado_por | uuid | Não |
-| ocorrido_em | timestamptz | Sim |
-
-## `causa`
-
-Exemplos:
+### Campos principais
 
 ```text
-reordenacao_manual
-entrada_prioritaria
-conclusao_item_anterior
-entrada_nova_tarefa
-cancelamento
-mudanca_setor
-```
-
-## Regras
-
-- mudanças precisam ser rastreáveis;
-- `alterado_por` pode ser nulo em mudança automática;
-- histórico alimenta notificações.
-
-## Índices
-
-```text
-index(tarefa_id, ocorrido_em)
-index(setor_id, ocorrido_em)
-```
-
----
-
-# 54. Reordenação da fila
-
-A alteração de `ordem` precisa ocorrer em transação.
-
-A mesma transação deve:
-
-- alterar ordem;
-- identificar tarefas afetadas;
-- registrar histórico;
-- gerar evento de auditoria;
-- gerar notificações quando aplicável.
-
----
-
-# 55. `produtividade.devolucoes`
-
-## Finalidade
-
-Registra devoluções formais de tarefas.
-
-## Campos principais
-
-| Campo | Tipo | Obrigatório |
-|---|---|---:|
-| id | uuid | Sim |
-| organizacao_id | uuid | Sim |
-| tarefa_id | uuid | Sim |
-| setor_origem_id | uuid | Sim |
-| setor_destino_id | uuid | Sim |
-| motivo_devolucao_id | uuid | Sim |
-| observacao | text | Não |
-| devolvido_por | uuid | Sim |
-| devolvido_em | timestamptz | Sim |
-| resolvida_em | timestamptz | Não |
-| retorno_origem_em | timestamptz | Não |
-
-## Regras
-
-- motivo obrigatório;
-- devolução não apaga fluxo anterior;
-- deve existir movimentação correspondente;
-- permite medir tempo de correção.
-
-## Índices
-
-```text
-index(tarefa_id, devolvido_em)
-index(motivo_devolucao_id, devolvido_em)
-index(setor_origem_id, setor_destino_id)
-```
-
----
-
-# 56. `produtividade.bloqueios`
-
-## Finalidade
-
-Registra períodos em que uma tarefa não consegue avançar.
-
-## Campos principais
-
-| Campo | Tipo | Obrigatório |
-|---|---|---:|
-| id | uuid | Sim |
-| organizacao_id | uuid | Sim |
-| tarefa_id | uuid | Sim |
-| motivo_bloqueio_id | uuid | Sim |
-| observacao | text | Não |
-| iniciado_em | timestamptz | Sim |
-| encerrado_em | timestamptz | Não |
-| iniciado_por | uuid | Sim |
-| encerrado_por | uuid | Não |
-
-## Regras
-
-- permitir múltiplos bloqueios ao longo do tempo;
-- bloquear não elimina responsabilidade;
-- motivo estruturado;
-- períodos alimentam métricas.
-
-## Índices
-
-```text
-index(tarefa_id, iniciado_em)
-index(motivo_bloqueio_id)
-```
-
----
-
-# 57. `produtividade.prazos_historico`
-
-## Finalidade
-
-Preserva histórico de prazo solicitado, proposto e comprometido.
-
-Pode se aplicar a:
-
-- atividade;
-- tarefa.
-
-## Campos principais
-
-| Campo | Tipo | Obrigatório |
-|---|---|---:|
-| id | uuid | Sim |
-| organizacao_id | uuid | Sim |
-| atividade_id | uuid | Não |
-| tarefa_id | uuid | Não |
-| tipo | text | Sim |
-| prazo_anterior | timestamptz | Não |
-| prazo_novo | timestamptz | Sim |
-| status_proposta | text | Não |
-| proposto_por | uuid | Não |
-| decidido_por | uuid | Não |
-| ocorrido_em | timestamptz | Sim |
-| decidido_em | timestamptz | Não |
-| motivo | text | Não |
-
-## Regra de integridade
-
-Exatamente um:
-
-```text
-atividade_id
-```
-
-ou:
-
-```text
+id
+organizacao_id
+fila_item_id
+setor_id
 tarefa_id
+posicao_anterior
+posicao_nova
+alterado_em
+alterado_por
+motivo
+causa
 ```
 
-deve estar preenchido.
+### Regra consolidada
 
-## `tipo`
+> Toda mudança de posição é registrada individualmente.
+
+Ela gera evento/notificação dentro da LPS para o dono/solicitante conforme a regra funcional definida.
+
+Canal externo, como e-mail ou push, pode ser configurável separadamente.
+
+---
+
+## 44. Reordenação concorrente
+
+Reordenar a fila é operação crítica.
+
+Precisa ser transacional.
+
+Evitar que dois gestores salvem ordens incompatíveis simultaneamente.
+
+Pode usar:
+
+- lock transacional;
+- versionamento otimista;
+- campo de versão;
+- estratégia de posições espaçadas.
+
+A escolha técnica pode ser feita na implementação, preservando a regra funcional.
+
+---
+
+# PARTE F — DEVOLUÇÕES, BLOQUEIOS E PRAZOS
+
+## 45. `produtividade.devolucoes`
+
+### Finalidade
+
+Registrar retorno estruturado de trabalho.
+
+Campos:
+
+```text
+id
+organizacao_id
+atividade_id
+tarefa_id
+setor_origem_id
+setor_destino_id
+motivo_devolucao_id
+descricao
+devolvido_em
+devolvido_por
+```
+
+Motivo é obrigatório.
+
+Texto livre complementa, mas não substitui o motivo estruturado.
+
+---
+
+## 46. `produtividade.bloqueios`
+
+Campos:
+
+```text
+id
+organizacao_id
+atividade_id nullable
+tarefa_id nullable
+motivo_bloqueio_id
+descricao
+inicio_em
+fim_em nullable
+registrado_por
+```
+
+Permite separar:
+
+- trabalho em execução;
+- espera;
+- impedimento;
+- dependência externa.
+
+---
+
+## 47. Prazo solicitado e prazo comprometido
+
+Não são o mesmo campo.
+
+Na atividade manter:
+
+```text
+prazo_solicitado_em
+prazo_comprometido_em
+```
+
+O primeiro representa necessidade.
+
+O segundo representa compromisso vigente.
+
+---
+
+## 48. `produtividade.prazos_historico`
+
+### Finalidade
+
+Registrar propostas e decisões de prazo.
+
+Campos principais:
+
+```text
+id
+organizacao_id
+atividade_id
+tarefa_id nullable
+tipo
+prazo_anterior
+prazo_proposto
+proposto_por
+proposto_em
+status_proposta
+respondido_por nullable
+respondido_em nullable
+motivo_recusa nullable
+```
+
+### `tipo`
 
 Exemplos:
 
 ```text
 solicitado
-proposto
 comprometido
-alteracao_direta
+proposta_alteracao
+ajuste_direto
 ```
 
-## `status_proposta`
-
-Exemplos:
+### `status_proposta`
 
 ```text
 pendente
 aceita
 recusada
+cancelada
 ```
 
-## Regras
+### Regra consolidada
 
-- prazo anterior nunca é apagado;
-- proposta não altera compromisso antes de aceite;
-- recusa pode gerar escalonamento.
+Se o executor/setor propõe novo prazo:
 
-## Índices
+- dono aceita → atualiza prazo comprometido;
+- dono recusa → gera escalonamento automaticamente conforme configuração.
 
-```text
-index(atividade_id, ocorrido_em)
-index(tarefa_id, ocorrido_em)
-index(status_proposta) where status_proposta = 'pendente'
-```
+Nunca substituir silenciosamente o prazo solicitado.
 
 ---
 
-# 58. Prazo atual
+# PARTE G — ESCALONAMENTO
 
-Para performance operacional:
+## 49. `produtividade.escalonamentos`
 
-```text
-atividades.prazo_solicitado
-atividades.prazo_comprometido
-tarefas.prazo_solicitado
-tarefas.prazo_comprometido
-```
-
-guardam o estado atual.
-
-`prazos_historico` explica como chegou ali.
-
----
-
-# 59. `produtividade.escalonamentos`
-
-## Finalidade
-
-Representa conflitos ou situações que subiram para decisão.
-
-## Campos principais
-
-| Campo | Tipo | Obrigatório |
-|---|---|---:|
-| id | uuid | Sim |
-| organizacao_id | uuid | Sim |
-| atividade_id | uuid | Sim |
-| tarefa_id | uuid | Não |
-| motivo | text | Sim |
-| regra_escalonamento_id | uuid | Não |
-| nivel_atual | integer | Sim |
-| status | text | Sim |
-| aberto_em | timestamptz | Sim |
-| aberto_por | uuid | Não |
-| resolvido_em | timestamptz | Não |
-| resolvido_por | uuid | Não |
-| decisao | text | Não |
-
-## Regras
-
-- atividade obrigatória;
-- tarefa opcional;
-- precisa gerar decisão;
-- histórico não desaparece.
-
-## Índices
-
-```text
-index(organizacao_id, status, aberto_em)
-index(atividade_id)
-index(tarefa_id)
-```
-
----
-
-# 60. `produtividade.escalonamento_destinatarios`
-
-## Finalidade
-
-Permite vários destinatários por escalonamento.
-
-## Campos principais
-
-| Campo | Tipo | Obrigatório |
-|---|---|---:|
-| escalonamento_id | uuid | Sim |
-| usuario_id | uuid | Sim |
-| nivel | integer | Sim |
-| notificado_em | timestamptz | Não |
-| ciencia_em | timestamptz | Não |
-
-## Chave
-
-```text
-primary key(escalonamento_id, usuario_id, nivel)
-```
-
----
-
-# 61. `produtividade.escalonamento_eventos`
-
-## Finalidade
-
-Registra evolução do escalonamento.
-
-Exemplos:
-
-```text
-aberto
-subiu_nivel
-comentario
-decisao
-resolvido
-```
-
-## Campos principais
+Campos principais:
 
 ```text
 id
 organizacao_id
-escalonamento_id
+atividade_id
+tarefa_id nullable
+regra_escalonamento_id nullable
 tipo
-dados
-usuario_id
-ocorrido_em
-```
-
-`dados` pode ser JSONB porque o formato varia conforme o evento.
-
----
-
-# 62. Aprovações
-
-Não criar um módulo completo de aprovações antes da necessidade.
-
-Quando aparecer necessidade real, poderá existir:
-
-```text
-produtividade.aprovacoes
-```
-
-Mas não é obrigatório no D0 atual.
-
----
-
-# 63. Schema `comunicacao`
-
----
-
-# 64. `comunicacao.conversas`
-
-## Finalidade
-
-Representa conversa contextual da atividade ou tarefa.
-
-## Campos principais
-
-| Campo | Tipo | Obrigatório |
-|---|---|---:|
-| id | uuid | Sim |
-| organizacao_id | uuid | Sim |
-| atividade_id | uuid | Não |
-| tarefa_id | uuid | Não |
-| criada_em | timestamptz | Sim |
-| ativa | boolean | Sim |
-
-## Regra
-
-Exatamente um contexto:
-
-```text
-atividade
-```
-
-ou:
-
-```text
-tarefa
-```
-
-## Unicidade
-
-Uma atividade pode ter uma conversa principal.
-
-Uma tarefa pode ter uma conversa principal.
-
-## Índices
-
-```text
-unique(atividade_id) where atividade_id is not null
-unique(tarefa_id) where tarefa_id is not null
+descricao
+status
+aberto_em
+aberto_por
+resolvido_em nullable
+resolvido_por nullable
 ```
 
 ---
 
-# 65. `comunicacao.mensagens`
+## 50. `produtividade.escalonamento_destinatarios`
 
-## Finalidade
+Relaciona escalonamento às pessoas/setores que precisam ser acionados.
 
-Armazena mensagens da conversa.
+```text
+escalonamento_id
+usuario_id nullable
+setor_id nullable
+papel
+```
 
-## Campos principais
+---
 
-| Campo | Tipo | Obrigatório |
-|---|---|---:|
-| id | uuid | Sim |
-| organizacao_id | uuid | Sim |
-| conversa_id | uuid | Sim |
-| autor_usuario_id | uuid | Não |
-| tipo_autor | text | Sim |
-| conteudo | text | Sim |
-| criada_em | timestamptz | Sim |
-| editada_em | timestamptz | Não |
-| removida_em | timestamptz | Não |
+## 51. `produtividade.escalonamento_eventos`
 
-## `tipo_autor`
+Histórico de:
 
-Exemplos:
+- abertura;
+- notificação;
+- comentário;
+- encaminhamento;
+- resolução;
+- encerramento.
+
+---
+
+# PARTE H — COMUNICAÇÃO
+
+## 52. Princípio
+
+D0 não é um clone completo do Slack.
+
+Conversas existem dentro do contexto de trabalho.
+
+---
+
+## 53. `comunicacao.conversas`
+
+Campos principais:
+
+```text
+id
+organizacao_id
+atividade_id nullable
+tarefa_id nullable
+criado_em
+```
+
+### Regra
+
+Cada conversa precisa estar vinculada a atividade ou tarefa.
+
+Não criar canais livres no D0.
+
+---
+
+## 54. `comunicacao.mensagens`
+
+Campos:
+
+```text
+id
+organizacao_id
+conversa_id
+autor_usuario_id nullable
+tipo_autor
+texto
+criado_em
+editado_em nullable
+excluido_em nullable
+```
+
+### `tipo_autor`
 
 ```text
 usuario
 sistema
 ```
 
-## Regras
-
-- mensagem não altera estado oficial automaticamente;
-- remoção física deve ser evitada;
-- autoria preservada.
-
-## Índices
-
-```text
-index(conversa_id, criada_em)
-index(autor_usuario_id, criada_em)
-```
+Mensagem não é automaticamente fonte oficial para alteração de prazo, devolução ou decisão estruturada.
 
 ---
 
-# 66. `comunicacao.participantes`
+## 55. `comunicacao.participantes`
 
-## Finalidade
+Pode existir para otimizar notificações e participação explícita.
 
-Controla participantes explícitos da conversa quando necessário.
-
-## Campos principais
+Campos:
 
 ```text
 conversa_id
 usuario_id
 adicionado_em
-adicionado_por
-removido_em
+removido_em nullable
 ```
 
-## Observação
-
-Acesso continua dependente de autorização.
-
-Ser participante não deve burlar RLS.
+Acesso à conversa continua condicionado ao acesso ao objeto vinculado.
 
 ---
 
-# 67. `comunicacao.mencoes`
-
-## Finalidade
-
-Registra menções em mensagens.
-
-## Campos principais
+## 56. `comunicacao.mencoes`
 
 ```text
-id
-organizacao_id
 mensagem_id
-usuario_mencionado_id
-criada_em
+usuario_id
 ```
 
-## Regra
-
-Menção válida pode gerar notificação.
+Mencionar alguém não deve ultrapassar regras de segurança.
 
 ---
 
-# 68. `comunicacao.notificacoes`
+# PARTE I — NOTIFICAÇÕES
 
-## Finalidade
+## 57. `comunicacao.notificacoes`
 
-Representa notificações lógicas dentro da LPS.
+### Finalidade
 
-## Campos principais
+Central interna de notificações da LPS.
 
-| Campo | Tipo | Obrigatório |
-|---|---|---:|
-| id | uuid | Sim |
-| organizacao_id | uuid | Sim |
-| usuario_id | uuid | Sim |
-| tipo_evento | text | Sim |
-| atividade_id | uuid | Não |
-| tarefa_id | uuid | Não |
-| evento_auditoria_id | uuid | Não |
-| titulo | text | Sim |
-| resumo | text | Não |
-| requer_acao | boolean | Sim |
-| criada_em | timestamptz | Sim |
-| lida_em | timestamptz | Não |
-| arquivada_em | timestamptz | Não |
-
-## Regras
-
-- notificação não é fonte oficial do evento;
-- aponta para atividade/tarefa/evento de origem;
-- evento continua existindo mesmo se notificação for arquivada.
-
-## Índices
-
-```text
-index(organizacao_id, usuario_id, lida_em, criada_em)
-index(tipo_evento, criada_em)
-```
-
----
-
-# 69. `comunicacao.preferencias_notificacao`
-
-## Finalidade
-
-Armazena preferências opcionais do usuário.
-
-## Campos principais
+Campos principais:
 
 ```text
 id
 organizacao_id
 usuario_id
-tipo_evento
-canal
-habilitado
-atualizado_em
+tipo
+entidade_tipo
+entidade_id
+titulo
+mensagem
+criado_em
+lido_em nullable
+prioridade nullable
+dados jsonb nullable
 ```
 
-## Regras
+### Eventos essenciais
 
-- regras obrigatórias da organização prevalecem;
-- preferência não apaga evento;
-- canal interno da LPS pode permanecer sempre disponível.
+- mudança de posição na fila;
+- conclusão;
+- retorno;
+- mudança de responsável;
+- proposta de prazo;
+- prazo aceito/recusado;
+- escalonamento;
+- bloqueio relevante;
+- menção.
+
+### Regra consolidada da fila
+
+Cada mudança de posição deve produzir registro interno individual da alteração/notificação aplicável.
+
+Agrupamento visual ou canais externos não devem apagar o histórico individual.
+
+### Regra consolidada da conclusão
+
+Dono da atividade recebe notificação de conclusão obrigatoriamente.
 
 ---
 
-# 70. Entregas por canal
+## 58. Preferências de notificação
 
-Pode existir futuramente:
+Tabela sugerida:
+
+```text
+comunicacao.preferencias_notificacao
+```
+
+Pode controlar:
+
+```text
+canal_email
+canal_push
+resumo
+silenciamento
+```
+
+Preferência pessoal não deve desabilitar evento obrigatório de auditoria nem eliminar a notificação interna que o produto definiu como obrigatória.
+
+---
+
+## 59. Entrega por canal
+
+Se houver e-mail/push, separar evento da entrega.
+
+Sugestão futura:
 
 ```text
 comunicacao.entregas_notificacao
 ```
 
-para:
-
-- push;
-- e-mail;
-- integrações.
-
-Não é necessário no D0 se a central interna for suficiente.
-
----
-
-# 71. Schema `configuracoes`
-
----
-
-# 72. Princípio do schema `configuracoes`
-
-O que varia entre empresas deve ser cadastro/configuração quando fizer sentido.
-
-O que define a identidade da LPS não deve ser completamente redefinido.
-
----
-
-# 73. `configuracoes.tipos_atividade`
-
-## Finalidade
-
-Classifica atividades para comparação, fluxo e inteligência.
-
-## Campos principais
+Campos:
 
 ```text
-id
-organizacao_id
-empresa_id nullable
-codigo
-nome
-descricao
-ativo
-```
-
-## Regras
-
-- evitar duplicidade;
-- governança importante para inteligência;
-- usuário comum não precisa criar tipos livremente.
-
----
-
-# 74. `configuracoes.tipos_tarefa`
-
-## Finalidade
-
-Classifica tarefas.
-
-Campos semelhantes a `tipos_atividade`.
-
-Ajuda a comparar tarefas equivalentes.
-
----
-
-# 75. `configuracoes.motivos_devolucao`
-
-## Finalidade
-
-Padroniza os motivos de devolução.
-
-## Campos principais
-
-```text
-id
-organizacao_id
-codigo
-nome
-descricao
-ativo
-```
-
-## Exemplos
-
-```text
-informacao_incompleta
-especificacao_incorreta
-documento_ausente
-escopo_divergente
+notificacao_id
+canal
+status
+tentativas
+enviado_em
+erro
 ```
 
 ---
 
-# 76. `configuracoes.motivos_bloqueio`
+# PARTE J — CONFIGURAÇÕES
 
-## Finalidade
+## 60. Princípio
 
-Padroniza bloqueios.
+Configurações representam vocabulário e regras operacionais da organização.
 
-Exemplos:
-
-```text
-aguardando_cliente
-aguardando_fornecedor
-aguardando_aprovacao
-aguardando_documento
-aguardando_decisao
-```
+Não devem transformar o banco em um construtor arbitrário de software.
 
 ---
 
-# 77. `configuracoes.fluxos_modelo`
-
-## Finalidade
-
-Representa modelos reutilizáveis de fluxo.
-
-## Campos principais
-
-```text
-id
-organizacao_id
-empresa_id nullable
-tipo_atividade_id nullable
-nome
-descricao
-versao
-ativo
-criado_em
-criado_por
-```
-
-## D0
-
-Pode começar simples.
-
-Não precisa de editor BPM completo.
-
----
-
-# 78. `configuracoes.fluxo_tarefas_modelo`
-
-## Finalidade
-
-Define tarefas padrão de um fluxo.
-
-## Campos principais
-
-```text
-id
-organizacao_id
-fluxo_modelo_id
-tipo_tarefa_id nullable
-titulo_padrao
-setor_id nullable
-ordem
-obrigatoria
-```
-
-## Regra
-
-Modelo não gera histórico operacional.
-
-Ao aplicar o modelo:
-
-```text
-criar tarefas reais em produtividade.tarefas
-```
-
----
-
-# 79. `configuracoes.fluxo_dependencias_modelo`
-
-## Finalidade
-
-Define dependências padrão entre tarefas do modelo.
+## 61. `configuracoes.tipos_atividade`
 
 Campos:
 
 ```text
 id
-fluxo_modelo_id
-tarefa_modelo_predecessora_id
-tarefa_modelo_sucessora_id
-tipo
-```
-
----
-
-# 80. Modelo aplicado deve gerar cópia operacional
-
-Não manter atividade “presa” dinamicamente ao modelo.
-
-Exemplo:
-
-```text
-Fluxo v1 aplicado hoje
-```
-
-Se modelo virar v2 amanhã:
-
-```text
-atividade antiga continua com estrutura que recebeu.
-```
-
-Isso preserva histórico.
-
----
-
-# 81. `configuracoes.regras_notificacao`
-
-## Finalidade
-
-Define regras corporativas de notificação.
-
-## Campos conceituais
-
-```text
-id
 organizacao_id
-tipo_evento
-obrigatoria
-destinatario_tipo
-canal
-condicoes
+nome
+descricao
 ativo
 ```
 
-## `condicoes`
+---
 
-Pode usar JSONB para regras variáveis.
+## 62. `configuracoes.tipos_tarefa`
 
-Exemplo:
-
-```json
-{
-  "apenas_se_dono": true
-}
-```
-
-JSONB aqui é aceitável porque regras podem evoluir.
+Mesmo padrão.
 
 ---
 
-# 82. `configuracoes.regras_escalonamento`
+## 63. `configuracoes.motivos_devolucao`
 
-## Finalidade
-
-Define quando e para quem escalar.
-
-## Campos conceituais
+Campos:
 
 ```text
 id
 organizacao_id
 nome
-evento_disparador
-nivel
-destinatario_tipo
-condicoes
+descricao
 ativo
 ```
 
-## Exemplos de disparador
+Exemplos possíveis:
 
 ```text
-prazo_recusado
-prazo_vencido
-bloqueio_prolongado
+informação incompleta
+especificação incorreta
+arquivo inválido
+aprovação necessária
 ```
 
-No D0, começar com poucos disparadores.
+A empresa pode configurar sua lista.
 
 ---
 
-# 83. Configuração de status
+## 64. `configuracoes.motivos_bloqueio`
 
-Não criar uma tabela complexa antes de definir catálogo interno.
+Mesma lógica.
 
-Futuramente pode existir:
+---
+
+## 65. Modelos de fluxo
+
+Tabelas futuras/gradativas:
 
 ```text
-configuracoes.rotulos_status
+configuracoes.fluxos_modelo
+configuracoes.fluxo_tarefas_modelo
+configuracoes.fluxo_dependencias_modelo
 ```
 
-para personalizar exibição.
+No início, a empresa pode construir processos manualmente.
 
-O estado interno precisa permanecer estável.
+Com o tempo, a LPS pode sugerir modelos reaproveitáveis.
 
----
-
-# 84. Schema `auditoria`
+Modelo aplicado deve gerar estrutura operacional independente, preservando histórico mesmo se o template mudar depois.
 
 ---
 
-# 85. Objetivo do schema `auditoria`
+## 66. Regras de notificação
 
-Registrar mudanças relevantes de forma genérica.
-
-Ele não substitui históricos específicos de domínio.
-
-Exemplo:
+Tabela sugerida:
 
 ```text
-produtividade.devolucoes
+configuracoes.regras_notificacao
 ```
 
-é dado de negócio.
+Deve guardar apenas regras realmente configuráveis.
+
+Evitar um construtor genérico `IF X AND Y OR Z` no D0.
+
+---
+
+## 67. Regras de escalonamento
+
+Tabela sugerida:
 
 ```text
-auditoria.eventos
+configuracoes.regras_escalonamento
 ```
 
-registra que a devolução aconteceu e quem realizou.
+Pode evoluir para disparadores como:
+
+- prazo proposto recusado;
+- tarefa atrasada;
+- bloqueio acima de limite;
+- atividade sem resposta;
+- retorno repetido.
+
+Percentuais ou limites não devem ser hardcoded sem decisão de produto.
 
 ---
 
-# 86. `auditoria.eventos`
+# PARTE K — AUDITORIA
 
-## Finalidade
+## 68. `auditoria.eventos`
 
-Registro imutável de eventos relevantes.
+### Finalidade
 
-## Campos principais
+Registrar alterações relevantes de sistema e negócio que precisam de rastreabilidade genérica.
 
-| Campo | Tipo | Obrigatório |
-|---|---|---:|
-| id | uuid | Sim |
-| organizacao_id | uuid | Sim |
-| usuario_id | uuid | Não |
-| tipo_evento | text | Sim |
-| entidade_tipo | text | Sim |
-| entidade_id | uuid | Sim |
-| atividade_id | uuid | Não |
-| tarefa_id | uuid | Não |
-| dados_antes | jsonb | Não |
-| dados_depois | jsonb | Não |
-| metadados | jsonb | Não |
-| ocorrido_em | timestamptz | Sim |
-
-## Exemplos
+### Campos principais
 
 ```text
-atividade.criada
-atividade.dono_alterado
-tarefa.iniciada
-tarefa.devolvida
-fila.reordenada
-prazo.aceito
-usuario.perfil_atribuido
-setor.inativado
-```
-
----
-
-# 87. Evento de auditoria deve ser imutável
-
-Usuários comuns não devem editar.
-
-Correções precisam gerar novo evento.
-
----
-
-# 88. `dados_antes` e `dados_depois`
-
-Devem ser usados apenas quando ajudam a explicar a mudança.
-
-Exemplo:
-
-```json
-dados_antes:
-{"prazo_comprometido":"2026-09-15T12:00:00Z"}
-
-dados_depois:
-{"prazo_comprometido":"2026-09-16T09:00:00Z"}
-```
-
----
-
-# 89. Não usar auditoria como banco operacional
-
-Evitar consultar `auditoria.eventos` para descobrir o status atual de toda tela.
-
-O estado atual fica nas tabelas de domínio.
-
-Auditoria explica o passado.
-
----
-
-# 90. `auditoria.acessos`
-
-Pode existir futuramente para:
-
-- login;
-- logout;
-- falhas;
-- sessão;
-- acesso sensível.
-
-Não é essencial ao núcleo do D0.
-
----
-
-# 91. `auditoria.integracoes`
-
-Pode existir futuramente para registrar:
-
-- origem;
-- payload resumido;
-- resultado;
-- erro;
-- identificador externo.
-
-Fora do D0 atual.
-
----
-
-# 92. Eventos de domínio x auditoria
-
-Exemplo de devolução:
-
-```text
-produtividade.devolucoes
-→ representa o fato de negócio
-```
-
-```text
-auditoria.eventos
-→ representa o rastro da ação
-```
-
-As duas camadas podem coexistir.
-
----
-
-# 93. Relacionamentos principais
-
-Visão simplificada:
-
-```text
-core.organizacoes
-    ↓
-core.empresas
-    ↓
-core.setores
-
-core.organizacoes
-    ↓
-core.usuarios
-    ↓
-core.usuario_setores
-```
-
----
-
-# 94. Relacionamentos operacionais
-
-```text
-produtividade.atividades
-    ↓ 1:N
-produtividade.tarefas
-    ↓ N:N
-produtividade.tarefa_executores
-```
-
----
-
-# 95. Fluxo
-
-```text
-tarefas
-    ↓
-passagens_setor
-    ↓
-fila_itens
-```
-
----
-
-# 96. Tempo
-
-```text
-tarefas
-    ↓
-sessoes_tempo
-```
-
----
-
-# 97. Retorno
-
-```text
-tarefas
-    ↓
-devolucoes
-```
-
----
-
-# 98. Bloqueio
-
-```text
-tarefas
-    ↓
-bloqueios
-```
-
----
-
-# 99. Prazo
-
-```text
-atividades / tarefas
-    ↓
-prazos_historico
-```
-
----
-
-# 100. Comunicação
-
-```text
-atividade ou tarefa
-    ↓
-conversa
-    ↓
-mensagens
-```
-
----
-
-# 101. Notificação
-
-```text
-evento
-    ↓
-notificacao
-    ↓
-usuario
-```
-
----
-
-# 102. Autorização
-
-```text
-usuario
-    ↓
-usuario_perfis
-    ↓
-perfil
-    ↓
-perfil_acoes
-    ↓
+id
+organizacao_id
+usuario_id nullable
+tipo_evento
+entidade_tipo
+entidade_id
 acao
+ocorrido_em
+dados_antes jsonb nullable
+dados_depois jsonb nullable
+contexto jsonb nullable
+request_id nullable
 ```
 
-com:
+### Exemplos
 
 ```text
-usuario_perfis
-    ↓
+perfil.alterado
+usuario.inativado
+fila.reordenada
+prazo.recusado
+setor.inativado
+permissao.concedida
+permissao.removida
+```
+
+---
+
+## 69. Auditoria não substitui históricos de domínio
+
+Exemplo:
+
+```text
+fila_historico_posicoes
+```
+
+é fonte operacional para análise de fila.
+
+`auditoria.eventos` complementa respondendo:
+
+```text
+quem alterou e como
+```
+
+Não usar uma única tabela JSON genérica para todo o produto.
+
+---
+
+## 70. Eventos de auditoria devem ser imutáveis
+
+Evitar edição e exclusão rotineira.
+
+Correções devem gerar novo evento.
+
+---
+
+## 71. Auditoria de login
+
+Pode existir tabela específica:
+
+```text
+auditoria.acessos
+```
+
+Campos possíveis:
+
+```text
+usuario_id
+sucesso
+ocorrido_em
+ip
+user_agent
+motivo_falha
+```
+
+Seguir políticas de privacidade e retenção.
+
+---
+
+# PARTE L — SEGURANÇA TÉCNICA
+
+## 72. RLS
+
+RLS — Row Level Security, Segurança em Nível de Linha — deve garantir principalmente:
+
+```text
+usuario só acessa sua organização
+```
+
+E, conforme a tabela:
+
+- escopo permitido;
+- relação com atividade/tarefa;
+- privilégios administrativos.
+
+Não concentrar toda lógica de autorização apenas no frontend.
+
+---
+
+## 73. Funções auxiliares de autorização
+
+Podem existir funções SQL seguras como:
+
+```text
+acessos.usuario_tem_acao(...)
+acessos.usuario_pode_acessar_recurso(...)
+```
+
+Mas evitar lógica duplicada entre várias funções contraditórias.
+
+A fonte de verdade precisa ser clara.
+
+---
+
+## 74. Índices para autorização
+
+Essenciais:
+
+```text
+usuario_perfis(usuario_id, ativo)
+perfil_acoes(perfil_id, acao_id)
+usuario_acoes(usuario_id, acao_id, ativo)
+escopos(organizacao_id, tipo)
+usuario_setores(usuario_id, setor_id)
+```
+
+Consultas de segurança não podem exigir varrer tabelas inteiras.
+
+---
+
+## 75. Não confiar no contexto selecionado na tela
+
+Trocar o seletor de empresa no frontend não cria autorização.
+
+O banco continua validando:
+
+```text
+organização
++
+ação
++
 escopo
 ```
 
 ---
 
-# 103. Organização em todas as relações
+# PARTE M — INTEGRIDADE E HISTÓRICO
 
-Mesmo quando FK já permite descobrir a organização, as relações críticas precisam impedir cruzamento de tenant.
+## 76. Exclusão física
 
-Estratégias técnicas possíveis:
+Evitar exclusão física de registros com histórico relevante.
 
-- FK composta com `organizacao_id`;
-- triggers de consistência;
-- constraints;
-- RLS;
-- validação na aplicação.
+Preferir:
+
+```text
+ativo = false
+```
+
+ou estados de cancelamento/inativação.
+
+`deleted_at` só quando houver necessidade real.
 
 ---
 
-# 104. Índices multi-tenant
+## 77. `ON DELETE`
 
-Consultas normalmente filtram por:
+Usar de forma intencional.
 
-```text
-organizacao_id
-```
+### `RESTRICT`
 
-Por isso, muitos índices devem começar por essa coluna.
+Para objetos com histórico que não podem desaparecer.
 
-Exemplo:
+### `SET NULL`
 
-```text
-index(organizacao_id, setor_atual_id, status)
-```
+Quando preservar fato histórico sem vínculo ativo é aceitável.
 
-em vez de apenas:
+### `CASCADE`
 
-```text
-index(status)
-```
+Somente para objetos dependentes sem valor histórico independente.
+
+Não usar cascade em massa por conveniência.
 
 ---
 
-# 105. Índices de atividades
+## 78. Timestamps
 
-Prioridades:
+Padrão:
 
 ```text
-organização + status
-organização + dono
-organização + prazo
-organização + empresa
-obra
-centro de custo
+criado_em
+atualizado_em
+concluido_em
+cancelado_em
+inativado_em
 ```
+
+conforme o domínio.
+
+Preferir `timestamptz`.
 
 ---
 
-# 106. Índices de tarefas
+## 79. Histórico de nomes
 
-Prioridades:
+IDs são a referência real.
 
-```text
-atividade
-setor atual + status
-prazo
-tipo
-```
+Renomear setor não pode destruir métricas históricas.
+
+Quando necessário para auditoria legível, eventos podem guardar snapshot textual.
 
 ---
 
-# 107. Índices de fila
+# PARTE N — MÉTRICAS E INTELIGÊNCIA FUTURA
 
-Críticos:
+## 80. Dados que o D0 precisa capturar
 
-```text
-setor + estado + ordem
-```
+Para aprender depois, o banco precisa registrar hoje:
 
----
-
-# 108. Índices de tempo
-
-Críticos:
-
-```text
-usuario + inicio
-tarefa + inicio
-```
-
----
-
-# 109. Índices de auditoria
-
-Críticos:
-
-```text
-entidade_tipo + entidade_id + ocorrido_em
-atividade_id + ocorrido_em
-tarefa_id + ocorrido_em
-usuario_id + ocorrido_em
-```
+- criação da atividade;
+- criação da tarefa;
+- entrada em fila;
+- posições da fila;
+- início do trabalho;
+- pausas/retomadas;
+- sessões por executor;
+- mudanças de setor;
+- devoluções;
+- motivos;
+- bloqueios;
+- propostas de prazo;
+- decisões sobre prazo;
+- conclusão;
+- escalonamentos;
+- conversas contextuais;
+- alterações de prioridade/ordem;
+- usuário e setor envolvidos.
 
 ---
 
-# 110. Índices de comunicação
+## 81. Não criar tabelas de IA no D0
 
-Críticos:
+A inteligência futura deve começar derivando padrões desses fatos.
+
+Não criar agora:
 
 ```text
-conversa + criada_em
-usuario + notificacoes não lidas
+ia_previsoes
+ia_recomendacoes
+embeddings_de_tudo
 ```
+
+sem funcionalidade real.
 
 ---
 
-# 111. Índices parciais
-
-PostgreSQL permite índices úteis como:
+## 82. Evolução esperada
 
 ```text
-where ativo = true
+D0
+registrar corretamente
+
+D1
+analisar
+
+D2
+prever e recomendar
 ```
 
-ou:
-
-```text
-where fim_em is null
-```
-
-Isso é recomendado para:
-
-- sessões abertas;
-- fila ativa;
-- vínculos ativos;
-- propostas pendentes.
+A camada de dados precisa permitir essa evolução sem obrigar inteligência artificial no início.
 
 ---
 
-# 112. Integridade de atividade
+## 83. Possíveis análises futuras
 
-Restrições possíveis:
+- tempo médio por tipo de tarefa;
+- tempo por setor;
+- tempo de fila;
+- retorno por motivo;
+- gargalos recorrentes;
+- concentração de horas-homem;
+- estimativa de prazo;
+- comparação entre processos semelhantes;
+- sugestão de treinamento;
+- sugestão de fluxo;
+- resumo automático da atividade.
 
-```text
-dono_usuario_id NOT NULL
-```
-
-```text
-concluida_em só quando status concluído
-```
-
-```text
-cancelada_em só quando cancelada
-```
-
-As regras exatas dependem do catálogo final de status.
+Nenhuma dessas conclusões precisa ser gravada como fato operacional no D0.
 
 ---
 
-# 113. Integridade de tarefa
+# PARTE O — CONSULTAS ESSENCIAIS
 
-Exemplos:
+## 84. Usuário e segurança
 
-- atividade obrigatória;
-- `concluida_em >= criada_em`;
-- setor atual precisa pertencer à organização;
-- executor precisa pertencer à organização.
-
----
-
-# 114. Integridade de sessão
+A LPS precisa responder rapidamente:
 
 ```text
-fim_em >= inicio_em
-```
-
-e:
-
-```text
-uma sessão ativa por usuário
+quais perfis este usuário possui?
+quais ações efetivas?
+em quais escopos?
+de onde veio cada permissão?
 ```
 
 ---
 
-# 115. Integridade de conversa
-
-Exatamente um contexto:
+## 85. Perfil
 
 ```text
-atividade_id XOR tarefa_id
+quais ações estão marcadas?
+quais usuários usam este perfil?
+em quais escopos ele está atribuído?
 ```
 
 ---
 
-# 116. Integridade de prazo
-
-Em `prazos_historico`:
+## 86. Ação
 
 ```text
-atividade_id XOR tarefa_id
+quem pode executar esta ação?
+em qual escopo?
+via qual perfil ou concessão direta?
 ```
 
 ---
 
-# 117. Integridade de dependência
+## 87. Escopo
 
 ```text
-predecessora != sucessora
+quem pode atuar na Obra X?
+quem pode reordenar o Setor Comercial?
+quem pode visualizar a Empresa B?
 ```
 
-e ambas pertencem à mesma atividade.
-
 ---
 
-# 118. Integridade de fila
-
-Uma tarefa não pode possuir duas entradas ativas simultaneamente.
-
----
-
-# 119. Transações
-
-Operações com várias alterações devem ser atômicas.
-
-Exemplo:
+## 88. Atividade
 
 ```text
-Devolver tarefa
+quem é o dono?
+qual prazo solicitado?
+qual prazo comprometido?
+quais tarefas?
+quais setores tocaram?
+quantas devoluções?
+quanto tempo total?
+quanto tempo de trabalho?
 ```
 
-precisa, em uma transação:
-
-1. registrar devolução;
-2. fechar passagem atual;
-3. abrir nova passagem;
-4. atualizar setor atual;
-5. atualizar fila;
-6. registrar auditoria;
-7. gerar notificação.
-
-Se uma parte falhar:
-
-> não deixar o sistema em estado parcial.
-
 ---
 
-# 120. Outro exemplo transacional
-
-Reordenar fila:
-
-1. alterar ordem;
-2. recalcular posições afetadas;
-3. registrar histórico;
-4. registrar auditoria;
-5. criar notificações.
-
----
-
-# 121. Conclusão de tarefa
-
-Pode envolver:
-
-1. fechar sessão ativa;
-2. atualizar status;
-3. registrar `concluida_em`;
-4. retirar da fila;
-5. fechar passagem de setor quando aplicável;
-6. liberar dependentes;
-7. gerar auditoria;
-8. gerar notificações.
-
----
-
-# 122. Primeira ação
-
-A definição funcional final ainda está pendente.
-
-Quando fechada, o banco pode manter:
+## 89. Fila
 
 ```text
-primeira_acao_em
+posição da minha tarefa
+total da fila
+tempo em fila
+histórico de posições
+quem reordenou
+motivo
 ```
 
-como campo cacheado para performance.
+---
 
-A fonte de verdade continua sendo eventos.
+# PARTE P — VIEWS RECOMENDADAS
+
+## 90. `acessos.vw_permissoes_efetivas`
+
+Uso administrativo e de suporte.
+
+Colunas possíveis:
+
+```text
+usuario_id
+acao_id
+acao_chave
+escopo_id
+escopo_tipo
+origem_tipo
+origem_id
+origem_nome
+```
+
+Não usar como única barreira de segurança.
 
 ---
 
-# 123. Campos derivados
+## 91. `produtividade.vw_tempo_tarefa`
 
-Exemplos:
+Pode calcular:
 
 ```text
-tempo_total
+tempo_decorrido
 horas_homem
-tempo_em_fila
+tempo_em_execucao
 ```
 
-não precisam ser campos persistidos no D0.
-
-Podem ser calculados.
+quando a consulta justificar.
 
 ---
 
-# 124. Views
+## 92. `produtividade.vw_tempo_setor`
 
-Views podem simplificar consultas.
-
-Exemplos futuros:
-
-```text
-vw_atividade_metricas
-vw_tarefa_metricas
-vw_fila_atual
-vw_usuario_permissoes
-```
+Deriva das passagens e eventos.
 
 ---
 
-# 125. Materialized views
+## 93. Materialized views
 
-Podem ser usadas futuramente para métricas pesadas.
+Só criar quando volume e custo de consulta exigirem.
 
-Não são necessárias antes de existir volume.
-
----
-
-# 126. Analytics separado
-
-Se a LPS crescer muito, análises históricas podem migrar para:
-
-- data warehouse;
-- lakehouse;
-- réplicas analíticas.
-
-Não precisa ser decidido no D0.
+Não antecipar otimização.
 
 ---
 
-# 127. D0 deve priorizar consistência operacional
+# PARTE Q — JSONB
 
-O banco principal precisa primeiro suportar bem:
+## 94. Onde usar
 
-- CRUD;
-- fluxo;
-- fila;
-- tempo;
-- auditoria;
-- segurança.
+Bom para:
 
----
-
-# 128. JSONB
-
-Usar JSONB apenas quando a estrutura realmente for variável.
-
-Bons candidatos:
-
-```text
-auditoria.metadados
-regras_notificacao.condicoes
-regras_escalonamento.condicoes
-```
+- snapshots de auditoria;
+- payload de integração;
+- metadados extensíveis de evento;
+- condições de configuração que ainda não justificam normalização.
 
 ---
 
-# 129. Onde evitar JSONB
+## 95. Onde evitar
 
-Evitar armazenar como JSON:
+Não guardar em JSONB o que precisa de:
 
-```text
-atividade
-tarefa
-setor
-executor
-prazo
-fila
-```
-
-Esses conceitos precisam de relações fortes.
-
----
-
-# 130. Auditoria de alterações
-
-Toda tabela crítica deve gerar eventos em:
-
-```text
-auditoria.eventos
-```
-
-por aplicação ou trigger, conforme decisão técnica.
-
----
-
-# 131. Triggers
-
-Triggers podem ajudar em:
-
-- `updated_at`;
-- auditoria;
-- consistência;
-- eventos específicos.
-
-Mas não concentrar toda lógica de negócio no banco sem necessidade.
-
----
-
-# 132. Lógica no banco x aplicação
-
-Regra recomendada:
-
-## Banco
-
-Responsável por:
-
-- integridade;
 - FK;
-- constraints;
-- RLS;
-- unicidade;
-- validações estruturais.
+- filtro frequente;
+- validação;
+- agregação;
+- segurança por linha;
+- relacionamento principal.
 
-## Aplicação
-
-Responsável por:
-
-- fluxo;
-- decisões;
-- notificações;
-- regras configuráveis;
-- orquestração.
-
----
-
-# 133. Funções PostgreSQL
-
-Podem ser usadas em operações críticas que exigem transação consistente.
-
-Exemplo:
+Exemplo ruim:
 
 ```text
-reordenar_fila(...)
+atividade.dados = {
+  "dono": "...",
+  "setor": "...",
+  "obra": "..."
+}
 ```
 
-ou:
+Esses dados merecem colunas relacionais.
+
+---
+
+# PARTE R — CONCORRÊNCIA
+
+## 96. Operações críticas
+
+Precisam de transação/controle de concorrência:
+
+- reordenar fila;
+- aceitar/recusar prazo;
+- concluir tarefa;
+- mudar dono;
+- alterar autorizações em lote;
+- iniciar/finalizar sessões de tempo quando houver restrição de simultaneidade.
+
+---
+
+## 97. Optimistic locking
+
+Pode ser usado com campo:
 
 ```text
-devolver_tarefa(...)
+versao integer
 ```
 
-A decisão depende da arquitetura da aplicação.
+em objetos que sofrem edição simultânea.
+
+Não é obrigatório em todas as tabelas.
 
 ---
 
-# 134. Segurança do schema `core`
+# PARTE S — NOTIFICAÇÕES ASSÍNCRONAS
 
-RLS por organização.
+## 98. Outbox pattern
 
-Exemplo conceitual:
+Pode ser útil futuramente para garantir entrega de eventos como:
+
+- notificação;
+- e-mail;
+- integração;
+- webhook.
+
+Mas não superarquitetar o D0.
+
+Se implementado, criar uma outbox transacional simples.
+
+---
+
+# PARTE T — ANEXOS
+
+## 99. Arquivos
+
+Não guardar binário pesado diretamente nas tabelas de atividade/mensagem.
+
+Usar storage e guardar metadados:
 
 ```text
-usuario.organizacao_id = registro.organizacao_id
+id
+organizacao_id
+entidade_tipo
+entidade_id
+caminho
+nome_original
+mime_type
+tamanho
+criado_por
+criado_em
 ```
 
-mais validação das ações/escopos quando necessário.
+A autorização do anexo segue o objeto de origem.
 
 ---
 
-# 135. Segurança do schema `acessos`
+# PARTE U — D0
 
-Somente usuários com ações administrativas podem:
+## 100. Tabelas obrigatórias do D0
 
-- criar perfil;
-- editar perfil;
-- conceder permissões;
-- alterar escopos.
-
-Usuários comuns podem consultar apenas o necessário.
-
----
-
-# 136. Segurança do schema `cadastros`
-
-Cada cadastro possui ações próprias.
-
-Exemplo:
-
-```text
-obra.visualizar
-obra.criar
-obra.editar
-```
-
-quando necessário.
-
----
-
-# 137. Segurança do schema `produtividade`
-
-Acesso depende de:
-
-- organização;
-- ação;
-- escopo;
-- relação com atividade;
-- setor;
-- dono;
-- executor.
-
----
-
-# 138. Segurança da conversa
-
-A conversa herda o contexto.
-
-Se usuário não pode acessar atividade/tarefa:
-
-> não pode acessar mensagens.
-
----
-
-# 139. Segurança das notificações
-
-Usuário só acessa suas próprias notificações.
-
----
-
-# 140. Segurança da auditoria
-
-Auditoria possui acesso mais restrito.
-
-Nem todo usuário que vê uma atividade precisa ver detalhes administrativos de segurança.
-
----
-
-# 141. Dados históricos
-
-Inativar cadastro não deve quebrar FK.
-
-Exemplo:
-
-```text
-Setor Financeiro inativado
-```
-
-Atividades antigas continuam relacionadas.
-
----
-
-# 142. Não utilizar cascade delete em excesso
-
-Evitar:
-
-```text
-apagar setor
-→ apagar tarefas
-```
-
-Isso seria destrutivo.
-
----
-
-# 143. `ON DELETE RESTRICT`
-
-Deve ser padrão para objetos com histórico importante.
-
----
-
-# 144. `ON DELETE SET NULL`
-
-Pode ser usado em referências opcionais não essenciais ao histórico.
-
-Avaliar caso a caso.
-
----
-
-# 145. `ON DELETE CASCADE`
-
-Usar apenas em objetos filhos que não têm significado independente.
-
-Exemplo possível:
-
-```text
-perfil_acoes
-```
-
-quando perfil é fisicamente removível em ambiente sem uso.
-
-Mas perfis em uso provavelmente serão inativados.
-
----
-
-# 146. Versionamento de fluxo
-
-Modelos podem possuir:
-
-```text
-versao
-```
-
-Atividades reais não devem mudar retroativamente.
-
----
-
-# 147. Versionamento de configuração
-
-Regras críticas podem futuramente exigir histórico.
-
-No D0, auditoria de alterações pode ser suficiente.
-
----
-
-# 148. Migrações
-
-Toda alteração de schema deve ser versionada.
-
-Usar:
-
-- migrations;
-- revisão;
-- testes;
-- rollback quando possível.
-
----
-
-# 149. Não editar produção manualmente como rotina
-
-Mudanças estruturais devem passar por migration.
-
----
-
-# 150. Dados mestres
-
-Cadastros como ações globais podem ser populados via seed controlado.
-
----
-
-# 151. Ações do sistema
-
-Exemplos de seed:
-
-```text
-atividade.visualizar
-atividade.criar
-tarefa.visualizar
-tarefa.iniciar
-fila.reordenar
-```
-
----
-
-# 152. Perfis
-
-Perfis são da organização.
-
-Não devem ser seeds globais obrigatórios, embora modelos possam ser oferecidos.
-
----
-
-# 153. Tipos de atividade
-
-Pertencem à organização.
-
----
-
-# 154. Motivos
-
-Pertencem à organização.
-
-Pode haver modelos globais copiáveis futuramente.
-
----
-
-# 155. Dados de teste
-
-Ambiente de desenvolvimento deve possuir fixtures separadas de produção.
-
----
-
-# 156. Auditoria e dados de teste
-
-Não misturar métricas de teste com operação real.
-
----
-
-# 157. Ambientes
-
-Idealmente:
-
-```text
-dev
-staging
-prod
-```
-
-com bancos separados.
-
----
-
-# 158. Segurança de credenciais
-
-Credenciais nunca devem ser armazenadas em:
-
-- mensagens;
-- commits;
-- documentação aberta.
-
-Usar secrets/environment variables.
-
----
-
-# 159. Chaves de serviço
-
-Service role do Supabase deve ficar apenas em ambiente seguro de backend.
-
-Nunca no front-end.
-
----
-
-# 160. Public key
-
-Mesmo com chave pública, RLS precisa estar correto.
-
----
-
-# 161. RLS não pode depender de confiança no cliente
-
-Política deve assumir que requisições podem ser manipuladas.
-
----
-
-# 162. Testes de segurança
-
-Cenários mínimos:
-
-```text
-Usuário Org A tentando abrir Org B
-→ negado
-```
-
-```text
-Usuário sem fila.reordenar
-→ negado
-```
-
-```text
-Usuário dono da atividade
-→ vê contexto da própria atividade
-```
-
-```text
-Usuário sem acesso ao setor
-→ não vê fila completa
-```
-
----
-
-# 163. Testes de integridade
-
-Exemplos:
-
-```text
-duas sessões abertas pelo mesmo usuário
-→ impedir
-```
-
-```text
-tarefa dependente dela mesma
-→ impedir
-```
-
-```text
-conversa vinculada a atividade e tarefa ao mesmo tempo
-→ impedir
-```
-
----
-
-# 164. Testes de histórico
-
-Exemplo:
-
-Reordenar:
-
-```text
-4 → 16
-```
-
-deve gerar:
-
-- nova ordem;
-- histórico;
-- evento;
-- notificação.
-
----
-
-# 165. Testes de devolução
-
-Devolver:
-
-```text
-Compras → Engenharia
-```
-
-deve gerar:
-
-- devolução;
-- motivo;
-- nova passagem;
-- atualização da tarefa;
-- fila;
-- evento;
-- notificação.
-
----
-
-# 166. Testes de prazo
-
-Propor:
-
-```text
-hoje → terça
-```
-
-não deve alterar `prazo_comprometido` até aceite.
-
----
-
-# 167. Teste de recusa
-
-Recusa:
-
-```text
-status_proposta = recusada
-```
-
-e:
-
-```text
-escalonamento criado
-```
-
-conforme regra.
-
----
-
-# 168. Teste de conclusão
-
-Concluir atividade:
-
-- registra timestamp;
-- registra evento;
-- notifica dono;
-- preserva histórico.
-
----
-
-# 169. D0 — tabelas obrigatórias
-
-Lista mínima recomendada.
-
-## `core`
+### `core`
 
 ```text
 organizacoes
@@ -3572,7 +2244,7 @@ setores
 usuario_setores
 ```
 
-## `acessos`
+### `acessos`
 
 ```text
 grupos_acoes
@@ -3584,14 +2256,14 @@ usuario_perfis
 usuario_acoes
 ```
 
-## `cadastros`
+### `cadastros`
 
 ```text
 obras
 centros_custo
 ```
 
-## `produtividade`
+### `produtividade`
 
 ```text
 atividades
@@ -3607,3266 +2279,418 @@ bloqueios
 prazos_historico
 escalonamentos
 escalonamento_destinatarios
+escalonamento_eventos
 ```
 
-## `comunicacao`
+### `comunicacao`
 
 ```text
 conversas
 mensagens
+participantes
 mencoes
 notificacoes
-preferencias_notificacao
 ```
 
-## `configuracoes`
+### `configuracoes`
 
 ```text
 tipos_atividade
 tipos_tarefa
 motivos_devolucao
 motivos_bloqueio
-fluxos_modelo
-fluxo_tarefas_modelo
-fluxo_dependencias_modelo
-regras_notificacao
-regras_escalonamento
 ```
 
-## `auditoria`
+Fluxos, notificações e escalonamentos configuráveis podem entrar gradualmente conforme a primeira versão exigir.
+
+### `auditoria`
 
 ```text
 eventos
+acessos
 ```
 
 ---
 
-# 170. Tabelas que podem ficar depois
+## 101. O que pode ficar para depois
+
+- cargo formal, se não for necessário no D0;
+- DENY explícito;
+- permissões por campo;
+- acessos temporários;
+- simulação “ver como usuário”;
+- modelos sofisticados de fluxo;
+- outbox completa;
+- materialized views;
+- data warehouse;
+- vector search;
+- embeddings;
+- tabelas de IA;
+- benchmark entre empresas;
+- regras avançadas de aprovação de concessão.
+
+---
+
+# PARTE V — ORDEM DE IMPLEMENTAÇÃO
+
+## 102. Etapa 1 — Tenant e identidade
 
 ```text
-clientes
-entidades
-entidade_papeis
-aprovacoes
-entregas_notificacao
-auditoria_acessos
-auditoria_integracoes
-metricas_materializadas
-insights
-previsoes
-recomendacoes
-feedback_recomendacao
-```
-
-Só criar quando o produto realmente exigir.
-
----
-
-# 171. Não criar tabelas de IA no D0
-
-O D0 precisa gerar os dados.
-
-Não precisa armazenar:
-
-```text
-score_ia
-embedding
-modelo_previsao
-```
-
-sem uso real.
-
----
-
-# 172. Base para inteligência futura
-
-Os dados mais importantes são:
-
-```text
-atividade
-tarefa
-evento
-tempo
-fila
-prazo
-devolução
-motivo
-setor
-executor
-conclusão
-```
-
----
-
-# 173. Views futuras de métricas
-
-Exemplos:
-
-```text
-vw_tarefa_tempo_total
-vw_tarefa_horas_homem
-vw_atividade_tempo_total
-vw_tempo_por_setor
-vw_devolucoes_por_motivo
-vw_fila_atual
-```
-
----
-
-# 174. Exemplo de cálculo de horas-homem
-
-```sql
-SUM(fim_em - inicio_em)
-```
-
-agrupado por:
-
-```text
-tarefa
-```
-
-ou:
-
-```text
-atividade
-```
-
----
-
-# 175. Exemplo de tempo em setor
-
-```text
-saida_em - entrada_em
-```
-
-por passagem.
-
----
-
-# 176. Exemplo de tempo em fila
-
-```text
-primeiro_inicio_execucao - entrou_em
-```
-
-por passagem relevante.
-
-A definição formal será centralizada para evitar cálculos divergentes.
-
----
-
-# 177. Dicionário de métricas
-
-Futuramente pode existir documentação técnica com:
-
-- nome;
-- fórmula;
-- fonte;
-- unidade;
-- exceções.
-
-Não precisa ser tabela do banco no D0.
-
----
-
-# 178. Desempenho
-
-Não otimizar prematuramente.
-
-Mas criar índices óbvios desde o início.
-
----
-
-# 179. Volume de auditoria
-
-Pode crescer rapidamente.
-
-Índices e política de retenção precisam ser monitorados.
-
----
-
-# 180. Particionamento
-
-Pode ser necessário no futuro para:
-
-```text
-auditoria.eventos
-mensagens
-notificacoes
-```
-
-Não é necessário antes de existir volume real.
-
----
-
-# 181. Arquivamento
-
-Atividades antigas podem ser marcadas como arquivadas sem sair do banco.
-
----
-
-# 182. Soft delete
-
-Não aplicar genericamente em tudo.
-
-Usar estado específico quando possível:
-
-```text
-ativo
-cancelado
-arquivado
-```
-
----
-
-# 183. Campo `deleted_at`
-
-Pode existir em objetos onde exclusão lógica realmente faça sentido.
-
-Não usar automaticamente.
-
----
-
-# 184. Auditoria de segurança
-
-Alterações em:
-
-```text
-usuario_perfis
-usuario_acoes
-perfil_acoes
-escopos
-```
-
-devem gerar eventos.
-
----
-
-# 185. Auditoria de configuração
-
-Alterações em:
-
-```text
-setores
-tipos
-motivos
-fluxos
-regras
-```
-
-também devem gerar histórico.
-
----
-
-# 186. Auditoria de domínio
-
-Eventos de:
-
-```text
-atividade
-tarefa
-fila
-prazo
-devolução
-bloqueio
-```
-
-são prioritários.
-
----
-
-# 187. Evento não substitui FK
-
-Mesmo com auditoria, as tabelas precisam ter relacionamentos normais.
-
----
-
-# 188. Nomes de schemas
-
-Usar nomes em português é aceitável e está alinhado ao domínio atual.
-
-Manter consistência.
-
----
-
-# 189. Nomes de tabelas
-
-Preferir plural:
-
-```text
-atividades
-tarefas
+organizacoes
+empresas
 usuarios
 ```
 
----
-
-# 190. Nomes de colunas
-
-Preferir:
-
-```text
-snake_case
-```
-
-Exemplo:
-
-```text
-prazo_comprometido
-```
-
----
-
-# 191. Não misturar idiomas
-
-Evitar:
-
-```text
-created_at
-prazo_final
-owner_id
-```
-
-no mesmo modelo.
-
-Escolher padrão.
-
-Neste documento, padrão funcional sugerido:
-
-```text
-português
-```
-
-A decisão final de nomenclatura técnica deve ser única.
-
----
-
-# 192. Supabase
-
-Se a LPS usar Supabase:
-
-- PostgreSQL continua sendo a fonte;
-- Auth fornece identidade;
-- RLS protege dados;
-- Realtime pode apoiar fila/notificações;
-- Storage pode apoiar anexos.
-
----
-
-# 193. Realtime
-
-Pode ser útil para:
-
-- mudança de posição;
-- mensagem;
-- notificação;
-- tarefa atualizada.
-
-Não deve substituir persistência.
-
----
-
-# 194. Storage
-
-Arquivos podem ser organizados por:
-
-```text
-organizacao
-atividade
-tarefa
-```
-
-com políticas compatíveis com RLS.
-
-A modelagem detalhada de anexos não é prioridade deste documento.
-
----
-
-# 195. Funções Edge
-
-Podem ser úteis para:
-
-- notificações externas;
-- integrações;
-- IA;
-- operações administrativas.
-
-Não usar para contornar RLS sem necessidade.
-
----
-
-# 196. Neon ou Supabase
-
-O modelo conceitual não deve depender excessivamente do fornecedor.
-
-PostgreSQL é a base.
-
----
-
-# 197. Portabilidade
-
-Evitar recursos proprietários quando não agregarem valor suficiente.
-
----
-
-# 198. Segurança do tenant
-
-Toda query de negócio precisa estar implicitamente ou explicitamente limitada por:
-
-```text
-organizacao_id
-```
-
----
-
-# 199. Escopo de empresa
-
-Depois do tenant:
-
-```text
-empresa_id
-```
-
-é filtro relevante em muitas consultas.
-
----
-
-# 200. Escopo de setor
-
-Para operação:
-
-```text
-setor_id
-```
-
-é central.
-
----
-
-# 201. Dono
-
-Para atividades:
-
-```text
-dono_usuario_id
-```
-
-é filtro central.
-
----
-
-# 202. Executor
-
-Para tarefas:
-
-```text
-tarefa_executores
-```
-
-é filtro central.
-
----
-
-# 203. Fila
-
-Para colaborador:
-
-```text
-setor + estado + ordem
-```
-
-é consulta crítica.
-
----
-
-# 204. Dashboard futuro
-
-Consultas agregadas podem exigir estrutura analítica separada.
-
-Não comprometer OLTP com relatórios pesados sem necessidade.
-
----
-
-# 205. OLTP
-
-**OLTP — Online Transaction Processing**
-
-É o banco operacional usado para:
-
-- criar;
-- editar;
-- movimentar;
-- executar.
-
-A LPS começa focada nisso.
-
----
-
-# 206. Analytics
-
-Depois pode existir camada própria para análise.
-
----
-
-# 207. Fonte de verdade
-
-No D0:
-
-```text
-PostgreSQL operacional
-```
-
-é a fonte de verdade.
-
----
-
-# 208. Concorrência de fila
-
-Reordenação pode ser feita por mais de uma pessoa simultaneamente.
-
-Precisa de transação e estratégia para evitar conflito.
-
-Possíveis abordagens:
-
-- lock por setor;
-- versão da fila;
-- retry otimista.
-
-A decisão técnica será feita na implementação.
-
----
-
-# 209. Concorrência de prazo
-
-Duas pessoas não devem aceitar/rejeitar a mesma proposta de forma inconsistente.
-
-Usar transação e status atual.
-
----
-
-# 210. Concorrência de sessão
-
-Uma pessoa iniciando duas tarefas quase simultaneamente precisa de restrição.
-
----
-
-# 211. Concorrência de dono
-
-Troca de dono precisa ser atômica.
-
----
-
-# 212. Optimistic locking
-
-Pode existir coluna:
-
-```text
-versao
-```
-
-ou utilizar `updated_at` em objetos críticos.
-
-Não obrigatório no D0 para tudo.
-
----
-
-# 213. Integridade antes de conveniência
-
-Melhor rejeitar uma operação inconsistente do que gravar estado impossível.
-
----
-
-# 214. Logs de erro
-
-Logs técnicos de aplicação não precisam morar necessariamente no mesmo banco.
-
-Não confundir:
-
-```text
-auditoria de negócio
-```
-
-com:
-
-```text
-log de erro técnico
-```
-
----
-
-# 215. Auditoria de negócio
-
-Exemplo:
-
-```text
-Paulo alterou prazo.
-```
-
----
-
-# 216. Log técnico
-
-Exemplo:
-
-```text
-timeout na API.
-```
-
-São coisas diferentes.
-
----
-
-# 217. Observabilidade
-
-Pode usar plataforma externa de logs.
-
-Fora do escopo deste documento.
-
----
-
-# 218. Dados obrigatórios mínimos para criar atividade
-
-Do ponto de vista do banco:
-
-```text
-organização
-empresa
-título
-dono
-status
-criador
-```
-
-Outros campos podem ser opcionais.
-
----
-
-# 219. Não obrigar obra
-
-Decisão consolidada.
-
----
-
-# 220. Não obrigar centro de custo
-
-Decisão consolidada.
-
----
-
-# 221. Dados mínimos para criar tarefa
-
-```text
-atividade
-título
-status
-criador
-```
-
-Setor pode ser definido no momento da criação ou antes de entrar em execução.
-
-A regra final de UX pode exigir mais.
-
----
-
-# 222. Tarefa sem executor
-
-Permitida.
-
----
-
-# 223. Tarefa sem setor
-
-Pode existir temporariamente durante criação.
-
-Antes de entrar em fila/execução, precisa de setor.
-
-A validação pode ocorrer na aplicação.
-
----
-
-# 224. Atividade sem tarefas
-
-Pode existir durante criação inicial.
-
-Mas precisa ser tratada na UX para não ficar esquecida.
-
----
-
-# 225. Processo de criação simples
-
-O banco não deve forçar dezenas de campos obrigatórios.
-
----
-
-# 226. Campo de descrição
-
-Texto livre útil.
-
-Não usar como substituto de campos estruturados.
-
----
-
-# 227. Campo de impacto
-
-Ainda não existe decisão final de modelagem.
-
-Não criar tabela complexa de criticidade agora.
-
-Quando entrar, separar:
-
-```text
-impacto informado
-```
-
-de:
-
-```text
-prioridade operacional
-```
-
----
-
-# 228. Prioridade operacional
-
-Pode futuramente ser campo na fila ou tarefa.
-
-Ainda não consolidado.
-
-Não confundir com ordem.
-
----
-
-# 229. Posição
-
-É derivada da ordem da fila.
-
----
-
-# 230. Ordem
-
-É controlada pelo setor.
-
----
-
-# 231. Notificação da posição
-
-Derivada do histórico de posição.
-
----
-
-# 232. Previsão
-
-Não armazenar no D0 como verdade.
-
-Futuramente pode existir:
-
-```text
-previsao_conclusao
-```
-
-com origem e confiança.
-
----
-
-# 233. Campos de IA
-
-Quando surgirem, precisam diferenciar:
-
-```text
-valor previsto
-confianca
-modelo
-gerado_em
-```
-
-Não misturar com prazo comprometido.
-
----
-
-# 234. Auditoria de IA futura
-
-Toda recomendação relevante deve registrar:
-
-- modelo;
-- versão;
-- input resumido;
-- resultado;
-- usuário;
-- aceite/rejeição.
-
-Fora do D0.
-
----
-
-# 235. Schema futuro de inteligência
-
-Se necessário:
-
-```text
-inteligencia
-```
-
-poderá existir no futuro.
-
-Não criar agora.
-
----
-
-# 236. Por que não criar `inteligencia` agora
-
-Porque ainda não existem:
-
-- previsões;
-- recomendações;
-- modelos;
-- feedbacks.
-
-Criar antes seria modelar abstração sem uso.
-
----
-
-# 237. Data warehouse futuro
-
-Também não criar agora.
-
----
-
-# 238. Matriz de schemas
-
-| Schema | Responsabilidade principal |
-|---|---|
-| core | Tenant, empresas, usuários, setores |
-| acessos | Perfis, ações, escopos e autorização |
-| cadastros | Obras, centros de custo e apoio |
-| produtividade | Atividades, tarefas, fluxo, tempo, fila, prazo |
-| comunicacao | Conversas e notificações |
-| configuracoes | Tipos, motivos, modelos e regras |
-| auditoria | Histórico genérico e imutável |
-
----
-
-# 239. Dependências entre schemas
-
-```text
-core
-↓
-todos
-```
-
-`core` é base.
-
----
-
-# 240. `acessos`
-
-Depende de:
-
-```text
-core.usuarios
-core.organizacoes
-core.setores
-```
-
-e pode referenciar cadastros de escopo.
-
----
-
-# 241. `produtividade`
-
-Depende de:
-
-```text
-core
-cadastros
-configuracoes
-```
-
----
-
-# 242. `comunicacao`
-
-Depende de:
-
-```text
-core
-produtividade
-auditoria
-```
-
----
-
-# 243. `auditoria`
-
-Referencia entidades de todos os schemas.
-
-Por isso deve evitar FKs impossíveis em `entidade_id` genérico.
-
-Campos específicos como:
-
-```text
-atividade_id
-tarefa_id
-```
-
-podem possuir FK.
-
-`entidade_tipo + entidade_id` funciona como referência lógica.
-
----
-
-# 244. Não criar dependências circulares desnecessárias
-
-A arquitetura deve manter schemas compreensíveis.
-
----
-
-# 245. Cliente como decisão pendente
-
-Não forçar relacionamento circular entre `core.empresas` e `cadastros.clientes` até a modelagem de entidades ser definida.
-
----
-
-# 246. Regra para nova tabela
-
-Antes de criar:
-
-1. Qual conceito representa?
-2. Existe comportamento próprio?
-3. Precisa de histórico?
-4. Já existe tabela que representa isso?
-5. É realmente D0?
-6. Precisa de FK?
-7. Qual organização é dona?
-8. Quais índices?
-9. Quais permissões?
-
----
-
-# 247. Regra para novo campo
-
-Perguntar:
-
-> Este dado é realmente necessário para operação, auditoria ou análise?
-
-Evitar campos “talvez um dia”.
-
----
-
-# 248. Regra para JSONB
-
-Perguntar:
-
-> A estrutura realmente varia ou estamos evitando modelar corretamente?
-
----
-
-# 249. Regra para status
-
-Não adicionar status para cada situação pequena.
-
-Pode existir:
-
-```text
-status
-+
-bloqueio
-+
-prazo
-+
-fila
-```
-
-em vez de dezenas de estados combinados.
-
----
-
-# 250. Explosão de status
-
-Evitar:
-
-```text
-aguardando_cliente_atrasado
-aguardando_cliente_sem_prazo
-aguardando_cliente_urgente
-```
-
-Modelar dimensões separadas.
-
----
-
-# 251. Estado ortogonal
-
-Exemplo:
-
-```text
-status = em_andamento
-bloqueio = aguardando_cliente
-prazo = atrasado
-```
-
-Isso é mais flexível.
-
----
-
-# 252. Fila e status
-
-Fila é uma estrutura própria.
-
-Não codificar posição no status.
-
----
-
-# 253. Prazo e status
-
-Atraso pode ser calculado.
-
-Não precisa existir status:
-
-```text
-atrasado
-```
-
-se for apenas uma condição derivada.
-
----
-
-# 254. Condições derivadas
-
-Exemplos:
-
-```text
-atrasada = agora > prazo_comprometido e não concluída
-```
-
----
-
-# 255. Dados derivados não precisam virar coluna
-
-A menos que performance exija.
-
----
-
-# 256. Atualização de timestamps
-
-`atualizado_em` deve refletir mudanças relevantes no registro.
-
-Não usar como substituto da auditoria.
-
----
-
-# 257. `criado_por`
-
-Importante nos objetos principais.
-
----
-
-# 258. `atualizado_por`
-
-Útil em cadastros e configurações.
-
-Em objetos com auditoria rica pode ser complementar.
-
----
-
-# 259. Arquivamento de atividade
-
-Pode existir campo futuro:
-
-```text
-arquivada_em
-```
-
-Não é necessário para o primeiro fluxo.
-
----
-
-# 260. Cancelamento
-
-Atividade e tarefa devem ter estado de cancelamento em vez de exclusão.
-
----
-
-# 261. Motivo de cancelamento
-
-Pode surgir futuramente como configuração.
-
-Não está consolidado no D0 atual.
-
----
-
-# 262. Reabertura
-
-Evento em auditoria.
-
-Pode atualizar status e timestamps.
-
----
-
-# 263. Histórico de status específico
-
-Pode ser derivado de `auditoria.eventos`.
-
-Não criar tabela separada se não houver necessidade.
-
----
-
-# 264. Histórico de fila específico
-
-Precisa de tabela própria porque posição é métrica central.
-
----
-
-# 265. Histórico de prazo específico
-
-Precisa de tabela própria porque negociação possui estado.
-
----
-
-# 266. Histórico de setor específico
-
-Precisa de `passagens_setor` porque medição de permanência é central.
-
----
-
-# 267. Histórico de tempo específico
-
-Precisa de `sessoes_tempo` porque é dado operacional.
-
----
-
-# 268. Históricos não são duplicação inútil
-
-Cada um possui semântica própria.
-
----
-
-# 269. Auditoria genérica complementa
-
-Permite responder:
-
-> quem alterou?
-
-mesmo em mudanças administrativas.
-
----
-
-# 270. Exemplo completo — criação de atividade
-
-Operação:
-
-```text
-Criar atividade
-```
-
-Grava:
-
-```text
-produtividade.atividades
-```
-
-Pode criar:
-
-```text
-comunicacao.conversas
-```
-
-automaticamente.
-
-Gera:
-
-```text
-auditoria.eventos
-```
-
----
-
-# 271. Exemplo completo — criar tarefa
-
-Grava:
-
-```text
-produtividade.tarefas
-```
-
-Pode criar:
-
-```text
-comunicacao.conversas
-```
-
-para a tarefa.
-
-Se setor definido:
-
-```text
-produtividade.passagens_setor
-```
-
-e talvez:
-
-```text
-produtividade.fila_itens
-```
-
----
-
-# 272. Exemplo completo — iniciar tarefa
-
-Operação:
-
-```text
-Iniciar
-```
-
-Grava:
-
-```text
-sessoes_tempo
-```
-
-Atualiza:
-
-```text
-tarefas.status
-tarefas.iniciada_em
-tarefas.primeira_acao_em
-```
-
-quando aplicável.
-
-Pode retirar da condição de espera da fila.
-
-Gera:
-
-```text
-auditoria.eventos
-```
-
----
-
-# 273. Exemplo completo — devolver
-
-Grava:
-
-```text
-devolucoes
-```
-
-Fecha:
-
-```text
-passagem_setor atual
-```
-
-Abre:
-
-```text
-nova passagem_setor
-```
-
-Atualiza:
-
-```text
-tarefas.setor_atual_id
-```
-
-Atualiza fila.
-
-Gera:
-
-```text
-auditoria.eventos
-notificacoes
-```
-
----
-
-# 274. Exemplo completo — propor prazo
-
-Grava:
-
-```text
-prazos_historico
-tipo = proposto
-status = pendente
-```
-
-Não altera:
-
-```text
-prazo_comprometido
-```
-
-até aceite.
-
----
-
-# 275. Exemplo completo — aceitar prazo
-
-Atualiza:
-
-```text
-prazos_historico.status = aceita
-tarefas/atividades.prazo_comprometido
-```
-
-Gera:
-
-```text
-auditoria
-notificacao
-```
-
----
-
-# 276. Exemplo completo — recusar prazo
-
-Atualiza proposta:
-
-```text
-recusada
-```
-
-Cria:
-
-```text
-escalonamentos
-```
-
-conforme regra.
-
----
-
-# 277. Exemplo completo — reordenar
-
-Atualiza:
-
-```text
-fila_itens.ordem
-```
-
-Registra:
-
-```text
-fila_historico_posicoes
-```
-
-Gera:
-
-```text
-auditoria
-notificacoes
-```
-
----
-
-# 278. Exemplo completo — concluir tarefa
-
-Fecha:
-
-```text
-sessoes abertas
-fila
-passagem
-```
-
-Atualiza:
-
-```text
-tarefas.status
-tarefas.concluida_em
-```
-
-Libera dependentes.
-
-Gera:
-
-```text
-auditoria
-notificacao
-```
-
----
-
-# 279. Exemplo completo — concluir atividade
-
-Atualiza:
-
-```text
-atividades.status
-atividades.concluida_em
-```
-
-Gera:
-
-```text
-auditoria
-```
-
-Notifica obrigatoriamente:
-
-```text
-dono
-```
-
----
-
-# 280. Consultas essenciais do D0
-
-O banco deve responder com eficiência:
-
-```text
-Minhas atividades abertas
-```
-
-```text
-Minhas tarefas
-```
-
-```text
-Fila do setor
-```
-
-```text
-Posição da minha tarefa
-```
-
-```text
-Atividades atrasadas
-```
-
-```text
-Timeline da atividade
-```
-
-```text
-Tempo trabalhado
-```
-
-```text
-Devoluções
-```
-
----
-
-# 281. Consulta — posição
-
-Conceitualmente:
-
-```sql
-row_number() over (
-  partition by setor_id
-  order by ordem
-)
-```
-
-sobre itens ativos.
-
----
-
-# 282. Consulta — total da fila
-
-```text
-count(itens ativos do setor)
-```
-
----
-
-# 283. Consulta — tempo total
-
-```text
-concluida_em - criado_em
-```
-
----
-
-# 284. Consulta — horas-homem
-
-Soma das sessões.
-
----
-
-# 285. Consulta — tempo por setor
-
-Soma ou detalhamento das passagens.
-
----
-
-# 286. Consulta — devoluções por motivo
-
-Agrupar:
-
-```text
-motivo_devolucao_id
-```
-
----
-
-# 287. Consulta — tarefas sem ação
-
-Usar:
-
-```text
-último evento relevante
-```
-
-ou campo cacheado futuro.
-
----
-
-# 288. Consulta — atraso
-
-```text
-prazo_comprometido < now()
-and concluida_em is null
-```
-
----
-
-# 289. Consulta — conflito de prazo
-
-Propostas pendentes ou recusadas com escalonamento aberto.
-
----
-
-# 290. Consulta — dono
-
-Atividades por `dono_usuario_id`.
-
----
-
-# 291. Consulta — executor
-
-Tarefas via `tarefa_executores`.
-
----
-
-# 292. Consulta — gestor
-
-Filtrar escopos autorizados e setores gerenciados.
-
----
-
-# 293. Segurança e performance
-
-RLS pode aumentar custo de consulta.
-
-Índices precisam apoiar colunas usadas nas políticas.
-
----
-
-# 294. Índices para RLS
-
-Exemplos:
-
-```text
-organizacao_id
-empresa_id
-setor_id
-usuario_id
-dono_usuario_id
-```
-
----
-
-# 295. Funções de autorização
-
-Pode ser útil criar funções SQL estáveis como:
-
-```text
-acessos.usuario_tem_acao(...)
-```
-
-Mas precisam ser bem testadas para não virar gargalo.
-
----
-
-# 296. Cache de autorização
-
-Pode ser necessário futuramente.
-
-Não otimizar antes de medir.
-
----
-
-# 297. Perfis e escopos
-
-A combinação proposta:
-
-```text
-usuario_perfis(perfil_id, escopo_id)
-```
-
-evita duplicação de perfil por setor.
-
----
-
-# 298. Exemplo
-
-```text
-Paulo
-Gestor Comercial
-Escopo Comercial
-```
-
-e:
-
-```text
-Paulo
-Visualizador
-Escopo Administrativo
-```
-
----
-
-# 299. Concessão direta
-
-`usuario_acoes` resolve exceções.
-
----
-
-# 300. Negação explícita
-
-Não está prevista no D0.
-
-O modelo inicial é:
-
-```text
-default deny
-+
-grants
-```
-
----
-
-# 301. Por que evitar DENY explícito no início
-
-Aumenta complexidade de precedência.
-
-Exemplo:
-
-```text
-perfil permite
-usuário nega
-outro perfil permite
-```
-
-Não precisamos disso agora.
-
----
-
-# 302. Empresas e escopos
-
-Se usuário pode operar em várias empresas, atribuir perfis com escopos diferentes.
-
----
-
-# 303. Setores por empresa
-
-No D0, `setores.empresa_id` é obrigatório.
-
-Se surgir necessidade de setor corporativo compartilhado, revisar.
-
----
-
-# 304. Holding
-
-Arquitetura deve permitir várias empresas dentro da organização.
-
-Modelagem avançada de holding não pertence ao D0.
-
----
-
-# 305. Grupos de empresas
-
-Também não precisam ser tabelas agora.
-
-A arquitetura pode evoluir.
-
----
-
-# 306. Obra
-
-Tabela separada.
-
----
-
-# 307. Centro de custo
-
-Tabela separada.
-
----
-
-# 308. Associação centro de custo → obra
-
-Opcional.
-
----
-
-# 309. Atividade → obra + centro de custo
-
-Ambos opcionais e podem coexistir.
-
----
-
-# 310. Cliente
-
-Pendente.
-
----
-
-# 311. Fornecedor
-
-Não é cadastro obrigatório do D0 deste módulo.
-
-Pode entrar quando o processo exigir.
-
----
-
-# 312. Integração com ERP
-
-Futuramente, empresa/obra/centro de custo podem ser sincronizados.
-
-Campos úteis:
-
-```text
-sistema_origem
-id_externo
-```
-
-não precisam existir em todas as tabelas agora.
-
----
-
-# 313. Tabela de mapeamento de integrações
-
-Melhor futuramente criar:
-
-```text
-integracoes.mapeamentos
-```
-
-do que poluir todas as tabelas, se houver muitas origens.
-
-Não é D0.
-
----
-
-# 314. Auditoria e métricas
-
-Não usar `updated_at` para calcular tempos.
-
-Usar eventos específicos.
-
----
-
-# 315. Exemplo
-
-```text
-updated_at
-```
-
-pode mudar por correção de título.
-
-Isso não significa:
-
-```text
-atividade avançou.
-```
-
----
-
-# 316. Primeira ação
-
-Precisa vir de evento operacional relevante.
-
----
-
-# 317. Última ação
-
-Pode ser derivada de eventos relevantes.
-
----
-
-# 318. Eventos relevantes
-
-Catálogo futuro pode marcar:
-
-```text
-conta_como_acao = true
-```
-
-para tipos de evento.
-
-Não precisa ser tabela no D0.
-
----
-
-# 319. Sequência temporal
-
-Eventos precisam utilizar timestamp do servidor.
-
----
-
-# 320. Ordenação de eventos
-
-Se dois eventos têm mesmo timestamp, usar:
-
-- ID ordenável;
-- sequência;
-- criado_em com precisão.
-
----
-
-# 321. UUIDv7
-
-Pode ser considerado futuramente por ordenação temporal.
-
-Não é obrigatório.
-
----
-
-# 322. Segurança de UUID
-
-UUID não substitui autorização.
-
----
-
-# 323. Anexos
-
-Se entrarem no D0, estrutura possível:
-
-```text
-comunicacao.anexos
-```
-
-ou:
-
-```text
-core.anexos
-```
-
-com contexto.
-
-Ainda não definido.
-
----
-
-# 324. Não armazenar arquivo binário diretamente na tabela principal
-
-Usar storage e guardar metadata.
-
----
-
-# 325. Mensagens e anexos
-
-Relacionamento:
-
-```text
-mensagem 1:N anexos
-```
-
-quando implementado.
-
----
-
-# 326. Limites de tamanho
-
-Política futura.
-
----
-
-# 327. Backup
-
-Banco operacional precisa de estratégia de backup.
-
-Assunto de infraestrutura, mas obrigatório em produção.
-
----
-
-# 328. Point-in-time recovery
-
-Desejável quando volume e criticidade justificarem.
-
----
-
-# 329. Restaurar backup não substitui auditoria
-
-São camadas diferentes.
-
----
-
-# 330. Segurança de dados
-
-Criptografia em trânsito e repouso deve usar mecanismos do provedor.
-
----
-
-# 331. Dados pessoais
-
-Usuários e mensagens podem conter dados pessoais.
-
-Políticas da LGPD precisam ser consideradas.
-
----
-
-# 332. Não guardar segredo desnecessário
-
-Evitar campos de senha próprios.
-
-Autenticação deve usar provedor seguro.
-
----
-
-# 333. Senhas
-
-Nunca armazenar senha em texto puro.
-
-Idealmente, delegar ao Supabase Auth ou provedor equivalente.
-
----
-
-# 334. Tokens
-
-Não armazenar tokens sensíveis em tabelas comuns.
-
----
-
-# 335. Logs sensíveis
-
-Auditoria não deve copiar credenciais ou secrets.
-
----
-
-# 336. Eventos com JSONB
-
-Sanitizar dados antes de salvar.
-
----
-
-# 337. LGPD e auditoria
-
-Direito de remoção precisa ser conciliado com obrigações de histórico.
-
-Tema jurídico futuro.
-
----
-
-# 338. Dados anonimizados
-
-Podem ser usados futuramente para benchmark.
-
-Não implementar sem política.
-
----
-
-# 339. Inteligência futura
-
-A modelagem atual já deve permitir extrair:
-
-- tempos;
-- fluxo real;
-- fila;
-- devoluções;
-- prazos;
-- executores;
-- setores;
-- conversa.
-
-Isso é suficiente para começar.
-
----
-
-# 340. Não criar tabelas de agregação prematuras
-
-Primeiro medir performance real.
-
----
-
-# 341. Quando criar materialização
-
-Quando consultas analíticas passarem a impactar operação.
-
----
-
-# 342. Observação sobre `primeira_acao_em`
-
-Pode ser campo derivado/cacheado.
-
-Não deve ser preenchido manualmente.
-
----
-
-# 343. Observação sobre `status`
-
-Catálogo final ainda depende de decisão do produto.
-
-Não fechar enums rígidos agora.
-
----
-
-# 344. PostgreSQL ENUM
-
-Evitar enums excessivamente rígidos para estados ainda em discussão.
-
-Pode usar:
-
-```text
-text + check
-```
-
-ou tabelas internas.
-
----
-
-# 345. Status internos consolidados
-
-Quando o catálogo estiver estável, revisar abordagem.
-
----
-
-# 346. IDs externos
-
-Não necessários no D0.
-
----
-
-# 347. Códigos humanos
-
-Atividades podem futuramente possuir código como:
-
-```text
-ATV-000123
-```
-
-Não é obrigatório para a PK.
-
----
-
-# 348. Código amigável
-
-Se implementado:
-
-```text
-organizacao + sequência
-```
-
-pode facilitar comunicação.
-
-Ainda não decidido.
-
----
-
-# 349. Busca
-
-Campos que podem exigir busca:
-
-- título;
-- nome;
-- código.
-
-No D0, índice B-tree e ILIKE podem bastar.
-
----
-
-# 350. Full-text search
-
-Pode ser adicionado futuramente para mensagens e atividades.
-
----
-
-# 351. Vector search
-
-Pode ser útil para IA e atividades semelhantes.
-
-Não pertence ao D0.
-
----
-
-# 352. Embeddings
-
-Não criar ainda.
-
----
-
-# 353. Pesquisa semântica
-
-Futura.
-
----
-
-# 354. Nomenclatura do banco
-
-Este documento usa nomes em português para clareza.
-
-A implementação deve escolher e manter um único padrão.
-
----
-
-# 355. Schema `public`
-
-Se usar Supabase, evitar deixar todas as tabelas de negócio diretamente no `public` sem organização.
-
-Os schemas propostos ajudam a separar responsabilidades.
-
----
-
-# 356. Exposição via API
-
-Supabase/PostgREST precisa estar configurado para schemas permitidos.
-
-Nem todo schema precisa ser exposto diretamente.
-
----
-
-# 357. Schema `auditoria`
-
-Pode ter acesso mais restrito.
-
----
-
-# 358. Schema `acessos`
-
-Também sensível.
-
----
-
-# 359. Funções seguras
-
-Funções `security definer` exigem cuidado extremo.
-
-Usar somente quando necessário.
-
----
-
-# 360. Search path
-
-Funções PostgreSQL devem definir `search_path` explicitamente quando aplicável.
-
-Assunto técnico de segurança.
-
----
-
-# 361. Foreign keys
-
-Devem existir sempre que a relação é real.
-
-Não depender apenas de UUID solto.
-
----
-
-# 362. Foreign keys entre schemas
-
-Permitidas e desejáveis.
-
----
-
-# 363. Exemplo
-
-```text
-produtividade.atividades.dono_usuario_id
-→ core.usuarios.id
-```
-
----
-
-# 364. Exemplo
-
-```text
-produtividade.tarefas.atividade_id
-→ produtividade.atividades.id
-```
-
----
-
-# 365. Exemplo
-
-```text
-produtividade.devolucoes.motivo_devolucao_id
-→ configuracoes.motivos_devolucao.id
-```
-
----
-
-# 366. Consistência de organização
-
-FK simples não garante que os dois registros são da mesma organização.
-
-A aplicação e/ou constraint adicional precisa validar.
-
----
-
-# 367. Estratégia recomendada
-
-Para relações críticas, considerar:
-
-```text
-UNIQUE(organizacao_id, id)
-```
-
-e FK composta:
-
-```text
-(organizacao_id, objeto_id)
-```
-
-→
-
-```text
-(organizacao_id, id)
-```
-
-Isso impede cruzamento de tenant no próprio banco.
-
----
-
-# 368. Custo
-
-FK composta aumenta verbosidade.
-
-Mas melhora segurança e integridade.
-
-Avaliar principalmente em tabelas de domínio.
-
----
-
-# 369. RLS continua necessária
-
-FK composta protege consistência.
-
-RLS protege leitura/escrita do usuário.
-
----
-
-# 370. Observabilidade de fila
-
-Pode existir view:
-
-```text
-vw_fila_posicoes
-```
+Garantir isolamento antes de criar operação.
 
-com:
-
-- tarefa;
-- ordem;
-- posição;
-- total.
-
----
-
-# 371. Notificação de posição
-
-Serviço observa mudança e persiste histórico.
-
----
-
-# 372. Não recalcular todos os históricos em leitura
-
-Histórico precisa ser registrado no momento da mudança.
-
----
-
-# 373. Concorrência de notificações
-
-Gerar notificação após transação de negócio bem-sucedida.
-
----
-
-# 374. Outbox pattern
-
-Futuramente, pode existir tabela de outbox para eventos assíncronos.
-
-Exemplo:
-
-```text
-infra.outbox_eventos
-```
-
-Não é necessário no D0 se volume pequeno.
-
----
-
-# 375. Por que outbox pode ser útil
-
-Evita:
-
-```text
-banco atualiza
-notificação falha
-```
-
-sem possibilidade de retry.
-
----
-
-# 376. Eventos assíncronos futuros
-
-- e-mail;
-- push;
-- IA;
-- integrações;
-- relatórios.
-
----
-
-# 377. Mas não superarquitetar
-
-D0 pode começar simples.
-
----
-
-# 378. Evolução possível
-
-Quando volume crescer:
-
-```text
-transação
-↓
-outbox
-↓
-worker
-↓
-notificação/integracao
-```
-
----
-
-# 379. Auditoria continua síncrona
-
-Eventos críticos de auditoria devem estar na mesma transação quando possível.
-
----
-
-# 380. Mensagem do sistema
-
-Pode ser gerada a partir do evento depois da transação.
-
----
-
-# 381. Evitar duplicação de regra
-
-Exemplo:
-
-Prazo aceito deve ser processado em uma única operação de domínio.
-
-Não duplicar lógica em:
-
-- front-end;
-- trigger;
-- função;
-- worker;
-
-sem necessidade.
-
----
-
-# 382. Fonte de verdade da regra
-
-Definir camada responsável durante implementação.
-
----
-
-# 383. API de domínio
-
-Futuramente, operações podem ser endpoints semânticos:
-
-```text
-POST /tarefas/{id}/devolver
-POST /filas/{setor}/reordenar
-POST /prazos/{id}/aceitar
-```
-
-em vez de CRUD direto irrestrito.
-
-Isso melhora consistência.
-
----
-
-# 384. Banco suporta operação semântica
-
-Mesmo usando Supabase, funções/RPC podem ser utilizadas quando a transação envolver várias tabelas.
-
----
-
-# 385. D0 não precisa ter tudo via RPC
-
-Escolher apenas operações críticas.
-
----
-
-# 386. Operações críticas candidatas
-
-- devolver tarefa;
-- reordenar fila;
-- aceitar/recusar prazo;
-- concluir tarefa;
-- escalar;
-- alterar dono.
-
----
-
-# 387. Operações simples
-
-- editar descrição;
-- criar tipo;
-- consultar fila;
-
-podem usar CRUD normal com RLS.
-
----
-
-# 388. Auditoria de configurações
-
-Exemplo:
-
-```text
-Administrador alterou perfil Gestor Comercial.
-```
-
-Registrar ações adicionadas/removidas.
-
----
-
-# 389. Auditoria de escopo
-
-Exemplo:
-
-```text
-Paulo ganhou acesso ao Administrativo.
-```
-
----
-
-# 390. Auditoria de setor
-
-Exemplo:
-
-```text
-Setor Compras renomeado para Suprimentos.
-```
-
-Histórico operacional não pode se perder.
-
----
-
-# 391. Nomes históricos
-
-Se relatório antigo precisa mostrar o nome à época, pode ser necessário snapshot ou histórico de cadastro.
-
-No D0, auditoria de alteração pode ser suficiente.
-
----
-
-# 392. Snapshot em eventos
-
-`dados_antes` e `dados_depois` preservam mudança.
-
----
-
-# 393. Métrica de setor após renomear
-
-Deve usar o mesmo `setor_id`.
-
-Assim o histórico permanece contínuo.
-
----
-
-# 394. IDs estáveis são essenciais
-
-Nunca usar nome como FK.
-
----
-
-# 395. Métrica de usuário inativado
-
-Continua utilizando o mesmo `usuario_id`.
-
----
-
-# 396. Não reutilizar IDs
-
----
-
-# 397. Não reutilizar e-mail para identidade histórica
-
-Usuário é identificado por ID.
-
----
-
-# 398. Conta recontratada
-
-Se mesma pessoa voltar, decisão sobre reutilizar ou criar novo vínculo precisa ser definida.
-
-Não é central agora.
-
----
-
-# 399. Dados de perfil
-
-Nome e e-mail são suficientes para o núcleo.
-
-Não criar RH completo.
-
----
-
-# 400. A LPS não é sistema de folha
-
-Evitar campos desnecessários:
-
-- salário;
-- cargo CLT detalhado;
-- benefícios.
-
-Podem vir de integração futura.
-
----
-
-# 401. Setor não é departamento completo
-
-Não criar hierarquia infinita.
-
----
-
-# 402. Hierarquia de setores
-
-Pode ser necessidade futura.
-
-No D0, não implementar `parent_setor_id` sem uso comprovado.
-
----
-
-# 403. Organograma
-
-Não é objetivo atual.
-
----
-
-# 404. Gestor do setor
-
-Pode ser representado em `usuario_setores.eh_gestor`.
-
-Se regras mais complexas surgirem, criar tabela específica.
-
----
-
-# 405. Escalonamento usando gestor
-
-A regra consulta membros com:
-
-```text
-eh_gestor = true
-```
-
-e autorização adequada.
-
----
-
-# 406. Gestor estrutural não substitui permissão
-
-Mesmo gestor precisa da ação correta.
-
----
-
-# 407. Obra e setor
-
-Não possuem relação direta obrigatória.
-
-Atividade pode combinar ambos.
-
----
-
-# 408. Centro de custo e setor
-
-Também independentes.
-
----
-
-# 409. Atividade sem obra
-
-Suportada.
-
----
-
-# 410. Atividade sem cliente
-
-Suportada.
-
----
-
-# 411. Atividade interna
-
-Exemplo:
-
-```text
-Picotar papel
-```
-
-Pode possuir apenas:
-
-```text
-empresa
-dono
-tarefas
-setor
-```
-
----
-
-# 412. Atividade operacional de obra
-
-Pode possuir:
-
-```text
-empresa
-obra
-centro de custo
-```
-
----
-
-# 413. Não obrigar contexto excessivo
-
-Isso preserva simplicidade.
-
----
-
-# 414. Regras de campo obrigatório por tipo
-
-Futuramente, um tipo de atividade pode exigir obra.
-
-Não é regra global.
-
----
-
-# 415. Configuração futura
-
-Exemplo:
-
-```text
-Tipo: Solicitação de material de obra
-obra obrigatória = sim
-```
-
-Não precisa no D0.
-
----
-
-# 416. Tipos de atividade
-
-Ajudam inteligência.
-
-Mas não devem bloquear criação por excesso de configuração.
-
----
-
-# 417. Tipo genérico
-
-Pode existir um tipo:
-
-```text
-Outros
-```
-
-no início.
-
----
-
-# 418. Governança
-
-Com o tempo, tipos devem ser consolidados para análise.
-
----
-
-# 419. Status de D0 das tabelas
-
-Legenda:
-
-```text
-OBRIGATÓRIA
-RECOMENDADA
-FUTURA
-PENDENTE DE DECISÃO
-```
-
 ---
-
-# 420. Matriz de prioridade
-
-| Tabela | Prioridade D0 |
-|---|---|
-| core.organizacoes | OBRIGATÓRIA |
-| core.empresas | OBRIGATÓRIA |
-| core.usuarios | OBRIGATÓRIA |
-| core.setores | OBRIGATÓRIA |
-| core.usuario_setores | OBRIGATÓRIA |
-| acessos.grupos_acoes | OBRIGATÓRIA |
-| acessos.acoes | OBRIGATÓRIA |
-| acessos.perfis | OBRIGATÓRIA |
-| acessos.perfil_acoes | OBRIGATÓRIA |
-| acessos.escopos | OBRIGATÓRIA |
-| acessos.usuario_perfis | OBRIGATÓRIA |
-| acessos.usuario_acoes | RECOMENDADA |
-| cadastros.obras | OBRIGATÓRIA |
-| cadastros.centros_custo | OBRIGATÓRIA |
-| cadastros.clientes | PENDENTE DE DECISÃO |
-| produtividade.atividades | OBRIGATÓRIA |
-| produtividade.tarefas | OBRIGATÓRIA |
-| produtividade.tarefa_executores | OBRIGATÓRIA |
-| produtividade.tarefa_dependencias | RECOMENDADA |
-| produtividade.sessoes_tempo | OBRIGATÓRIA |
-| produtividade.passagens_setor | OBRIGATÓRIA |
-| produtividade.fila_itens | OBRIGATÓRIA |
-| produtividade.fila_historico_posicoes | OBRIGATÓRIA |
-| produtividade.devolucoes | OBRIGATÓRIA |
-| produtividade.bloqueios | OBRIGATÓRIA |
-| produtividade.prazos_historico | OBRIGATÓRIA |
-| produtividade.escalonamentos | OBRIGATÓRIA |
-| produtividade.escalonamento_destinatarios | RECOMENDADA |
-| comunicacao.conversas | OBRIGATÓRIA |
-| comunicacao.mensagens | OBRIGATÓRIA |
-| comunicacao.participantes | RECOMENDADA |
-| comunicacao.mencoes | OBRIGATÓRIA |
-| comunicacao.notificacoes | OBRIGATÓRIA |
-| comunicacao.preferencias_notificacao | RECOMENDADA |
-| configuracoes.tipos_atividade | OBRIGATÓRIA |
-| configuracoes.tipos_tarefa | RECOMENDADA |
-| configuracoes.motivos_devolucao | OBRIGATÓRIA |
-| configuracoes.motivos_bloqueio | OBRIGATÓRIA |
-| configuracoes.fluxos_modelo | RECOMENDADA |
-| configuracoes.fluxo_tarefas_modelo | RECOMENDADA |
-| configuracoes.fluxo_dependencias_modelo | FUTURA/RECOMENDADA |
-| configuracoes.regras_notificacao | RECOMENDADA |
-| configuracoes.regras_escalonamento | OBRIGATÓRIA |
-| auditoria.eventos | OBRIGATÓRIA |
-
----
-
-# 421. Sequência recomendada de implementação
 
-## Etapa 1 — Tenant e segurança
+## 103. Etapa 2 — Setores e segurança
 
 ```text
-organizações
-empresas
-usuários
 setores
-usuário-setores
-ações
+usuario_setores
+grupos_acoes
+acoes
 perfis
+perfil_acoes
 escopos
-RLS
+usuario_perfis
+usuario_acoes
+```
+
+Implementar UI simples de marcar/desmarcar e consulta de permissão efetiva.
+
+---
+
+## 104. Etapa 3 — Cadastros de contexto
+
+```text
+obras
+centros_custo
 ```
 
 ---
 
-# 422. Etapa 2 — Núcleo operacional
+## 105. Etapa 4 — Atividades e tarefas
 
 ```text
 atividades
 tarefas
-executores
+tarefa_executores
 ```
 
 ---
 
-# 423. Etapa 3 — Tempo e fluxo
+## 106. Etapa 5 — Tempo e movimentações
 
 ```text
-sessões
-passagens de setor
-dependências
+sessoes_tempo
+passagens_setor
+dependencias
 ```
 
 ---
 
-# 424. Etapa 4 — Filas
+## 107. Etapa 6 — Filas
 
 ```text
 fila_itens
-histórico de posição
+fila_historico_posicoes
 ```
 
 ---
 
-# 425. Etapa 5 — Prazo, devolução e bloqueio
+## 108. Etapa 7 — Devoluções, bloqueios e prazos
 
 ```text
-prazos
-devoluções
+devolucoes
 bloqueios
+prazos_historico
 ```
 
 ---
 
-# 426. Etapa 6 — Escalonamento
+## 109. Etapa 8 — Escalonamento e notificação
 
 ```text
 escalonamentos
-destinatários
-regras
+notificacoes
 ```
 
 ---
 
-# 427. Etapa 7 — Comunicação
+## 110. Etapa 9 — Comunicação contextual
 
 ```text
 conversas
 mensagens
-menções
-notificações
+participantes
+mencoes
 ```
 
 ---
 
-# 428. Etapa 8 — Modelos de fluxo
+## 111. Etapa 10 — Métricas
 
-```text
-fluxos_modelo
-tarefas_modelo
-dependências_modelo
-```
+Criar consultas e views sobre dados já confiáveis.
+
+Não começar pelo dashboard.
 
 ---
 
-# 429. Etapa 9 — Métricas
+# PARTE W — TESTES DE ACEITE DO BANCO
 
-Criar views/consultas usando os dados reais.
+## 112. Tenant
 
----
-
-# 430. Não começar por dashboard
-
-Primeiro:
-
-```text
-dados corretos.
-```
+- usuário da Organização A não lê registro da Organização B;
+- FK não permite cruzar objetos de tenants distintos;
+- manipular IDs no frontend não rompe isolamento.
 
 ---
 
-# 431. Não começar por IA
+## 113. Autorizações
 
-Primeiro:
-
-```text
-histórico confiável.
-```
-
----
-
-# 432. Critérios para considerar o banco D0 funcional
-
-O banco precisa permitir:
-
-```text
-[ ] criar organização
-[ ] criar empresa
-[ ] criar usuário
-[ ] criar setor
-[ ] vincular usuário a setor
-[ ] configurar perfil
-[ ] configurar ação
-[ ] restringir por escopo
-[ ] criar atividade
-[ ] definir dono
-[ ] criar tarefas
-[ ] atribuir vários executores
-[ ] mover entre setores
-[ ] criar dependências simples
-[ ] controlar fila
-[ ] mostrar posição exata
-[ ] registrar histórico da posição
-[ ] registrar sessões de tempo
-[ ] registrar devolução com motivo
-[ ] registrar bloqueio
-[ ] negociar prazo
-[ ] escalar conflito
-[ ] conversar dentro da atividade/tarefa
-[ ] gerar notificações
-[ ] registrar auditoria
-```
+- perfil pode ser criado sem alterar código;
+- ações podem ser marcadas/desmarcadas rapidamente;
+- usuário pode possuir vários perfis;
+- perfil pode ser atribuído em escopos diferentes;
+- concessão direta adiciona exceção;
+- sem concessão válida, acesso é negado;
+- origem da permissão é consultável;
+- alteração fica auditada.
 
 ---
 
-# 433. Critérios de qualidade
+## 114. Setores
 
-Além de funcionar, o banco deve:
-
-```text
-[ ] impedir cruzamento de organização
-[ ] preservar histórico
-[ ] impedir duplicidades críticas
-[ ] impedir sessões simultâneas indevidas
-[ ] impedir relações inválidas
-[ ] manter integridade referencial
-[ ] possuir índices principais
-[ ] possuir RLS
-```
+- usuário participa de vários setores;
+- participação não concede acesso sozinha;
+- setor pode ser inativado sem apagar histórico;
+- gestor pode existir sem receber automaticamente todas as ações.
 
 ---
 
-# 434. Decisões consolidadas neste documento
+## 115. Atividade e tarefa
 
-## Schemas
+- uma atividade possui um dono;
+- tarefa possui setor responsável;
+- tarefa pode ter vários executores;
+- atividade pode existir sem obra;
+- atividade pode existir sem centro de custo;
+- obra e centro de custo podem coexistir.
 
-Serão utilizados:
+---
 
-```text
-core
-acessos
-cadastros
-produtividade
-comunicacao
-configuracoes
-auditoria
-```
+## 116. Tempo
 
-## Tenant
+- sessões somam horas-homem corretamente;
+- tempo corrido é diferente de horas-homem;
+- correção manual fica auditada;
+- sessão inválida é bloqueada.
 
-- organização é o limite principal;
-- empresas existem dentro da organização;
-- dados não cruzam organizações.
+---
 
-## Usuários e setores
+## 117. Fila
 
+- posição própria é consultável;
+- histórico registra todas as mudanças;
+- reordenação é transacional;
+- responsável externo não recebe detalhes de outras demandas sem autorização.
+
+---
+
+## 118. Prazo
+
+- prazo solicitado não é sobrescrito silenciosamente;
+- prazo comprometido é separado;
+- proposta fica registrada;
+- aceitação registra responsável e data;
+- recusa dispara escalonamento conforme regra.
+
+---
+
+## 119. Comunicação
+
+- conversa está vinculada a atividade/tarefa;
+- usuário sem acesso ao objeto não ganha acesso pela mensagem;
+- mensagem não altera prazo automaticamente.
+
+---
+
+## 120. Notificações
+
+- mudança de posição gera registro interno correspondente;
+- conclusão notifica dono da atividade;
+- preferências de canal não apagam histórico obrigatório.
+
+---
+
+# PARTE X — DECISÕES CONSOLIDADAS
+
+## 121. Tenant e estrutura
+
+- organização é tenant;
 - usuário pertence a uma organização;
+- organização pode possuir várias empresas;
+- setores são dinâmicos;
 - usuário pode participar de vários setores;
-- setor é configurável;
-- participação não equivale a autorização.
-
-## Autorizações
-
-- ações são dinâmicas;
-- perfis agrupam ações;
-- perfis são atribuídos dentro de escopos;
-- concessão direta pode existir;
-- negação por padrão;
-- RLS como última barreira.
-
-## Cadastros
-
-- obras e centros de custo são separados;
-- obra é opcional na atividade;
-- centro de custo é opcional;
-- ambos podem coexistir;
-- departamentos e área de negócio ficam fora do D0.
-
-## Atividades
-
-- um único dono;
-- empresa obrigatória;
-- contexto operacional opcional;
-- prazo solicitado separado de comprometido;
-- histórico preservado.
-
-## Tarefas
-
-- pertencem a atividade;
-- podem possuir vários executores;
-- podem mudar de setor;
-- podem ter dependências;
-- podem ser devolvidas;
-- possuem tempo próprio.
-
-## Tempo
-
-- sessões por usuário;
-- uma sessão ativa por usuário no D0;
-- origem automática/manual distinguível;
-- horas-homem derivadas.
-
-## Fluxo
-
-- passagens por setor são registradas;
-- múltiplas passagens pelo mesmo setor permitidas;
-- `setor_atual_id` é apenas estado atual.
-
-## Fila
-
-- fila por setor;
-- ordem armazenada;
-- posição derivada;
-- histórico de posição persistido;
-- reordenação auditada.
-
-## Devolução
-
-- motivo obrigatório;
-- histórico preservado;
-- permite medir correção e retrabalho.
-
-## Prazo
-
-- histórico separado;
-- proposta não altera compromisso antes de aceite;
-- recusa pode escalar.
-
-## Escalonamento
-
-- entidade própria;
-- múltiplos destinatários;
-- decisão final registrada.
-
-## Comunicação
-
-- conversa ligada à atividade ou tarefa;
-- mensagem não altera estado oficial;
-- notificações apontam para eventos.
-
-## Configurações
-
-- tipos;
-- motivos;
-- modelos;
-- regras;
-- configuráveis por organização.
-
-## Auditoria
-
-- evento imutável;
-- não substitui tabelas de domínio;
-- registra antes/depois quando relevante.
+- participação estrutural e autorização são separadas.
 
 ---
 
-# 435. Decisões ainda pendentes
+## 122. Segurança
 
-Ainda precisam ser fechadas antes ou durante implementação:
-
-1. catálogo final de status internos;
-2. definição formal de primeira ação;
-3. modelagem definitiva de clientes/entidades;
-4. se `setor.empresa_id` continuará obrigatório em todas as organizações;
-5. detalhes do calendário útil;
-6. comportamento de tarefa bloqueada na fila;
-7. obrigatoriedade de fluxo modelo no D0;
-8. política de exclusão de mensagens;
-9. estrutura de anexos;
-10. canais externos de notificação;
-11. granularidade final dos escopos;
-12. política de acesso temporário;
-13. uso de FK composta por `organizacao_id`;
-14. quais operações críticas serão RPC/função transacional;
-15. catálogo inicial de ações.
+- ações representam capacidades reais da LPS;
+- cliente não cria comportamento inexistente apenas cadastrando uma string;
+- perfis são configuráveis;
+- ações são marcadas/desmarcadas nos perfis;
+- perfil pode ser atribuído em escopo;
+- concessões diretas cobrem exceções;
+- empresa, setor, obra e centro de custo usam o mesmo motor de escopo;
+- D0 trabalha com concessões positivas e negação por padrão;
+- origem da permissão é explicável;
+- backend e banco validam segurança;
+- alterações de segurança são auditadas.
 
 ---
 
-# 436. Pontos que não devem ser decididos pelo banco
+## 123. Atividades e tarefas
 
-O banco não deve decidir:
-
-- se usuário acha tarefa importante;
-- se fluxo é bom;
-- se um colaborador é produtivo;
-- se setor é lento;
-- se precisa contratar pessoa;
-- se recomendação de IA deve ser aceita.
-
-O banco registra fatos.
-
-A camada de produto e gestão interpreta.
+- atividade é o resultado completo;
+- um único dono responde pelo resultado;
+- tarefa é passo executável;
+- tarefa possui setor responsável;
+- tarefa pode ter vários executores;
+- atividade atravessa setores por suas tarefas e movimentações.
 
 ---
 
-# 437. Regra de ouro do banco
+## 124. Fila
 
-> **Se um fato operacional será importante para entender o processo amanhã, ele precisa ser registrado corretamente hoje.**
-
----
-
-# 438. Regra de ouro da segurança
-
-> **Nenhuma autorização pode depender apenas da interface, e nenhuma relação pode cruzar organizações.**
+- solicitante vê posição exata própria;
+- não vê detalhes das demais demandas sem autorização;
+- gestor e pessoas autorizadas podem reordenar;
+- cada mudança de posição é registrada;
+- histórico de posição é fonte para métricas e transparência.
 
 ---
 
-# 439. Regra de ouro da auditoria
+## 125. Prazo
 
-> **Estado atual responde “como está”; histórico responde “como chegou aqui”. A LPS precisa dos dois.**
-
----
-
-# 440. Regra de ouro da inteligência
-
-> **O banco do D0 deve ser construído para gerar dados confiáveis, não para fingir que a inteligência futura já existe.**
+- prazo solicitado e comprometido são diferentes;
+- executor pode propor novo prazo;
+- dono aceita ou recusa;
+- recusa gera escalonamento configurado;
+- histórico preserva propostas e decisões.
 
 ---
 
-# 441. Regra de ouro da simplicidade
+## 126. Tempo e auditoria
 
-> **Não criar estrutura para problemas que ainda não existem.**
+- medir tempo real é central;
+- horas-homem somam sessões individuais;
+- espera, fila, bloqueio e trabalho não devem ser confundidos;
+- o banco guarda histórico suficiente para reconstruir a trajetória do trabalho.
 
 ---
 
-# 442. Estrutura resumida
+## 127. Comunicação e IA futura
+
+- D0 possui conversa contextual de atividade/tarefa;
+- não possui canais livres;
+- mensagem não vira mudança oficial sem confirmação estruturada;
+- futura inteligência artificial usa dados estruturados e histórico;
+- D0 coleta dados, não tenta adivinhar tudo.
+
+---
+
+# PARTE Y — QUESTÕES PENDENTES
+
+## 128. Pontos para implementação decidir
+
+- cargo/função organizacional entra no D0 ou D1;
+- modelo exato para múltiplos gestores de setor;
+- estrutura final de `escopos` combinados;
+- necessidade de escopo por perfil versus escopo por atribuição em cenários avançados;
+- necessidade futura de DENY explícito;
+- modelo definitivo de cliente/pessoa/fornecedor;
+- estratégia de posição de fila;
+- política final de simultaneidade de timer;
+- mecanismo de autenticação multifator;
+- volume que justificará partições/materialized views;
+- modelo futuro de analytics/warehouse.
+
+Esses pontos não mudam a arquitetura central.
+
+---
+
+# PARTE Z — RESUMO DA ARQUITETURA
+
+## 129. Estrutura resumida
 
 ```text
-core
-├── organizacoes
-├── empresas
-├── usuarios
-├── setores
-└── usuario_setores
+core.organizacoes
+└── core.empresas
+└── core.usuarios
+└── core.setores
+    └── core.usuario_setores
 
-acessos
-├── grupos_acoes
-├── acoes
-├── perfis
-├── perfil_acoes
-├── escopos
-├── usuario_perfis
-└── usuario_acoes
+acessos.grupos_acoes
+└── acessos.acoes
 
-cadastros
-├── obras
-└── centros_custo
+acessos.perfis
+└── acessos.perfil_acoes
 
-produtividade
-├── atividades
-├── tarefas
-├── tarefa_executores
-├── tarefa_dependencias
-├── sessoes_tempo
-├── passagens_setor
-├── fila_itens
-├── fila_historico_posicoes
-├── devolucoes
-├── bloqueios
-├── prazos_historico
-├── escalonamentos
-├── escalonamento_destinatarios
-└── escalonamento_eventos
+acessos.escopos
 
-comunicacao
-├── conversas
-├── mensagens
-├── participantes
-├── mencoes
-├── notificacoes
-└── preferencias_notificacao
+core.usuarios
+├── acessos.usuario_perfis
+└── acessos.usuario_acoes
 
-configuracoes
-├── tipos_atividade
-├── tipos_tarefa
-├── motivos_devolucao
-├── motivos_bloqueio
-├── fluxos_modelo
-├── fluxo_tarefas_modelo
-├── fluxo_dependencias_modelo
-├── regras_notificacao
-└── regras_escalonamento
+cadastros.obras
+cadastros.centros_custo
 
-auditoria
-└── eventos
+produtividade.atividades
+└── produtividade.tarefas
+    ├── produtividade.tarefa_executores
+    ├── produtividade.tarefa_dependencias
+    ├── produtividade.sessoes_tempo
+    └── produtividade.fila_itens
+
+produtividade.passagens_setor
+produtividade.fila_historico_posicoes
+produtividade.devolucoes
+produtividade.bloqueios
+produtividade.prazos_historico
+produtividade.escalonamentos
+
+comunicacao.conversas
+└── comunicacao.mensagens
+
+comunicacao.notificacoes
+
+auditoria.eventos
 ```
 
 ---
 
-# 443. Fluxo de dados resumido
+## 130. Regra de ouro do banco
 
-```text
-USUÁRIO AUTENTICA
-↓
-RLS IDENTIFICA ORGANIZAÇÃO
-↓
-AUTORIZAÇÃO VALIDA AÇÃO + ESCOPO
-↓
-USUÁRIO EXECUTA AÇÃO
-↓
-TABELA DE DOMÍNIO É ALTERADA
-↓
-HISTÓRICO ESPECÍFICO É REGISTRADO
-↓
-AUDITORIA REGISTRA O EVENTO
-↓
-NOTIFICAÇÃO É GERADA QUANDO APLICÁVEL
-↓
-DADOS FICAM DISPONÍVEIS PARA MÉTRICAS
-↓
-FUTURAMENTE ALIMENTAM INTELIGÊNCIA
-```
+> **A LPS deve armazenar fatos com identidade, contexto, tempo e autoria suficientes para operar hoje, auditar amanhã e aprender no futuro.**
 
 ---
 
-# 444. Encerramento
+## 131. Regra de ouro da segurança
 
-O banco da LPS precisa ser suficientemente robusto para preservar o histórico e suficientemente simples para não travar o desenvolvimento.
-
-O D0 não precisa possuir:
-
-- ERP completo;
-- dezenas de módulos;
-- data warehouse;
-- IA;
-- benchmark;
-- modelagem infinita de organizações.
-
-Ele precisa representar muito bem:
-
-```text
-quem
-```
-
-```text
-o quê
-```
-
-```text
-onde
-```
-
-```text
-quando
-```
-
-```text
-quanto tempo
-```
-
-```text
-em qual fila
-```
-
-```text
-qual prazo
-```
-
-```text
-por onde passou
-```
-
-```text
-por que voltou
-```
-
-```text
-quem decidiu
-```
-
-```text
-quando terminou
-```
-
-Se esses fatos forem registrados corretamente, a LPS terá uma base sólida para:
-
-- gestão;
-- auditoria;
-- métricas;
-- gargalos;
-- previsão;
-- recomendação;
-- inteligência.
-
-O banco deve ser consequência da lógica do produto.
-
-Não o contrário.
+> **O cliente configura usuários, setores, perfis e escopos; a LPS mantém o mesmo motor de autorização para todos, sem criar exceções de código por pessoa, setor ou cliente.**
 
 ---
 
-# 445. Controle de versão
+## 132. Controle de versão
 
 | Versão | Descrição |
 |---|---|
-| 1.0 | Consolidação da arquitetura conceitual do banco de dados da LPS com schemas, tabelas, relacionamentos, regras, índices, auditoria e segurança |
+| 1.0 | Estrutura inicial do banco da LPS |
+| 2.0 | Revisão da arquitetura de autorizações, consolidação do motor genérico de escopos, UX de perfis/ações e alinhamento com atividades, filas, prazos, comunicação, auditoria e aprendizado futuro |
+

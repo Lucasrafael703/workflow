@@ -134,7 +134,7 @@
                 {% if conflict.status == "ABERTO" %}
                 <div class="message message--error" style="margin-top:12px">
                     <strong>Prazo em conflito</strong> — aberto em {{ conflict.opened_at|date:"d/m/Y H:i" }}.
-                    {% if perms.activities.can_resolve_deadline_conflict %}
+                    {% if can_resolve_conflict %}
                     <a href="{% url 'conflict-resolve' conflict.pk %}" class="btn">Registrar decisão</a>
                     {% else %}
                     <div class="muted">Aguardando decisão dos responsáveis.</div>

@@ -79,7 +79,7 @@
                 <li>
                     <a href="{% url 'task-detail' conflict.task.pk %}">{{ conflict.task.title }}</a>
                     <div class="muted">Aberto em {{ conflict.opened_at|date:"d/m/Y H:i" }}</div>
-                    {% if perms.activities.can_resolve_deadline_conflict %}
+                    {% if can_resolve_conflicts %}
                     <a href="{% url 'conflict-resolve' conflict.pk %}" class="btn">Registrar decisão</a>
                     {% endif %}
                 </li>

@@ -23,7 +23,8 @@
     {% include "activities/_form_fields.html" %}
     <p class="muted">
         “Setores em que atua” define onde a pessoa trabalha e para onde as tarefas do setor
-        são notificadas. “Perfis de acesso” define o que ela pode fazer. São coisas diferentes.
+        são notificadas — não concede autorização. O que ela pode fazer é definido em
+        {% if instance %}<a href="{% url 'user-access' instance.pk %}">Acessos</a>{% else %}Acessos, após salvar{% endif %}.
     </p>
     <div class="actions-row">
         <button type="submit" class="btn btn--primary">Salvar</button>

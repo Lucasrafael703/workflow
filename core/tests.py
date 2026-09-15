@@ -65,15 +65,22 @@ class UserSectorServiceTests(TestCase):
         membership = UserSector.objects.get(user=self.user, sector=self.sector)
         self.assertIsNotNone(membership.removed_at)
 
-    def test_readding_reactivates_instead_of_duplicating(self):
-        """O UniqueConstraint é incondicional: precisa reativar a linha existente."""
+    def test_readding_opens_a_new_period_preserving_history(self):
+        """Sair e voltar gera um novo período; quando a pessoa saiu continua registrado."""
         UserSectorService.add(self.user, self.sector)
         UserSectorService.remove(self.user, self.sector)
         UserSectorService.add(self.user, self.sector)
 
-        self.assertEqual(UserSector.objects.filter(user=self.user, sector=self.sector).count(), 1)
-        membership = UserSector.objects.get(user=self.user, sector=self.sector)
-        self.assertIsNone(membership.removed_at)
+        memberships = UserSector.objects.filter(user=self.user, sector=self.sector)
+        self.assertEqual(memberships.count(), 2)
+        self.assertEqual(memberships.filter(removed_at__isnull=True).count(), 1)
+        self.assertEqual(memberships.filter(removed_at__isnull=False).count(), 1)
+
+    def test_manager_role_is_recorded(self):
+        """Ser gestor é vínculo estrutural, não autorização (Regras 05 §10)."""
+        UserSectorService.add(self.user, self.sector, role=UserSector.Role.GESTOR)
+        membership = UserSector.objects.get(user=self.user, sector=self.sector, removed_at__isnull=True)
+        self.assertEqual(membership.role, UserSector.Role.GESTOR)
 
     def test_removing_someone_who_is_not_a_member_fails(self):
         with self.assertRaises(CadastroError):
