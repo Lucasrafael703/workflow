@@ -1,0 +1,261 @@
+/* ==========================================================================
+   Tela de entrada
+   Dividida em dois: à esquerda a marca e o que a LPS entrega; à direita o
+   formulário, isolado em um cartão claro. Login limpo e sem distração.
+   ========================================================================== */
+
+.login-page { min-height: 100vh; background: var(--bg); }
+
+.login {
+    display: grid;
+    grid-template-columns: 1.05fr 1fr;
+    min-height: 100vh;
+}
+
+/* --- Painel da marca -------------------------------------------------- */
+
+.login__brand {
+    position: relative;
+    display: flex;
+    align-items: center;
+    padding: 56px 60px;
+    overflow: hidden;
+    background:
+        linear-gradient(150deg, #12294a 0%, #16345c 42%, #1b4d8f 100%);
+    color: #fff;
+}
+
+/* Planos de vidro sugerindo a fachada do prédio, como no logotipo.
+   São formas geométricas em CSS — sem imagem para carregar. */
+.login__brand::before,
+.login__brand::after {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+}
+.login__brand::before {
+    width: 74%;
+    height: 150%;
+    right: -26%;
+    top: -18%;
+    background: linear-gradient(200deg, rgba(97, 165, 242, .30), rgba(97, 165, 242, 0) 62%);
+    transform: rotate(14deg);
+}
+.login__brand::after {
+    width: 46%;
+    height: 120%;
+    right: 4%;
+    bottom: -32%;
+    background: linear-gradient(180deg, rgba(120, 180, 250, .22), rgba(27, 98, 196, 0) 70%);
+    transform: rotate(-9deg);
+}
+
+.login__brand-inner { position: relative; z-index: 1; max-width: 460px; }
+
+.login__logo { margin-bottom: 44px; }
+
+.login__headline {
+    font-size: 40px;
+    line-height: 1.16;
+    font-weight: 800;
+    letter-spacing: -.025em;
+    margin: 0 0 18px;
+}
+.login__headline span { color: var(--brand-blue-light); }
+
+.login__lead {
+    font-size: 16px;
+    line-height: 1.55;
+    color: #bed3ea;
+    margin: 0 0 40px;
+    max-width: 380px;
+}
+
+.login__features { list-style: none; padding: 0; margin: 0 0 56px; }
+.login__features li {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+.login__features strong { display: block; font-size: 15px; font-weight: 700; }
+.login__features span span,
+.login__features li > span:last-child { color: #bed3ea; font-size: 13.5px; line-height: 1.45; }
+.login__features strong { color: #fff; }
+
+.login__feature-icon {
+    width: 44px; height: 44px;
+    flex: 0 0 44px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, .10);
+    border: 1px solid rgba(255, 255, 255, .14);
+    color: var(--brand-blue-light);
+}
+.login__feature-icon svg { width: 20px; height: 20px; }
+
+.login__tagline {
+    font-size: 11.5px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: #8fa9c8;
+    line-height: 1.85;
+}
+.login__rule {
+    display: block;
+    width: 38px; height: 3px;
+    border-radius: 2px;
+    background: var(--brand-blue-light);
+    margin-bottom: 18px;
+}
+
+/* --- Painel do formulário --------------------------------------------- */
+
+.login__panel {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 40px;
+    background: var(--bg);
+}
+
+.login__card {
+    width: 100%;
+    max-width: 420px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 40px 38px;
+    box-shadow: 0 18px 50px rgba(18, 41, 74, .10);
+}
+
+.login__card-logo { margin-bottom: 30px; }
+
+.login__title {
+    font-size: 25px;
+    font-weight: 800;
+    letter-spacing: -.02em;
+    margin: 0 0 6px;
+    color: var(--text);
+}
+.login__subtitle { color: var(--muted); margin: 0 0 28px; font-size: 14px; }
+
+/* Campo com ícone à esquerda e, na senha, botão de revelar à direita */
+.field { position: relative; display: flex; align-items: center; }
+.field__icon {
+    position: absolute;
+    left: 13px;
+    display: inline-flex;
+    color: var(--muted);
+    pointer-events: none;
+}
+.field__icon svg { width: 17px; height: 17px; }
+
+.login__card .field input {
+    width: 100%;
+    padding: 13px 14px 13px 42px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    font: inherit;
+    font-size: 14px;
+    background: var(--surface);
+    color: var(--text);
+}
+.login__card .field input::placeholder { color: var(--muted); }
+.login__card .field input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(27, 98, 196, .13);
+}
+.login__card .field:has(input[data-password]) input { padding-right: 44px; }
+
+.field__toggle {
+    position: absolute;
+    right: 8px;
+    width: 30px; height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: none;
+    border-radius: 6px;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0;
+}
+.field__toggle:hover { color: var(--text-2); background: var(--surface-alt); }
+.field__toggle svg { width: 17px; height: 17px; }
+
+.login__card .form-row > label {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 7px;
+}
+
+.login__submit { margin-top: 22px; }
+.login__submit svg { width: 17px; height: 17px; }
+
+.login__divider {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 28px 0 14px;
+    color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: .08em;
+}
+.login__divider::before,
+.login__divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+
+.login__motto {
+    text-align: center;
+    color: var(--muted);
+    font-size: 12.5px;
+    margin: 0;
+}
+
+.login__version {
+    position: absolute;
+    right: 24px;
+    bottom: 18px;
+    color: var(--muted);
+    font-size: 11.5px;
+    margin: 0;
+}
+
+/* --- Responsivo -------------------------------------------------------- */
+
+@media (max-width: 900px) {
+    .login { grid-template-columns: 1fr; }
+
+    /* No celular o formulário vem primeiro — entrar é o que a pessoa veio
+       fazer. A marca vira um rodapé curto, abaixo do cartão. */
+    .login__panel { order: 1; padding: 30px 20px 34px; }
+    .login__brand { order: 2; padding: 32px 26px 40px; align-items: flex-start; }
+
+    .login__logo { margin-bottom: 20px; }
+    .login__headline { font-size: 25px; }
+    .login__lead { margin-bottom: 0; font-size: 14.5px; }
+    .login__features,
+    .login__tagline { display: none; }
+
+    .login__card { padding: 30px 24px; box-shadow: var(--shadow); }
+    .login__card-logo { display: none; } /* a marca já aparece logo abaixo */
+    .login__version { position: static; margin-top: 20px; text-align: center; }
+}
+
+@media (max-width: 420px) {
+    .login__card { padding: 26px 18px; border-radius: 14px; }
+    .login__title { font-size: 22px; }
+}

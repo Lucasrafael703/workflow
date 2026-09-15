@@ -5,57 +5,136 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Entrar — LPS</title>
     <link rel="stylesheet" href="{% static 'css/app.css' %}">
-    <style>
-        /* Login limpo, profissional e sem distração (Benchmark §5). */
-        body { background: var(--nav-bg); display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
-        .login { width: 100%; max-width: 380px; }
-        .login__brand { text-align: center; margin-bottom: 22px; color: #fff; }
-        .login__brand .mark {
-            width: 46px; height: 46px; border-radius: 13px; background: var(--primary);
-            display: inline-flex; align-items: center; justify-content: center;
-            font-weight: 800; font-size: 17px; margin-bottom: 12px;
-        }
-        .login__brand h1 { font-size: 20px; color: #fff; }
-        .login__brand p { color: #9fb2c7; margin: 4px 0 0; font-size: 13px; }
-        .login__card { background: var(--surface); border-radius: 14px; padding: 26px 24px; box-shadow: var(--shadow-lg); }
-        .login__foot { text-align: center; color: #7b8fa6; font-size: 12px; margin-top: 18px; }
-    </style>
+    <link rel="stylesheet" href="{% static 'css/login.css' %}">
 </head>
-<body>
+<body class="login-page">
+{% include "_icons.html" %}
+
 <div class="login">
-    <div class="login__brand">
-        <div class="mark">LPS</div>
-        <h1>Bem-vindo de volta</h1>
-        <p>Entre para ver o que precisa da sua atenção.</p>
-    </div>
-
-    <div class="login__card">
-        {% if messages %}
-        <ul class="messages">
-            {% for message in messages %}
-            <li class="message message--{{ message.tags }}">{{ message }}</li>
-            {% endfor %}
-        </ul>
-        {% endif %}
-
-        <form method="post">
-            {% csrf_token %}
-            {% for field in form %}
-            <div class="form-row">
-                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-                {{ field }}
-                {% if field.errors %}<ul class="errorlist">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+    {# ----- Painel da marca: o que a LPS entrega ----- #}
+    <aside class="login__brand">
+        <div class="login__brand-inner">
+            <div class="login__logo">
+                {% include "_logo.html" with variant="light" size=54 wordmark=True %}
             </div>
-            {% endfor %}
-            {% if form.non_field_errors %}
-            <ul class="errorlist">{% for e in form.non_field_errors %}<li>{{ e }}</li>{% endfor %}</ul>
-            {% endif %}
-            <input type="hidden" name="next" value="{{ next }}">
-            <button type="submit" class="btn btn--primary btn--block btn--lg">Entrar</button>
-        </form>
-    </div>
 
-    <p class="login__foot">LPS — gestão de trabalho</p>
+            <h1 class="login__headline">
+                Gestão de atividades,<br>
+                <span>filas e gargalos</span>
+            </h1>
+            <p class="login__lead">
+                Mais visibilidade, mais controle e mais resultados para a sua operação.
+            </p>
+
+            <ul class="login__features">
+                <li>
+                    <span class="login__feature-icon">{% include "_icon.html" with name="chart" %}</span>
+                    <span>
+                        <strong>Acompanhe</strong>
+                        o andamento das atividades
+                    </span>
+                </li>
+                <li>
+                    <span class="login__feature-icon">{% include "_icon.html" with name="queue" %}</span>
+                    <span>
+                        <strong>Identifique</strong>
+                        filas e gargalos
+                    </span>
+                </li>
+                <li>
+                    <span class="login__feature-icon">{% include "_icon.html" with name="check" %}</span>
+                    <span>
+                        <strong>Tome decisões</strong>
+                        com base em dados reais
+                    </span>
+                </li>
+            </ul>
+
+            <div class="login__tagline">
+                <span class="login__rule"></span>
+                Processos mais fluidos.<br>Resultados mais grandes.
+            </div>
+        </div>
+    </aside>
+
+    {# ----- Formulário ----- #}
+    <main class="login__panel">
+        <div class="login__card">
+            <div class="login__card-logo">
+                {% include "_logo.html" with size=44 wordmark=True %}
+            </div>
+
+            <h2 class="login__title">Bem-vindo de volta</h2>
+            <p class="login__subtitle">Acesse sua conta para continuar.</p>
+
+            {% if messages %}
+            <ul class="messages">
+                {% for message in messages %}
+                <li class="message message--{{ message.tags }}">{{ message }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if form.non_field_errors %}
+            <ul class="messages">
+                {% for error in form.non_field_errors %}
+                <li class="message message--error">{{ error }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            <form method="post" novalidate>
+                {% csrf_token %}
+
+                <div class="form-row">
+                    <label for="{{ form.username.id_for_label }}">{{ form.username.label }}</label>
+                    <div class="field">
+                        <span class="field__icon">{% include "_icon.html" with name="users" %}</span>
+                        <input type="text" name="{{ form.username.html_name }}"
+                               id="{{ form.username.id_for_label }}"
+                               value="{{ form.username.value|default:'' }}"
+                               placeholder="Seu usuário"
+                               autocomplete="username" autofocus required>
+                    </div>
+                    {% if form.username.errors %}
+                    <ul class="errorlist">{% for e in form.username.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+                    {% endif %}
+                </div>
+
+                <div class="form-row">
+                    <label for="{{ form.password.id_for_label }}">{{ form.password.label }}</label>
+                    <div class="field">
+                        <span class="field__icon">{% include "_icon.html" with name="shield" %}</span>
+                        <input type="password" name="{{ form.password.html_name }}"
+                               id="{{ form.password.id_for_label }}"
+                               placeholder="Sua senha"
+                               autocomplete="current-password" required
+                               data-password>
+                        <button type="button" class="field__toggle" data-password-toggle
+                                aria-label="Mostrar senha" hidden>
+                            {% include "_icon.html" with name="eye" %}
+                        </button>
+                    </div>
+                    {% if form.password.errors %}
+                    <ul class="errorlist">{% for e in form.password.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+                    {% endif %}
+                </div>
+
+                <input type="hidden" name="next" value="{{ next }}">
+
+                <button type="submit" class="btn btn--primary btn--block btn--lg login__submit">
+                    Entrar {% include "_icon.html" with name="arrow-right" %}
+                </button>
+            </form>
+
+            <div class="login__divider"><span>LPS</span></div>
+            <p class="login__motto">Trabalho organizado. Resultados reais.</p>
+        </div>
+
+        <p class="login__version">v1.0.0</p>
+    </main>
 </div>
+
+<script src="{% static 'js/login.js' %}"></script>
 </body>
 </html>
