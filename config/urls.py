@@ -7,13 +7,11 @@ from django.views.generic import RedirectView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("", RedirectView.as_view(pattern_name="dashboard", permanent=False)),
+    path("", RedirectView.as_view(pattern_name="notification-list", permanent=False)),
     path("accounts/login/", auth_views.LoginView.as_view(template_name="accounts/login.html"), name="login"),
     path("accounts/logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("accounts/", include("accounts.urls")),
-    path("demands/", include("demands.urls")),
     path("notifications/", include("notifications.urls")),
-    path("", include("workflows.urls")),
 ]
 
 if settings.DEBUG:

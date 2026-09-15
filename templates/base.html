@@ -3,18 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Gestão de Processos{% endblock %}</title>
+    <title>{% block title %}LPS{% endblock %}</title>
     <link rel="stylesheet" href="{% static 'css/app.css' %}">
 </head>
 <body>
 {% if user.is_authenticated %}
 <header class="topbar">
-    <div class="topbar__brand"><a href="{% url 'dashboard' %}">Gestão de Processos</a></div>
+    <div class="topbar__brand"><a href="{% url 'notification-list' %}">LPS</a></div>
     <nav class="topbar__nav">
-        <a href="{% url 'dashboard' %}">Dashboard</a>
-        <a href="{% url 'demand-list' %}">Demandas</a>
-        <a href="{% url 'process-list' %}">Processos</a>
-        <a href="{% url 'my-activities' %}">Minhas Atividades</a>
+        <a href="{% url 'profile' %}">Meu perfil</a>
         <a href="{% url 'notification-list' %}">Notificações
             {% if unread_notifications_count %}<span class="badge">{{ unread_notifications_count }}</span>{% endif %}
         </a>

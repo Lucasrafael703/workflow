@@ -9,9 +9,8 @@ class AuditService:
     def log(
         user,
         action,
-        demand=None,
-        process=None,
-        step=None,
+        activity=None,
+        task=None,
         field_name="",
         old_value="",
         new_value="",
@@ -19,9 +18,8 @@ class AuditService:
     ):
         return AuditLog.objects.create(
             user=user,
-            demand=demand,
-            process=process,
-            step=step,
+            activity=activity,
+            task=task,
             action=action,
             field_name=field_name,
             old_value=str(old_value) if old_value is not None else "",

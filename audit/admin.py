@@ -5,9 +5,9 @@ from .models import AuditLog
 
 @admin.register(AuditLog)
 class AuditLogAdmin(admin.ModelAdmin):
-    list_display = ["timestamp", "action", "user", "process", "step", "field_name"]
+    list_display = ["timestamp", "action", "user", "activity", "task", "field_name"]
     list_filter = ["action"]
-    search_fields = ["process__title", "step__name", "user__username"]
+    search_fields = ["activity__title", "task__title", "user__username"]
     readonly_fields = [f.name for f in AuditLog._meta.fields]
 
     def has_add_permission(self, request):
