@@ -1,4 +1,3 @@
-from django.conf import settings
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -12,20 +11,38 @@ def _dedupe(*querysets):
     return set(by_id.values())
 
 
-def resolve_admins():
-    return set(User.objects.filter(groups__name=settings.ADMIN_GROUP_NAME).distinct())
+def resolve_sector_members(sector):
+    """Quem participa operacionalmente do setor (Regras 05 §8)."""
+    if sector is None:
+        return set()
+    return _dedupe(
+        User.objects.filter(
+            sector_memberships__sector=sector,
+            sector_memberships__removed_at__isnull=True,
+            is_active=True,
+        )
+    )
+
+
+def resolve_sector_managers(sector):
+    """Gestores do setor — usados para escalonamento e ciência (Regras 05 §10)."""
+    from accounts.models import UserSector
+
+    if sector is None:
+        return set()
+    return _dedupe(
+        User.objects.filter(
+            sector_memberships__sector=sector,
+            sector_memberships__removed_at__isnull=True,
+            sector_memberships__role=UserSector.Role.GESTOR,
+            is_active=True,
+        )
+    )
 
 
 def resolve_sector_and_admins(sector):
-    """Usuários com participação ativa no setor (accounts.UserSector) + membros
-    do grupo de administradores (settings.ADMIN_GROUP_NAME), sem duplicar.
+    """Destinatários naturais de um evento do setor.
 
-    Retorna sempre um set, para permitir composição com `|` nos chamadores.
+    Retorna sempre um set, para compor com `|` nos chamadores.
     """
-    admins = User.objects.filter(groups__name=settings.ADMIN_GROUP_NAME)
-    if sector is None:
-        return _dedupe(admins)
-    members = User.objects.filter(
-        sector_memberships__sector=sector, sector_memberships__removed_at__isnull=True
-    )
-    return _dedupe(admins, members)
+    return resolve_sector_members(sector) | resolve_sector_managers(sector)

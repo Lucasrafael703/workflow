@@ -22,9 +22,21 @@ urlpatterns = [
     path("configuracoes/", views.SettingsView.as_view(), name="settings"),
     path("permissoes/", views.PermissionMatrixView.as_view(), name="permissions"),
     path("permissoes/<int:pk>/salvar/", views.PermissionUpdateView.as_view(), name="permissions-update"),
-    path("perfis/novo/", views.ProfileGroupCreateView.as_view(), name="profile-group-create"),
-    path("perfis/<int:pk>/", views.ProfileGroupCreateView.as_view(), name="profile-group-edit"),
+    path("perfis/novo/", views.ProfileFormView.as_view(), name="profile-create"),
+    path("perfis/<int:pk>/", views.ProfileFormView.as_view(), name="profile-edit"),
     path("usuarios/", views.UserListView.as_view(), name="user-list"),
     path("usuarios/novo/", views.UserFormView.as_view(), name="user-create"),
     path("usuarios/<int:pk>/", views.UserFormView.as_view(), name="user-edit"),
+    path("usuarios/<int:pk>/acessos/", views.UserAccessView.as_view(), name="user-access"),
+    path(
+        "usuarios/<int:pk>/acessos/<int:assignment_pk>/remover/",
+        views.UserAccessRemoveView.as_view(),
+        name="user-access-remove",
+    ),
+    path("usuarios/<int:pk>/concessoes/", views.UserGrantActionView.as_view(), name="user-grant"),
+    path(
+        "usuarios/<int:pk>/concessoes/<int:grant_pk>/remover/",
+        views.UserGrantRemoveView.as_view(),
+        name="user-grant-remove",
+    ),
 ]

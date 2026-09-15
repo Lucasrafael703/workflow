@@ -10,6 +10,8 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.generic import DetailView, FormView, ListView, TemplateView, View
 
 from audit.models import AuditLog
+from acessos import catalog
+from acessos.services import AuthorizationService
 from core.mixins import ActionRequiredMixin, OrganizationRequiredMixin, user_sectors
 from core.models import Sector
 
@@ -80,44 +82,13 @@ def active_session(user):
     )
 
 
-def may_act_on_task(user, task):
-    """Quem pode agir sobre uma tarefa: quem executa, o dono do resultado,
-    quem participa do setor responsável, ou quem tem ação explícita.
+def can(user, action_key, resource=None):
+    """Atalho de leitura para os templates decidirem o que exibir.
 
-    As Regras separam vínculo (dono/executor/membro do setor) de autorização
-    (ação concedida por perfil) — as duas coisas somam (Regras 05 §215-221).
+    Esconder botão é experiência do usuário, não segurança: a decisão real é
+    refeita na camada de serviço (Regras 05 §42).
     """
-    if task.activity.owner_id == user.id:
-        return True
-    if TaskExecutor.objects.filter(task=task, user=user, removed_at__isnull=True).exists():
-        return True
-    if user_sectors(user).filter(pk=task.sector_id).exists():
-        return True
-    return user.has_perm("activities.can_assign_task") or user.has_perm(
-        "activities.can_view_full_queue"
-    )
-
-
-def assert_may_act_on_task(user, task):
-    if not may_act_on_task(user, task):
-        raise ActivityError("Você não possui acesso para agir sobre esta tarefa.")
-
-
-def may_act_on_activity(user, activity):
-    """Age sobre a atividade quem responde por ela, quem executa alguma de suas
-    tarefas, ou quem tem visão autorizada sobre todas as atividades."""
-    if activity.owner_id == user.id or activity.created_by_id == user.id:
-        return True
-    if TaskExecutor.objects.filter(
-        task__activity=activity, user=user, removed_at__isnull=True
-    ).exists():
-        return True
-    return user.has_perm("activities.can_view_all_activities")
-
-
-def assert_may_act_on_activity(user, activity):
-    if not may_act_on_activity(user, activity):
-        raise ActivityError("Você não possui acesso para agir sobre esta atividade.")
+    return AuthorizationService.can(user, action_key, resource)
 
 
 def pending_items(user, organization):
@@ -137,8 +108,10 @@ def pending_items(user, organization):
         .select_related("task", "task__activity")
         .order_by("-opened_at")
     )
-    if not user.has_perm("activities.can_resolve_deadline_conflict"):
-        conflicts = conflicts.filter(task__activity__owner=user)
+    resolvable = AuthorizationService.accessible_sector_ids(user, catalog.ESCALONAMENTO_RESOLVER)
+    conflicts = conflicts.filter(
+        Q(task__sector_id__in=resolvable) | Q(task__activity__owner=user)
+    )
     return {"proposals": proposals, "conflicts": conflicts}
 
 
@@ -242,7 +215,7 @@ class ActivityListView(OrganizationRequiredMixin, ListView):
                 status__in=[Activity.Status.CONCLUIDA, Activity.Status.CANCELADA],
             )
         elif tab == "todas":
-            if not user.has_perm("activities.can_view_all_activities"):
+            if not can(user, catalog.ATIVIDADE_VISUALIZAR_TODAS):
                 queryset = queryset.filter(owner=user)
         else:
             queryset = queryset.filter(owner=user)
@@ -280,7 +253,7 @@ class ActivityListView(OrganizationRequiredMixin, ListView):
         context["search"] = self.request.GET.get("q", "")
         context["sectors"] = Sector.objects.filter(organization=self.organization, is_active=True)
         context["selected_sector"] = self.request.GET.get("sector", "")
-        context["can_view_all"] = self.request.user.has_perm("activities.can_view_all_activities")
+        context["can_view_all"] = can(self.request.user, catalog.ATIVIDADE_VISUALIZAR_TODAS)
         return context
 
 
@@ -361,9 +334,13 @@ class ActivityDetailView(OrganizationRequiredMixin, DetailView):
                 "owner_changes": activity.owner_changes.select_related(
                     "previous_owner", "new_owner", "changed_by"
                 ),
-                "can_change_owner": self.request.user.has_perm("activities.can_change_owner"),
-                "can_cancel": self.request.user.has_perm("activities.can_cancel_activity"),
-                "can_reopen": self.request.user.has_perm("activities.can_reopen_activity"),
+                "can_change_owner": can(self.request.user, catalog.ATIVIDADE_ALTERAR_DONO, activity),
+                "can_cancel": can(self.request.user, catalog.ATIVIDADE_CANCELAR, activity),
+                "can_reopen": can(self.request.user, catalog.ATIVIDADE_REABRIR, activity),
+                "can_complete": can(self.request.user, catalog.ATIVIDADE_CONCLUIR, activity),
+                "can_edit": can(self.request.user, catalog.ATIVIDADE_EDITAR, activity),
+                "can_add_task": can(self.request.user, catalog.TAREFA_CRIAR, activity),
+                "can_message": can(self.request.user, catalog.COMUNICACAO_PARTICIPAR, activity),
                 "is_owner": activity.owner_id == self.request.user.id,
             }
         )
@@ -403,7 +380,6 @@ class ActivityEditView(OrganizationRequiredMixin, FormView):
 class ActivityCompleteView(ServiceActionView):
     def perform(self, request, pk):
         activity = get_object_or_404(Activity, pk=pk, organization=self.organization)
-        assert_may_act_on_activity(request.user, activity)
         ActivityService.complete_activity(activity, request.user)
         messages.success(request, "Atividade concluída.")
 
@@ -485,7 +461,6 @@ class ActivityChangeOwnerView(OrganizationRequiredMixin, FormView):
 class ActivityMessageCreateView(ServiceActionView):
     def perform(self, request, pk):
         activity = get_object_or_404(Activity, pk=pk, organization=self.organization)
-        assert_may_act_on_activity(request.user, activity)
         form = MessageForm(request.POST)
         if not form.is_valid():
             raise ActivityError("Escreva uma mensagem antes de enviar.")
@@ -578,8 +553,19 @@ class TaskDetailView(OrganizationRequiredMixin, DetailView):
                 "task_messages": task.messages.select_related("author"),
                 "message_form": MessageForm(),
                 "is_owner": task.activity.owner_id == user.id,
-                "can_assume": user.has_perm("activities.can_assume_task"),
-                "can_assign": user.has_perm("activities.can_assign_task"),
+                "can_assume": can(user, catalog.TAREFA_ASSUMIR, task),
+                "can_assign": can(user, catalog.TAREFA_ATRIBUIR, task),
+                "can_start": can(user, catalog.TAREFA_INICIAR, task),
+                "can_complete": can(user, catalog.TAREFA_CONCLUIR, task),
+                "can_return": can(user, catalog.TAREFA_DEVOLVER, task),
+                "can_block": can(user, catalog.TAREFA_BLOQUEAR, task),
+                "can_move": can(user, catalog.TAREFA_MOVER_SETOR, task),
+                "can_cancel_task": can(user, catalog.TAREFA_CANCELAR, task),
+                "can_edit_task": can(user, catalog.TAREFA_EDITAR, task),
+                "can_log_time": can(user, catalog.TEMPO_LANCAR_MANUAL, task),
+                "can_propose": can(user, catalog.PRAZO_PROPOR, task),
+                "can_resolve_conflict": can(user, catalog.ESCALONAMENTO_RESOLVER, task),
+                "can_message": can(user, catalog.COMUNICACAO_PARTICIPAR, task),
                 "executor_form": ExecutorForm(organization=self.organization),
                 "manual_time_form": ManualTimeForm(),
                 "deadline_form": DeadlineProposalForm(),
@@ -695,13 +681,9 @@ class TaskActionView(ServiceActionView):
         user = request.user
 
         if self.action == "assume":
-            if not user.has_perm("activities.can_assume_task"):
-                raise ActivityError("Você não tem permissão para assumir tarefas.")
             TaskService.add_executor(task, user, added_by=user)
             messages.success(request, "Tarefa assumida.")
             return
-
-        assert_may_act_on_task(user, task)
 
         if self.action == "start":
             TaskService.start(task, user)
@@ -734,17 +716,18 @@ class TaskFormActionView(OrganizationRequiredMixin, FormView):
             Task, pk=self.kwargs["pk"], activity__organization=self.organization
         )
 
+    required_action = None
+
     def dispatch(self, request, *args, **kwargs):
-        if request.user.is_authenticated and getattr(
+        organization_id = getattr(
             getattr(request.user, "profile", None), "organization_id", None
-        ):
+        )
+        if self.required_action and request.user.is_authenticated and organization_id:
             task = get_object_or_404(
-                Task,
-                pk=kwargs["pk"],
-                activity__organization_id=request.user.profile.organization_id,
+                Task, pk=kwargs["pk"], activity__organization_id=organization_id
             )
-            if not may_act_on_task(request.user, task):
-                raise PermissionDenied("Você não possui acesso para agir sobre esta tarefa.")
+            if not can(request.user, self.required_action, task):
+                raise PermissionDenied("Você não possui acesso a este conteúdo.")
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
@@ -769,6 +752,7 @@ class TaskFormActionView(OrganizationRequiredMixin, FormView):
 
 class TaskReturnView(TaskFormActionView):
     form_class = TaskReturnForm
+    required_action = catalog.TAREFA_DEVOLVER
     title = "Devolver tarefa"
     submit_label = "Devolver"
 
@@ -791,6 +775,7 @@ class TaskReturnView(TaskFormActionView):
 
 class TaskBlockView(TaskFormActionView):
     form_class = TaskBlockForm
+    required_action = catalog.TAREFA_BLOQUEAR
     title = "Registrar bloqueio"
     submit_label = "Bloquear"
 
@@ -803,6 +788,7 @@ class TaskBlockView(TaskFormActionView):
 
 class TaskMoveView(TaskFormActionView):
     form_class = MoveSectorForm
+    required_action = catalog.TAREFA_MOVER_SETOR
     title = "Enviar para outro setor"
     submit_label = "Enviar"
 
@@ -821,6 +807,7 @@ class TaskMoveView(TaskFormActionView):
 
 class TaskCancelView(TaskFormActionView):
     form_class = CancelForm
+    required_action = catalog.TAREFA_CANCELAR
     title = "Cancelar tarefa"
     submit_label = "Cancelar tarefa"
 
@@ -831,8 +818,6 @@ class TaskCancelView(TaskFormActionView):
 
 class TaskExecutorAddView(ServiceActionView):
     def perform(self, request, pk):
-        if not request.user.has_perm("activities.can_assign_task"):
-            raise ActivityError("Você não tem permissão para atribuir executores.")
         task = get_object_or_404(Task, pk=pk, activity__organization=self.organization)
         form = ExecutorForm(request.POST, organization=self.organization)
         if not form.is_valid():
@@ -846,8 +831,6 @@ class TaskExecutorAddView(ServiceActionView):
 
 class TaskExecutorRemoveView(ServiceActionView):
     def perform(self, request, pk, user_pk):
-        if not request.user.has_perm("activities.can_assign_task"):
-            raise ActivityError("Você não tem permissão para remover executores.")
         task = get_object_or_404(Task, pk=pk, activity__organization=self.organization)
         executor = get_object_or_404(
             TaskExecutor, task=task, user_id=user_pk, removed_at__isnull=True
@@ -862,7 +845,6 @@ class TaskExecutorRemoveView(ServiceActionView):
 class TaskMessageCreateView(ServiceActionView):
     def perform(self, request, pk):
         task = get_object_or_404(Task, pk=pk, activity__organization=self.organization)
-        assert_may_act_on_task(request.user, task)
         form = MessageForm(request.POST)
         if not form.is_valid():
             raise ActivityError("Escreva uma mensagem antes de enviar.")
@@ -874,6 +856,7 @@ class TaskMessageCreateView(ServiceActionView):
 
 class TaskManualTimeView(TaskFormActionView):
     form_class = ManualTimeForm
+    required_action = catalog.TEMPO_LANCAR_MANUAL
     title = "Adicionar tempo trabalhado"
     submit_label = "Lançar tempo"
 
@@ -895,6 +878,7 @@ class TaskManualTimeView(TaskFormActionView):
 
 class DeadlineProposeView(TaskFormActionView):
     form_class = DeadlineProposalForm
+    required_action = catalog.PRAZO_PROPOR
     title = "Propor novo prazo"
     submit_label = "Enviar proposta"
 
@@ -982,11 +966,9 @@ class QueueView(OrganizationRequiredMixin, TemplateView):
         if sector is None:
             return context
 
-        # Ver a fila inteira exige participar do setor ou ter a ação explícita.
-        may_see_full = (
-            my_sectors.filter(pk=sector.pk).exists()
-            or user.has_perm("activities.can_view_full_queue")
-        )
+        # Ver a fila inteira é uma ação autorizada, não consequência de
+        # participar do setor (Regras 08 §14, doc 05 §24, §45).
+        may_see_full = can(user, catalog.FILA_VISUALIZAR_COMPLETA, sector)
         entries = (
             QueueEntry.objects.filter(sector=sector, left_at__isnull=True)
             .select_related("task", "task__activity", "task__activity__owner")
@@ -998,7 +980,7 @@ class QueueView(OrganizationRequiredMixin, TemplateView):
             {
                 "may_see_full": may_see_full,
                 "total": total,
-                "can_reorder": user.has_perm("activities.can_reorder_queue"),
+                "can_reorder": can(user, catalog.FILA_REORDENAR, sector),
                 "now": timezone.now(),
             }
         )
@@ -1045,11 +1027,23 @@ class QueueReorderView(OrganizationRequiredMixin, View):
 # ---------------------------------------------------------------------------
 
 
-class ManagementView(OrganizationRequiredMixin, ActionRequiredMixin, TemplateView):
-    """Gestão por exceção: mostra o que precisa de decisão (doc 09 §157-173)."""
+class ManagementView(OrganizationRequiredMixin, TemplateView):
+    """Gestão por exceção: mostra o que precisa de decisão (doc 09 §157-173).
+
+    A checagem é própria porque a tela reúne vários setores: quem acompanha
+    métricas em algum deles pode entrar, e cada bloco continua recortado.
+    """
 
     template_name = "activities/management.html"
-    required_action = "activities.can_view_full_queue"
+
+    def dispatch(self, request, *args, **kwargs):
+        # Abre para quem acompanha métricas em qualquer setor; o conteúdo
+        # continua recortado pelo escopo de cada bloco.
+        if request.user.is_authenticated and not AuthorizationService.can_anywhere(
+            request.user, catalog.METRICAS_VISUALIZAR
+        ):
+            raise PermissionDenied("Você não possui acesso a este conteúdo.")
+        return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1106,6 +1100,7 @@ class ManagementView(OrganizationRequiredMixin, ActionRequiredMixin, TemplateVie
                     activity__organization=org, completed_at__date=today
                 ).count(),
                 "open_total": open_tasks.count(),
+                "can_resolve_conflicts": can(self.request.user, catalog.ESCALONAMENTO_RESOLVER),
             }
         )
         return context

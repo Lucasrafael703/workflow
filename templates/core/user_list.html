@@ -24,10 +24,15 @@
             <div class="muted">{{ item.username }}</div></td>
         <td data-label="E-mail">{{ item.email|default:"—" }}</td>
         <td data-label="Perfis">
-            {% for group in item.groups.all %}{{ group.name }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="muted">—</span>{% endfor %}
+            {% for assignment in item.access_profiles.all %}{% if assignment.is_active %}
+                {{ assignment.profile.name }} <span class="muted">({{ assignment.scope.label }})</span>{% if not forloop.last %}<br>{% endif %}
+            {% endif %}{% empty %}<span class="muted">—</span>{% endfor %}
         </td>
         <td data-label="Situação">{% if item.is_active %}Ativo{% else %}<span class="muted">Inativo</span>{% endif %}</td>
-        <td data-label=""><a href="{% url 'user-edit' item.pk %}">Editar</a></td>
+        <td data-label="">
+            <a href="{% url 'user-edit' item.pk %}">Editar</a> ·
+            <a href="{% url 'user-access' item.pk %}">Acessos</a>
+        </td>
     </tr>
     {% empty %}
     <tr><td colspan="5" class="muted">Nenhum usuário nesta organização.</td></tr>

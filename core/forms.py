@@ -1,6 +1,9 @@
 from django import forms
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
+
+from acessos.models import Action
+from acessos.models import Profile as AccessProfile
+from acessos.models import Scope
 
 from .models import Company, CostCenter, Sector, Site
 
@@ -46,10 +49,10 @@ class ReturnReasonForm(forms.Form):
 
 
 class UserForm(forms.Form):
-    """Cadastro de usuário (doc 09 §210-214).
+    """Cadastro de usuário (doc 05 §7, §37).
 
-    "Setores em que atua" fica separado de "Perfis de acesso": participar de um
-    setor não concede permissão (Regras 05 §25-27).
+    "Setores em que atua" descreve onde a pessoa trabalha; o que ela pode fazer
+    é definido na tela de acessos, sempre dentro de um escopo (doc 05 §8, §45).
     """
 
     first_name = forms.CharField(label="Nome", max_length=150)
@@ -61,29 +64,34 @@ class UserForm(forms.Form):
         required=False,
         widget=forms.CheckboxSelectMultiple,
     )
-    groups = forms.ModelMultipleChoiceField(
-        label="Perfis de acesso",
-        queryset=Group.objects.all(),
+    managed_sectors = forms.ModelMultipleChoiceField(
+        label="Setores que gerencia",
+        queryset=Sector.objects.none(),
         required=False,
         widget=forms.CheckboxSelectMultiple,
+        help_text="Ser gestor é um vínculo estrutural: não concede autorização por si só.",
     )
     is_active = forms.BooleanField(label="Ativo", required=False, initial=True)
 
     def __init__(self, *args, organization=None, instance=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.instance = instance
-        self.fields["sectors"].queryset = Sector.objects.filter(
-            organization=organization, is_active=True
-        )
+        sectors = Sector.objects.filter(organization=organization, is_active=True)
+        self.fields["sectors"].queryset = sectors
+        self.fields["managed_sectors"].queryset = sectors
+
         if instance is not None and not self.is_bound:
+            from accounts.models import UserSector
+
             self.fields["first_name"].initial = instance.first_name
             self.fields["email"].initial = instance.email
             self.fields["username"].initial = instance.username
             self.fields["is_active"].initial = instance.is_active
-            self.fields["groups"].initial = instance.groups.all()
-            self.fields["sectors"].initial = Sector.objects.filter(
-                user_memberships__user=instance, user_memberships__removed_at__isnull=True
-            )
+            memberships = UserSector.objects.filter(user=instance, removed_at__isnull=True)
+            self.fields["sectors"].initial = [m.sector_id for m in memberships]
+            self.fields["managed_sectors"].initial = [
+                m.sector_id for m in memberships if m.role == UserSector.Role.GESTOR
+            ]
 
     def clean_username(self):
         username = self.cleaned_data["username"].strip()
@@ -94,24 +102,88 @@ class UserForm(forms.Form):
             raise forms.ValidationError("Já existe um usuário com este nome de usuário.")
         return username
 
+    def clean(self):
+        cleaned = super().clean()
+        sectors = set(cleaned.get("sectors") or [])
+        managed = set(cleaned.get("managed_sectors") or [])
+        if not managed <= sectors:
+            self.add_error(
+                "managed_sectors",
+                "Só é possível gerenciar um setor do qual a pessoa participa.",
+            )
+        return cleaned
 
-class ProfileGroupForm(forms.Form):
-    """Perfil de acesso = conjunto reutilizável de ações (Regras 05 §32-34)."""
 
-    name = forms.CharField(label="Nome do perfil", max_length=150)
-    permissions = forms.MultipleChoiceField(
-        label="Ações", required=False, widget=forms.CheckboxSelectMultiple
+class AccessProfileForm(forms.Form):
+    """Perfil de acesso = conjunto reutilizável de ações (doc 05 §11, §32)."""
+
+    name = forms.CharField(label="Nome do perfil", max_length=120)
+    description = forms.CharField(label="Descrição", max_length=255, required=False)
+
+
+class ScopedGrantForm(forms.Form):
+    """Base das telas que concedem algo: a concessão sempre tem um "onde"."""
+
+    scope_type = forms.ChoiceField(label="Onde vale", choices=Scope.Type.choices)
+    company = forms.ModelChoiceField(label="Empresa", queryset=Company.objects.none(), required=False)
+    sector = forms.ModelChoiceField(label="Setor", queryset=Sector.objects.none(), required=False)
+    site = forms.ModelChoiceField(label="Obra", queryset=Site.objects.none(), required=False)
+    cost_center = forms.ModelChoiceField(
+        label="Centro de custo", queryset=CostCenter.objects.none(), required=False
+    )
+    relation = forms.ChoiceField(
+        label="Relação", choices=[("", "---------")] + list(Scope.Relation.choices), required=False
     )
 
-    def __init__(self, *args, permission_choices=(), instance=None, **kwargs):
+    def __init__(self, *args, organization=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.instance = instance
-        self.fields["permissions"].choices = permission_choices
-        if instance is not None and not self.is_bound:
-            self.fields["name"].initial = instance.name
-            self.fields["permissions"].initial = [
-                f"{p.content_type.app_label}.{p.codename}" for p in instance.permissions.all()
-            ]
+        self.fields["company"].queryset = Company.objects.filter(
+            organization=organization, is_active=True
+        )
+        self.fields["sector"].queryset = Sector.objects.filter(
+            organization=organization, is_active=True
+        )
+        self.fields["site"].queryset = Site.objects.filter(organization=organization, is_active=True)
+        self.fields["cost_center"].queryset = CostCenter.objects.filter(
+            organization=organization, is_active=True
+        )
+
+    def clean(self):
+        cleaned = super().clean()
+        scope_type = cleaned.get("scope_type")
+        required_field = {
+            Scope.Type.EMPRESA: "company",
+            Scope.Type.SETOR: "sector",
+            Scope.Type.OBRA: "site",
+            Scope.Type.CENTRO_CUSTO: "cost_center",
+            Scope.Type.RELACIONAL: "relation",
+        }.get(scope_type)
+        if required_field and not cleaned.get(required_field):
+            self.add_error(required_field, "Obrigatório para este tipo de escopo.")
+        return cleaned
+
+
+class AssignProfileForm(ScopedGrantForm):
+    profile = forms.ModelChoiceField(label="Perfil", queryset=AccessProfile.objects.none())
+
+    def __init__(self, *args, organization=None, **kwargs):
+        super().__init__(*args, organization=organization, **kwargs)
+        self.fields["profile"].queryset = AccessProfile.objects.filter(
+            organization=organization, is_active=True
+        )
+        self.order_fields(["profile", "scope_type", "company", "sector", "site", "cost_center", "relation"])
+
+
+class GrantActionForm(ScopedGrantForm):
+    """Concessão direta: exceção pontual, não a forma padrão de administrar
+    (doc 05 §27)."""
+
+    action = forms.ModelChoiceField(label="Ação", queryset=Action.objects.none())
+
+    def __init__(self, *args, organization=None, **kwargs):
+        super().__init__(*args, organization=organization, **kwargs)
+        self.fields["action"].queryset = Action.objects.filter(is_active=True).select_related("group")
+        self.order_fields(["action", "scope_type", "company", "sector", "site", "cost_center", "relation"])
 
 
 class NotificationPreferencesForm(forms.Form):

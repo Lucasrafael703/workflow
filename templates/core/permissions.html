@@ -4,52 +4,62 @@
 {% block content %}
 <div class="section-head">
     <h1>Perfis e permissões</h1>
-    <a href="{% url 'profile-group-create' %}" class="btn btn--primary">+ Novo perfil</a>
+    <a href="{% url 'profile-create' %}" class="btn btn--primary">+ Novo perfil</a>
 </div>
-<p class="muted">Um perfil responde: o que esta pessoa pode fazer? Participar de um setor
-   não concede permissão — os dois conceitos são separados.</p>
+<p class="muted">
+    Um perfil responde: o que esta pessoa pode fazer? <strong>Onde</strong> ela pode fazer
+    é definido ao atribuir o perfil a alguém, na tela de acessos do usuário.
+</p>
 
 <div class="split">
     <div>
-        {% if group %}
+        {% if profile %}
         <form method="get" class="filters">
-            <input type="hidden" name="group" value="{{ group.pk }}">
+            <input type="hidden" name="profile" value="{{ profile.pk }}">
             <div class="form-row">
                 <label for="q">Buscar ação</label>
                 <input type="search" id="q" name="q" value="{{ search }}" placeholder="Ex.: fila">
             </div>
-            <button type="submit" class="btn">Buscar</button>
+            <div class="form-row">
+                <label for="show">Mostrar</label>
+                <select id="show" name="show">
+                    <option value="todas" {% if show == 'todas' %}selected{% endif %}>Todas</option>
+                    <option value="autorizadas" {% if show == 'autorizadas' %}selected{% endif %}>Autorizadas</option>
+                    <option value="nao-autorizadas" {% if show == 'nao-autorizadas' %}selected{% endif %}>Não autorizadas</option>
+                </select>
+            </div>
+            <button type="submit" class="btn">Filtrar</button>
         </form>
 
-        <form method="post" action="{% url 'permissions-update' group.pk %}" class="card">
+        <form method="post" action="{% url 'permissions-update' profile.pk %}" class="card">
             {% csrf_token %}
-            {# Com busca ativa nem toda ação está na tela; informa quais foram
-               exibidas para não desmarcar o que ficou fora do filtro. #}
-            {% for block in blocks %}{% for row in block.rows %}
-            <input type="hidden" name="visible" value="{{ row.code }}">
-            {% endfor %}{% endfor %}
             <div class="section-head">
-                <h2>{{ group.name }}</h2>
-                <a href="{% url 'profile-group-edit' group.pk %}">Renomear</a>
+                <h2>{{ profile.name }}</h2>
+                <a href="{% url 'profile-edit' profile.pk %}">Editar dados</a>
             </div>
+            {% if profile.description %}<p class="muted">{{ profile.description }}</p>{% endif %}
 
             {% for block in blocks %}
             <fieldset>
-                <legend>{{ block.label }}</legend>
+                <legend>{{ block.group.name }}</legend>
                 {% for row in block.rows %}
-                <div class="form-row" style="margin-bottom:8px">
+                <div class="form-row" style="margin-bottom:10px">
+                    {# Só o que está na tela pode ser desmarcado: com filtro ativo,
+                       o resto precisa ser preservado. #}
+                    <input type="hidden" name="visible" value="{{ row.action.pk }}">
                     <label style="font-weight:normal">
-                        <input type="checkbox" name="permissions" value="{{ row.code }}"
+                        <input type="checkbox" name="actions" value="{{ row.action.pk }}"
                                style="width:auto" {% if row.granted %}checked{% endif %}>
-                        {{ row.label }}
-                        <code class="muted" style="font-size:11px">{{ row.code }}</code>
+                        {{ row.action.name }}
+                        {% if row.action.is_sensitive %}<span class="tag tag--ALTA">sensível</span>{% endif %}
+                        <code class="muted" style="font-size:11px">{{ row.action.key }}</code>
                     </label>
-                    {% if row.description %}<div class="helptext">{{ row.description }}</div>{% endif %}
+                    <div class="helptext">{{ row.action.description }}</div>
                 </div>
                 {% endfor %}
             </fieldset>
             {% empty %}
-            <p class="muted">Nenhuma ação encontrada para a busca.</p>
+            <p class="muted">Nenhuma ação encontrada para este filtro.</p>
             {% endfor %}
 
             <button type="submit" class="btn btn--primary">Salvar permissões</button>
@@ -57,7 +67,7 @@
         {% else %}
         <div class="card empty-state">
             <p>Nenhum perfil cadastrado ainda.</p>
-            <a href="{% url 'profile-group-create' %}" class="btn btn--primary">Criar primeiro perfil</a>
+            <a href="{% url 'profile-create' %}" class="btn btn--primary">Criar primeiro perfil</a>
         </div>
         {% endif %}
     </div>
@@ -66,23 +76,28 @@
         <div class="card">
             <h2>Perfis</h2>
             <ul class="list-reset">
-                {% for item in groups %}
+                {% for item in profiles %}
                 <li>
-                    <a href="?group={{ item.pk }}" {% if group and item.pk == group.pk %}style="font-weight:700"{% endif %}>{{ item.name }}</a>
-                    <span class="muted">{{ item.user_count }} usuário{{ item.user_count|pluralize }}</span>
+                    <a href="?profile={{ item.pk }}" {% if profile and item.pk == profile.pk %}style="font-weight:700"{% endif %}>{{ item.name }}</a>
+                    <span class="muted">{{ item.user_count }} atribuição{{ item.user_count|pluralize:"ões" }}</span>
                 </li>
+                {% empty %}
+                <li class="muted">Nenhum perfil.</li>
                 {% endfor %}
             </ul>
         </div>
 
-        {% if group %}
+        {% if profile %}
         <div class="card">
-            <h2>Usuários com este perfil</h2>
+            <h2>Quem possui este perfil</h2>
             <ul class="list-reset">
-                {% for member in members %}
-                <li><a href="{% url 'user-edit' member.pk %}">{{ member.get_username }}</a></li>
+                {% for assignment in assignments %}
+                <li>
+                    <a href="{% url 'user-access' assignment.user.pk %}">{{ assignment.user.get_username }}</a>
+                    <div class="muted">{{ assignment.scope.label }}</div>
+                </li>
                 {% empty %}
-                <li class="muted">Nenhum usuário vinculado.</li>
+                <li class="muted">Ninguém possui este perfil ainda.</li>
                 {% endfor %}
             </ul>
         </div>

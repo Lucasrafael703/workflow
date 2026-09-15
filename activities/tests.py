@@ -1,8 +1,9 @@
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Permission
 from django.test import TestCase
 from django.utils import timezone
 
+from acessos import catalog
+from acessos.testing import grant_action, grant_actions
 from audit.models import AuditLog
 from core.models import Organization, Sector
 
@@ -28,9 +29,30 @@ from .services import (
 User = get_user_model()
 
 
-def grant(user, codename):
-    perm = Permission.objects.get(codename=codename)
-    user.user_permissions.add(perm)
+# Tudo é negado por padrão: cada teste concede explicitamente o que precisa,
+# deixando visível qual ação e qual escopo estão sendo exercidos.
+OPERATOR_ACTIONS = [
+    catalog.ATIVIDADE_CRIAR,
+    catalog.ATIVIDADE_EDITAR,
+    catalog.ATIVIDADE_CONCLUIR,
+    catalog.TAREFA_CRIAR,
+    catalog.TAREFA_EDITAR,
+    catalog.TAREFA_ASSUMIR,
+    catalog.TAREFA_ATRIBUIR,
+    catalog.TAREFA_INICIAR,
+    catalog.TAREFA_PAUSAR,
+    catalog.TAREFA_RETOMAR,
+    catalog.TAREFA_CONCLUIR,
+    catalog.TAREFA_CANCELAR,
+    catalog.TAREFA_DEVOLVER,
+    catalog.TAREFA_BLOQUEAR,
+    catalog.TAREFA_MOVER_SETOR,
+    catalog.TEMPO_LANCAR_MANUAL,
+    catalog.PRAZO_PROPOR,
+    catalog.PRAZO_ACEITAR,
+    catalog.PRAZO_RECUSAR,
+    catalog.COMUNICACAO_PARTICIPAR,
+]
 
 
 class ActivitiesTestCase(TestCase):
@@ -45,6 +67,11 @@ class ActivitiesTestCase(TestCase):
         self.executor2 = User.objects.create_user("luan", password="x")
         self.gestor = User.objects.create_user("gestor", password="x")
         self.reason = ReturnReason.objects.create(organization=self.org, name="Especificação incompleta")
+
+        for user in (self.owner, self.creator, self.executor, self.executor2, self.gestor):
+            user.profile.organization = self.org
+            user.profile.save(update_fields=["organization"])
+            grant_actions(user, OPERATOR_ACTIONS, organization=self.org)
 
 
 class ActivityOwnershipTests(ActivitiesTestCase):
@@ -65,7 +92,7 @@ class ActivityOwnershipTests(ActivitiesTestCase):
         activity = ActivityService.create_activity(
             organization=self.org, title="Atividade X", owner=self.owner, created_by=self.creator
         )
-        grant(self.gestor, "can_change_owner")
+        grant_action(self.gestor, catalog.ATIVIDADE_ALTERAR_DONO, organization=self.org)
         ActivityService.change_owner(activity, self.executor, changed_by=self.gestor)
         activity.refresh_from_db()
 
@@ -202,7 +229,7 @@ class QueueTests(ActivitiesTestCase):
         with self.assertRaises(ActivityError):
             QueueService.reorder(entry1, 2, user=self.creator)
 
-        grant(self.gestor, "can_reorder_queue")
+        grant_action(self.gestor, catalog.FILA_REORDENAR, sector=self.sector)
         QueueService.reorder(entry1, 2, user=self.gestor, reason="Entrada de demanda bloqueadora")
         entry1.refresh_from_db()
 
@@ -257,7 +284,7 @@ class DeadlineNegotiationTests(ActivitiesTestCase):
         with self.assertRaises(ActivityError):
             DeadlineService.resolve_conflict(conflict, user=self.creator, resolution_note="Mantido")
 
-        grant(self.gestor, "can_resolve_deadline_conflict")
+        grant_action(self.gestor, catalog.ESCALONAMENTO_RESOLVER, organization=self.org)
         DeadlineService.resolve_conflict(conflict, user=self.gestor, resolution_note="Mantido prazo original")
         conflict.refresh_from_db()
         self.assertEqual(conflict.status, DeadlineConflict.Status.RESOLVIDO)

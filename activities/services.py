@@ -2,10 +2,12 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
+from acessos import catalog
+from acessos.services import AuthorizationError, AuthorizationService, ResourceContext
 from audit.models import AuditLog
 from audit.services import AuditService
 from notifications.models import Notification
-from notifications.recipients import resolve_admins, resolve_sector_and_admins
+from notifications.recipients import resolve_sector_and_admins
 from notifications.services import NotificationService
 
 from .models import (
@@ -34,6 +36,18 @@ class ActivityError(Exception):
     Views capturam esta exceção e exibem a mensagem via django.contrib.messages."""
 
 
+def require_action(user, action_key, resource=None):
+    """Exige uma ação do catálogo dentro do escopo do recurso.
+
+    A negação vira ActivityError para as telas continuarem tratando erro de
+    autorização e erro de regra de negócio da mesma forma.
+    """
+    try:
+        AuthorizationService.require(user, action_key, resource)
+    except AuthorizationError as exc:
+        raise ActivityError(str(exc)) from exc
+
+
 def _same_organization(*objects):
     orgs = {obj.organization_id for obj in objects if obj is not None}
     return len(orgs) <= 1
@@ -57,6 +71,13 @@ class ActivityService:
         cost_center=None,
         requested_deadline=None,
     ):
+        require_action(
+            created_by,
+            catalog.ATIVIDADE_CRIAR,
+            ResourceContext.for_new(
+                organization, company=company, site=site, cost_center=cost_center, owner=owner
+            ),
+        )
         if not title:
             raise ActivityError("Informe o resultado esperado da atividade.")
         if owner is None:
@@ -76,7 +97,7 @@ class ActivityService:
 
         AuditService.log(user=created_by, action=AuditLog.Action.CREATE, activity=activity, new_value=title)
         NotificationService.notify(
-            users={owner, created_by, *resolve_admins()},
+            users={owner, created_by},
             event_type=Notification.EventType.ACTIVITY_CREATED,
             title="Atividade criada",
             message=f"A atividade '{activity.title}' foi criada.",
@@ -87,8 +108,7 @@ class ActivityService:
     @staticmethod
     @transaction.atomic
     def change_owner(activity, new_owner, changed_by):
-        if not changed_by.has_perm("activities.can_change_owner"):
-            raise ActivityError("Você não tem permissão para alterar o dono desta atividade.")
+        require_action(changed_by, catalog.ATIVIDADE_ALTERAR_DONO, activity)
         if activity.status in (Activity.Status.CONCLUIDA, Activity.Status.CANCELADA):
             raise ActivityError("Não é possível alterar o dono de uma atividade concluída ou cancelada.")
         if new_owner.id == activity.owner_id:
@@ -109,7 +129,7 @@ class ActivityService:
             new_value=new_owner.get_username(),
         )
         NotificationService.notify(
-            users={previous_owner, new_owner, *resolve_admins()},
+            users={previous_owner, new_owner},
             event_type=Notification.EventType.OWNER_CHANGED,
             title="Dono da atividade alterado",
             message=f"O dono de '{activity.title}' passou de {previous_owner} para {new_owner}.",
@@ -124,6 +144,7 @@ class ActivityService:
 
         Dono, conclusão e cancelamento possuem serviços próprios e não passam por aqui.
         """
+        require_action(user, catalog.ATIVIDADE_EDITAR, activity)
         if activity.status in (Activity.Status.CONCLUIDA, Activity.Status.CANCELADA):
             raise ActivityError("Não é possível editar uma atividade concluída ou cancelada.")
 
@@ -162,6 +183,7 @@ class ActivityService:
     @staticmethod
     @transaction.atomic
     def complete_activity(activity, user):
+        require_action(user, catalog.ATIVIDADE_CONCLUIR, activity)
         if activity.status in (Activity.Status.CONCLUIDA, Activity.Status.CANCELADA):
             raise ActivityError("Esta atividade já está concluída ou cancelada.")
         open_tasks = activity.tasks.exclude(
@@ -180,7 +202,7 @@ class ActivityService:
             user=user, action=AuditLog.Action.COMPLETE, activity=activity, old_value=old_status, new_value=activity.status
         )
         NotificationService.notify(
-            users={activity.owner, *resolve_admins()},
+            users={activity.owner},
             event_type=Notification.EventType.ACTIVITY_COMPLETED,
             title="Atividade concluída",
             message=f"A atividade '{activity.title}' foi concluída.",
@@ -191,8 +213,7 @@ class ActivityService:
     @staticmethod
     @transaction.atomic
     def cancel_activity(activity, user, reason):
-        if not user.has_perm("activities.can_cancel_activity"):
-            raise ActivityError("Você não tem permissão para cancelar atividades.")
+        require_action(user, catalog.ATIVIDADE_CANCELAR, activity)
         if activity.status in (Activity.Status.CONCLUIDA, Activity.Status.CANCELADA):
             raise ActivityError("Esta atividade já está concluída ou cancelada.")
         if not reason:
@@ -213,7 +234,7 @@ class ActivityService:
             reason=reason,
         )
         NotificationService.notify(
-            users={activity.owner, *resolve_admins()},
+            users={activity.owner},
             event_type=Notification.EventType.ACTIVITY_CANCELLED,
             title="Atividade cancelada",
             message=f"A atividade '{activity.title}' foi cancelada. Motivo: {reason}",
@@ -224,8 +245,7 @@ class ActivityService:
     @staticmethod
     @transaction.atomic
     def reopen_activity(activity, user, reason):
-        if not user.has_perm("activities.can_reopen_activity"):
-            raise ActivityError("Você não tem permissão para reabrir atividades.")
+        require_action(user, catalog.ATIVIDADE_REABRIR, activity)
         if activity.status != Activity.Status.CONCLUIDA:
             raise ActivityError("Somente atividades concluídas podem ser reabertas.")
         if not reason:
@@ -241,7 +261,7 @@ class ActivityService:
             user=user, action=AuditLog.Action.REOPEN, activity=activity, new_value=activity.status, reason=reason
         )
         NotificationService.notify(
-            users={activity.owner, *resolve_admins()},
+            users={activity.owner},
             event_type=Notification.EventType.ACTIVITY_REOPENED,
             title="Atividade reaberta",
             message=f"A atividade '{activity.title}' foi reaberta. Motivo: {reason}",
@@ -258,6 +278,19 @@ class TaskService:
     @staticmethod
     @transaction.atomic
     def create_task(activity, sector, title, created_by, description="", order=1, depends_on=None, requested_deadline=None):
+        # A tarefa nasce no setor informado: é esse o escopo que autoriza.
+        require_action(
+            created_by,
+            catalog.TAREFA_CRIAR,
+            ResourceContext.for_new(
+                activity.organization,
+                company=activity.company,
+                sector=sector,
+                site=activity.site,
+                cost_center=activity.cost_center,
+                owner=activity.owner,
+            ),
+        )
         if not _same_organization(activity, sector):
             raise ActivityError("O setor informado pertence a outra organização.")
         if not title:
@@ -297,6 +330,7 @@ class TaskService:
         Setor, prazo comprometido, executores e transições de estado possuem
         serviços próprios e não passam por aqui.
         """
+        require_action(user, catalog.TAREFA_EDITAR, task)
         if task.status in (Task.Status.CONCLUIDA, Task.Status.CANCELADA):
             raise ActivityError("Não é possível editar uma tarefa concluída ou cancelada.")
 
@@ -336,6 +370,7 @@ class TaskService:
         Fica marcada como lançamento manual para diferenciar do tempo capturado
         pelo timer, preservando a confiabilidade das métricas.
         """
+        require_action(logged_by, catalog.TEMPO_LANCAR_MANUAL, task)
         if started_at is None or ended_at is None:
             raise ActivityError("Informe o início e o fim do período trabalhado.")
         if ended_at <= started_at:
@@ -366,6 +401,11 @@ class TaskService:
     @staticmethod
     @transaction.atomic
     def add_executor(task, user, added_by):
+        # Assumir a si mesmo e atribuir outra pessoa são capacidades distintas.
+        if user.id == added_by.id:
+            require_action(added_by, catalog.TAREFA_ASSUMIR, task)
+        else:
+            require_action(added_by, catalog.TAREFA_ATRIBUIR, task)
         if TaskExecutor.objects.filter(task=task, user=user, removed_at__isnull=True).exists():
             raise ActivityError("Este usuário já é executor desta tarefa.")
 
@@ -386,6 +426,12 @@ class TaskService:
     @staticmethod
     @transaction.atomic
     def remove_executor(task, user, removed_by):
+        # Sair de uma tarefa que assumi é o oposto de assumir; tirar outra
+        # pessoa é atribuição.
+        if user.id == removed_by.id:
+            require_action(removed_by, catalog.TAREFA_ASSUMIR, task)
+        else:
+            require_action(removed_by, catalog.TAREFA_ATRIBUIR, task)
         link = TaskExecutor.objects.filter(task=task, user=user, removed_at__isnull=True).first()
         if link is None:
             raise ActivityError("Este usuário não é executor ativo desta tarefa.")
@@ -404,6 +450,7 @@ class TaskService:
     @staticmethod
     @transaction.atomic
     def start(task, user):
+        require_action(user, catalog.TAREFA_INICIAR, task)
         if not TaskService._is_active_executor(task, user):
             raise ActivityError("Somente executores atribuídos podem iniciar a tarefa.")
         if task.status not in (
@@ -440,6 +487,7 @@ class TaskService:
     @staticmethod
     @transaction.atomic
     def pause(task, user):
+        require_action(user, catalog.TAREFA_PAUSAR, task)
         session = WorkSession.objects.filter(task=task, user=user, ended_at__isnull=True).first()
         if session is None:
             raise ActivityError("Você não possui uma sessão de trabalho ativa nesta tarefa.")
@@ -457,6 +505,7 @@ class TaskService:
     @staticmethod
     @transaction.atomic
     def resume(task, user):
+        require_action(user, catalog.TAREFA_RETOMAR, task)
         if not TaskService._is_active_executor(task, user):
             raise ActivityError("Somente executores atribuídos podem retomar a tarefa.")
         return TaskService.start(task, user)
@@ -464,6 +513,7 @@ class TaskService:
     @staticmethod
     @transaction.atomic
     def complete(task, user):
+        require_action(user, catalog.TAREFA_CONCLUIR, task)
         if task.status not in (Task.Status.EM_EXECUCAO, Task.Status.EM_FILA, Task.Status.DISPONIVEL):
             raise ActivityError("Esta tarefa não pode ser concluída no status atual.")
 
@@ -501,6 +551,7 @@ class TaskService:
     @staticmethod
     @transaction.atomic
     def cancel(task, user, reason):
+        require_action(user, catalog.TAREFA_CANCELAR, task)
         if task.status in (Task.Status.CONCLUIDA, Task.Status.CANCELADA):
             raise ActivityError("Esta tarefa já está concluída ou cancelada.")
         if not reason:
@@ -525,6 +576,7 @@ class TaskService:
     @staticmethod
     @transaction.atomic
     def block(task, user, reason, observation=""):
+        require_action(user, catalog.TAREFA_BLOQUEAR, task)
         if not reason:
             raise ActivityError("Informe o motivo do bloqueio.")
         if task.status == Task.Status.BLOQUEADA:
@@ -551,6 +603,7 @@ class TaskService:
     @staticmethod
     @transaction.atomic
     def unblock(task, user, resume_status=None):
+        require_action(user, catalog.TAREFA_BLOQUEAR, task)
         if task.status != Task.Status.BLOQUEADA:
             raise ActivityError("Esta tarefa não está bloqueada.")
 
@@ -581,6 +634,7 @@ class TaskService:
     @staticmethod
     @transaction.atomic
     def move_to_sector(task, new_sector, user, note=""):
+        require_action(user, catalog.TAREFA_MOVER_SETOR, task)
         if not _same_organization(task.activity, new_sector):
             raise ActivityError("O setor informado pertence a outra organização.")
 
@@ -623,6 +677,7 @@ class TaskService:
     @transaction.atomic
     def return_task(task, to_sector, reason, user, observation=""):
         """Devolve a tarefa para um setor anterior. Motivo sempre obrigatório (Regras 02 §36-39)."""
+        require_action(user, catalog.TAREFA_DEVOLVER, task)
         if reason is None:
             raise ActivityError("Toda devolução precisa de um motivo.")
         if not _same_organization(task.activity, to_sector, reason):
@@ -745,8 +800,8 @@ class QueueService:
     @transaction.atomic
     def reorder(queue_entry, new_position, user, reason=None):
         """Reordena a fila ativa de um setor, preservando histórico de todas as posições afetadas."""
-        if not user.has_perm("activities.can_reorder_queue"):
-            raise ActivityError("Você não tem permissão para reordenar esta fila.")
+        # O escopo importa: quem reordena o Comercial não reordena Compras.
+        require_action(user, catalog.FILA_REORDENAR, queue_entry)
         if not queue_entry.is_active:
             raise ActivityError("Esta entrada não está mais ativa na fila.")
 
@@ -800,6 +855,7 @@ class DeadlineService:
     @staticmethod
     @transaction.atomic
     def propose(task, deadline, user):
+        require_action(user, catalog.PRAZO_PROPOR, task)
         proposal = DeadlineProposal.objects.create(task=task, proposed_deadline=deadline, proposed_by=user)
         AuditService.log(
             user=user, action=AuditLog.Action.DEADLINE_PROPOSED, activity=task.activity, task=task, new_value=deadline
@@ -817,6 +873,7 @@ class DeadlineService:
     @staticmethod
     @transaction.atomic
     def accept(proposal, user):
+        require_action(user, catalog.PRAZO_ACEITAR, proposal.task)
         if proposal.status != DeadlineProposal.Status.PENDENTE:
             raise ActivityError("Esta proposta já foi decidida.")
         if user.id != proposal.task.activity.owner_id:
@@ -847,6 +904,7 @@ class DeadlineService:
     @staticmethod
     @transaction.atomic
     def reject(proposal, user, note=""):
+        require_action(user, catalog.PRAZO_RECUSAR, proposal.task)
         if proposal.status != DeadlineProposal.Status.PENDENTE:
             raise ActivityError("Esta proposta já foi decidida.")
         if user.id != proposal.task.activity.owner_id:
@@ -882,8 +940,7 @@ class DeadlineService:
     @staticmethod
     @transaction.atomic
     def resolve_conflict(conflict, user, resolution_note):
-        if not user.has_perm("activities.can_resolve_deadline_conflict"):
-            raise ActivityError("Você não tem permissão para resolver conflitos de prazo.")
+        require_action(user, catalog.ESCALONAMENTO_RESOLVER, conflict.task)
         if conflict.status == DeadlineConflict.Status.RESOLVIDO:
             raise ActivityError("Este conflito já foi resolvido.")
 
@@ -920,6 +977,7 @@ class MessageService:
     @staticmethod
     @transaction.atomic
     def post_activity_message(activity, author, body):
+        require_action(author, catalog.COMUNICACAO_PARTICIPAR, activity)
         body = (body or "").strip()
         if not body:
             raise ActivityError("Escreva uma mensagem antes de enviar.")
@@ -943,6 +1001,7 @@ class MessageService:
     @staticmethod
     @transaction.atomic
     def post_task_message(task, author, body):
+        require_action(author, catalog.COMUNICACAO_PARTICIPAR, task)
         body = (body or "").strip()
         if not body:
             raise ActivityError("Escreva uma mensagem antes de enviar.")

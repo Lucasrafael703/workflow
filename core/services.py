@@ -163,19 +163,42 @@ class ReturnReasonService(SimpleCadastroService):
 
 
 class UserSectorService:
-    """Participação operacional de um usuário em um setor (Regras 05 §24-26)."""
+    """Participação operacional de um usuário em um setor (Regras 05 §8, §10).
+
+    Participar de um setor não concede autorização: quem decide o que a pessoa
+    pode fazer é o motor de acessos (Regras 08 §14).
+    """
 
     @staticmethod
     @transaction.atomic
-    def add(user, sector):
+    def add(user, sector, role=None):
         from accounts.models import UserSector
 
-        membership, created = UserSector.objects.get_or_create(user=user, sector=sector)
-        if not created and membership.removed_at is not None:
-            # O UniqueConstraint é incondicional: reativa a linha existente
-            # em vez de tentar criar uma segunda.
-            membership.removed_at = None
-            membership.save(update_fields=["removed_at"])
+        role = role or UserSector.Role.MEMBRO
+        membership = UserSector.objects.filter(
+            user=user, sector=sector, removed_at__isnull=True
+        ).first()
+        if membership is not None:
+            if membership.role != role:
+                membership.role = role
+                membership.save(update_fields=["role"])
+            return membership
+
+        # Entrar de novo abre um novo período; o anterior continua no histórico.
+        return UserSector.objects.create(user=user, sector=sector, role=role)
+
+    @staticmethod
+    @transaction.atomic
+    def set_role(user, sector, role):
+        from accounts.models import UserSector
+
+        membership = UserSector.objects.filter(
+            user=user, sector=sector, removed_at__isnull=True
+        ).first()
+        if membership is None:
+            raise CadastroError("Este usuário não participa deste setor.")
+        membership.role = role
+        membership.save(update_fields=["role"])
         return membership
 
     @staticmethod

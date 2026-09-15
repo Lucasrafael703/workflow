@@ -1,17 +1,25 @@
 from django.contrib import messages
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group, Permission
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.generic import FormView, TemplateView, View
 
+from acessos import catalog
+from acessos.models import Action, ActionGroup
+from acessos.models import Profile as AccessProfile
+from acessos.models import UserAction as UserActionGrant
+from acessos.models import UserProfile as UserProfileAssignment
+from acessos.services import AccessService, AuthorizationService
+
 from .forms import (
+    AccessProfileForm,
+    AssignProfileForm,
     CompanyForm,
     CostCenterForm,
+    GrantActionForm,
     NotificationPreferencesForm,
-    ProfileGroupForm,
     ReturnReasonForm,
     SectorForm,
     SiteForm,
@@ -27,71 +35,9 @@ from .services import (
     SectorService,
     SimpleCadastroService,
     SiteService,
-    UserSectorService,
 )
 
 User = get_user_model()
-
-
-# Rótulo humano primeiro, código técnico depois (doc 09 §203-205).
-PERMISSION_GROUPS = [
-    (
-        "Atividades",
-        [
-            ("activities.add_activity", "Criar atividade"),
-            ("activities.change_activity", "Editar atividade"),
-            ("activities.can_view_all_activities", "Visualizar todas as atividades"),
-            ("activities.can_change_owner", "Alterar dono da atividade"),
-            ("activities.can_cancel_activity", "Cancelar atividade"),
-            ("activities.can_reopen_activity", "Reabrir atividade"),
-        ],
-    ),
-    (
-        "Tarefas",
-        [
-            ("activities.add_task", "Criar tarefa"),
-            ("activities.change_task", "Editar tarefa"),
-            ("activities.can_assume_task", "Assumir tarefa"),
-            ("activities.can_assign_task", "Atribuir executor"),
-        ],
-    ),
-    (
-        "Filas",
-        [
-            ("activities.can_view_full_queue", "Visualizar fila completa"),
-            ("activities.can_reorder_queue", "Reordenar fila"),
-        ],
-    ),
-    (
-        "Prazos",
-        [("activities.can_resolve_deadline_conflict", "Resolver conflito de prazo")],
-    ),
-    (
-        "Cadastros",
-        [
-            ("core.change_sector", "Criar e editar setores"),
-            ("core.change_company", "Criar e editar empresas"),
-            ("core.change_site", "Criar e editar obras"),
-            ("core.change_costcenter", "Criar e editar centros de custo"),
-            ("activities.change_returnreason", "Criar e editar motivos de devolução"),
-        ],
-    ),
-    (
-        "Segurança",
-        [
-            ("auth.add_user", "Criar usuário"),
-            ("auth.change_user", "Editar usuário"),
-            ("auth.change_group", "Editar perfis e permissões"),
-        ],
-    ),
-]
-
-PERMISSION_DESCRIPTIONS = {
-    "activities.can_view_full_queue": "Permite ver todas as tarefas e detalhes da fila do setor, não apenas a própria posição.",
-    "activities.can_reorder_queue": "Permite alterar a ordem de execução das tarefas do setor.",
-    "activities.can_change_owner": "Permite transferir a responsabilidade de uma atividade para outra pessoa.",
-    "activities.can_resolve_deadline_conflict": "Permite encerrar um conflito de prazo registrando a decisão.",
-}
 
 
 class CadastroHomeView(OrganizationRequiredMixin, TemplateView):
@@ -149,7 +95,7 @@ class CadastroFormView(OrganizationRequiredMixin, ActionRequiredMixin, FormView)
     service = None
     tab = ""
     title = ""
-    required_action = "core.change_sector"
+    required_action = catalog.SETOR_EDITAR
 
     def get_model(self):
         return self.model
@@ -208,7 +154,7 @@ class SectorFormView(CadastroFormView):
     model = Sector
     tab = "setores"
     title = "Setor"
-    required_action = "core.change_sector"
+    required_action = catalog.SETOR_EDITAR
 
     def initial_from(self, instance):
         return {"name": instance.name, "description": instance.description}
@@ -227,7 +173,7 @@ class CompanyFormView(CadastroFormView):
     model = Company
     tab = "empresas"
     title = "Empresa"
-    required_action = "core.change_company"
+    required_action = catalog.EMPRESA_GERIR
 
     def initial_from(self, instance):
         return {"name": instance.name, "document": instance.document}
@@ -244,7 +190,7 @@ class SiteFormView(CadastroFormView):
     model = Site
     tab = "obras"
     title = "Obra"
-    required_action = "core.change_site"
+    required_action = catalog.OBRA_GERIR
 
     def initial_from(self, instance):
         return {"name": instance.name, "company": instance.company_id}
@@ -261,7 +207,7 @@ class CostCenterFormView(CadastroFormView):
     model = CostCenter
     tab = "centros-de-custo"
     title = "Centro de custo"
-    required_action = "core.change_costcenter"
+    required_action = catalog.CENTRO_CUSTO_GERIR
 
     def initial_from(self, instance):
         return {"name": instance.name, "site": instance.site_id}
@@ -277,7 +223,7 @@ class ReturnReasonFormView(CadastroFormView):
     form_class = ReturnReasonForm
     tab = "motivos"
     title = "Motivo de devolução"
-    required_action = "activities.change_returnreason"
+    required_action = catalog.MOTIVO_DEVOLUCAO_GERIR
 
     def get_model(self):
         from activities.models import ReturnReason
@@ -297,17 +243,17 @@ class CadastroToggleActiveView(OrganizationRequiredMixin, View):
     # Cada cadastro é governado pela sua própria ação; inativar um setor
     # afeta filas e tarefas de toda a organização.
     cadastros = {
-        "setores": (Sector, "core.change_sector"),
-        "empresas": (Company, "core.change_company"),
-        "obras": (Site, "core.change_site"),
-        "centros-de-custo": (CostCenter, "core.change_costcenter"),
+        "setores": (Sector, catalog.SETOR_INATIVAR),
+        "empresas": (Company, catalog.EMPRESA_GERIR),
+        "obras": (Site, catalog.OBRA_GERIR),
+        "centros-de-custo": (CostCenter, catalog.CENTRO_CUSTO_GERIR),
     }
 
     def resolve(self, tab):
         if tab == "motivos":
             from activities.models import ReturnReason
 
-            return ReturnReason, "activities.change_returnreason"
+            return ReturnReason, catalog.MOTIVO_DEVOLUCAO_GERIR
         return self.cadastros.get(tab, (None, None))
 
     def post(self, request, tab, pk):
@@ -315,10 +261,9 @@ class CadastroToggleActiveView(OrganizationRequiredMixin, View):
         if model is None:
             messages.error(request, "Cadastro desconhecido.")
             return redirect("cadastros")
-        if not request.user.has_perm(action):
-            raise PermissionDenied("Você não possui acesso para alterar este cadastro.")
-
         instance = get_object_or_404(model, pk=pk, organization=self.organization)
+        if not AuthorizationService.can(request.user, action, instance):
+            raise PermissionDenied("Você não possui acesso para alterar este cadastro.")
         SimpleCadastroService.set_active(instance, not instance.is_active)
         messages.success(
             request, "Cadastro reativado." if instance.is_active else "Cadastro inativado."
@@ -347,135 +292,132 @@ class SettingsView(OrganizationRequiredMixin, FormView):
 
 
 class PermissionMatrixView(OrganizationRequiredMixin, ActionRequiredMixin, TemplateView):
-    """Responde "O que este perfil pode fazer?" (doc 09 §196-209)."""
+    """Responde "O que este perfil pode fazer?" (doc 05 §32, §38)."""
 
     template_name = "core/permissions.html"
-    required_action = "auth.change_group"
+    required_action = catalog.SEGURANCA_GERIR_PERFIS
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        groups = Group.objects.annotate(user_count=Count("user")).order_by("name")
-        selected = self.request.GET.get("group")
-        group = groups.filter(pk=selected).first() if selected else groups.first()
+        profiles = AccessProfile.objects.filter(organization=self.organization).annotate(
+            user_count=Count("assignments", filter=Q(assignments__is_active=True), distinct=True)
+        )
+        selected = self.request.GET.get("profile")
+        profile = profiles.filter(pk=selected).first() if selected else profiles.first()
 
         granted = set()
-        if group:
-            granted = {
-                f"{p.content_type.app_label}.{p.codename}" for p in group.permissions.all()
-            }
+        if profile:
+            granted = set(profile.profile_actions.values_list("action_id", flat=True))
 
         search = self.request.GET.get("q", "").strip().lower()
+        show = self.request.GET.get("show", "todas")
+
         blocks = []
-        for label, actions in PERMISSION_GROUPS:
-            rows = [
-                {
-                    "code": code,
-                    "label": human,
-                    "description": PERMISSION_DESCRIPTIONS.get(code, ""),
-                    "granted": code in granted,
-                }
-                for code, human in actions
-                if not search or search in human.lower() or search in code.lower()
-            ]
+        for group in ActionGroup.objects.filter(is_active=True).prefetch_related("actions"):
+            rows = []
+            for action in group.actions.filter(is_active=True):
+                is_granted = action.id in granted
+                if show == "autorizadas" and not is_granted:
+                    continue
+                if show == "nao-autorizadas" and is_granted:
+                    continue
+                if search and search not in action.name.lower() and search not in action.key.lower():
+                    continue
+                rows.append({"action": action, "granted": is_granted})
             if rows:
-                blocks.append({"label": label, "rows": rows})
+                blocks.append({"group": group, "rows": rows})
 
         context.update(
             {
-                "groups": groups,
-                "group": group,
+                "profiles": profiles,
+                "profile": profile,
                 "blocks": blocks,
                 "search": self.request.GET.get("q", ""),
-                "members": User.objects.filter(groups=group).order_by("username") if group else [],
+                "show": show,
+                "assignments": (
+                    profile.assignments.filter(is_active=True).select_related("user", "scope")
+                    if profile
+                    else []
+                ),
             }
         )
         return context
 
 
 class PermissionUpdateView(OrganizationRequiredMixin, ActionRequiredMixin, View):
-    required_action = "auth.change_group"
+    required_action = catalog.SEGURANCA_GERIR_AUTORIZACOES
 
     def post(self, request, pk):
-        group = get_object_or_404(Group, pk=pk)
-        selected = set(request.POST.getlist("permissions"))
-        # Só as ações exibidas podem ser desmarcadas: com um filtro de busca
-        # ativo, o que ficou fora da tela precisa ser preservado. Se nada foi
-        # exibido, não há o que desmarcar.
-        visible = set(request.POST.getlist("visible"))
+        profile = get_object_or_404(AccessProfile, pk=pk, organization=self.organization)
+        selected = {int(value) for value in request.POST.getlist("actions") if value.isdigit()}
+        # Só as ações exibidas podem ser desmarcadas: com busca ou filtro ativo,
+        # o que ficou fora da tela precisa ser preservado.
+        visible = {int(value) for value in request.POST.getlist("visible") if value.isdigit()}
 
-        keep = [
-            p
-            for p in group.permissions.all()
-            if f"{p.content_type.app_label}.{p.codename}" not in visible
-        ]
-        known = {code for _, actions in PERMISSION_GROUPS for code, _ in actions}
-
-        permissions = []
-        for code in selected & known & visible:
-            app_label, codename = code.split(".", 1)
-            permission = Permission.objects.filter(
-                content_type__app_label=app_label, codename=codename
-            ).first()
-            if permission:
-                permissions.append(permission)
-
-        group.permissions.set(permissions + keep)
-        messages.success(request, f"Permissões do perfil {group.name} atualizadas.")
-        return redirect(f"{reverse('permissions')}?group={group.pk}")
+        AccessService.set_profile_actions(
+            profile, granted_ids=selected & visible, visible_ids=visible, changed_by=request.user
+        )
+        messages.success(request, f"Permissões do perfil {profile.name} atualizadas.")
+        return redirect(f"{reverse('permissions')}?profile={profile.pk}")
 
 
-class ProfileGroupCreateView(OrganizationRequiredMixin, ActionRequiredMixin, FormView):
-    template_name = "core/profile_group_form.html"
-    form_class = ProfileGroupForm
-    required_action = "auth.change_group"
+class ProfileFormView(OrganizationRequiredMixin, ActionRequiredMixin, FormView):
+    template_name = "core/profile_form.html"
+    form_class = AccessProfileForm
+    required_action = catalog.SEGURANCA_GERIR_PERFIS
+
+    def get_instance(self):
+        pk = self.kwargs.get("pk")
+        if pk is None:
+            return None
+        return get_object_or_404(AccessProfile, pk=pk, organization=self.organization)
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        kwargs["permission_choices"] = [
-            (code, human) for _, actions in PERMISSION_GROUPS for code, human in actions
-        ]
-        pk = self.kwargs.get("pk")
-        kwargs["instance"] = get_object_or_404(Group, pk=pk) if pk else None
+        instance = self.get_instance()
+        if instance is not None and not self.request.POST:
+            kwargs["initial"] = {"name": instance.name, "description": instance.description}
         return kwargs
 
-    def form_valid(self, form):
-        pk = self.kwargs.get("pk")
-        group = get_object_or_404(Group, pk=pk) if pk else None
-        name = form.cleaned_data["name"].strip()
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["instance"] = self.get_instance()
+        return context
 
-        if Group.objects.filter(name__iexact=name).exclude(pk=group.pk if group else None).exists():
-            form.add_error("name", "Já existe um perfil com este nome.")
+    def form_valid(self, form):
+        instance = self.get_instance()
+        try:
+            if instance is None:
+                instance = AccessService.create_profile(
+                    self.organization,
+                    form.cleaned_data["name"],
+                    created_by=self.request.user,
+                    description=form.cleaned_data.get("description", ""),
+                )
+            else:
+                instance = AccessService.update_profile(
+                    instance,
+                    name=form.cleaned_data["name"],
+                    description=form.cleaned_data.get("description", ""),
+                    changed_by=self.request.user,
+                )
+        except CadastroError as exc:
+            form.add_error(None, str(exc))
             return self.form_invalid(form)
 
-        if group is None:
-            group = Group.objects.create(name=name)
-        else:
-            group.name = name
-            group.save(update_fields=["name"])
-
-        permissions = []
-        for code in form.cleaned_data["permissions"]:
-            app_label, codename = code.split(".", 1)
-            permission = Permission.objects.filter(
-                content_type__app_label=app_label, codename=codename
-            ).first()
-            if permission:
-                permissions.append(permission)
-        group.permissions.set(permissions)
-
         messages.success(self.request, "Perfil salvo.")
-        return redirect(f"{reverse('permissions')}?group={group.pk}")
+        return redirect(f"{reverse('permissions')}?profile={instance.pk}")
 
 
 class UserListView(OrganizationRequiredMixin, ActionRequiredMixin, TemplateView):
     template_name = "core/user_list.html"
-    required_action = "auth.change_user"
+    required_action = catalog.USUARIO_VISUALIZAR
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         users = (
             User.objects.filter(profile__organization=self.organization)
-            .prefetch_related("groups")
+            .prefetch_related("access_profiles__profile", "access_profiles__scope")
             .order_by("username")
         )
         search = self.request.GET.get("q", "").strip()
@@ -487,13 +429,14 @@ class UserListView(OrganizationRequiredMixin, ActionRequiredMixin, TemplateView)
             )
         context["users"] = users
         context["search"] = search
+        context["can_edit"] = AuthorizationService.can(self.request.user, catalog.USUARIO_EDITAR)
         return context
 
 
 class UserFormView(OrganizationRequiredMixin, ActionRequiredMixin, FormView):
     template_name = "core/user_form.html"
     form_class = UserForm
-    required_action = "auth.change_user"
+    required_action = catalog.USUARIO_EDITAR
 
     def get_instance(self):
         pk = self.kwargs.get("pk")
@@ -514,15 +457,21 @@ class UserFormView(OrganizationRequiredMixin, ActionRequiredMixin, FormView):
         if instance is not None:
             from activities.models import Activity, Task
 
-            context["open_activities"] = Activity.objects.filter(
-                organization=self.organization, owner=instance
-            ).exclude(status__in=["CONCLUIDA", "CANCELADA"]).count()
-            context["open_tasks"] = Task.objects.filter(
-                activity__organization=self.organization,
-                executors__user=instance,
-                executors__removed_at__isnull=True,
-                status__in=["DISPONIVEL", "EM_FILA", "EM_EXECUCAO", "BLOQUEADA"],
-            ).distinct().count()
+            context["open_activities"] = (
+                Activity.objects.filter(organization=self.organization, owner=instance)
+                .exclude(status__in=["CONCLUIDA", "CANCELADA"])
+                .count()
+            )
+            context["open_tasks"] = (
+                Task.objects.filter(
+                    activity__organization=self.organization,
+                    executors__user=instance,
+                    executors__removed_at__isnull=True,
+                    status__in=["DISPONIVEL", "EM_FILA", "EM_EXECUCAO", "BLOQUEADA"],
+                )
+                .distinct()
+                .count()
+            )
         return context
 
     def form_valid(self, form):
@@ -550,17 +499,120 @@ class UserFormView(OrganizationRequiredMixin, ActionRequiredMixin, FormView):
             profile.organization = self.organization
             profile.save(update_fields=["organization"])
 
-        instance.groups.set(data["groups"])
-
-        selected = set(data["sectors"])
-        current = set(
-            Sector.objects.filter(
-                user_memberships__user=instance, user_memberships__removed_at__isnull=True
-            )
+        AccessService.sync_user_sectors(
+            instance,
+            sectors=data["sectors"],
+            managed_sectors=data.get("managed_sectors") or [],
+            changed_by=self.request.user,
         )
-        for sector in selected - current:
-            UserSectorService.add(instance, sector)
-        for sector in current - selected:
-            UserSectorService.remove(instance, sector)
-
         return redirect("user-list")
+
+
+class UserAccessView(OrganizationRequiredMixin, ActionRequiredMixin, FormView):
+    """Perfis e concessões diretas de uma pessoa, com a origem de cada acesso
+    (doc 05 §31, §37)."""
+
+    template_name = "core/user_access.html"
+    form_class = AssignProfileForm
+    required_action = catalog.SEGURANCA_GERIR_AUTORIZACOES
+
+    def get_target(self):
+        return get_object_or_404(
+            User, pk=self.kwargs["pk"], profile__organization=self.organization
+        )
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["organization"] = self.organization
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        target = self.get_target()
+        context["target"] = target
+        context["assignments"] = target.access_profiles.filter(is_active=True).select_related(
+            "profile", "scope"
+        )
+        context["direct_grants"] = target.direct_actions.filter(is_active=True).select_related(
+            "action", "scope"
+        )
+        context["effective_actions"] = AuthorizationService.effective_actions(target)
+        context["unrestricted"] = AuthorizationService.has_unrestricted_access(target)
+        context["grant_form"] = GrantActionForm(organization=self.organization)
+        return context
+
+    def form_valid(self, form):
+        target = self.get_target()
+        try:
+            AccessService.assign_profile(
+                user=target,
+                profile=form.cleaned_data["profile"],
+                scope_type=form.cleaned_data["scope_type"],
+                sector=form.cleaned_data.get("sector"),
+                company=form.cleaned_data.get("company"),
+                site=form.cleaned_data.get("site"),
+                cost_center=form.cleaned_data.get("cost_center"),
+                relation=form.cleaned_data.get("relation") or "",
+                granted_by=self.request.user,
+            )
+            messages.success(self.request, "Perfil atribuído.")
+        except CadastroError as exc:
+            form.add_error(None, str(exc))
+            return self.form_invalid(form)
+        return redirect("user-access", pk=target.pk)
+
+
+class UserAccessRemoveView(OrganizationRequiredMixin, ActionRequiredMixin, View):
+    required_action = catalog.SEGURANCA_GERIR_AUTORIZACOES
+
+    def post(self, request, pk, assignment_pk):
+        target = get_object_or_404(User, pk=pk, profile__organization=self.organization)
+        assignment = get_object_or_404(
+            UserProfileAssignment, pk=assignment_pk, user=target, organization=self.organization
+        )
+        AccessService.revoke_profile(assignment, changed_by=request.user)
+        messages.success(request, "Atribuição removida.")
+        return redirect("user-access", pk=target.pk)
+
+
+class UserGrantActionView(OrganizationRequiredMixin, ActionRequiredMixin, View):
+    """Concessão direta para exceção pontual (doc 05 §27)."""
+
+    required_action = catalog.SEGURANCA_GERIR_AUTORIZACOES
+
+    def post(self, request, pk):
+        target = get_object_or_404(User, pk=pk, profile__organization=self.organization)
+        form = GrantActionForm(request.POST, organization=self.organization)
+        if not form.is_valid():
+            messages.error(request, "Verifique os dados da concessão.")
+            return redirect("user-access", pk=target.pk)
+
+        try:
+            AccessService.grant_action(
+                user=target,
+                action=form.cleaned_data["action"],
+                scope_type=form.cleaned_data["scope_type"],
+                sector=form.cleaned_data.get("sector"),
+                company=form.cleaned_data.get("company"),
+                site=form.cleaned_data.get("site"),
+                cost_center=form.cleaned_data.get("cost_center"),
+                relation=form.cleaned_data.get("relation") or "",
+                granted_by=request.user,
+            )
+            messages.success(request, "Concessão direta registrada.")
+        except CadastroError as exc:
+            messages.error(request, str(exc))
+        return redirect("user-access", pk=target.pk)
+
+
+class UserGrantRemoveView(OrganizationRequiredMixin, ActionRequiredMixin, View):
+    required_action = catalog.SEGURANCA_GERIR_AUTORIZACOES
+
+    def post(self, request, pk, grant_pk):
+        target = get_object_or_404(User, pk=pk, profile__organization=self.organization)
+        grant = get_object_or_404(
+            UserActionGrant, pk=grant_pk, user=target, organization=self.organization
+        )
+        AccessService.revoke_action(grant, changed_by=request.user)
+        messages.success(request, "Concessão removida.")
+        return redirect("user-access", pk=target.pk)
