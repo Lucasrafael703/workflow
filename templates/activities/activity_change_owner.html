@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Alterar dono — LPS{% endblock %}
+
+{% block content %}
+<p class="muted"><a href="{% url 'activity-detail' activity.pk %}">← {{ activity.title }}</a></p>
+<h1>Alterar dono da atividade</h1>
+<p class="muted">Dono atual: <strong>{{ activity.owner.get_username }}</strong>.
+   A atividade continua com um único dono; a troca fica registrada.</p>
+
+<form method="post" class="card" style="max-width:480px">
+    {% csrf_token %}
+    {% include "activities/_form_fields.html" %}
+    <div class="actions-row">
+        <button type="submit" class="btn btn--primary">Transferir</button>
+        <a href="{% url 'activity-detail' activity.pk %}" class="btn">Voltar</a>
+    </div>
+</form>
+{% endblock %}

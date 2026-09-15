@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Gestão — LPS{% endblock %}
+
+{% block content %}
+<h1>Visão do gestor</h1>
+<p class="muted">O que precisa de decisão agora. Cada bloco abre o detalhe por trás do número.</p>
+
+<div class="stat-grid">
+    <div class="stat-card"><div class="value">{{ open_total }}</div><div class="label">Tarefas abertas</div></div>
+    <div class="stat-card"><div class="value">{{ overdue_count }}</div><div class="label">Atrasadas</div></div>
+    <div class="stat-card"><div class="value">{{ blocked_count }}</div><div class="label">Bloqueadas</div></div>
+    <div class="stat-card"><div class="value">{{ conflicts|length }}</div><div class="label">Conflitos de prazo</div></div>
+</div>
+
+<div class="split">
+    <div>
+        <div class="card">
+            <h2>Filas por setor</h2>
+            {% if sectors %}
+            <table class="responsive">
+                <thead><tr><th>Setor</th><th>Na fila</th><th></th></tr></thead>
+                <tbody>
+                {% for sector in sectors %}
+                <tr>
+                    <td data-label="Setor">{{ sector.name }}</td>
+                    <td data-label="Na fila">{{ sector.queue_size }}</td>
+                    <td data-label=""><a href="{% url 'queue-sector' sector.pk %}">Ver fila</a></td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="muted">Nenhum setor cadastrado.</p>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <h2>Atrasos</h2>
+            {% if overdue_tasks %}
+            <ul class="list-reset">
+                {% for task in overdue_tasks %}
+                <li>
+                    <a href="{% url 'task-detail' task.pk %}">{{ task.title }}</a>
+                    <span class="tag tag--overdue">Atrasada</span>
+                    <div class="muted">{{ task.sector.name }} · Prazo comprometido {{ task.committed_deadline|date:"d/m/Y H:i" }}
+                        · Dono: {{ task.activity.owner.get_username }}</div>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="muted">Nenhuma tarefa atrasada.</p>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <h2>Bloqueios</h2>
+            {% if blocked_tasks %}
+            <ul class="list-reset">
+                {% for task in blocked_tasks %}
+                <li>
+                    <a href="{% url 'task-detail' task.pk %}">{{ task.title }}</a>
+                    <div class="muted">{{ task.sector.name }}
+                        {% for block in task.blocks.all %}{% if not block.ended_at %} · {{ block.reason }}{% endif %}{% endfor %}</div>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="muted">Nenhuma tarefa bloqueada.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div>
+        <div class="card">
+            <h2>Conflitos de prazo</h2>
+            {% if conflicts %}
+            <ul class="list-reset">
+                {% for conflict in conflicts %}
+                <li>
+                    <a href="{% url 'task-detail' conflict.task.pk %}">{{ conflict.task.title }}</a>
+                    <div class="muted">Aberto em {{ conflict.opened_at|date:"d/m/Y H:i" }}</div>
+                    {% if perms.activities.can_resolve_deadline_conflict %}
+                    <a href="{% url 'conflict-resolve' conflict.pk %}" class="btn">Registrar decisão</a>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="muted">Nenhum conflito aberto.</p>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <h2>Capacidade (hoje)</h2>
+            <p>Entraram: <strong>{{ entered_today }}</strong></p>
+            <p>Concluídas: <strong>{{ completed_today }}</strong></p>
+            <p class="muted">Fila atual: {{ open_total }} tarefas abertas.</p>
+        </div>
+
+        <div class="card">
+            <h2>Sem avanço</h2>
+            {% if stalled_activities %}
+            <ul class="list-reset">
+                {% for activity in stalled_activities %}
+                <li>
+                    <a href="{% url 'activity-detail' activity.pk %}">{{ activity.title }}</a>
+                    <div class="muted">
+                        {% if activity.first_action_at %}Sem ação recente{% else %}Ainda sem primeira ação{% endif %}
+                        · criada em {{ activity.created_at|date:"d/m/Y" }}
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="muted">Nenhuma atividade parada.</p>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <h2>Histórico geral</h2>
+            <a href="{% url 'history' %}" class="btn">Abrir histórico</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

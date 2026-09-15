@@ -147,3 +147,98 @@ legend { font-weight: 700; padding: 0 6px; }
 
 .actions-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 .muted { color: var(--color-muted); }
+
+/* Status das tarefas/atividades da LPS. O texto sempre acompanha a cor: nunca
+   depender só de cor para comunicar estado (doc 09 §66, §234). */
+.tag--ABERTA { background: #e8f0fe; color: var(--color-primary); }
+.tag--NAO_INICIADA { background: #eef0f2; color: var(--color-muted); }
+.tag--DISPONIVEL { background: #e8f0fe; color: var(--color-primary); }
+.tag--EM_FILA { background: #eef0f2; color: var(--color-muted); }
+.tag--EM_EXECUCAO { background: #e3f6ec; color: var(--color-success); }
+.tag--DEVOLVIDA { background: #fdf3e0; color: var(--color-warning); }
+.tag--ABERTO { background: #fdecea; color: var(--color-danger); }
+.tag--RESOLVIDO { background: #e3f6ec; color: var(--color-success); }
+.tag--ACEITO { background: #e3f6ec; color: var(--color-success); }
+.tag--RECUSADO { background: #fdecea; color: var(--color-danger); }
+
+/* Barra persistente do timer (doc 09 §104) */
+.timerbar {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    background: var(--color-success); color: #fff;
+    padding: 10px 24px;
+}
+.timerbar a { color: #fff; text-decoration: underline; }
+.timerbar__clock { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.timerbar form { display: inline; }
+.timerbar .btn { background: rgba(255,255,255,0.15); color: #fff; border-color: rgba(255,255,255,0.4); }
+
+.timer-hero { text-align: center; padding: 20px; }
+.timer-hero__clock { font-size: 40px; font-weight: 700; font-variant-numeric: tabular-nums; margin-bottom: 12px; }
+.btn--lg { padding: 12px 28px; font-size: 16px; font-weight: 600; }
+
+/* Abas */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--color-border); margin-bottom: 16px; flex-wrap: wrap; }
+.tabs a {
+    padding: 8px 14px; color: var(--color-muted); font-weight: 600;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.tabs a.is-active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+.tabs a:hover { text-decoration: none; }
+
+/* Fila */
+.queue-row { display: flex; align-items: center; gap: 12px; }
+.queue-position {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 30px; height: 30px; border-radius: 50%;
+    background: var(--color-bg); border: 1px solid var(--color-border); font-weight: 700;
+}
+.position-pill {
+    display: inline-block; padding: 4px 12px; border-radius: 999px;
+    background: var(--color-primary); color: #fff; font-weight: 700;
+}
+.queue-list { list-style: none; padding: 0; margin: 0; }
+.queue-list li {
+    background: var(--color-surface); border: 1px solid var(--color-border);
+    border-radius: var(--radius); padding: 10px 14px; margin-bottom: 8px;
+}
+.queue-list li.is-dragging { opacity: 0.5; }
+.queue-list li[draggable="true"] { cursor: grab; }
+
+/* Conversa */
+.chat { list-style: none; padding: 0; margin: 0 0 16px; }
+.chat li { background: var(--color-surface); border: 1px solid var(--color-border);
+    border-radius: var(--radius); padding: 10px 14px; margin-bottom: 8px; }
+.chat .who { font-weight: 600; }
+.chat .when { color: var(--color-muted); font-size: 12px; margin-left: 6px; }
+.context-banner { background: #e8f0fe; color: var(--color-primary);
+    padding: 8px 12px; border-radius: var(--radius); margin-bottom: 12px; font-size: 13px; }
+
+/* Layout auxiliar */
+.split { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; align-items: start; }
+.empty-state { text-align: center; padding: 32px 16px; color: var(--color-muted); }
+.empty-state p { margin-bottom: 16px; }
+.section-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
+.filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 16px; }
+.filters .form-row { margin-bottom: 0; }
+.deadline-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.deadline-compare > div { background: var(--color-bg); border-radius: var(--radius); padding: 10px 14px; }
+.list-reset { list-style: none; padding: 0; margin: 0; }
+.list-reset li { padding: 6px 0; border-bottom: 1px solid var(--color-border); }
+.list-reset li:last-child { border-bottom: none; }
+
+@media (max-width: 760px) {
+    .topbar { flex-wrap: wrap; gap: 10px; }
+    .topbar__nav { order: 3; width: 100%; overflow-x: auto; }
+    .split { grid-template-columns: 1fr; }
+    .deadline-compare { grid-template-columns: 1fr; }
+    /* Tabelas viram cartões no celular (doc 09 §281) */
+    table.responsive thead { display: none; }
+    table.responsive tr {
+        display: block; background: var(--color-surface);
+        border: 1px solid var(--color-border); border-radius: var(--radius);
+        padding: 10px 14px; margin-bottom: 10px;
+    }
+    table.responsive td { display: flex; justify-content: space-between; gap: 12px; border: none; padding: 4px 0; }
+    table.responsive td::before { content: attr(data-label); color: var(--color-muted); font-size: 12px; font-weight: 600; }
+}

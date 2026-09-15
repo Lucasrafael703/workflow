@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Perfil de acesso — LPS{% endblock %}
+
+{% block content %}
+<p class="muted"><a href="{% url 'permissions' %}">← Perfis e permissões</a></p>
+<h1>Perfil de acesso</h1>
+
+<form method="post" class="card" style="max-width:640px">
+    {% csrf_token %}
+    {% include "activities/_form_fields.html" %}
+    <div class="actions-row">
+        <button type="submit" class="btn btn--primary">Salvar perfil</button>
+        <a href="{% url 'permissions' %}" class="btn">Cancelar</a>
+    </div>
+</form>
+{% endblock %}

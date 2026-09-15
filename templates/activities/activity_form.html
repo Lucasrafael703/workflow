@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}{% if is_edit %}Editar atividade{% else %}Nova atividade{% endif %} — LPS{% endblock %}
+
+{% block content %}
+<h1>{% if is_edit %}Editar atividade{% else %}Nova atividade{% endif %}</h1>
+
+<form method="post" class="card" style="max-width:640px">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+
+    {# Progressive disclosure: o essencial à vista, o resto em "Mais opções" (doc 09 §315) #}
+    {% for field in form %}
+        {% if field.name == "title" or field.name == "owner" or field.name == "requested_deadline" %}
+        <div class="form-row">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<div class="helptext">{{ field.help_text }}</div>{% endif %}
+            {{ field.errors }}
+        </div>
+        {% endif %}
+    {% endfor %}
+
+    <details {% if is_edit %}open{% endif %}>
+        <summary style="cursor:pointer; font-weight:600; margin-bottom:12px">Mais opções</summary>
+        {% for field in form %}
+            {% if field.name != "title" and field.name != "owner" and field.name != "requested_deadline" %}
+            <div class="form-row">
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.help_text %}<div class="helptext">{{ field.help_text }}</div>{% endif %}
+                {{ field.errors }}
+            </div>
+            {% endif %}
+        {% endfor %}
+    </details>
+
+    <div class="actions-row">
+        <button type="submit" class="btn btn--primary">{% if is_edit %}Salvar{% else %}Criar{% endif %}</button>
+        {% if is_edit %}
+        <a href="{% url 'activity-detail' activity.pk %}" class="btn">Cancelar</a>
+        {% else %}
+        <a href="{% url 'activity-list' %}" class="btn">Cancelar</a>
+        {% endif %}
+    </div>
+</form>
+{% endblock %}

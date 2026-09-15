@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}{{ activity.title }} — LPS{% endblock %}
+
+{% block content %}
+<div class="section-head">
+    <div>
+        <h1 style="margin-bottom:6px">{{ activity.title }}</h1>
+        <div class="muted">
+            <span class="tag tag--{{ activity.status }}">{{ activity.get_status_display }}</span>
+            · Dono: <strong>{{ activity.owner.get_username }}</strong>
+            {% if activity.requested_deadline %}
+            · Prazo solicitado: {{ activity.requested_deadline|date:"d/m/Y H:i" }}
+            {% else %}· Sem prazo{% endif %}
+            {% if activity.company %} · {{ activity.company.name }}{% endif %}
+            {% if activity.site %} · Obra: {{ activity.site.name }}{% endif %}
+        </div>
+    </div>
+    <div class="actions-row">
+        {% if activity.status != "CONCLUIDA" and activity.status != "CANCELADA" %}
+        <a href="{% url 'task-create' activity.pk %}" class="btn btn--primary">Adicionar tarefa</a>
+        <a href="{% url 'activity-edit' activity.pk %}" class="btn">Editar</a>
+        {% endif %}
+    </div>
+</div>
+
+<nav class="tabs">
+    <a href="?tab=visao-geral" class="{% if tab == 'visao-geral' %}is-active{% endif %}">Visão geral</a>
+    <a href="?tab=tarefas" class="{% if tab == 'tarefas' %}is-active{% endif %}">Tarefas ({{ tasks_total }})</a>
+    <a href="?tab=historico" class="{% if tab == 'historico' %}is-active{% endif %}">Histórico</a>
+    <a href="?tab=conversa" class="{% if tab == 'conversa' %}is-active{% endif %}">Conversa</a>
+</nav>
+
+{% if tab == "tarefas" %}
+    {% include "activities/_tasks_block.html" %}
+
+{% elif tab == "historico" %}
+    <div class="card">
+        <h2>Histórico</h2>
+        {% include "activities/_timeline.html" with entries=history %}
+    </div>
+    {% if owner_changes %}
+    <div class="card">
+        <h2>Mudanças de dono</h2>
+        <ul class="list-reset">
+            {% for change in owner_changes %}
+            <li>{{ change.previous_owner.get_username }} → <strong>{{ change.new_owner.get_username }}</strong>
+                <span class="muted">por {{ change.changed_by.get_username }} em {{ change.changed_at|date:"d/m/Y H:i" }}</span></li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+{% elif tab == "conversa" %}
+    <div class="card">
+        <div class="context-banner">Você está comentando na atividade: {{ activity.title }}</div>
+        {% if activity_messages %}
+        <ul class="chat">
+            {% for message in activity_messages %}
+            <li>
+                <span class="who">{{ message.author.get_username }}</span>
+                <span class="when">{{ message.created_at|date:"d/m/Y H:i" }}</span>
+                <div>{{ message.body|linebreaksbr }}</div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="muted">Nenhuma mensagem ainda.</p>
+        {% endif %}
+
+        <form method="post" action="{% url 'activity-message' activity.pk %}">
+            {% csrf_token %}
+            <div class="form-row">{{ message_form.body }}</div>
+            <button type="submit" class="btn btn--primary">Enviar</button>
+        </form>
+        <p class="muted" style="margin-top:8px">
+            Uma mensagem não altera prazo, status ou responsável. Para isso, use a ação correspondente na tarefa.
+        </p>
+    </div>
+
+{% else %}
+    <div class="split">
+        <div>
+            <div class="card">
+                <h2>Visão geral</h2>
+                {% if activity.description %}<p>{{ activity.description|linebreaksbr }}</p>{% endif %}
+                <p><strong>Progresso:</strong> {{ tasks_done }} de {{ tasks_total }} tarefas concluídas</p>
+                {% if sectors_involved %}
+                <p><strong>Setores envolvidos:</strong> {{ sectors_involved|join:" → " }}</p>
+                {% endif %}
+                <p class="muted">Criada por {{ activity.created_by.get_username }} em {{ activity.created_at|date:"d/m/Y H:i" }}
+                {% if activity.first_action_at %} · Primeira ação em {{ activity.first_action_at|date:"d/m/Y H:i" }}{% endif %}</p>
+                {% if activity.status == "CANCELADA" %}
+                <p class="message message--warning">Cancelada em {{ activity.cancelled_at|date:"d/m/Y H:i" }}. Motivo: {{ activity.cancelled_reason }}</p>
+                {% elif activity.status == "CONCLUIDA" %}
+                <p class="message message--success">Concluída em {{ activity.completed_at|date:"d/m/Y H:i" }} por {{ activity.completed_by.get_username }}.</p>
+                {% endif %}
+            </div>
+
+            <div class="card">
+                <h2>Situação atual</h2>
+                {% if open_tasks %}
+                <ul class="list-reset">
+                    {% for task in open_tasks %}
+                    <li>
+                        <a href="{% url 'task-detail' task.pk %}">{{ task.title }}</a>
+                        <span class="tag tag--{{ task.status }}">{{ task.get_status_display }}</span>
+                        <div class="muted">
+                            {{ task.sector.name }}
+                            {% if task.queue_info %} · Posição {{ task.queue_info.position }} de {{ task.queue_info.total }}{% endif %}
+                            {% if task.committed_deadline %} · Comprometido: {{ task.committed_deadline|date:"d/m/Y H:i" }}{% endif %}
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="muted">Nenhuma tarefa em aberto.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div>
+            <div class="card">
+                <h2>Ações</h2>
+                <div class="actions-row">
+                    {% if activity.status != "CONCLUIDA" and activity.status != "CANCELADA" %}
+                        <form method="post" action="{% url 'activity-complete' activity.pk %}"
+                              onsubmit="return confirm('Confirmar conclusão: o resultado “{{ activity.title|escapejs }}” foi alcançado?');">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn--primary">Concluir atividade</button>
+                        </form>
+                        {% if can_change_owner %}<a href="{% url 'activity-change-owner' activity.pk %}" class="btn">Alterar dono</a>{% endif %}
+                        {% if can_cancel %}<a href="{% url 'activity-cancel' activity.pk %}" class="btn btn--danger">Cancelar</a>{% endif %}
+                    {% elif activity.status == "CONCLUIDA" and can_reopen %}
+                        <a href="{% url 'activity-reopen' activity.pk %}" class="btn">Reabrir</a>
+                    {% endif %}
+                </div>
+            </div>
+            {% include "activities/_tasks_block.html" %}
+        </div>
+    </div>
+{% endif %}
+{% endblock %}

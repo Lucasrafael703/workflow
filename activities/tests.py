@@ -3,6 +3,7 @@ from django.contrib.auth.models import Permission
 from django.test import TestCase
 from django.utils import timezone
 
+from audit.models import AuditLog
 from core.models import Organization, Sector
 
 from .models import (
@@ -10,11 +11,19 @@ from .models import (
     DeadlineConflict,
     DeadlineProposal,
     QueueEntry,
+    QueuePositionChange,
     ReturnReason,
     Task,
     WorkSession,
 )
-from .services import ActivityError, ActivityService, DeadlineService, QueueService, TaskService
+from .services import (
+    ActivityError,
+    ActivityService,
+    DeadlineService,
+    MessageService,
+    QueueService,
+    TaskService,
+)
 
 User = get_user_model()
 
@@ -288,3 +297,177 @@ class ActivityCompletionTests(ActivitiesTestCase):
         activity.refresh_from_db()
         self.assertEqual(activity.status, Activity.Status.CONCLUIDA)
         self.assertTrue(self.owner.notifications.filter(activity=activity, event_type="ACTIVITY_COMPLETED").exists())
+
+
+class UpdateAuditTests(ActivitiesTestCase):
+    def test_editing_activity_audits_each_field(self):
+        activity = ActivityService.create_activity(
+            organization=self.org, title="Título antigo", owner=self.owner, created_by=self.creator
+        )
+        ActivityService.update_activity(
+            activity, self.owner, title="Título novo", description="Contexto"
+        )
+        activity.refresh_from_db()
+
+        self.assertEqual(activity.title, "Título novo")
+        entries = activity.audit_entries.filter(action=AuditLog.Action.UPDATE)
+        self.assertEqual(entries.count(), 2)
+        title_entry = entries.get(field_name="title")
+        self.assertEqual(title_entry.old_value, "Título antigo")
+        self.assertEqual(title_entry.new_value, "Título novo")
+
+    def test_completed_activity_cannot_be_edited(self):
+        activity = ActivityService.create_activity(
+            organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
+        )
+        ActivityService.complete_activity(activity, user=self.owner)
+        with self.assertRaises(ActivityError):
+            ActivityService.update_activity(activity, self.owner, title="Outro")
+
+    def test_task_cannot_depend_on_itself(self):
+        activity = ActivityService.create_activity(
+            organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
+        )
+        task = TaskService.create_task(activity, self.sector, "Tarefa", created_by=self.creator)
+        with self.assertRaises(ActivityError):
+            TaskService.update_task(task, self.creator, depends_on=task)
+
+
+class ManualTimeTests(ActivitiesTestCase):
+    def _task(self):
+        activity = ActivityService.create_activity(
+            organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
+        )
+        task = TaskService.create_task(activity, self.sector, "Tarefa", created_by=self.creator)
+        TaskService.add_executor(task, self.executor, added_by=self.creator)
+        return task
+
+    def test_time_can_only_be_logged_for_an_executor(self):
+        task = self._task()
+        now = timezone.now()
+        with self.assertRaises(ActivityError):
+            TaskService.log_manual_time(
+                task,
+                user=self.executor2,  # não é executor da tarefa
+                started_at=now - timezone.timedelta(hours=1),
+                ended_at=now,
+                logged_by=self.creator,
+            )
+
+    def test_manual_time_is_flagged(self):
+        task = self._task()
+        now = timezone.now()
+        session = TaskService.log_manual_time(
+            task,
+            user=self.executor,
+            started_at=now - timezone.timedelta(hours=2),
+            ended_at=now - timezone.timedelta(hours=1),
+            logged_by=self.creator,
+        )
+        self.assertTrue(session.is_manual)
+        self.assertEqual(session.duration, timezone.timedelta(hours=1))
+
+    def test_manual_time_rejects_inverted_period(self):
+        task = self._task()
+        now = timezone.now()
+        with self.assertRaises(ActivityError):
+            TaskService.log_manual_time(
+                task,
+                user=self.executor,
+                started_at=now,
+                ended_at=now - timezone.timedelta(hours=1),
+                logged_by=self.creator,
+            )
+
+    def test_manual_time_rejects_future(self):
+        task = self._task()
+        future = timezone.now() + timezone.timedelta(days=1)
+        with self.assertRaises(ActivityError):
+            TaskService.log_manual_time(
+                task,
+                user=self.executor,
+                started_at=future,
+                ended_at=future + timezone.timedelta(hours=1),
+                logged_by=self.creator,
+            )
+
+
+class QueueRenumberTests(ActivitiesTestCase):
+    def test_completing_task_closes_position_gap(self):
+        activity = ActivityService.create_activity(
+            organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
+        )
+        first = TaskService.create_task(activity, self.sector, "Tarefa 1", created_by=self.creator)
+        second = TaskService.create_task(activity, self.sector, "Tarefa 2", created_by=self.creator)
+        third = TaskService.create_task(activity, self.sector, "Tarefa 3", created_by=self.creator)
+
+        TaskService.complete(first, self.creator)
+
+        remaining = QueueEntry.objects.filter(sector=self.sector, left_at__isnull=True).order_by("position")
+        self.assertEqual([e.position for e in remaining], [1, 2])
+        self.assertEqual([e.task_id for e in remaining], [second.pk, third.pk])
+
+    def test_renumbering_is_recorded_as_automatic(self):
+        activity = ActivityService.create_activity(
+            organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
+        )
+        first = TaskService.create_task(activity, self.sector, "Tarefa 1", created_by=self.creator)
+        second = TaskService.create_task(activity, self.sector, "Tarefa 2", created_by=self.creator)
+
+        TaskService.complete(first, self.creator)
+
+        entry = QueueEntry.objects.get(task=second)
+        change = entry.position_changes.first()
+        self.assertEqual(change.reason, QueuePositionChange.Reason.AUTOMATICA_CONCLUSAO)
+        self.assertIsNone(change.changed_by)
+
+    def test_history_never_records_a_position_larger_than_the_total(self):
+        """"2 de 1" seria impossível e apareceria para o solicitante."""
+        activity = ActivityService.create_activity(
+            organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
+        )
+        first = TaskService.create_task(activity, self.sector, "Tarefa 1", created_by=self.creator)
+        TaskService.create_task(activity, self.sector, "Tarefa 2", created_by=self.creator)
+        TaskService.create_task(activity, self.sector, "Tarefa 3", created_by=self.creator)
+
+        TaskService.complete(first, self.creator)
+
+        for change in QueuePositionChange.objects.all():
+            self.assertLessEqual(change.old_position, change.old_total)
+            self.assertLessEqual(change.new_position, change.new_total)
+
+
+class MessageTests(ActivitiesTestCase):
+    def test_activity_message_notifies_owner_not_author(self):
+        activity = ActivityService.create_activity(
+            organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
+        )
+        MessageService.post_activity_message(activity, self.creator, "Alguma novidade?")
+
+        self.assertEqual(activity.messages.count(), 1)
+        self.assertTrue(self.owner.notifications.filter(activity=activity).exists())
+        self.assertFalse(
+            self.creator.notifications.filter(
+                activity=activity, title="Nova mensagem na atividade"
+            ).exists()
+        )
+
+    def test_empty_message_is_rejected(self):
+        activity = ActivityService.create_activity(
+            organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
+        )
+        with self.assertRaises(ActivityError):
+            MessageService.post_activity_message(activity, self.creator, "   ")
+
+    def test_task_message_reaches_executors(self):
+        activity = ActivityService.create_activity(
+            organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
+        )
+        task = TaskService.create_task(activity, self.sector, "Tarefa", created_by=self.creator)
+        TaskService.add_executor(task, self.executor, added_by=self.creator)
+
+        MessageService.post_task_message(task, self.owner, "Fornecedor informou 7 dias")
+
+        self.assertTrue(
+            self.executor.notifications.filter(task=task, title="Nova mensagem na tarefa").exists()
+        )

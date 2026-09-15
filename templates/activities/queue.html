@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Fila — LPS{% endblock %}
+
+{% block content %}
+<div class="section-head">
+    <h1>Fila do setor</h1>
+</div>
+
+<form method="get" class="filters">
+    <div class="form-row">
+        <label for="sector">Setor</label>
+        <select id="sector" name="sector" onchange="this.form.submit()">
+            {% for option in sectors %}
+            <option value="{{ option.pk }}" {% if sector and option.pk == sector.pk %}selected{% endif %}>{{ option.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <noscript><button type="submit" class="btn">Ver fila</button></noscript>
+</form>
+
+{% if not sector %}
+<div class="card empty-state"><p>Nenhum setor cadastrado ainda.</p>
+    <a href="{% url 'sector-create' %}" class="btn btn--primary">Cadastrar setor</a></div>
+
+{% elif may_see_full %}
+<div class="stat-grid">
+    <div class="stat-card"><div class="value">{{ total }}</div><div class="label">Na fila</div></div>
+    <div class="stat-card"><div class="value">{{ in_execution }}</div><div class="label">Em execução</div></div>
+    <div class="stat-card"><div class="value">{{ blocked }}</div><div class="label">Bloqueadas</div></div>
+</div>
+
+<div class="card">
+    <h2>{{ sector.name }} — ordem de execução</h2>
+    {% if entries %}
+    <ul class="queue-list" id="queue-list">
+        {% for entry in entries %}
+        <li data-entry-id="{{ entry.pk }}" {% if can_reorder %}draggable="true"{% endif %}>
+            <div class="queue-row">
+                <span class="queue-position">{{ entry.position }}</span>
+                <div style="flex:1">
+                    <a href="{% url 'task-detail' entry.task.pk %}">{{ entry.task.title }}</a>
+                    <span class="tag tag--{{ entry.task.status }}">{{ entry.task.get_status_display }}</span>
+                    <div class="muted">
+                        Dono: {{ entry.task.activity.owner.get_username }}
+                        · Na fila desde {{ entry.entered_at|date:"d/m/Y H:i" }}
+                        {% if entry.task.committed_deadline %} · Comprometido: {{ entry.task.committed_deadline|date:"d/m/Y H:i" }}
+                        {% elif entry.task.requested_deadline %} · Solicitado: {{ entry.task.requested_deadline|date:"d/m/Y H:i" }}{% endif %}
+                    </div>
+                </div>
+                {% if can_reorder %}
+                {# Fallback sem JS e caminho confiável no celular (doc 09 §283) #}
+                <form method="post" action="{% url 'queue-reorder' entry.pk %}" class="queue-move">
+                    {% csrf_token %}
+                    <input type="number" name="new_position" min="1" max="{{ total }}" value="{{ entry.position }}"
+                           aria-label="Nova posição" style="width:64px; padding:6px">
+                    <input type="text" name="reason" placeholder="Motivo (opcional)" style="padding:6px; width:150px">
+                    <button type="submit" class="btn">Mover</button>
+                </form>
+                {% endif %}
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+    {% if can_reorder %}
+    <p class="muted">Arraste um item para reordenar, ou informe a posição e clique em Mover.</p>
+    {% endif %}
+    {% else %}
+    <p class="muted">Nenhuma tarefa aguardando neste setor.</p>
+    {% endif %}
+</div>
+
+{% else %}
+{# Quem é de fora do setor vê só a própria demanda: posição e prazo, nunca o
+   título das outras tarefas (doc 09 §97-99). #}
+<div class="card">
+    <h2>{{ sector.name }}</h2>
+    {% if my_entries %}
+        {% for entry in my_entries %}
+        <div style="margin-bottom:16px">
+            <div>Sua tarefa: <a href="{% url 'task-detail' entry.task.pk %}">{{ entry.task.title }}</a></div>
+            <p><span class="position-pill">Posição: {{ entry.position }} de {{ total }}</span></p>
+            <div class="muted">
+                Status: {{ entry.task.get_status_display }}
+                {% if entry.task.committed_deadline %} · Prazo comprometido: {{ entry.task.committed_deadline|date:"d/m/Y H:i" }}{% endif %}
+            </div>
+            {% if entry.position_changes.exists %}
+            <details style="margin-top:6px">
+                <summary style="cursor:pointer" class="muted">Histórico da posição</summary>
+                <ul class="list-reset">
+                    {% for change in entry.position_changes.all %}
+                    <li class="muted">{{ change.changed_at|date:"d/m H:i" }} — {{ change.old_position }} de {{ change.old_total }}
+                        → {{ change.new_position }} de {{ change.new_total }}</li>
+                    {% endfor %}
+                </ul>
+            </details>
+            {% endif %}
+        </div>
+        {% endfor %}
+    {% else %}
+        <p class="muted">Você não possui demandas na fila deste setor.</p>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if may_see_full and can_reorder %}
+<script src="{% static 'js/queue.js' %}"></script>
+{% endif %}
+{% endblock %}

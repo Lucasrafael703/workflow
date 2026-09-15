@@ -1,0 +1,6 @@
+{# Inativar preserva o histórico; a exclusão não é oferecida (Regras 05 §89-90). #}
+<form method="post" action="{% url 'cadastro-toggle' tab item.pk %}" style="display:inline"
+      onsubmit="return confirm('{% if item.is_active %}Inativar{% else %}Reativar{% endif %} “{{ item.name|escapejs }}”?');">
+    {% csrf_token %}
+    <button type="submit" class="link-button">{% if item.is_active %}Inativar{% else %}Reativar{% endif %}</button>
+</form>
