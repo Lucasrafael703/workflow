@@ -40,4 +40,37 @@
         );
         if (first) first.focus();
     }
+
+    // Menu "mais opções" das notificações: um por linha, só um aberto por vez.
+    // Sem JS o menu simplesmente não aparece — a ação principal ao lado
+    // continua sendo um botão normal.
+    var toggles = document.querySelectorAll("[data-notif-menu-toggle]");
+    if (toggles.length) {
+        function fecharTodos(exceto) {
+            document.querySelectorAll("[data-notif-menu]").forEach(function (menu) {
+                if (menu !== exceto) menu.hidden = true;
+            });
+            document.querySelectorAll("[data-notif-menu-toggle]").forEach(function (btn) {
+                if (btn.getAttribute("aria-expanded") === "true" && btn.nextElementSibling !== exceto) {
+                    btn.setAttribute("aria-expanded", "false");
+                }
+            });
+        }
+
+        toggles.forEach(function (btn) {
+            var menu = btn.nextElementSibling;
+            btn.addEventListener("click", function (event) {
+                event.stopPropagation();
+                var abrindo = menu.hidden;
+                fecharTodos(abrindo ? menu : null);
+                menu.hidden = !abrindo;
+                btn.setAttribute("aria-expanded", String(abrindo));
+            });
+        });
+
+        document.addEventListener("click", function () { fecharTodos(null); });
+        document.addEventListener("keydown", function (event) {
+            if (event.key === "Escape") fecharTodos(null);
+        });
+    }
 })();

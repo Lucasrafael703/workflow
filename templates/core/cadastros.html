@@ -17,20 +17,24 @@
         <a href="{% url 'costcenter-create' %}" class="btn btn--primary">{% include "_icon.html" with name="plus" %} Novo centro de custo</a>
         {% elif tab == "motivos" %}
         <a href="{% url 'returnreason-create' %}" class="btn btn--primary">{% include "_icon.html" with name="plus" %} Novo motivo</a>
-        {% else %}
+        {% elif tab == "setores" %}
         <a href="{% url 'sector-create' %}" class="btn btn--primary">{% include "_icon.html" with name="plus" %} Novo setor</a>
         {% endif %}
     </div>
 </div>
 
 <nav class="tabs">
+    <a href="{% url 'process-list' %}">Processos</a>
     <a href="?tab=setores" class="{% if tab == 'setores' %}is-active{% endif %}">Setores</a>
     <a href="?tab=empresas" class="{% if tab == 'empresas' %}is-active{% endif %}">Empresas</a>
     <a href="?tab=obras" class="{% if tab == 'obras' %}is-active{% endif %}">Obras</a>
     <a href="?tab=centros-de-custo" class="{% if tab == 'centros-de-custo' %}is-active{% endif %}">Centros de custo</a>
-    <a href="?tab=motivos" class="{% if tab == 'motivos' %}is-active{% endif %}">Motivos de devolução</a>
+    <a href="?tab=tipos-de-atividade" class="{% if tab == 'tipos-de-atividade' %}is-active{% endif %}">Tipos de atividade</a>
+    <a href="?tab=tipos-de-tarefa" class="{% if tab == 'tipos-de-tarefa' %}is-active{% endif %}">Tipos de tarefa</a>
+    <a href="?tab=motivos" class="{% if tab == 'motivos' %}is-active{% endif %}">Motivos</a>
 </nav>
 
+{% if tab != "tipos-de-atividade" and tab != "tipos-de-tarefa" %}
 <form method="get">
     <input type="hidden" name="tab" value="{{ tab }}">
     <div class="toolbar">
@@ -42,6 +46,7 @@
         {% if search %}<a href="?tab={{ tab }}" class="btn btn--ghost">Limpar</a>{% endif %}
     </div>
 </form>
+{% endif %}
 
 {% if tab == "empresas" %}
 <div class="card card--flush">
@@ -180,6 +185,25 @@
 <div class="hint-bar">
     {% include "_icon.html" with name="info" %}
     <span>Toda devolução exige um motivo estruturado — é o que permite descobrir retrabalho recorrente.</span>
+</div>
+
+{% elif tab == "tipos-de-atividade" %}
+<div class="card">
+    <div class="empty-state">
+        <div class="empty-state__icon">{% include "_icon.html" with name="folder" %}</div>
+        <h3>Tipos de atividade ainda não disponível</h3>
+        <p>Tipo de atividade é a classificação usada para organizar processos (Regras 11 §4).
+           Essa tela ainda não foi construída.</p>
+    </div>
+</div>
+
+{% elif tab == "tipos-de-tarefa" %}
+<div class="card">
+    <div class="empty-state">
+        <div class="empty-state__icon">{% include "_icon.html" with name="folder" %}</div>
+        <h3>Tipos de tarefa ainda não disponível</h3>
+        <p>Essa tela ainda não foi construída.</p>
+    </div>
 </div>
 
 {% else %}

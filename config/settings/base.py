@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     "core",
     "acessos",
     "activities",
+    "processes",
     "notifications",
     "audit",
 ]

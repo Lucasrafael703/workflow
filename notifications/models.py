@@ -20,11 +20,22 @@ class Notification(models.Model):
         ACTIVITY_CANCELLED = "ACTIVITY_CANCELLED", "Atividade cancelada"
         ACTIVITY_REOPENED = "ACTIVITY_REOPENED", "Atividade reaberta"
         OWNER_CHANGED = "OWNER_CHANGED", "Dono alterado"
+        MESSAGE_POSTED = "MESSAGE_POSTED", "Nova mensagem"
+        MENTIONED = "MENTIONED", "Você foi mencionado"
 
     recipient = models.ForeignKey(
         settings.AUTH_USER_MODEL, verbose_name="destinatário", on_delete=models.CASCADE, related_name="notifications"
     )
     event_type = models.CharField("tipo", max_length=24, choices=EventType.choices)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="quem gerou o evento",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        help_text="Quem delegou, propôs, mencionou ou concluiu — o sujeito da frase da notificação.",
+    )
     activity = models.ForeignKey(
         "activities.Activity",
         verbose_name="atividade",

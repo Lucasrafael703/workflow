@@ -12,8 +12,15 @@ logger = logging.getLogger(__name__)
 
 class NotificationService:
     @staticmethod
-    def notify(users, event_type, title, message, activity=None, task=None, url=""):
-        """Cria uma notificação in-app para cada usuário em `users`."""
+    def notify(users, event_type, title, message, activity=None, task=None, url="", actor=None):
+        """Cria uma notificação in-app para cada usuário em `users`.
+
+        `actor` é quem gerou o evento (delegou, propôs, mencionou, concluiu)
+        — o sujeito da frase que a notificação mostra na linha "o que
+        aconteceu". Quem chama decide se o próprio ator deve estar em
+        `users` ou não: às vezes uma pessoa conclui a própria atividade e
+        ainda faz sentido confirmar isso a ela mesma.
+        """
         users = list({u.id: u for u in users}.values())
         notifications = [
             Notification(
@@ -24,6 +31,7 @@ class NotificationService:
                 title=title,
                 message=message,
                 url=url,
+                actor=actor,
             )
             for user in users
         ]

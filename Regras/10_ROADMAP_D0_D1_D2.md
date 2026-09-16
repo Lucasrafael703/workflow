@@ -280,6 +280,48 @@ Regras:
 
 ---
 
+# 11.1 D0 — Processos
+
+D0 precisa permitir cadastrar processos reutilizáveis sem transformar a LPS em ferramenta completa de modelagem de processos.
+
+Estrutura mínima:
+
+```text
+Processo
+├── Informações básicas
+├── Inputs
+├── Output
+├── Critérios de aceite
+└── Fluxo padrão de tarefas
+```
+
+Precisa permitir:
+
+- criar processo vinculado a uma empresa;
+- salvar rascunho;
+- cadastrar inputs;
+- definir um output principal;
+- cadastrar critérios de aceite;
+- definir tarefas padrão e setores;
+- publicar uma versão;
+- criar nova versão a partir de processo publicado;
+- inativar sem apagar histórico;
+- aplicar processo em uma atividade.
+
+Regra:
+
+```text
+versão publicada
+=
+imutável
+```
+
+Atividade antiga continua vinculada à versão que recebeu.
+
+Atividade sem processo continua permitida no D0.
+
+---
+
 # 12. D0 — Atividades
 
 Atividade representa:
@@ -295,6 +337,8 @@ Precisa permitir:
 - associar empresa;
 - associar obra opcional;
 - associar centro de custo opcional;
+- associar processo opcional;
+- preservar versão do processo aplicada;
 - concluir;
 - cancelar;
 - reabrir quando autorizado.
@@ -324,6 +368,8 @@ Criar
 ```
 
 Campos adicionais entram depois.
+
+Processo pode ser selecionado opcionalmente por ação simples `Usar processo`, sem transformar o cadastro rápido em formulário longo.
 
 Objetivo:
 
@@ -396,23 +442,29 @@ Requisitos:
 
 ---
 
-# 17. D0 — Fluxos modelo
+# 17. D0 — Fluxo padrão do processo
 
-Pode existir versão simples de modelos reutilizáveis.
+O fluxo reutilizável pertence ao processo.
 
 Exemplo:
 
 ```text
+Processo:
 Solicitação de compra
+
+Tarefas padrão:
+Engenharia → Compras → Financeiro → Almoxarifado
 ```
 
-pode gerar tarefas padrão.
+Ao aplicar o processo, a LPS cria tarefas operacionais reais.
 
 Não construir:
 
-- BPMN completo;
-- editor visual complexo;
-- regras condicionais avançadas.
+- BPMN — Business Process Model and Notation, ou Notação e Modelagem de Processos de Negócio — completo;
+- regras condicionais avançadas;
+- motor genérico de formulários;
+- dezenas de tipos de validação;
+- automação inteligente de processo antes de existir histórico.
 
 ---
 
@@ -797,6 +849,8 @@ Usuários
 Setores
 Perfis e permissões
 Cadastros básicos
+Processos
+Novo/editar processo em modal grande
 ```
 
 ---
@@ -843,6 +897,8 @@ Não construir ainda:
 - ranking de pessoas;
 - dashboard complexo;
 - BPMN completo;
+- motor de processo com regras condicionais avançadas;
+- formulários dinâmicos complexos;
 - chat corporativo genérico;
 - canais livres;
 - workflow com dezenas de condições;
@@ -854,6 +910,26 @@ Não construir ainda:
 ---
 
 # 42. Critério de saída do D0
+
+Antes de considerar o D0 encerrado, a organização também precisa conseguir:
+
+```text
+criar um processo
+↓
+publicar uma versão
+↓
+aplicar o processo em uma atividade
+↓
+receber inputs
+↓
+executar tarefas
+↓
+validar critérios
+↓
+registrar output
+↓
+concluir sem perder o vínculo com a versão
+```
 
 O D0 só está concluído quando uma empresa consegue operar uma demanda real do começo ao fim na LPS.
 

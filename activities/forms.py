@@ -218,7 +218,9 @@ class ManualTimeForm(forms.Form):
 class MessageForm(forms.Form):
     body = forms.CharField(
         label="",
-        widget=forms.Textarea(attrs={"rows": 3, "placeholder": "Escreva uma mensagem…"}),
+        widget=forms.Textarea(
+            attrs={"rows": 3, "placeholder": "Escreva uma mensagem… use @usuario para mencionar alguém"}
+        ),
     )
 
 

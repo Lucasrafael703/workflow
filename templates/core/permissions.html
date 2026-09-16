@@ -55,8 +55,10 @@
                         </div>
 
                         {% for row in block.rows %}
-                        {# Só o que está na tela pode ser desmarcado: com filtro ativo,
-                           o resto precisa ser preservado. #}
+                        {% comment %}
+                        Só o que está na tela pode ser desmarcado: com filtro ativo,
+                        o resto precisa ser preservado.
+                        {% endcomment %}
                         <input type="hidden" name="visible" value="{{ row.action.pk }}">
                         <div class="form-row form-row--check" style="margin-bottom:10px">
                             <label>

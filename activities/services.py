@@ -1,3 +1,5 @@
+import re
+
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
@@ -102,6 +104,7 @@ class ActivityService:
             title="Atividade criada",
             message=f"A atividade '{activity.title}' foi criada.",
             activity=activity,
+            actor=created_by,
         )
         return activity
 
@@ -134,6 +137,7 @@ class ActivityService:
             title="Dono da atividade alterado",
             message=f"O dono de '{activity.title}' passou de {previous_owner} para {new_owner}.",
             activity=activity,
+            actor=changed_by,
         )
         return activity
 
@@ -207,6 +211,7 @@ class ActivityService:
             title="Atividade concluída",
             message=f"A atividade '{activity.title}' foi concluída.",
             activity=activity,
+            actor=user,
         )
         return activity
 
@@ -239,6 +244,7 @@ class ActivityService:
             title="Atividade cancelada",
             message=f"A atividade '{activity.title}' foi cancelada. Motivo: {reason}",
             activity=activity,
+            actor=user,
         )
         return activity
 
@@ -266,6 +272,7 @@ class ActivityService:
             title="Atividade reaberta",
             message=f"A atividade '{activity.title}' foi reaberta. Motivo: {reason}",
             activity=activity,
+            actor=user,
         )
         return activity
 
@@ -319,6 +326,7 @@ class TaskService:
             message=f"A tarefa '{task.title}' está disponível no setor {sector.name}.",
             activity=activity,
             task=task,
+            actor=created_by,
         )
         return task
 
@@ -420,6 +428,7 @@ class TaskService:
             message=f"Você foi incluído como executor de '{task.title}'.",
             activity=task.activity,
             task=task,
+            actor=added_by,
         )
         return task
 
@@ -545,6 +554,7 @@ class TaskService:
             message=f"A tarefa '{task.title}' foi concluída.",
             activity=task.activity,
             task=task,
+            actor=user,
         )
         return task
 
@@ -597,6 +607,7 @@ class TaskService:
             message=f"A tarefa '{task.title}' foi bloqueada: {reason}",
             activity=task.activity,
             task=task,
+            actor=user,
         )
         return task
 
@@ -624,6 +635,7 @@ class TaskService:
             message=f"A tarefa '{task.title}' foi desbloqueada.",
             activity=task.activity,
             task=task,
+            actor=user,
         )
         return task
 
@@ -670,6 +682,7 @@ class TaskService:
             message=f"A tarefa '{task.title}' foi movida para o setor {new_sector.name}.",
             activity=task.activity,
             task=task,
+            actor=user,
         )
         return task
 
@@ -712,6 +725,7 @@ class TaskService:
             message=f"A tarefa '{task.title}' foi devolvida de {old_sector.name} para {to_sector.name}. Motivo: {reason.name}",
             activity=task.activity,
             task=task,
+            actor=user,
         )
         return task
 
@@ -847,6 +861,7 @@ class QueueService:
             message=f"A posição de '{queue_entry.task.title}' mudou para {queue_entry.position} de {total}.",
             activity=queue_entry.task.activity,
             task=queue_entry.task,
+            actor=user,
         )
         return queue_entry
 
@@ -867,6 +882,7 @@ class DeadlineService:
             message=f"Foi proposto o prazo {deadline:%d/%m/%Y %H:%M} para '{task.title}'.",
             activity=task.activity,
             task=task,
+            actor=user,
         )
         return proposal
 
@@ -898,6 +914,7 @@ class DeadlineService:
             message=f"O prazo proposto para '{task.title}' foi aceito.",
             activity=task.activity,
             task=task,
+            actor=user,
         )
         return proposal
 
@@ -934,6 +951,7 @@ class DeadlineService:
             message=f"O prazo proposto para '{task.title}' foi recusado. Motivo: {note}",
             activity=task.activity,
             task=task,
+            actor=user,
         )
         return conflict
 
@@ -956,6 +974,9 @@ class DeadlineService:
         return conflict
 
 
+MENTION_PATTERN = re.compile(r"@([\w.]+)")
+
+
 class MessageService:
     """Comunicação contextual (Regras 06).
 
@@ -975,6 +996,25 @@ class MessageService:
         ).distinct()
 
     @staticmethod
+    def _mentioned_users(body, author, resource):
+        """Extrai @usuário do texto (Regras 06 §28-32).
+
+        Só individual no D0 — nunca @setor. Mencionar não concede acesso: a
+        pessoa só é notificada se já for autorizada a participar daquele
+        contexto (§29). Uma menção inválida ou sem acesso é ignorada em
+        silêncio, sem quebrar o envio da mensagem.
+        """
+        usernames = set(MENTION_PATTERN.findall(body))
+        if not usernames:
+            return set()
+        candidates = User.objects.filter(username__in=usernames, is_active=True).exclude(id=author.id)
+        return {
+            user
+            for user in candidates
+            if AuthorizationService.can(user, catalog.COMUNICACAO_PARTICIPAR, resource)
+        }
+
+    @staticmethod
     @transaction.atomic
     def post_activity_message(activity, author, body):
         require_action(author, catalog.COMUNICACAO_PARTICIPAR, activity)
@@ -984,17 +1024,29 @@ class MessageService:
 
         message = ActivityMessage.objects.create(activity=activity, author=author, body=body)
 
+        mentioned = MessageService._mentioned_users(body, author, activity)
+
         recipients = {activity.owner, activity.created_by}
         recipients.update(MessageService._executors_of({"tasks_executed__task__activity": activity}))
-        recipients = {u for u in recipients if u is not None and u.id != author.id}
+        recipients = {u for u in recipients if u is not None and u.id != author.id} - mentioned
 
         if recipients:
             NotificationService.notify(
                 users=recipients,
-                event_type=Notification.EventType.ACTIVITY_CREATED,
+                event_type=Notification.EventType.MESSAGE_POSTED,
                 title="Nova mensagem na atividade",
                 message=MessageService._truncate(f"{author.get_username()}: {body}"),
                 activity=activity,
+                actor=author,
+            )
+        if mentioned:
+            NotificationService.notify(
+                users=mentioned,
+                event_type=Notification.EventType.MENTIONED,
+                title="Você foi mencionado",
+                message=MessageService._truncate(body),
+                activity=activity,
+                actor=author,
             )
         return message
 
@@ -1008,17 +1060,30 @@ class MessageService:
 
         message = TaskMessage.objects.create(task=task, author=author, body=body)
 
+        mentioned = MessageService._mentioned_users(body, author, task)
+
         recipients = {task.activity.owner}
         recipients.update(MessageService._executors_of({"tasks_executed__task": task}))
-        recipients = {u for u in recipients if u is not None and u.id != author.id}
+        recipients = {u for u in recipients if u is not None and u.id != author.id} - mentioned
 
+        if mentioned:
+            NotificationService.notify(
+                users=mentioned,
+                event_type=Notification.EventType.MENTIONED,
+                title="Você foi mencionado",
+                message=MessageService._truncate(body),
+                activity=task.activity,
+                task=task,
+                actor=author,
+            )
         if recipients:
             NotificationService.notify(
                 users=recipients,
-                event_type=Notification.EventType.TASK_ASSIGNED,
+                event_type=Notification.EventType.MESSAGE_POSTED,
                 title="Nova mensagem na tarefa",
                 message=MessageService._truncate(f"{author.get_username()}: {body}"),
                 activity=task.activity,
                 task=task,
+                actor=author,
             )
         return message

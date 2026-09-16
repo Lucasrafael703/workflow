@@ -27,6 +27,7 @@ def navigation(request):
                 can(user, catalog.SETOR_EDITAR)
                 or can(user, catalog.EMPRESA_GERIR)
                 or can(user, catalog.MOTIVO_DEVOLUCAO_GERIR)
+                or AuthorizationService.can_anywhere(user, catalog.PROCESSO_VISUALIZAR)
             ),
             "users": can(user, catalog.USUARIO_VISUALIZAR),
             "security": can(user, catalog.SEGURANCA_GERIR_PERFIS),
@@ -34,6 +35,7 @@ def navigation(request):
         "lps_org": organization,
         "lps_open_tasks": _open_task_count(user),
         "nav_active": _active_nav(request),
+        "nav_cadastros_tab": _active_cadastros_tab(request),
     }
 
 
@@ -58,6 +60,9 @@ _NAV_BY_URL_NAME = {
     "management": "management",
     "history": "management",
     "cadastros": "cadastros",
+    "process-list": "cadastros",
+    "process-create": "cadastros",
+    "process-edit": "cadastros",
     "sector-create": "cadastros",
     "sector-edit": "cadastros",
     "company-create": "cadastros",
@@ -84,6 +89,37 @@ def _active_nav(request):
     if match is None:
         return ""
     return _NAV_BY_URL_NAME.get(match.url_name, "")
+
+
+# Dentro de Cadastros, cada URL de criar/editar já pertence a uma aba fixa —
+# só a própria listagem depende do "?tab=" da querystring.
+_CADASTROS_TAB_BY_URL_NAME = {
+    "process-list": "processos",
+    "process-create": "processos",
+    "process-edit": "processos",
+    "sector-create": "setores",
+    "sector-edit": "setores",
+    "company-create": "empresas",
+    "company-edit": "empresas",
+    "site-create": "obras",
+    "site-edit": "obras",
+    "costcenter-create": "centros-de-custo",
+    "costcenter-edit": "centros-de-custo",
+    "returnreason-create": "motivos",
+    "returnreason-edit": "motivos",
+}
+
+
+def _active_cadastros_tab(request):
+    """Qual aba de Cadastros destacar no submenu — usada para abrir o grupo
+    já expandido e marcar o item certo, mesmo em telas de criar/editar que
+    não carregam "?tab=" na própria URL."""
+    match = getattr(request, "resolver_match", None)
+    if match is None:
+        return ""
+    if match.url_name == "cadastros":
+        return request.GET.get("tab", "setores")
+    return _CADASTROS_TAB_BY_URL_NAME.get(match.url_name, "")
 
 
 def _open_task_count(user):

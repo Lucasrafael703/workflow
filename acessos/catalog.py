@@ -57,6 +57,15 @@ OBRA_GERIR = "obra.gerir"
 CENTRO_CUSTO_GERIR = "centro_custo.gerir"
 MOTIVO_DEVOLUCAO_GERIR = "motivo_devolucao.gerir"
 
+# Processos
+PROCESSO_VISUALIZAR = "processo.visualizar"
+PROCESSO_CRIAR = "processo.criar"
+PROCESSO_EDITAR_RASCUNHO = "processo.editar_rascunho"
+PROCESSO_PUBLICAR = "processo.publicar"
+PROCESSO_CRIAR_VERSAO = "processo.criar_versao"
+PROCESSO_INATIVAR = "processo.inativar"
+PROCESSO_APLICAR = "processo.aplicar"
+
 # Segurança
 USUARIO_VISUALIZAR = "usuario.visualizar"
 USUARIO_CRIAR = "usuario.criar"
@@ -146,6 +155,19 @@ GROUPS = [
         ],
     ),
     (
+        "processos",
+        "Processos",
+        [
+            (PROCESSO_VISUALIZAR, "Visualizar processos", "Permite consultar os modelos reutilizáveis cadastrados.", False),
+            (PROCESSO_CRIAR, "Criar processo", "Permite cadastrar um novo processo em rascunho.", False),
+            (PROCESSO_EDITAR_RASCUNHO, "Editar rascunho de processo", "Permite alterar inputs, output, critérios e fluxo antes da publicação.", False),
+            (PROCESSO_PUBLICAR, "Publicar versão de processo", "Permite tornar uma versão do processo disponível para uso — depois disso ela não é mais alterada.", True),
+            (PROCESSO_CRIAR_VERSAO, "Criar nova versão de processo", "Permite abrir uma nova versão a partir da publicada, sem alterar atividades já em andamento.", False),
+            (PROCESSO_INATIVAR, "Inativar processo", "Permite impedir novas aplicações do processo, preservando o histórico.", True),
+            (PROCESSO_APLICAR, "Aplicar processo em atividade", "Permite selecionar um processo publicado ao criar uma atividade.", False),
+        ],
+    ),
+    (
         "seguranca",
         "Segurança",
         [
@@ -187,6 +209,8 @@ SUGGESTED_PROFILES = {
         PRAZO_ACEITAR,
         PRAZO_RECUSAR,
         COMUNICACAO_PARTICIPAR,
+        PROCESSO_VISUALIZAR,
+        PROCESSO_APLICAR,
     ],
     "Gestor de Setor": [
         ATIVIDADE_VISUALIZAR,
@@ -216,6 +240,13 @@ SUGGESTED_PROFILES = {
         COMUNICACAO_PARTICIPAR,
         METRICAS_VISUALIZAR,
         AUDITORIA_VISUALIZAR,
+        PROCESSO_VISUALIZAR,
+        PROCESSO_CRIAR,
+        PROCESSO_EDITAR_RASCUNHO,
+        PROCESSO_PUBLICAR,
+        PROCESSO_CRIAR_VERSAO,
+        PROCESSO_INATIVAR,
+        PROCESSO_APLICAR,
     ],
     "Administrador": [key for _, _, actions in GROUPS for key, _, _, _ in actions],
 }

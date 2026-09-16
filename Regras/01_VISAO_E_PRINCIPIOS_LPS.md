@@ -326,11 +326,47 @@ O gestor não deve depender apenas de percepção.
 
 # 6. Princípios fundamentais do produto
 
+## 6.1 Processo define o padrão; atividade registra a execução
+
+Para trabalhos recorrentes, a LPS pode possuir um **processo** reutilizável.
+
+O processo define, de forma estruturada:
+
+```text
+INPUT
+↓
+TAREFAS / FLUXO PADRÃO
+↓
+OUTPUT
+↓
+CRITÉRIOS DE ACEITE
+```
+
+A atividade representa uma execução real desse padrão.
+
+Exemplo:
+
+```text
+Processo:
+Elaborar orçamento
+
+Atividade:
+Entregar orçamento da obra X ao cliente
+```
+
+O processo não substitui o conceito de atividade, dono ou tarefa.
+
+Também não deve virar burocracia obrigatória para toda demanda. No D0, atividades simples e não recorrentes podem existir sem processo.
+
+Quando um processo publicado é utilizado, a atividade deve guardar a versão exata aplicada para preservar histórico.
+
+---
+
 Os princípios abaixo devem orientar toda decisão futura.
 
 ---
 
-## 6.1 Uma atividade possui um único dono
+## 6.2 Uma atividade possui um único dono
 
 Não existem dois donos de uma atividade.
 
@@ -351,7 +387,7 @@ Isso evita responsabilidade difusa.
 
 ---
 
-## 6.2 Atividades são compostas por tarefas
+## 6.3 Atividades são compostas por tarefas
 
 A atividade representa o resultado ou problema maior.
 
@@ -378,7 +414,7 @@ A atividade termina quando o problema está resolvido, não apenas quando algué
 
 ---
 
-## 6.3 Uma tarefa pode possuir vários executores
+## 6.4 Uma tarefa pode possuir vários executores
 
 Mais de uma pessoa pode trabalhar na mesma tarefa.
 
@@ -394,7 +430,7 @@ Depois, o sistema pode consolidar:
 
 ---
 
-## 6.4 A responsabilidade pelo resultado não muda quando a tarefa muda de setor
+## 6.5 A responsabilidade pelo resultado não muda quando a tarefa muda de setor
 
 Exemplo:
 
@@ -418,7 +454,7 @@ O dono deve conseguir acompanhar o processo até o resultado final.
 
 ---
 
-## 6.5 O sistema registra fatos, não opiniões
+## 6.6 O sistema registra fatos, não opiniões
 
 Evitar armazenar conclusões vagas como:
 
@@ -442,7 +478,7 @@ A inteligência deve nascer do histórico.
 
 ---
 
-## 6.6 Toda movimentação relevante deve ser auditável
+## 6.7 Toda movimentação relevante deve ser auditável
 
 A LPS deve permitir reconstruir a história da atividade.
 
@@ -473,7 +509,7 @@ A pergunta deve poder ser respondida:
 
 ---
 
-## 6.7 Transparência não significa exposição total
+## 6.8 Transparência não significa exposição total
 
 O solicitante precisa de informação suficiente para acompanhar sua demanda.
 
@@ -507,7 +543,7 @@ A LPS deve equilibrar:
 
 ---
 
-## 6.8 A fila deve ser visível e gerenciável
+## 6.9 A fila deve ser visível e gerenciável
 
 Cada setor pode possuir uma fila de trabalho.
 
@@ -535,7 +571,7 @@ a mudança deve ser registrada e pode gerar notificação conforme a configuraç
 
 ---
 
-## 6.9 Prioridade não é definida apenas por quem solicita
+## 6.10 Prioridade não é definida apenas por quem solicita
 
 Quem solicita conhece o próprio impacto.
 
@@ -554,7 +590,7 @@ Esses conceitos não devem ser tratados como a mesma coisa.
 
 ---
 
-## 6.10 Prazo solicitado e prazo comprometido são diferentes
+## 6.11 Prazo solicitado e prazo comprometido são diferentes
 
 A LPS deve preservar os dois.
 
@@ -582,7 +618,7 @@ O histórico não deve ser apagado quando houver renegociação.
 
 ---
 
-## 6.11 Conflitos precisam escalar
+## 6.12 Conflitos precisam escalar
 
 Quando solicitante e executor não conseguem chegar a um acordo, não basta deixar a tarefa parada.
 
@@ -608,7 +644,7 @@ O objetivo é evitar conflito silencioso.
 
 ---
 
-## 6.12 Devolução deve gerar aprendizado
+## 6.13 Devolução deve gerar aprendizado
 
 Uma tarefa pode voltar para uma etapa ou setor anterior.
 
@@ -631,7 +667,7 @@ Com histórico suficiente, a LPS deve conseguir identificar padrões de retrabal
 
 ---
 
-## 6.13 Comunicação deve estar ligada ao trabalho
+## 6.14 Comunicação deve estar ligada ao trabalho
 
 A LPS não precisa nascer como um Slack corporativo.
 
@@ -654,7 +690,7 @@ Isso permite que a conversa tenha relação direta com o trabalho realizado.
 
 ---
 
-## 6.14 Conversa não substitui dado estruturado
+## 6.15 Conversa não substitui dado estruturado
 
 Uma mensagem pode dizer:
 
@@ -679,7 +715,7 @@ Mas deve solicitar confirmação antes de alterar um dado oficial.
 
 ---
 
-## 6.15 O sistema deve ser simples na operação
+## 6.16 O sistema deve ser simples na operação
 
 A sofisticação deve estar na estrutura, não na dificuldade de uso.
 
@@ -712,6 +748,7 @@ A LPS deve ser dinâmica onde as empresas são diferentes e estática onde o pro
 
 Exemplos:
 
+- processos e suas configurações de input, output, critérios e fluxo;
 - setores;
 - usuários;
 - participação de usuários em setores;
@@ -756,6 +793,9 @@ Alguns conceitos não devem ser redefinidos por cada empresa.
 
 Exemplos:
 
+- processo é modelo reutilizável e atividade é execução real;
+- versão publicada de processo não deve ser alterada retroativamente;
+- atividade vinculada a processo deve preservar a versão aplicada;
 - atividade possui um único dono;
 - atividade pode possuir tarefas;
 - tarefas podem possuir executores;
@@ -872,6 +912,20 @@ A configurabilidade deve ser usada para preservar escala.
 ---
 
 # 9. Cadastros configuráveis
+
+Processos são cadastros estruturais de comportamento e devem ser configuráveis pela organização.
+
+Um processo pode definir:
+
+- inputs;
+- output;
+- critérios de aceite;
+- fluxo padrão de tarefas;
+- setores normalmente envolvidos;
+- versão publicada.
+
+O cadastro do processo deve permanecer separado da execução das atividades.
+
 
 A LPS deve permitir que empresas criem os cadastros necessários para sua realidade.
 
@@ -2271,6 +2325,7 @@ Esses assuntos devem ser decididos no documento responsável.
 | Versão | Descrição |
 |---|---|
 | 1.0 | Consolidação da visão e dos princípios da LPS definidos até o momento |
+| 1.1 | Inclusão de processo como padrão reutilizável com versões, input, output e critérios de aceite |
 
 ---
 

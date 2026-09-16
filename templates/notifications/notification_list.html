@@ -5,62 +5,100 @@
 <div class="page-head">
     <div class="page-head__text">
         <h1>Notificações</h1>
-        <p class="sub">O que exige resposta vem primeiro; o resto é informativo.</p>
+        <p class="sub">O que precisa da sua atenção.</p>
     </div>
     <div class="page-head__actions">
+        <form method="get" class="toolbar__search">
+            {% include "_icon.html" with name="search" %}
+            <input type="hidden" name="filter" value="{{ filter }}">
+            <input type="search" name="q" value="{{ search }}" placeholder="Buscar notificações…">
+            <noscript><button type="submit" class="btn btn--sm">Buscar</button></noscript>
+        </form>
+        {% if unread_count %}
         <form method="post" action="{% url 'notification-mark-all-read' %}">
             {% csrf_token %}
             <button type="submit" class="btn">Marcar todas como lidas</button>
         </form>
+        {% endif %}
     </div>
 </div>
 
-<nav class="tabs">
-    <a href="?" class="{% if not filter %}is-active{% endif %}">Todas</a>
-    <a href="?filter=nao-lidas" class="{% if filter == 'nao-lidas' %}is-active{% endif %}">Não lidas</a>
-    <a href="?filter=acao" class="{% if filter == 'acao' %}is-active{% endif %}">Ação necessária</a>
-</nav>
+{% comment %}
+Abas como navegação principal — sem os quatro cartões de resumo do topo, que
+duplicavam os mesmos números. "Ação necessária" é a primeira e a aba padrão:
+é o que precisa da atenção da pessoa antes de tudo. "Todas" fica por último,
+como opção explícita, não como ponto de partida (evita a tela virar um feed).
+{% endcomment %}
+<div class="section-head">
+    <nav class="tabs">
+        <a href="?filter=acao" class="{% if filter == 'acao' %}is-active{% endif %}">Ação necessária <span class="count">({{ action_count }})</span></a>
+        <a href="?filter=nao-lidas" class="{% if filter == 'nao-lidas' %}is-active{% endif %}">Não lidas <span class="count">({{ unread_count }})</span></a>
+        <a href="?filter=mencoes" class="{% if filter == 'mencoes' %}is-active{% endif %}">Menções {% if mention_count %}<span class="count">({{ mention_count }})</span>{% endif %}</a>
+        <a href="?filter=alertas" class="{% if filter == 'alertas' %}is-active{% endif %}">Alertas {% if alert_count %}<span class="count">({{ alert_count }})</span>{% endif %}</a>
+        <a href="?filter=todas" class="{% if filter == 'todas' %}is-active{% endif %}">Todas <span class="count">({{ total_count }})</span></a>
+    </nav>
 
-{% if action_required %}
-<div class="card card--flush">
-    <div class="card__head">
-        <h2>Ação necessária</h2>
-        <span class="muted small">Precisam de uma resposta sua</span>
-    </div>
-    <div class="card__body">
-        {% include "notifications/_items.html" with items=action_required actionable=True %}
-    </div>
+    <form method="get">
+        <input type="hidden" name="filter" value="{{ filter }}">
+        <input type="hidden" name="q" value="{{ search }}">
+        <div class="toolbar" style="margin:0">
+            <label class="inline" for="ordem">Ordenar por</label>
+            <select id="ordem" name="ordem" onchange="this.form.submit()">
+                <option value="recentes" {% if ordem == 'recentes' %}selected{% endif %}>Mais recentes</option>
+                <option value="antigas" {% if ordem == 'antigas' %}selected{% endif %}>Mais antigas</option>
+            </select>
+            <noscript><button type="submit" class="btn btn--sm">Aplicar</button></noscript>
+        </div>
+    </form>
 </div>
-{% endif %}
 
-{% if informative %}
-<div class="card card--flush">
-    <div class="card__head">
-        <h2>Informativo</h2>
-        <span class="muted small">Para você ficar sabendo</span>
-    </div>
-    <div class="card__body">
-        {% include "notifications/_items.html" with items=informative actionable=False %}
-    </div>
+{% if notifications %}
+{% comment %}
+"card--flush" recorta pelas bordas arredondadas (overflow:hidden) — bom para
+tabela, ruim aqui: cortaria o menu "⋮" das últimas linhas. Um modificador
+próprio mantém o recorte só nos cantos, via border-radius no primeiro/
+último item da lista, sem overflow:hidden no card inteiro.
+{% endcomment %}
+<div class="card card--flush notif-list-card">
+    {% include "notifications/_items.html" with items=notifications %}
 </div>
-{% endif %}
-
-{% if not action_required and not informative %}
-<div class="card">
-    <div class="empty-state">
-        <div class="empty-state__icon">{% include "_icon.html" with name="bell" %}</div>
-        <h3>Nenhuma notificação</h3>
-        <p>Você é avisado quando um prazo for proposto, uma tarefa devolvida ou algo precisar da sua decisão.</p>
-        <a href="{% url 'home' %}" class="btn">Voltar para a Home</a>
-    </div>
-</div>
-{% endif %}
 
 {% if is_paginated %}
 <div class="pagination">
-    {% if page_obj.has_previous %}<a class="btn btn--sm" href="?filter={{ filter }}&page={{ page_obj.previous_page_number }}">Anterior</a>{% endif %}
+    {% if page_obj.has_previous %}<a class="btn btn--sm" href="?filter={{ filter }}&q={{ search }}&ordem={{ ordem }}&page={{ page_obj.previous_page_number }}">Anterior</a>{% endif %}
     <span class="muted small">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
-    {% if page_obj.has_next %}<a class="btn btn--sm" href="?filter={{ filter }}&page={{ page_obj.next_page_number }}">Próxima</a>{% endif %}
+    {% if page_obj.has_next %}<a class="btn btn--sm" href="?filter={{ filter }}&q={{ search }}&ordem={{ ordem }}&page={{ page_obj.next_page_number }}">Próxima</a>{% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="card">
+    <div class="empty-state">
+        <div class="empty-state__icon">{% include "_icon.html" with name="check" %}</div>
+        {% if search %}
+        <h3>Nenhuma notificação encontrada</h3>
+        <p>Ajuste a busca para localizar outra notificação.</p>
+        <a href="?filter={{ filter }}" class="btn">Limpar busca</a>
+        {% elif filter == 'acao' %}
+        <h3>Tudo em dia</h3>
+        <p>Nenhuma notificação exige sua ação agora.</p>
+        <a href="?filter=todas" class="btn">Ver todas as notificações</a>
+        {% elif filter == 'nao-lidas' %}
+        <h3>Tudo lido</h3>
+        <p>Você não tem notificações novas no momento.</p>
+        <a href="?filter=todas" class="btn">Ver todas as notificações</a>
+        {% elif filter == 'mencoes' %}
+        <h3>Nenhuma menção</h3>
+        <p>Você é avisado aqui sempre que alguém mencionar você com @usuário em um comentário.</p>
+        {% elif filter == 'alertas' %}
+        <h3>Nenhum alerta</h3>
+        <p>Sem tarefas atrasadas, bloqueadas ou devolvidas — nada exigindo atenção por aqui.</p>
+        {% else %}
+        <h3>Nenhuma notificação</h3>
+        <p>Você é avisado quando um prazo for proposto, uma tarefa devolvida ou algo precisar da sua decisão.</p>
+        <a href="{% url 'home' %}" class="btn">Voltar para a Home</a>
+        {% endif %}
+    </div>
 </div>
 {% endif %}
 {% endblock %}

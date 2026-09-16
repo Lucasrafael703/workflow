@@ -65,12 +65,32 @@
                 <span class="nav-item__label">Visão do gestor</span>
             </a>
             {% endif %}
+
+            {% comment %}
+            Cadastros é o único item com submenu: agrupa o que é "o que existe
+            na organização" sem abrir um terceiro nível — cada opção aqui leva
+            direto a uma aba dentro da mesma tela de Cadastros. O resto do
+            menu fica plano; status e filtros ficam dentro de cada tela.
+            {% endcomment %}
             {% if lps_nav.cadastros %}
-            <a href="{% url 'cadastros' %}" class="nav-item {% if nav_active == 'cadastros' %}is-active{% endif %}">
-                <span class="nav-item__icon">{% include "_icon.html" with name="folder" %}</span>
-                <span class="nav-item__label">Cadastros</span>
-            </a>
+            <details class="nav-group {% if nav_active == 'cadastros' %}has-active{% endif %}"
+                      {% if nav_active == 'cadastros' %}open{% endif %}>
+                <summary>
+                    <span class="nav-item__icon">{% include "_icon.html" with name="folder" %}</span>
+                    <span class="nav-item__label">Cadastros</span>
+                    <span class="nav-group__chevron">{% include "_icon.html" with name="chevron-down" %}</span>
+                </summary>
+                <a href="{% url 'process-list' %}" class="nav-subitem {% if nav_cadastros_tab == 'processos' %}is-active{% endif %}">Processos</a>
+                <a href="{% url 'cadastros' %}?tab=setores" class="nav-subitem {% if nav_cadastros_tab == 'setores' %}is-active{% endif %}">Setores</a>
+                <a href="{% url 'cadastros' %}?tab=empresas" class="nav-subitem {% if nav_cadastros_tab == 'empresas' %}is-active{% endif %}">Empresas</a>
+                <a href="{% url 'cadastros' %}?tab=obras" class="nav-subitem {% if nav_cadastros_tab == 'obras' %}is-active{% endif %}">Obras</a>
+                <a href="{% url 'cadastros' %}?tab=centros-de-custo" class="nav-subitem {% if nav_cadastros_tab == 'centros-de-custo' %}is-active{% endif %}">Centros de custo</a>
+                <a href="{% url 'cadastros' %}?tab=tipos-de-atividade" class="nav-subitem {% if nav_cadastros_tab == 'tipos-de-atividade' %}is-active{% endif %}">Tipos de atividade</a>
+                <a href="{% url 'cadastros' %}?tab=tipos-de-tarefa" class="nav-subitem {% if nav_cadastros_tab == 'tipos-de-tarefa' %}is-active{% endif %}">Tipos de tarefa</a>
+                <a href="{% url 'cadastros' %}?tab=motivos" class="nav-subitem {% if nav_cadastros_tab == 'motivos' %}is-active{% endif %}">Motivos</a>
+            </details>
             {% endif %}
+
             {% if lps_nav.users %}
             <a href="{% url 'user-list' %}" class="nav-item {% if nav_active == 'users' %}is-active{% endif %}">
                 <span class="nav-item__icon">{% include "_icon.html" with name="users" %}</span>

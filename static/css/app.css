@@ -191,6 +191,39 @@ h3 { font-size: 13px; font-weight: 700; margin: 0 0 8px; }
 
 .sidebar__footer { border-top: 1px solid rgba(255, 255, 255, .08); padding: 10px 0; }
 
+/* Único item do menu com submenu (Cadastros) — o resto fica plano, com abas
+   e filtros dentro da própria tela, não em mais níveis de navegação. */
+.nav-group > summary {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    margin: 1px 10px;
+    padding: 9px 12px;
+    border-radius: var(--radius-sm);
+    color: var(--nav-text);
+    font-weight: 500;
+    font-size: 13.5px;
+    cursor: pointer;
+    list-style: none;
+}
+.nav-group > summary::-webkit-details-marker { display: none; }
+.nav-group > summary:hover { background: var(--nav-bg-2); color: #fff; }
+.nav-group.has-active > summary { color: #fff; font-weight: 600; }
+.nav-group__chevron { width: 15px; flex: 0 0 15px; opacity: .7; transition: transform .15s ease; }
+.nav-group__chevron svg { width: 15px; height: 15px; }
+.nav-group[open] > summary .nav-group__chevron { transform: rotate(180deg); }
+
+.nav-subitem {
+    display: block;
+    margin: 1px 10px 1px 38px;
+    padding: 7px 12px;
+    border-radius: var(--radius-sm);
+    color: var(--nav-text);
+    font-size: 13px;
+}
+.nav-subitem:hover { background: var(--nav-bg-2); color: #fff; text-decoration: none; }
+.nav-subitem.is-active { background: var(--primary); color: #fff; font-weight: 600; }
+
 /* Cabeçalho */
 .topbar {
     position: fixed;
@@ -277,6 +310,12 @@ h3 { font-size: 13px; font-weight: 700; margin: 0 0 8px; }
     box-shadow: var(--shadow);
 }
 .card--flush { padding: 0; overflow: hidden; }
+/* Notificações têm um menu "⋮" que se abre para baixo — overflow:hidden no
+   card cortaria o menu das últimas linhas da lista. Aqui o recorte visual
+   dos cantos vem do raio aplicado direto no primeiro/último item. */
+.notif-list-card { overflow: visible; }
+.notif-list-card .list-rows > li:first-child .notif-row { border-radius: var(--radius) var(--radius) 0 0; }
+.notif-list-card .list-rows > li:last-child .notif-row { border-radius: 0 0 var(--radius) var(--radius); }
 .card__head {
     display: flex; align-items: center; justify-content: space-between;
     gap: 12px; flex-wrap: wrap;
@@ -316,6 +355,7 @@ a.stat-card:hover { text-decoration: none; border-color: var(--border-strong); b
 .stat-card__icon--warning { background: var(--warning-soft); color: var(--warning); }
 .stat-card__icon--danger { background: var(--danger-soft); color: var(--danger); }
 .stat-card__icon--primary { background: var(--primary-soft); color: var(--primary); }
+.stat-card__icon--neutral { background: var(--neutral-soft); color: var(--text-2); }
 .stat-card .label { color: var(--muted); font-size: 12px; font-weight: 600; }
 .stat-card .value { font-size: 27px; font-weight: 700; line-height: 1.15; letter-spacing: -.02em; }
 .stat-card .value small { font-size: 13px; font-weight: 600; color: var(--muted); }
@@ -343,9 +383,16 @@ a.stat-card:hover { text-decoration: none; border-color: var(--border-strong); b
 .btn--primary:hover { background: var(--primary-hover); }
 .btn--danger { background: var(--danger); color: #fff; border-color: var(--danger); }
 .btn--danger:hover { background: #bf3b46; }
+/* Para decisões negativas que não são destrutivas (recusar, não aprovar):
+   vermelho suave em vez de preenchido, que passa sensação de erro/exclusão. */
+.btn--soft-danger { background: var(--danger-soft); color: var(--danger); border-color: #f3c6ca; }
+.btn--soft-danger:hover { background: #fbdfe1; }
 .btn--ghost { border-color: transparent; background: transparent; color: var(--text-2); }
 .btn--ghost:hover { background: var(--surface-alt); }
 .btn--sm { padding: 5px 10px; font-size: 12px; }
+.btn--icon { padding: 6px; border-color: transparent; background: transparent; color: var(--muted); }
+.btn--icon:hover { background: var(--danger-soft); color: var(--danger); }
+.btn--icon svg { width: 16px; height: 16px; }
 .btn--lg { padding: 12px 24px; font-size: 15px; }
 .btn--block { width: 100%; justify-content: center; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
@@ -370,6 +417,9 @@ a.stat-card:hover { text-decoration: none; border-color: var(--border-strong); b
 .tag--BLOQUEADA, .tag--ABERTO, .tag--RECUSADO, .tag--URGENTE { background: var(--danger-soft); color: var(--danger); }
 .tag--PENDENTE, .tag--NAO_INICIADA, .tag--EM_FILA, .tag--BAIXA { background: var(--neutral-soft); color: var(--text-2); }
 .tag--CANCELADA { background: var(--neutral-soft); color: var(--muted); text-decoration: line-through; }
+.tag--PUBLICADO { background: var(--success-soft); color: var(--success); }
+.tag--RASCUNHO { background: var(--warning-soft); color: var(--warning); }
+.tag--SUBSTITUIDO { background: var(--neutral-soft); color: var(--muted); }
 .tag--overdue { background: var(--danger); color: #fff; }
 
 .dot-state {
@@ -574,6 +624,46 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     margin: auto;
 }
 .modal--wide { max-width: 860px; }
+.modal--xl {
+    max-width: 1180px;
+    width: 90%;
+    display: flex;
+    flex-direction: column;
+    max-height: 90vh;
+}
+.modal--xl .modal__body { overflow-y: auto; flex: 1 1 auto; }
+@media (max-width: 720px) {
+    .modal--xl { width: 100%; max-height: 100vh; border-radius: 0; }
+}
+
+/* Seções grandes dentro do editor de processo (Regras 11 §25-26): expandir
+   inline em vez de abrir um novo modal sobre o atual. */
+.proc-section { border: 1px solid var(--border); border-radius: var(--radius-md); margin-bottom: 14px; }
+.proc-section__head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 14px 18px; cursor: pointer; list-style: none;
+}
+.proc-section__head::-webkit-details-marker { display: none; }
+.proc-section__head h3 { margin: 0; font-size: 14.5px; }
+.proc-section__head .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.proc-section__chevron { width: 16px; flex: 0 0 16px; color: var(--muted); transition: transform .15s ease; }
+.proc-section[open] .proc-section__chevron { transform: rotate(180deg); }
+.proc-section__body { padding: 4px 18px 18px; border-top: 1px solid var(--border); }
+
+.proc-row {
+    display: flex; align-items: center; gap: 12px; padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+}
+.proc-row:last-of-type { border-bottom: none; }
+.proc-row__grip { color: var(--muted); flex: 0 0 auto; cursor: grab; }
+.proc-row__main { flex: 1 1 auto; min-width: 0; }
+.proc-row__title { font-weight: 600; font-size: 13.5px; }
+.proc-row__meta { color: var(--muted); font-size: 12px; margin-top: 1px; }
+.proc-row__remove { flex: 0 0 auto; }
+
+.proc-add-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; padding-top: 12px; }
+.proc-add-form .field { margin: 0; min-width: 140px; flex: 1 1 140px; }
+.proc-add-form .field--check { flex: 0 0 auto; min-width: 0; }
 .modal__head {
     display: flex; align-items: flex-start; justify-content: space-between;
     gap: 16px; padding: 18px 22px; border-bottom: 1px solid var(--border);
@@ -711,7 +801,158 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .attention--danger { border-left-color: var(--danger); }
 .attention--warning { border-left-color: var(--warning); }
 .attention--info { border-left-color: var(--info); }
+.attention--success { border-left-color: var(--success); }
 .attention__title { font-weight: 700; font-size: 13px; }
+
+/* ==========================================================================
+   Notificações — um único componente de card com pequenas variações por
+   categoria (delegação, prazo, menção, alerta, conclusão, informativo).
+   A cor vem só da categoria — nunca cinco cores no mesmo card.
+
+   Anatomia fixa em 100% dos cards (da esquerda para a direita, de cima para
+   baixo): ícone grande | tipo (linha 1) → título real (linha 2) → frase do
+   que aconteceu (linha 3) → campos de contexto (linha 4)  ...  ação(ões).
+   O card inteiro é clicável (leva ao contexto); os botões são as exceções
+   que fazem algo mais específico que "abrir".
+   ========================================================================== */
+
+.notif-row {
+    position: relative;
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    padding: 18px 20px;
+    border-bottom: 1px solid var(--border);
+    border-left: 3px solid var(--border);
+}
+.notif-row:last-child { border-bottom: none; }
+.notif-row--danger { border-left-color: var(--danger); }
+.notif-row--warning { border-left-color: var(--warning); }
+.notif-row--success { border-left-color: var(--success); }
+.notif-row--info { border-left-color: var(--info); }
+.notif-row--mention { border-left-color: #7c4fd1; }
+.notif-row--neutral { border-left-color: var(--border-strong); }
+.notif-row--unread { background: var(--surface-alt); }
+
+/* O card inteiro é clicável por baixo do conteúdo — clicar em qualquer parte
+   sem ação própria (ícone, título, frase, campos) abre o contexto, como
+   pedido: "clicar no card → abre o contexto". O botão de ação real por cima
+   (Aceitar, Recusar, Ver detalhes, o menu) tem seu próprio form e continua
+   funcionando, pois recebe o clique antes do botão-base por estar acima
+   dele no empilhamento. */
+.notif-row__link-form { position: absolute; inset: 0; z-index: 1; margin: 0; }
+.notif-row__link {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    border: none; background: none; padding: 0; margin: 0;
+    cursor: pointer;
+}
+.notif-row__icon, .notif-row__body, .notif-row__side { position: relative; z-index: 2; }
+.notif-row:hover { background: var(--surface-alt); }
+
+/* Ícone: 56×56, sempre a mesma área, para o card nunca parecer decoração
+   pequena demais para o que representa. */
+.notif-row__icon {
+    width: 56px; height: 56px; flex: 0 0 56px;
+    border-radius: 14px;
+    display: inline-flex; align-items: center; justify-content: center;
+    align-self: flex-start;
+}
+.notif-row__icon svg { width: 28px; height: 28px; }
+.notif-row__icon--danger { background: var(--danger-soft); color: var(--danger); }
+.notif-row__icon--warning { background: var(--warning-soft); color: var(--warning); }
+.notif-row__icon--success { background: var(--success-soft); color: var(--success); }
+.notif-row__icon--info { background: var(--info-soft); color: var(--info); }
+.notif-row__icon--mention { background: #f1eafb; color: #7c4fd1; }
+.notif-row__icon--neutral { background: var(--neutral-soft); color: var(--text-2); }
+
+.notif-row__body { flex: 1; min-width: 0; }
+
+/* Linha 1 — tipo: pequeno, secundário, nunca o texto principal. */
+.notif-row__top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.notif-row__eyebrow {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+    color: var(--muted);
+}
+.notif-row__eyebrow--danger { color: var(--danger); }
+.notif-row__eyebrow--warning { color: var(--warning); }
+.notif-row__eyebrow--mention { color: #7c4fd1; }
+
+/* Linha 2 — o objeto real que a pessoa reconhece. */
+.notif-row__headline { font-weight: 700; font-size: 16px; line-height: 1.3; margin-bottom: 3px; }
+
+/* Linha 3 — uma frase do que aconteceu. */
+.notif-row__summary { color: var(--text-2); font-size: 13.5px; line-height: 1.45; margin-bottom: 8px; }
+
+/* Linha 4 — campos de contexto, específicos por categoria (no máximo 3). */
+.notif-row__facts { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.notif-row__fact { display: flex; align-items: center; gap: 6px; color: var(--text-2); font-size: 12.5px; }
+.notif-row__fact svg { width: 14px; height: 14px; color: var(--muted); flex: 0 0 14px; }
+.notif-row__fact b { font-weight: 700; color: var(--text); }
+.notif-row__fact-label { display: block; font-size: 10.5px; color: var(--muted); line-height: 1.3; }
+.notif-row__fact-value { display: block; font-weight: 600; color: var(--text); font-size: 12.5px; line-height: 1.3; }
+
+.notif-row__message {
+    color: var(--text-2); font-size: 13px; line-height: 1.5;
+    margin: 8px 0 0; padding: 8px 10px;
+    background: var(--surface-alt); border-radius: var(--radius-sm);
+}
+
+/* Ações: no máximo duas visíveis, sempre 40px de altura, sempre a mesma
+   tipografia — o resto vai para o menu de overflow. */
+.notif-row__side {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: flex-end;
+}
+.notif-row__actions { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+.notif-row__actions form,
+.notif-row__actions .btn { height: 40px; }
+.notif-row__actions .btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 0 16px; font-size: 13px; font-weight: 700; border-radius: 8px;
+    white-space: nowrap;
+}
+
+.notif-row__status {
+    font-size: 11px; font-weight: 700;
+    padding: 3px 9px; border-radius: 999px;
+    white-space: nowrap;
+}
+.notif-row__status--action { background: var(--danger-soft); color: var(--danger); }
+.notif-row__status--waiting { background: var(--info-soft); color: var(--info); }
+.notif-row__status--new { background: var(--warning-soft); color: var(--warning); }
+
+/* Terciário: o "⋮" — ações pouco importantes (marcar como não lida, etc.). */
+.notif-row__more { position: relative; flex: 0 0 auto; }
+.notif-row__more-btn {
+    width: 40px; height: 40px; border-radius: 8px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid var(--border-strong); background: var(--surface); color: var(--muted); cursor: pointer;
+}
+.notif-row__more-btn:hover { background: var(--surface-alt); color: var(--text-2); }
+.notif-row__more-btn svg { width: 17px; height: 17px; }
+.notif-row__menu {
+    position: absolute; right: 0; top: 46px; z-index: 10;
+    min-width: 190px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-lg);
+    padding: 6px;
+}
+.notif-row__menu[hidden] { display: none; }
+.notif-row__menu button, .notif-row__menu a {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    padding: 8px 10px; border-radius: 6px;
+    border: none; background: none; text-align: left;
+    font: inherit; font-size: 12.5px; color: var(--text);
+    cursor: pointer;
+}
+.notif-row__menu button:hover, .notif-row__menu a:hover { background: var(--surface-alt); text-decoration: none; }
+.notif-row__menu svg { width: 14px; height: 14px; color: var(--muted); }
 
 /* Layout auxiliar */
 .split { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; align-items: start; }
@@ -768,6 +1009,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     .form-grid, .deadline-compare { grid-template-columns: 1fr; }
     .page-head { flex-direction: column; align-items: stretch; }
     .page-head__actions .btn { flex: 1; justify-content: center; }
+    .page-head__actions .toolbar__search { flex: 1 1 100%; min-width: 0; }
 
     /* Tabelas viram cartões (doc 09 §281) */
     table.responsive thead { display: none; }
@@ -786,6 +1028,13 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     table.responsive td.col-actions { justify-content: flex-start; padding-top: 10px; }
     .queue-list li { align-items: flex-start; }
     .queue-move { width: 100%; }
+
+    /* Notificações: a ação desce para baixo do texto, em largura total */
+    .notif-row { flex-wrap: wrap; align-items: flex-start; padding: 14px; }
+    .notif-row__side { width: 100%; min-width: 0; order: 3; justify-content: space-between; margin-top: 4px; }
+    .notif-row__actions { flex: 1; }
+    .notif-row__actions form, .notif-row__actions a { flex: 1; }
+    .notif-row__actions .btn { width: 100%; justify-content: center; }
 }
 
 @media print {

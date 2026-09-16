@@ -175,6 +175,44 @@ tarefa concluída
 atividade concluída
 ```
 
+Quando uma atividade utiliza processo, eventos adicionais precisam existir.
+
+Exemplos:
+
+```text
+processo aplicado
+```
+
+```text
+versão do processo registrada
+```
+
+```text
+input preenchido
+```
+
+```text
+input alterado
+```
+
+```text
+critério de aceite atendido
+```
+
+```text
+critério de aceite reaberto
+```
+
+```text
+evidência de output registrada
+```
+
+```text
+fluxo padrão desviado
+```
+
+O evento precisa guardar `processo_id` e `processo_versao_id` quando existirem.
+
 ---
 
 # 5. Evento precisa possuir contexto
@@ -308,6 +346,22 @@ A timeline da tarefa responde:
 > O que aconteceu com esta parte específica do trabalho?
 
 As duas visões devem coexistir.
+
+---
+
+# 9.1 Métricas específicas de processo
+
+Para atividades vinculadas a processo, a LPS deve conseguir medir futuramente:
+
+- percentual de inputs obrigatórios recebidos na criação;
+- tempo aguardando inputs obrigatórios;
+- tempo entre inputs completos e primeira ação;
+- quantidade de critérios de aceite reabertos;
+- tempo entre última tarefa e aceite final;
+- desvios do fluxo padrão;
+- diferenças entre versões do mesmo processo.
+
+Essas métricas devem nascer de eventos e estados estruturados, não de perguntas manuais ao usuário.
 
 ---
 

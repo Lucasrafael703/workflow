@@ -209,19 +209,127 @@ densidade de informação
 
 # 10. Hierarquia principal da navegação
 
-Sugestão inicial:
+A navegação desktop deve permanecer rasa.
+
+Estrutura consolidada:
 
 ```text
+OPERAÇÃO
 Home
 Minhas atividades
+Minhas tarefas
 Fila
 Notificações
-Gestão
-Cadastros
-Configurações
+
+GESTÃO
+Visão do gestor
+Cadastros ▾
+Usuários
+Perfis e permissões ▾
+
+RODAPÉ
+Configurações ▾
 ```
 
-Itens aparecem conforme autorização.
+## Home
+
+Não possui submenu.
+
+## Minhas atividades
+
+Não possui submenu lateral.
+
+Filtros ou abas ficam dentro da tela:
+
+```text
+Minhas
+Participando
+Concluídas
+```
+
+## Minhas tarefas
+
+Não possui submenu lateral.
+
+Dentro da tela podem existir:
+
+```text
+A fazer
+Em execução
+Bloqueadas
+Concluídas
+```
+
+## Fila
+
+Não possui submenu lateral.
+
+Setor, status e demais recortes são filtros internos.
+
+## Notificações
+
+Não possui submenu lateral.
+
+## Visão do gestor
+
+Não possui submenu lateral.
+
+Recortes como fila, prazo, bloqueio, capacidade e gargalo ficam dentro da própria visão.
+
+## Cadastros
+
+Submenus:
+
+```text
+Processos
+Setores
+Empresas
+Obras
+Centros de custo
+Tipos de atividade
+Tipos de tarefa
+Motivos
+```
+
+`Motivos` pode reunir abas internas para devolução e bloqueio.
+
+## Usuários
+
+Não possui submenu lateral.
+
+Dentro da tela:
+
+```text
+Ativos
+Inativos
+Convites
+```
+
+## Perfis e permissões
+
+Submenus:
+
+```text
+Perfis
+Grupos de ações
+Ações
+Autorizações específicas
+```
+
+## Configurações
+
+Submenus:
+
+```text
+Organização
+Notificações
+Escalonamento
+Calendário de trabalho
+```
+
+`Integrações` pode aparecer futuramente quando existir funcionalidade real.
+
+A LPS não deve mostrar submenu vazio ou funcionalidade futura desabilitada apenas para parecer completa.
 
 ---
 
@@ -254,10 +362,23 @@ Sugestão:
 ```text
 Home
 Atividades
+Tarefas
 Fila
-Notificações
 Mais
 ```
+
+Dentro de `Mais` podem ficar:
+
+```text
+Notificações
+Visão do gestor, se autorizado
+Cadastros, se autorizado
+Usuários, se autorizado
+Perfis e permissões, se autorizado
+Configurações
+```
+
+Cadastros administrativos complexos podem abrir como tela inteira no mobile em vez de modal centralizado.
 
 ---
 
@@ -820,6 +941,42 @@ Centro de custo
 Tipo de atividade
 Descrição
 ```
+
+---
+
+# 50.1 Processo na criação de atividade
+
+Processo deve ser opcional no D0.
+
+A criação rápida continua possível:
+
+```text
+O que precisa ser resolvido?
+Dono
+Prazo
+Criar
+```
+
+Pode existir uma ação discreta:
+
+```text
+Usar processo
+```
+
+ou um seletor opcional de processo.
+
+Ao selecionar um processo, a LPS deve mostrar apenas um resumo imediato:
+
+```text
+Processo: Elaborar orçamento
+Entrega esperada: Proposta pronta para envio
+Inputs: 3 obrigatórios + 1 opcional
+Fluxo: 4 etapas
+```
+
+Não abrir todos os campos do processo dentro do formulário inicial da atividade.
+
+Depois de criar, a atividade passa a mostrar inputs, output, critérios e fluxo de forma contextual.
 
 ---
 
@@ -2289,20 +2446,242 @@ Não devem poluir a experiência diária.
 
 # 175. Área Cadastros
 
-Pode conter:
+Submenus consolidados:
 
 ```text
-Empresas
+Processos
 Setores
+Empresas
 Obras
 Centros de custo
 Tipos de atividade
 Tipos de tarefa
-Motivos de devolução
-Motivos de bloqueio
+Motivos
 ```
 
-Itens aparecem conforme permissão.
+Itens aparecem conforme autorização.
+
+---
+
+# 175.1 Tela de Processos
+
+`Cadastros > Processos` é uma página completa.
+
+Objetivo:
+
+> localizar, visualizar, criar, versionar, duplicar e inativar processos reutilizáveis.
+
+A tabela pode mostrar:
+
+```text
+Nome
+Tipo de atividade
+Inputs
+Output
+Fluxo
+Versão publicada
+Status
+Ações
+```
+
+Ações rápidas:
+
+```text
+Visualizar
+Editar rascunho
+Criar nova versão
+Duplicar
+Inativar
+```
+
+No topo:
+
+```text
++ Novo processo
+```
+
+---
+
+# 175.2 Novo processo em modal grande
+
+Ao clicar em `+ Novo processo`, abrir um **modal grande**, ocupando aproximadamente 85% a 90% da largura e até 90% da altura útil no desktop.
+
+O objetivo é manter o usuário dentro do contexto de Cadastros sem transformar o formulário em uma página longa e perdida na navegação.
+
+Estrutura:
+
+```text
+Cabeçalho fixo
+Novo processo
+Descrição curta
+[X]
+
+Conteúdo com rolagem interna
+
+Rodapé fixo
+Cancelar | Salvar rascunho | Publicar versão
+```
+
+A rolagem deve acontecer dentro do modal.
+
+Cabeçalho e ações finais permanecem visíveis.
+
+---
+
+# 175.3 Estrutura visual do cadastro de processo
+
+Dentro do modal:
+
+```text
+1. Informações básicas — incluindo empresa
+2. Inputs — o que preciso receber
+3. Output — o que precisa ser entregue
+4. Critérios de aceite — como sei que está pronto
+5. Fluxo padrão — tarefas e setores
+```
+
+As seções devem usar cartões claros e progressivos.
+
+O usuário não precisa preencher tudo antes de salvar rascunho.
+
+---
+
+# 175.4 Não empilhar modais
+
+Ao editar inputs, output, critérios ou fluxo dentro de `Novo processo`, evitar abrir um segundo modal por cima do primeiro.
+
+Preferir uma destas abordagens dentro do mesmo modal:
+
+- expandir a seção;
+- trocar o conteúdo interno com ação `Voltar`;
+- abrir painel lateral interno;
+- editar diretamente na seção.
+
+Regra:
+
+> um modal grande pode conter um fluxo complexo; vários modais empilhados aumentam perda de contexto.
+
+---
+
+# 175.5 Inputs no cadastro de processo
+
+Mostrar lista atual e ação de adicionar.
+
+Cada input pode ter:
+
+```text
+Nome
+Tipo
+Obrigatório
+Origem
+Ajuda de preenchimento
+Ordem
+```
+
+A maior parte da configuração deve ser clicável:
+
+- seletor de tipo;
+- alternador de obrigatório;
+- seletor de origem;
+- arrastar para ordenar.
+
+Reduzir digitação livre ao nome e à orientação necessária.
+
+---
+
+# 175.6 Output no cadastro de processo
+
+A seção precisa responder visualmente:
+
+> O que exatamente deve existir ao final?
+
+Campos mínimos:
+
+```text
+Entrega esperada
+Tipo de evidência
+Descrição complementar opcional
+```
+
+Mostrar uma prévia de como essa entrega aparecerá na atividade.
+
+---
+
+# 175.7 Critérios de aceite
+
+A seção precisa responder:
+
+> Como a LPS sabe que o output está realmente pronto?
+
+Cada critério:
+
+```text
+Nome
+Obrigatório para concluir
+Tipo de validação
+Ordem
+```
+
+No D0, priorizar:
+
+```text
+Checklist simples
+Evidência
+```
+
+---
+
+# 175.8 Fluxo padrão
+
+O fluxo do processo representa tarefas padrão, não novas atividades.
+
+Exemplo visual:
+
+```text
+1 Levantamento
+→
+2 Cotação
+→
+3 Precificação
+→
+4 Revisão
+```
+
+Cada cartão mostra no mínimo:
+
+```text
+Tarefa
+Setor responsável
+Obrigatória ou opcional
+```
+
+Permitir arrastar para reordenar no desktop.
+
+Não criar editor BPMN — Business Process Model and Notation, ou Notação e Modelagem de Processos de Negócio — completo no D0.
+
+---
+
+# 175.9 Publicação e versão
+
+Enquanto estiver em rascunho:
+
+```text
+Editar livremente
+```
+
+Ao publicar:
+
+```text
+Versão 1 publicada
+```
+
+Depois, alterações estruturais devem gerar:
+
+```text
+Criar nova versão
+```
+
+A interface deve explicar isso antes de o usuário editar uma versão já utilizada.
 
 ---
 
@@ -2317,23 +2696,13 @@ Código opcional
 Ativo
 ```
 
+Pode abrir em modal pequeno ou médio, pois é um cadastro curto.
+
 ---
 
 # 177. Duplicidade
 
-Ao salvar:
-
-```text
-Financeiro
-```
-
-se já existe:
-
-```text
-financeiro
-```
-
-mostrar:
+Ao salvar `Financeiro`, se já existe `financeiro`, mostrar:
 
 ```text
 Já existe um setor com este nome.
@@ -2343,17 +2712,7 @@ Já existe um setor com este nome.
 
 # 178. Não sugerir similaridade automaticamente
 
-```text
-Financeiro
-```
-
-e:
-
-```text
-Financeiro e Administrativo
-```
-
-podem coexistir.
+`Financeiro` e `Financeiro e Administrativo` podem coexistir.
 
 ---
 
@@ -2381,11 +2740,20 @@ Descrição
 Ativo
 ```
 
+Tipo de atividade é classificação. Não é processo e não carrega sozinho um fluxo completo.
+
 ---
 
-# 182. Motivo de devolução
+# 182. Motivos
 
-Exemplo:
+`Motivos` pode ser uma única tela com abas:
+
+```text
+Devolução
+Bloqueio
+```
+
+Cada item:
 
 ```text
 Nome
@@ -2397,31 +2765,13 @@ Ativo
 
 # 183. Inativação
 
-Preferir:
-
-```text
-Inativar
-```
-
-em vez de:
-
-```text
-Excluir
-```
-
-para cadastros em uso.
+Preferir `Inativar` em vez de `Excluir` para cadastros em uso.
 
 ---
 
 # 184. Impacto da inativação
 
-Mostrar antes:
-
-```text
-Este setor possui 12 tarefas abertas.
-```
-
-quando relevante.
+Mostrar impacto antes da confirmação quando relevante.
 
 ---
 
@@ -2429,66 +2779,63 @@ quando relevante.
 
 Configurações são diferentes de cadastros.
 
-Cadastro:
-
 ```text
-o que existe
-```
-
-Configuração:
-
-```text
-como a LPS se comporta
+Cadastro = o que existe
+Configuração = como a LPS se comporta
 ```
 
 ---
 
 # 186. Área Configurações
 
-Pode conter:
+Submenus consolidados:
 
 ```text
-Fluxos
+Organização
 Notificações
-Escalonamentos
-Preferências
+Escalonamento
+Calendário de trabalho
 ```
 
----
-
-# 187. Fluxos
-
-Tela para:
-
-- criar modelo;
-- ordenar tarefas;
-- definir setores;
-- definir dependências simples.
+Integrações entram quando houver integração real.
 
 ---
 
-# 188. Não usar BPMN completo no D0
+# 187. Fluxos deixam de ser menu isolado
 
-A interface pode ser:
+Fluxo padrão pertence ao cadastro de processo.
+
+Não criar submenu `Fluxos` separado no D0.
+
+Isso evita que o usuário configure um fluxo sem entender qual input e qual output ele atende.
+
+---
+
+# 188. Processo precisa unir as duas pontas
+
+A experiência deve reforçar:
 
 ```text
-1. Engenharia
-2. Compras
-3. Financeiro
-4. Almoxarifado
+O que entra?
+↓
+O que acontece?
+↓
+O que sai?
+↓
+Como valido?
 ```
 
 ---
 
 # 189. Arrastar tarefas
 
-Permitir reordenação visual.
+Permitir reordenação visual dentro do fluxo do processo.
 
 ---
 
 # 190. Dependência
 
-Pode ser configurada com:
+Pode ser configurada de forma simples:
 
 ```text
 Esta tarefa depende de:
@@ -2499,11 +2846,7 @@ Esta tarefa depende de:
 
 # 191. Paralelismo
 
-Se duas tarefas não dependem entre si:
-
-```text
-podem ser executadas em paralelo
-```
+Se duas tarefas não dependem entre si, podem ser executadas em paralelo.
 
 A interface pode representar isso sem diagrama avançado.
 
@@ -2889,15 +3232,48 @@ Mensagens curtas.
 
 ---
 
-# 222. Evitar excesso de modais
+# 222. Uso de modais
 
-Ações simples podem acontecer inline.
+Modal não é ruim por definição. O problema é usar modal pequeno para fluxo grande ou empilhar vários níveis.
 
-Usar modal quando:
+Usar modal grande para:
 
-- decisão é relevante;
-- precisa de dados adicionais;
-- ação é destrutiva.
+- criar ou editar processo;
+- cadastrar usuário com várias seções;
+- configurações administrativas autocontidas;
+- ações que precisam preservar visualmente a tela de origem.
+
+Usar modal pequeno ou médio para:
+
+- devolução;
+- bloqueio;
+- confirmação sensível;
+- cadastro curto.
+
+Usar inline para microações:
+
+- marcar critério;
+- trocar filtro;
+- ordenar;
+- ativar/desativar opção simples.
+
+## Regra do modal grande
+
+No desktop:
+
+```text
+Largura aproximada: 85% a 90% da viewport
+Altura máxima: aproximadamente 90% da viewport
+Cabeçalho: fixo
+Conteúdo: rolagem interna
+Rodapé de ações: fixo
+```
+
+`Viewport` é a área visível da janela do navegador.
+
+No mobile, fluxos grandes devem usar tela inteira ou painel de tela inteira.
+
+Evitar modal sobre modal.
 
 ---
 
@@ -3620,25 +3996,45 @@ O formulário manual precisa continuar ótimo.
 
 ---
 
-# 290. Templates de atividade
+# 290. Processos reutilizáveis
 
-Futuramente, tipo pode carregar tarefas padrão.
+Trabalhos recorrentes podem utilizar processo publicado.
+
+O processo pode carregar:
+
+- inputs;
+- output;
+- critérios;
+- tarefas padrão;
+- setores;
+- dependências simples.
 
 ---
 
-# 291. Aplicar modelo
+# 291. Aplicar processo
 
-Ação:
+Ação possível na criação:
 
 ```text
-Usar fluxo padrão
+Usar processo
 ```
+
+Ou:
+
+```text
+Processo
+[Selecionar]
+```
+
+A versão publicada mais adequada fica registrada na atividade.
 
 ---
 
-# 292. Não obrigar template
+# 292. Não obrigar processo
 
-Nova atividade pode começar vazia.
+Nova atividade pode começar sem processo.
+
+Isso preserva velocidade e permite demandas ad hoc.
 
 ---
 
@@ -4519,6 +4915,8 @@ Conversa
 Notificações
 Visão do gestor
 Cadastros
+Lista de processos
+Modal grande de novo/editar processo
 Configurações
 Permissões
 ```
@@ -4543,6 +4941,7 @@ Timeline
 Chat contextual
 Central de notificações
 Matriz de permissões
+Seções de input, output, critérios e fluxo do processo
 ```
 
 ---
