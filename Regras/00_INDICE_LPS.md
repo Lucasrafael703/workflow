@@ -119,7 +119,36 @@ Se a resposta for **não** para todas, a funcionalidade deve ir para o backlog e
 
 ## 5. Conceitos fundamentais já definidos
 
-### 5.1 Atividade
+### 5.1 Processo
+
+Processo é um modelo reutilizável que define como um tipo recorrente de trabalho deve ser executado com clareza.
+
+A estrutura mínima é:
+
+```text
+INPUT
+↓
+EXECUÇÃO / TRANSFORMAÇÃO
+↓
+OUTPUT
+↓
+CRITÉRIOS DE ACEITE
+```
+
+O processo pode também definir um fluxo padrão de tarefas e setores.
+
+O processo **não é a atividade**.
+
+- processo = padrão reutilizável;
+- versão do processo = fotografia imutável daquele padrão publicado;
+- atividade = execução real;
+- tarefa = parte do trabalho necessário para chegar ao resultado.
+
+Uma atividade pode existir sem processo no D0 para preservar criação rápida e demandas não recorrentes. Quando um processo é selecionado, a atividade fica vinculada à versão aplicada.
+
+---
+
+### 5.2 Atividade
 
 A atividade representa um problema, objetivo ou resultado que precisa ser resolvido.
 
@@ -135,7 +164,7 @@ O dono da atividade é responsável por acompanhar o resultado até que o proble
 
 ---
 
-### 5.2 Tarefa
+### 5.3 Tarefa
 
 A atividade pode possuir diversas tarefas.
 
@@ -161,7 +190,7 @@ Os tempos de trabalho de cada pessoa devem ser registrados separadamente e somad
 
 ---
 
-### 5.3 Dono da atividade
+### 5.4 Dono da atividade
 
 Toda atividade possui um único dono.
 
@@ -181,7 +210,7 @@ Transferir uma tarefa para outro setor não elimina a responsabilidade do dono d
 
 ---
 
-### 5.4 Setor
+### 5.5 Setor
 
 Os setores são configuráveis por empresa.
 
@@ -212,7 +241,7 @@ Participar de um setor não significa automaticamente possuir todas as permissõ
 
 ---
 
-### 5.5 Fluxo entre setores
+### 5.6 Fluxo entre setores
 
 Uma atividade pode percorrer vários setores por meio de suas tarefas.
 
@@ -242,7 +271,7 @@ O fluxo deve possuir histórico e auditoria.
 
 ---
 
-### 5.6 Devolução
+### 5.7 Devolução
 
 Uma tarefa pode voltar para um setor ou etapa anterior.
 
@@ -259,7 +288,7 @@ A devolução é um dado relevante para identificar retrabalho e problemas recor
 
 ---
 
-### 5.7 Fila
+### 5.8 Fila
 
 Cada setor pode possuir sua própria fila de tarefas.
 
@@ -279,7 +308,7 @@ Alterações na posição devem ser auditadas.
 
 ---
 
-### 5.8 Prioridade
+### 5.9 Prioridade
 
 A prioridade não deve depender apenas da percepção de quem solicita.
 
@@ -298,7 +327,7 @@ Por isso, a LPS deve separar conceitos como:
 
 ---
 
-### 5.9 Prazo solicitado e prazo comprometido
+### 5.10 Prazo solicitado e prazo comprometido
 
 A LPS deve diferenciar:
 
@@ -333,7 +362,7 @@ Se houver recusa, a situação deve seguir a regra de escalonamento configurada.
 
 ---
 
-### 5.10 Escalonamento
+### 5.11 Escalonamento
 
 O escalonamento deve existir como conceito estrutural.
 
@@ -353,7 +382,7 @@ A LPS não deve depender apenas de cobrança manual.
 
 ---
 
-### 5.11 Comunicação
+### 5.12 Comunicação
 
 A LPS não deve nascer como um Slack corporativo completo.
 
@@ -373,7 +402,7 @@ Essa mensagem pode futuramente ser interpretada pela LPS como possível alteraç
 
 ---
 
-### 5.12 Auditoria
+### 5.13 Auditoria
 
 A auditoria é um dos pilares da LPS.
 
@@ -410,7 +439,7 @@ A auditoria deve permitir analisar:
 
 ---
 
-### 5.13 Retroalimentação
+### 5.14 Retroalimentação
 
 A LPS deve aprender com os próprios dados.
 
@@ -487,7 +516,7 @@ Definir o que é a LPS, por que ela existe e quais princípios não devem ser qu
 - visão do D0.
 
 **Status:**  
-⚪ Não criado.
+🟠 Em revisão.
 
 ---
 
@@ -518,7 +547,7 @@ Documentar o núcleo operacional da LPS.
 - comportamento inicial sem inteligência.
 
 **Status:**  
-⚪ Não criado.
+🟠 Em revisão.
 
 ---
 
@@ -547,7 +576,7 @@ Documentar como a LPS gerencia capacidade, ordem de execução, negociação de 
 - configuração por empresa.
 
 **Status:**  
-⚪ Não criado.
+🟠 Em revisão.
 
 ---
 
@@ -584,7 +613,7 @@ Definir tudo o que a LPS precisa registrar para permitir análise operacional.
 - auditoria de alterações.
 
 **Status:**  
-⚪ Não criado.
+🟠 Em revisão.
 
 ---
 
@@ -617,7 +646,7 @@ Definir a estrutura organizacional mínima e o sistema configurável de autoriza
 - configuração por empresa.
 
 **Status:**  
-⚪ Não criado.
+🟠 Em revisão.
 
 ---
 
@@ -645,7 +674,7 @@ Definir como as pessoas recebem informação e se comunicam dentro do contexto d
 - diferença entre conversa e dado oficial.
 
 **Status:**  
-⚪ Não criado.
+🟠 Em revisão.
 
 ---
 
@@ -677,7 +706,7 @@ Definir como a LPS poderá aprender com os dados operacionais sem depender de in
 - autorização de uso de dados.
 
 **Status:**  
-⚪ Não criado.
+🟠 Em revisão.
 
 ---
 
@@ -751,7 +780,7 @@ Traduzir as regras da LPS em experiência de uso.
 - experiência mobile.
 
 **Status:**  
-⚪ Não criado.
+🟠 Em revisão.
 
 ---
 
@@ -800,39 +829,64 @@ Controlar a evolução do produto e evitar que funcionalidades futuras entrem pr
 - aprendizado entre empresas.
 
 **Status:**  
-⚪ Não criado.
+🟠 Em revisão.
+
+---
+
+### `11_PROCESSOS_INPUTS_OUTPUTS_E_CRITERIOS_DE_ACEITE.md`
+
+**Objetivo:**  
+Definir processo como modelo reutilizável da LPS, incluindo input, output, critérios de aceite, fluxo padrão, versionamento e comportamento quando o processo é aplicado a uma atividade.
+
+**Conteúdo principal:**
+
+- diferença entre processo, atividade, tarefa e tipo de atividade;
+- inputs configuráveis;
+- output verificável;
+- critérios de aceite;
+- fluxo padrão de tarefas;
+- versões imutáveis publicadas;
+- aplicação do processo em atividades;
+- comportamento de conclusão;
+- experiência de cadastro;
+- limites do D0.
+
+**Status:**  
+🟢 Consolidado nesta revisão.
 
 ---
 
 ## 7. Ordem recomendada de construção da documentação
 
-A ordem recomendada é:
+A ordem lógica de leitura não precisa ser igual à numeração física dos arquivos.
 
 ```text
 00 — Índice
 ↓
-01 — Visão e Princípios
+01 — Visão e princípios
 ↓
-02 — Atividades, Tarefas e Fluxos
+11 — Processos, inputs, outputs e critérios de aceite
 ↓
-03 — Filas, Prazos e Escalonamento
+02 — Atividades, tarefas e fluxos
 ↓
-04 — Auditoria, Tempo e Métricas
+03 — Filas, prazos e escalonamento
 ↓
-05 — Usuários, Setores e Autorizações
+04 — Auditoria, tempo e métricas
 ↓
-06 — Notificações e Comunicação
+05 — Usuários, setores e autorizações
 ↓
-07 — Inteligência e Retroalimentação
+06 — Notificações e comunicação
 ↓
-08 — Banco de Dados
+07 — Inteligência e retroalimentação
 ↓
-09 — Telas e Experiência
+08 — Banco de dados
 ↓
-10 — Roadmap
+09 — Telas e experiência do usuário
+↓
+10 — Roadmap D0, D1 e D2
 ```
 
-Essa ordem existe para evitar que decisões técnicas sejam tomadas antes de o comportamento do produto estar definido.
+O documento `11` foi criado depois dos demais, mas conceitualmente fica entre visão e atividade porque processo passou a ser um conceito de negócio de primeira classe.
 
 ---
 
@@ -841,6 +895,12 @@ Essa ordem existe para evitar que decisões técnicas sejam tomadas antes de o c
 ### `01` influencia todos os demais
 
 O documento de visão define as regras que não devem ser quebradas pelo restante do projeto.
+
+### `11` define o padrão reutilizável que pode originar atividades
+
+`11` influencia diretamente `02`, `04`, `05`, `07`, `08`, `09` e `10`.
+
+O banco e a interface não devem inventar regras de processo fora desse documento.
 
 ### `02` alimenta `03`, `04`, `06`, `08` e `09`
 
@@ -876,17 +936,18 @@ O roadmap evita antecipação desnecessária de funcionalidades.
 
 | Documento | Status | Prioridade |
 |---|---|---|
-| 00 — Índice Geral | 🟢 Em desenvolvimento | Alta |
-| 01 — Visão e Princípios | ⚪ Não criado | Alta |
-| 02 — Atividades, Tarefas e Fluxos | ⚪ Não criado | Crítica |
-| 03 — Filas, Prazos e Escalonamento | ⚪ Não criado | Crítica |
-| 04 — Auditoria, Tempo e Métricas | ⚪ Não criado | Crítica |
-| 05 — Usuários, Setores e Autorizações | ⚪ Não criado | Alta |
-| 06 — Notificações e Comunicação | ⚪ Não criado | Média |
-| 07 — Inteligência e Retroalimentação | ⚪ Não criado | Média |
-| 08 — Banco de Dados | ⚪ Revisão necessária | Alta |
-| 09 — Telas e Experiência | ⚪ Não criado | Alta |
-| 10 — Roadmap D0/D1/D2 | ⚪ Não criado | Alta |
+| 00 — Índice Geral | 🟠 Em revisão | Alta |
+| 01 — Visão e Princípios | 🟠 Em revisão | Alta |
+| 02 — Atividades, Tarefas e Fluxos | 🟠 Em revisão | Crítica |
+| 03 — Filas, Prazos e Escalonamento | 🟠 Em revisão | Crítica |
+| 04 — Auditoria, Tempo e Métricas | 🟠 Em revisão | Crítica |
+| 05 — Usuários, Setores e Autorizações | 🟠 Em revisão | Alta |
+| 06 — Notificações e Comunicação | 🟠 Em revisão | Média |
+| 07 — Inteligência e Retroalimentação | 🟠 Em revisão | Média |
+| 08 — Banco de Dados | 🟠 Em revisão | Alta |
+| 09 — Telas e Experiência | 🟠 Em revisão | Alta |
+| 10 — Roadmap D0/D1/D2 | 🟠 Em revisão | Alta |
+| 11 — Processos, Inputs, Outputs e Critérios de Aceite | 🟠 Em revisão | Crítica |
 
 ---
 
@@ -1007,6 +1068,17 @@ Exemplos:
 ---
 
 ## 12. Decisões consolidadas até o momento
+
+### Processos
+
+- processo é um modelo reutilizável;
+- processo possui input, output e critérios de aceite;
+- processo pode possuir fluxo padrão de tarefas;
+- processo publicado é versionado;
+- atividade que usa processo aponta para uma versão específica;
+- alterar um processo publicado gera nova versão;
+- uma atividade antiga não muda quando o processo evolui;
+- processo não é obrigatório para toda atividade no D0.
 
 ### Estrutura do produto
 
@@ -1453,7 +1525,8 @@ O produto deve evitar apresentar estimativas como certezas quando não houver da
 ├── 07_INTELIGENCIA_E_RETROALIMENTACAO.md
 ├── 08_BANCO_DE_DADOS.md
 ├── 09_TELAS_E_EXPERIENCIA_DO_USUARIO.md
-└── 10_ROADMAP_D0_D1_D2.md
+├── 10_ROADMAP_D0_D1_D2.md
+└── 11_PROCESSOS_INPUTS_OUTPUTS_E_CRITERIOS_DE_ACEITE.md
 ```
 
 ---
@@ -1488,6 +1561,11 @@ Se os dados forem ruins, nenhuma inteligência artificial corrigirá a base oper
 
 Neste momento, os conceitos mais amadurecidos são:
 
+- processo reutilizável;
+- input;
+- output;
+- critérios de aceite;
+- versionamento de processo;
 - atividade;
 - dono único;
 - tarefas;
@@ -1513,17 +1591,25 @@ Os próximos documentos devem transformar esses conceitos em regras detalhadas e
 
 ---
 
-## 28. Próximo documento recomendado
+## 28. Próxima validação recomendada
 
-O próximo documento recomendado é:
+A documentação principal já existe.
 
-`01_VISAO_E_PRINCIPIOS_LPS.md`
+O próximo passo recomendado não é criar outro documento por padrão.
 
-Depois dele:
+É validar com uso real, nesta ordem:
 
-`02_ATIVIDADES_TAREFAS_E_FLUXOS.md`
+```text
+11 — Processo
+↓
+09 — Experiência de cadastro e execução
+↓
+08 — Banco de dados
+↓
+10 — Escopo do D0
+```
 
-O banco de dados deve ser revisado apenas depois que os principais comportamentos de negócio estiverem suficientemente definidos.
+Somente criar novo arquivo se surgir um conceito com comportamento próprio que não pertença claramente aos documentos atuais.
 
 ---
 
@@ -1533,6 +1619,7 @@ O banco de dados deve ser revisado apenas depois que os principais comportamento
 |---|---|
 | 0.1 | Estrutura inicial do índice geral da LPS |
 | 1.0 | Consolidação das principais decisões de produto discutidas até o momento |
+| 1.1 | Inclusão de processo como conceito de primeira classe, novo documento 11 e revisão das dependências |
 
 ---
 

@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Processos — LPS{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div class="page-head__text">
+        <h1>Processos</h1>
+        <p class="sub">Gerencie os modelos reutilizáveis da organização.</p>
+    </div>
+    <div class="page-head__actions">
+        <a href="{% url 'process-create' %}" class="btn btn--primary">{% include "_icon.html" with name="plus" %} Novo processo</a>
+    </div>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-card">
+        <div class="stat-card__icon stat-card__icon--success">{% include "_icon.html" with name="check" %}</div>
+        <div class="value">{{ stat_active }}</div>
+        <div class="label">Processos ativos</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__icon stat-card__icon--warning">{% include "_icon.html" with name="sliders" %}</div>
+        <div class="value">{{ stat_draft }}</div>
+        <div class="label">Em rascunho</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__icon stat-card__icon--info">{% include "_icon.html" with name="folder" %}</div>
+        <div class="value">{{ stat_types }}</div>
+        <div class="label">Tipos de atividade</div>
+    </div>
+</div>
+
+<form method="get">
+    <div class="toolbar">
+        <div class="toolbar__search">
+            {% include "_icon.html" with name="search" %}
+            <input type="search" name="q" value="{{ search }}" placeholder="Buscar pelo nome…">
+        </div>
+        <select name="tipo">
+            <option value="">Todos os tipos de atividade</option>
+            {% for t in activity_types %}
+            <option value="{{ t.pk }}" {% if activity_type_id == t.pk|stringformat:"s" %}selected{% endif %}>{{ t.name }}</option>
+            {% endfor %}
+        </select>
+        <select name="status">
+            <option value="">Todos os status</option>
+            <option value="publicado" {% if status == "publicado" %}selected{% endif %}>Publicado</option>
+            <option value="rascunho" {% if status == "rascunho" %}selected{% endif %}>Em rascunho</option>
+            <option value="inativo" {% if status == "inativo" %}selected{% endif %}>Inativo</option>
+        </select>
+        <button type="submit" class="btn">Filtrar</button>
+        {% if search or status or activity_type_id %}<a href="{% url 'process-list' %}" class="btn btn--ghost">Limpar</a>{% endif %}
+    </div>
+</form>
+
+<div class="card card--flush">
+    <div class="table-wrap">
+        <table class="responsive">
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    <th>Tipo de atividade</th>
+                    <th>Inputs</th>
+                    <th>Output</th>
+                    <th>Fluxo</th>
+                    <th>Versão</th>
+                    <th>Status</th>
+                    <th class="col-actions">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for process in processes %}
+            {% with version=process.published_version|default:process.draft_version %}
+            <tr>
+                <td data-label="Nome">
+                    <a href="{% url 'process-edit' process.pk %}" class="title">{{ process.name }}</a>
+                    {% if not process.is_active %}<div class="muted" style="font-size:11.5px">Inativo</div>{% endif %}
+                </td>
+                <td data-label="Tipo de atividade">{{ process.activity_type.name|default:"—" }}</td>
+                <td data-label="Inputs">{{ version.inputs.count|default:"0" }}</td>
+                <td data-label="Output">
+                    {% if version.output_description %}<span title="{{ version.output_description }}">{{ version.output_description|truncatechars:40 }}</span>{% else %}<span class="muted">—</span>{% endif %}
+                </td>
+                <td data-label="Fluxo">{{ version.steps.count|default:"0" }} etapa{{ version.steps.count|pluralize }}</td>
+                <td data-label="Versão">v{{ version.number|default:"—" }}</td>
+                <td data-label="Status">
+                    {% if version %}<span class="tag tag--{{ version.status }}">{{ version.get_status_display }}</span>{% else %}<span class="muted">—</span>{% endif %}
+                </td>
+                <td data-label="Ações" class="col-actions">
+                    <a href="{% url 'process-edit' process.pk %}">Editar</a>
+                    <form method="post" action="{% url 'process-toggle-active' process.pk %}" style="display:inline">
+                        {% csrf_token %}
+                        <button type="submit" class="link-button">{% if process.is_active %}Inativar{% else %}Reativar{% endif %}</button>
+                    </form>
+                </td>
+            </tr>
+            {% endwith %}
+            {% empty %}
+            <tr><td colspan="8">
+                <div class="empty-state">
+                    <div class="empty-state__icon">{% include "_icon.html" with name="folder" %}</div>
+                    <h3>Nenhum processo cadastrado</h3>
+                    <p>Um processo descreve como uma categoria recorrente de trabalho normalmente deve acontecer —
+                       com inputs, output, critérios de aceite e fluxo padrão.</p>
+                    <a href="{% url 'process-create' %}" class="btn btn--primary">Criar primeiro processo</a>
+                </div>
+            </td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+<div class="hint-bar">
+    {% include "_icon.html" with name="info" %}
+    <span>Processo não é obrigatório: atividades ad hoc continuam podendo ser criadas apenas com título, dono e prazo.</span>
+</div>
+{% endblock %}

@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+{% block title %}{{ process.name }} — Processo — LPS{% endblock %}
+
+{% block content %}
+<div class="modal-backdrop">
+    <div class="modal modal--xl">
+        <div class="modal__head">
+            <div>
+                <h2>{{ process.name }}</h2>
+                <div class="sub">
+                    Cadastros › Processos ·
+                    {% if version %}
+                        v{{ version.number }}
+                        <span class="tag tag--{{ version.status }}">{{ version.get_status_display }}</span>
+                    {% endif %}
+                    {% if versions|length > 1 %}
+                    <select onchange="if(this.value) window.location.href=this.value" style="margin-left:8px; font-size:12px; padding:2px 6px;">
+                        {% for v in versions %}
+                        <option value="?v={{ v.pk }}" {% if version.pk == v.pk %}selected{% endif %}>v{{ v.number }} — {{ v.get_status_display }}</option>
+                        {% endfor %}
+                    </select>
+                    {% endif %}
+                </div>
+            </div>
+            <a href="{% url 'process-list' %}" class="modal__close" title="Fechar">&times;</a>
+        </div>
+
+        <div class="modal__body">
+            {% if not can_edit %}
+            <div class="hint-bar">
+                {% include "_icon.html" with name="info" %}
+                <span>
+                    Esta versão está {{ version.get_status_display|lower }} e não pode ser alterada.
+                    {% if version.status == "PUBLICADO" %}Crie uma nova versão para editar.{% endif %}
+                </span>
+            </div>
+            {% endif %}
+
+            {# --- Informações básicas -------------------------------------------------- #}
+            <details class="proc-section" open>
+                <summary class="proc-section__head">
+                    <div>
+                        <h3>Informações básicas</h3>
+                        <div class="sub">{{ process.company.name }}{% if process.activity_type %} · {{ process.activity_type.name }}{% endif %}</div>
+                    </div>
+                    <span class="proc-section__chevron">{% include "_icon.html" with name="chevron-down" %}</span>
+                </summary>
+                <div class="proc-section__body">
+                    {% if can_edit %}
+                    <form method="post" action="{% url 'process-basic-info' process.pk %}">
+                        {% csrf_token %}
+                        <div class="field">
+                            <label for="id_name">Nome</label>
+                            <input type="text" id="id_name" name="name" value="{{ process.name }}" required>
+                        </div>
+                        <div class="field">
+                            <label for="id_activity_type">Tipo de atividade</label>
+                            <select id="id_activity_type" name="activity_type">
+                                <option value="">—</option>
+                                {% for t in basic_form.activity_type.field.queryset %}
+                                <option value="{{ t.pk }}" {% if process.activity_type_id == t.pk %}selected{% endif %}>{{ t.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="id_description">Descrição</label>
+                            <textarea id="id_description" name="description" rows="2">{{ process.description }}</textarea>
+                        </div>
+                        <div class="form-foot">
+                            <button type="submit" class="btn btn--primary">Salvar informações</button>
+                        </div>
+                    </form>
+                    {% else %}
+                    <p><strong>Descrição:</strong> {{ process.description|default:"—" }}</p>
+                    {% endif %}
+                </div>
+            </details>
+
+            {# --- Inputs ------------------------------------------------------------ #}
+            <details class="proc-section" id="inputs" open>
+                <summary class="proc-section__head">
+                    <div>
+                        <h3>Inputs</h3>
+                        <div class="sub">{{ inputs|length }} definido{{ inputs|length|pluralize }} — o que precisa estar disponível para a execução começar</div>
+                    </div>
+                    <span class="proc-section__chevron">{% include "_icon.html" with name="chevron-down" %}</span>
+                </summary>
+                <div class="proc-section__body">
+                    {% for item in inputs %}
+                    <div class="proc-row">
+                        <div class="proc-row__main">
+                            <div class="proc-row__title">{{ item.name }} <span class="tag tag--NORMAL">{{ item.get_input_type_display }}</span> {% if item.is_required %}<span class="tag tag--BLOQUEADA">Obrigatório</span>{% else %}<span class="tag tag--PENDENTE">Opcional</span>{% endif %}</div>
+                            <div class="proc-row__meta">{% if item.source %}Origem: {{ item.get_source_display }}{% endif %}{% if item.help_text %} — {{ item.help_text }}{% endif %}</div>
+                        </div>
+                        {% if can_edit %}
+                        <form method="post" action="{% url 'process-input-remove' process.pk item.pk %}" class="proc-row__remove">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn--icon" title="Remover">{% include "_icon.html" with name="trash" %}</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                    {% empty %}
+                    <p class="muted">Nenhum input definido ainda.</p>
+                    {% endfor %}
+
+                    {% if can_edit %}
+                    <form method="post" action="{% url 'process-input-add' process.pk %}" class="proc-add-form">
+                        {% csrf_token %}
+                        <div class="field"><label>Nome</label><input type="text" name="name" placeholder="Ex.: Projeto" required></div>
+                        <div class="field">
+                            <label>Tipo</label>
+                            <select name="input_type">
+                                {% for value, label in input_form.input_type.field.choices %}
+                                <option value="{{ value }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label>Origem</label>
+                            <select name="source">
+                                <option value="">—</option>
+                                {% for value, label in input_form.source.field.choices %}{% if value %}
+                                <option value="{{ value }}">{{ label }}</option>
+                                {% endif %}{% endfor %}
+                            </select>
+                        </div>
+                        <div class="field"><label>Ajuda</label><input type="text" name="help_text" placeholder="Opcional"></div>
+                        <label class="field field--check"><input type="checkbox" name="is_required" checked> Obrigatório</label>
+                        <button type="submit" class="btn">{% include "_icon.html" with name="plus" %} Adicionar</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </details>
+
+            {# --- Output ------------------------------------------------------------ #}
+            <details class="proc-section" id="output" open>
+                <summary class="proc-section__head">
+                    <div>
+                        <h3>Output</h3>
+                        <div class="sub">A entrega principal produzida pelo processo</div>
+                    </div>
+                    <span class="proc-section__chevron">{% include "_icon.html" with name="chevron-down" %}</span>
+                </summary>
+                <div class="proc-section__body">
+                    {% if can_edit %}
+                    <form method="post" action="{% url 'process-output' process.pk %}">
+                        {% csrf_token %}
+                        <div class="field">
+                            <label for="id_output_description">Entrega esperada</label>
+                            <textarea id="id_output_description" name="output_description" rows="2" placeholder="Ex.: Proposta comercial pronta para envio">{{ version.output_description }}</textarea>
+                            <div class="hint">Escreva como resultado verificável — evite descrever a ação (“Elaborar proposta”).</div>
+                        </div>
+                        <div class="field">
+                            <label for="id_output_evidence_type">Evidência do output</label>
+                            <select id="id_output_evidence_type" name="output_evidence_type">
+                                <option value="">—</option>
+                                {% for value, label in output_form.output_evidence_type.field.choices %}{% if value %}
+                                <option value="{{ value }}" {% if version.output_evidence_type == value %}selected{% endif %}>{{ label }}</option>
+                                {% endif %}{% endfor %}
+                            </select>
+                        </div>
+                        {% if version.output_description %}
+                        <div class="summary-panel">
+                            <strong>Pré-visualização</strong>
+                            <p>{{ version.output_description }}</p>
+                        </div>
+                        {% endif %}
+                        <div class="form-foot">
+                            <button type="submit" class="btn btn--primary">Salvar output</button>
+                        </div>
+                    </form>
+                    {% else %}
+                    <p>{{ version.output_description|default:"—" }}</p>
+                    {% endif %}
+                </div>
+            </details>
+
+            {# --- Critérios de aceite ------------------------------------------------ #}
+            <details class="proc-section" id="criterios" open>
+                <summary class="proc-section__head">
+                    <div>
+                        <h3>Critérios de aceite</h3>
+                        <div class="sub">{{ criteria|length }} critério{{ criteria|length|pluralize }} — como a organização comprova que a entrega está pronta</div>
+                    </div>
+                    <span class="proc-section__chevron">{% include "_icon.html" with name="chevron-down" %}</span>
+                </summary>
+                <div class="proc-section__body">
+                    {% for item in criteria %}
+                    <div class="proc-row">
+                        <div class="proc-row__main">
+                            <div class="proc-row__title">{{ item.name }} {% if item.is_required %}<span class="tag tag--BLOQUEADA">Obrigatório</span>{% else %}<span class="tag tag--PENDENTE">Opcional</span>{% endif %}</div>
+                        </div>
+                        {% if can_edit %}
+                        <form method="post" action="{% url 'process-criterion-remove' process.pk item.pk %}" class="proc-row__remove">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn--icon" title="Remover">{% include "_icon.html" with name="trash" %}</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                    {% empty %}
+                    <p class="muted">Nenhum critério definido ainda.</p>
+                    {% endfor %}
+
+                    {% if can_edit %}
+                    <form method="post" action="{% url 'process-criterion-add' process.pk %}" class="proc-add-form">
+                        {% csrf_token %}
+                        <div class="field"><label>Critério</label><input type="text" name="name" placeholder="Ex.: Aprovação realizada" required></div>
+                        <label class="field field--check"><input type="checkbox" name="is_required" checked> Obrigatório</label>
+                        <button type="submit" class="btn">{% include "_icon.html" with name="plus" %} Adicionar</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </details>
+
+            {# --- Fluxo padrão -------------------------------------------------------- #}
+            <details class="proc-section" id="fluxo" open>
+                <summary class="proc-section__head">
+                    <div>
+                        <h3>Fluxo padrão</h3>
+                        <div class="sub">{{ steps|length }} etapa{{ steps|length|pluralize }} — as tarefas modelo desta versão</div>
+                    </div>
+                    <span class="proc-section__chevron">{% include "_icon.html" with name="chevron-down" %}</span>
+                </summary>
+                <div class="proc-section__body">
+                    {% for item in steps %}
+                    <div class="proc-row">
+                        <span class="proc-row__grip">{% include "_icon.html" with name="grip" %}</span>
+                        <div class="proc-row__main">
+                            <div class="proc-row__title">{{ item.order }}. {{ item.name }}</div>
+                            <div class="proc-row__meta">{{ item.sector.name }}{% if item.depends_on_previous and not forloop.first %} · depende da etapa anterior{% endif %}</div>
+                        </div>
+                        {% if can_edit %}
+                        <form method="post" action="{% url 'process-step-remove' process.pk item.pk %}" class="proc-row__remove">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn--icon" title="Remover">{% include "_icon.html" with name="trash" %}</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                    {% empty %}
+                    <p class="muted">Nenhuma etapa definida ainda. Publicar exige ao menos uma.</p>
+                    {% endfor %}
+
+                    {% if can_edit %}
+                    <form method="post" action="{% url 'process-step-add' process.pk %}" class="proc-add-form">
+                        {% csrf_token %}
+                        <div class="field"><label>Nome da tarefa</label><input type="text" name="name" placeholder="Ex.: Realizar cotação" required></div>
+                        <div class="field">
+                            <label>Setor responsável</label>
+                            <select name="sector" required>
+                                <option value="">Selecione…</option>
+                                {% for sector in sectors %}
+                                <option value="{{ sector.pk }}">{{ sector.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <label class="field field--check"><input type="checkbox" name="depends_on_previous" checked> Depende da anterior</label>
+                        <button type="submit" class="btn">{% include "_icon.html" with name="plus" %} Adicionar etapa</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </details>
+        </div>
+
+        <div class="modal__foot form-foot--split">
+            <a href="{% url 'process-list' %}" class="btn">Fechar</a>
+            <div style="display:flex; gap:8px;">
+                {% if version.status == "PUBLICADO" or version.status == "SUBSTITUIDO" %}
+                <form method="post" action="{% url 'process-new-version' process.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn">Criar nova versão</button>
+                </form>
+                {% endif %}
+                {% if can_edit and can_publish %}
+                <form method="post" action="{% url 'process-publish' process.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn--primary">Publicar versão</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

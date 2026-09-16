@@ -1,24 +1,104 @@
-<ul class="list-rows">
+{% load lps %}
+<ul class="list-rows" style="margin:0">
     {% for n in items %}
-    <li>
-        <div style="display:flex;gap:12px;align-items:flex-start">
-            <span class="stat-card__icon {% if actionable %}stat-card__icon--warning{% else %}stat-card__icon--info{% endif %}"
-                  style="margin:0;flex:0 0 32px">
-                {% if actionable %}{% include "_icon.html" with name="alert" %}
-                {% else %}{% include "_icon.html" with name="info" %}{% endif %}
+    <li style="padding:0">
+        <div class="notif-row notif-row--{{ n.tone }} {% if not n.is_read %}notif-row--unread{% endif %}">
+            {% comment %}
+            O card inteiro é clicável: este form/botão cobre toda a área do
+            card (via CSS) e leva ao contexto, igual a clicar em "Abrir". Os
+            botões de ação real (Aceitar, Recusar, Analisar, o menu) ficam
+            por cima dele, em forms próprios, então continuam clicáveis
+            independentemente.
+            {% endcomment %}
+            <form method="post" action="{% url 'notification-mark-read' n.pk %}" class="notif-row__link-form">
+                {% csrf_token %}
+                <button type="submit" class="notif-row__link" aria-label="Abrir {{ n.headline }}"></button>
+            </form>
+
+            <span class="notif-row__icon notif-row__icon--{{ n.tone }}">
+                {% include "_icon.html" with name=n.icon %}
             </span>
-            <div style="flex:1">
-                <strong>{{ n.title }}</strong>
-                {% if not n.is_read %}<span class="tag tag--ABERTA">nova</span>{% endif %}
-                <div class="muted small">{{ n.created_at|date:"d/m/Y H:i" }}</div>
-                <p style="margin:4px 0 0">{{ n.message }}</p>
-                <div class="actions-row" style="margin-top:8px">
-                    <form method="post" action="{% url 'notification-mark-read' n.pk %}">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn--sm {% if actionable %}btn--primary{% endif %}">
-                            {% if actionable %}Analisar{% elif n.task_id or n.activity_id or n.url %}Abrir{% else %}Marcar como lida{% endif %}
-                        </button>
-                    </form>
+
+            <div class="notif-row__body">
+                {# Linha 1 — tipo: pequeno e secundário, nunca o texto principal. #}
+                <div class="notif-row__top">
+                    <span class="notif-row__eyebrow notif-row__eyebrow--{{ n.tone }}">{{ n.category_label }}</span>
+                    {% if n.needs_action %}
+                        <span class="notif-row__status notif-row__status--action">Ação necessária</span>
+                    {% elif not n.is_read %}
+                        <span class="notif-row__status notif-row__status--new">Nova</span>
+                    {% endif %}
+                </div>
+
+                {# Linha 2 — o objeto real que a pessoa reconhece. #}
+                <div class="notif-row__headline">{{ n.headline }}</div>
+
+                {# Linha 3 — uma frase curta do que aconteceu. #}
+                <p class="notif-row__summary">{{ n.summary }}</p>
+
+                {# Linha 4 — campos de contexto, só os que fazem sentido para esta categoria. #}
+                {% if n.fields %}
+                <div class="notif-row__facts">
+                    {% for icon, text in n.fields %}
+                    <span class="notif-row__fact">
+                        {% include "_icon.html" with name=icon %}
+                        <span>{{ text }}</span>
+                    </span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                {% if n.show_message %}
+                <p class="notif-row__message">{{ n.message }}</p>
+                {% endif %}
+            </div>
+
+            <div class="notif-row__side">
+                <div class="notif-row__actions">
+                    {% if n.event_type == "DEADLINE_PROPOSED" and n.pending_proposal_id %}
+                        {# Prazo: no máximo duas ações — aceitar (primário) e recusar (negativo suave, não vermelho forte) #}
+                        <form method="post" action="{% url 'deadline-accept' n.pending_proposal_id %}">
+                            {% csrf_token %}<button type="submit" class="btn btn--primary">Aceitar</button>
+                        </form>
+                        <a href="{% url 'task-detail' n.task_id %}#prazo" class="btn btn--soft-danger">Recusar</a>
+                    {% elif n.event_type == "DEADLINE_CONFLICT" and n.open_conflict_id %}
+                        <a href="{% url 'conflict-resolve' n.open_conflict_id %}" class="btn btn--primary">Analisar</a>
+                    {% elif n.category == "mencao" %}
+                        {% if n.task_id %}
+                        <a href="{% url 'task-detail' n.task_id %}#conversa" class="btn">Ver menção</a>
+                        {% else %}
+                        <a href="{% url 'activity-detail' n.activity_id %}?tab=conversa" class="btn">Ver menção</a>
+                        {% endif %}
+                    {% elif n.category == "delegacao" %}
+                        <a href="{% if n.task_id %}{% url 'task-detail' n.task_id %}{% else %}{% url 'activity-detail' n.activity_id %}{% endif %}" class="btn btn--primary">Abrir atividade</a>
+                    {% elif n.needs_action %}
+                        <a href="{% if n.task_id %}{% url 'task-detail' n.task_id %}{% else %}{% url 'activity-detail' n.activity_id %}{% endif %}" class="btn btn--primary">Analisar</a>
+                    {% elif n.category == "conclusao" %}
+                        <a href="{% if n.task_id %}{% url 'task-detail' n.task_id %}{% else %}{% url 'activity-detail' n.activity_id %}{% endif %}" class="btn">Ver detalhes</a>
+                    {% endif %}
+                </div>
+
+                <div class="notif-row__more">
+                    <button type="button" class="notif-row__more-btn" data-notif-menu-toggle aria-label="Mais opções" aria-expanded="false">
+                        {% include "_icon.html" with name="more" %}
+                    </button>
+                    <div class="notif-row__menu" hidden data-notif-menu>
+                        {% if not n.is_read %}
+                        <form method="post" action="{% url 'notification-mark-read' n.pk %}">
+                            {% csrf_token %}
+                            <button type="submit">{% include "_icon.html" with name="check" %} Marcar como lida</button>
+                        </form>
+                        {% endif %}
+                        {% if n.task_id %}
+                        <a href="{% url 'task-detail' n.task_id %}">
+                            {% include "_icon.html" with name="clock" %} Ver histórico
+                        </a>
+                        {% elif n.activity_id %}
+                        <a href="{% url 'activity-detail' n.activity_id %}?tab=historico">
+                            {% include "_icon.html" with name="clock" %} Ver histórico
+                        </a>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
         </div>

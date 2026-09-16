@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Novo processo — LPS{% endblock %}
+
+{% block content %}
+<div class="modal-backdrop">
+    <div class="modal">
+        <div class="modal__head">
+            <div>
+                <h2>Novo processo</h2>
+                <div class="sub">Cadastros › Processos</div>
+            </div>
+            <a href="{% url 'process-list' %}" class="modal__close" title="Fechar">&times;</a>
+        </div>
+
+        <form method="post">
+            {% csrf_token %}
+            <div class="modal__body">
+                <div class="field">
+                    <label for="id_name">Nome</label>
+                    <input type="text" id="id_name" name="name" placeholder="Ex.: Elaborar orçamento" required autofocus>
+                </div>
+                <div class="field">
+                    <label for="id_company">Empresa</label>
+                    <select id="id_company" name="company" required>
+                        <option value="">Selecione…</option>
+                        {% for company in companies %}
+                        <option value="{{ company.pk }}">{{ company.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="hint">O processo pertence a uma única empresa, para não referenciar setores de outra (Regras 11 §7).</div>
+                </div>
+                <div class="field">
+                    <label for="id_activity_type">Tipo de atividade <span class="muted">(opcional)</span></label>
+                    <select id="id_activity_type" name="activity_type">
+                        <option value="">—</option>
+                        {% for t in activity_types %}
+                        <option value="{{ t.pk }}">{{ t.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="id_description">Descrição <span class="muted">(opcional)</span></label>
+                    <textarea id="id_description" name="description" rows="3" placeholder="O que este processo transforma em quê?"></textarea>
+                </div>
+            </div>
+            <div class="modal__foot">
+                <a href="{% url 'process-list' %}" class="btn">Cancelar</a>
+                <button type="submit" class="btn btn--primary">Criar rascunho</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

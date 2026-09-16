@@ -103,8 +103,10 @@
 </div>
 
 {% else %}
-{# Quem é de fora do setor vê só a própria demanda: posição e prazo, nunca o
-   título das outras tarefas (doc 09 §97-99). #}
+{% comment %}
+Quem é de fora do setor vê só a própria demanda: posição e prazo, nunca o
+título das outras tarefas (doc 09 §97-99).
+{% endcomment %}
 <div class="card card--flush">
     <div class="card__head"><h2>{{ sector.name }}</h2></div>
     <div class="card__body">

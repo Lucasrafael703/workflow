@@ -62,6 +62,16 @@ class Activity(models.Model):
 
     requested_deadline = models.DateTimeField("prazo solicitado", null=True, blank=True)
 
+    process_version = models.ForeignKey(
+        "processes.ProcessVersion",
+        verbose_name="versão do processo aplicada",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="activities",
+        help_text="Vínculo travado no momento da criação — publicar nova versão não altera atividades antigas (Regras 11 §19).",
+    )
+
     status = models.CharField("status", max_length=14, choices=Status.choices, default=Status.ABERTA)
 
     created_at = models.DateTimeField("criada em", auto_now_add=True)

@@ -64,6 +64,57 @@ A atividade termina quando o resultado é alcançado.
 
 ---
 
+# 2.1 Processo x atividade x tarefa
+
+A LPS precisa separar três conceitos.
+
+```text
+PROCESSO
+= padrão reutilizável
+```
+
+```text
+ATIVIDADE
+= uma execução real que busca um resultado
+```
+
+```text
+TAREFA
+= uma parte do trabalho necessário para chegar ao resultado
+```
+
+Exemplo:
+
+```text
+Processo:
+Elaborar orçamento
+
+Atividade:
+Entregar orçamento da obra Alpha até 20/09
+
+Tarefas:
+Levantamento
+Cotação
+Precificação
+Revisão
+```
+
+O processo pode carregar para a atividade:
+
+- inputs esperados;
+- output esperado;
+- critérios de aceite;
+- tarefas padrão;
+- setores;
+- ordem;
+- dependências simples.
+
+O tipo de atividade continua existindo como classificação. Ele não deve ser usado como substituto de processo.
+
+Uma atividade pode existir sem processo no D0.
+
+---
+
 # 3. Conceito de atividade
 
 Uma atividade representa:
@@ -1116,6 +1167,8 @@ Pagamento realizado
 
 Se o material ainda não chegou, a atividade não terminou.
 
+Quando a atividade utiliza um processo, a conclusão também precisa respeitar os critérios obrigatórios da versão aplicada.
+
 ---
 
 # 48. Resultado alcançado
@@ -1128,7 +1181,17 @@ Tarefas concluídas
 resultado necessariamente alcançado
 ```
 
-Pode existir necessidade de uma confirmação final.
+Se existir processo:
+
+```text
+OUTPUT ESPERADO
++
+CRITÉRIOS OBRIGATÓRIOS ATENDIDOS
++
+EVIDÊNCIA, SE EXIGIDA
+=
+ATIVIDADE APTA PARA CONCLUSÃO
+```
 
 Exemplo:
 
@@ -1148,11 +1211,16 @@ RESULTADO ALCANÇADO
 
 # 49. Quem conclui a atividade
 
-A regra exata deve ser configurável conforme autorização.
+A regra de autorização continua configurável.
 
-Conceitualmente, o dono da atividade precisa ser informado e participar do encerramento quando fizer sentido.
+Conceitualmente:
 
-O sistema deve evitar que uma atividade seja considerada resolvida sem que o resultado tenha sido efetivamente alcançado.
+- critérios obrigatórios devem estar atendidos;
+- output deve estar comprovado quando o processo exigir evidência;
+- o dono precisa receber informação de conclusão;
+- a conclusão deve gerar evento de auditoria.
+
+A LPS deve impedir conclusão silenciosa de uma atividade estruturada quando os critérios obrigatórios do processo não foram atendidos.
 
 ---
 
@@ -1181,17 +1249,15 @@ A reabertura deve:
 
 # 51. Fluxo configurável
 
-A LPS deve permitir que empresas definam fluxos.
+A LPS deve permitir que empresas definam fluxos padrão para seus processos.
 
 Exemplo:
 
 ```text
+Processo:
 Solicitação de compra
-```
 
-Fluxo configurado:
-
-```text
+Fluxo padrão:
 Engenharia
 ↓
 Compras
@@ -1201,203 +1267,187 @@ Financeiro
 Almoxarifado
 ```
 
-Outro tipo de atividade pode possuir outro fluxo.
+O fluxo padrão é uma parte do processo, não o processo inteiro.
 
 ---
 
-# 52. Fluxos não devem ser fixos no código
+# 52. Processo define o fluxo padrão
 
-Evitar lógica como:
+Um processo pode definir:
+
+- tarefas padrão;
+- ordem;
+- setor responsável;
+- obrigatoriedade;
+- dependências simples.
+
+O fluxo não deve ser fixo no código.
+
+---
+
+# 53. Tipo de atividade não é processo
+
+Tipo de atividade serve para classificação.
+
+Exemplo:
 
 ```text
-Se atividade = compra:
-    Engenharia
-    Compras
-    Financeiro
+Tipo de atividade:
+Orçamento
 ```
 
-O fluxo precisa ser cadastro/configuração.
-
-Isso permite empresas diferentes.
-
----
-
-# 53. Fluxo inicialmente criado manualmente
-
-No início da LPS:
-
-- a empresa cria o fluxo;
-- define as tarefas;
-- define a ordem;
-- define os setores;
-- define dependências;
-- define responsáveis quando necessário;
-- informa prazos manualmente.
-
-A LPS registra o que acontece.
-
----
-
-# 54. Por que começar manualmente
-
-No início, a LPS não possui histórico suficiente para afirmar:
-
-- qual fluxo é melhor;
-- qual prazo é adequado;
-- qual setor deve participar;
-- quanto tempo cada etapa leva.
-
-Tentar automatizar isso sem dados seria inventar inteligência.
-
----
-
-# 55. O sistema precisa aprender com os fluxos executados
-
-Cada execução deve alimentar histórico para responder futuramente:
-
-- quais tarefas normalmente aparecem;
-- quais setores normalmente participam;
-- quais etapas são puladas;
-- quais etapas retornam;
-- quais etapas demoram;
-- quais fluxos geram menos retrabalho;
-- quais fluxos geram melhor resultado.
-
----
-
-# 56. Evolução futura dos fluxos
-
-A evolução esperada é:
+Pode haver processos diferentes dentro do mesmo tipo:
 
 ```text
-D0
-Fluxo configurado manualmente
+Elaborar orçamento executivo
+Elaborar orçamento preliminar
+Revisar orçamento
 ```
 
-Depois:
+Por isso, o fluxo padrão deve ser associado ao processo e à sua versão, não apenas ao tipo de atividade.
+
+---
+
+# 54. Aplicar processo gera estrutura operacional
+
+Ao criar atividade usando um processo, a LPS deve instanciar a estrutura operacional daquela versão.
+
+Exemplo:
 
 ```text
-Histórico suficiente
+Processo v3
 ↓
-LPS identifica padrão
+cria atividade real
+↓
+cria tarefas reais
+↓
+cria critérios de aceite da execução
+↓
+prepara inputs da execução
 ```
 
-Depois:
-
-```text
-LPS sugere fluxo
-```
-
-Exemplo:
-
-> Atividades deste tipo normalmente seguem Engenharia → Compras → Financeiro → Almoxarifado. Deseja utilizar este fluxo?
-
-A decisão continua com o usuário.
+A execução gera histórico próprio.
 
 ---
 
-# 57. Sugestão não significa imposição
+# 55. Processo precisa de versão
 
-Mesmo no futuro, a LPS pode sugerir.
-
-Não deve necessariamente impor.
-
-A organização pode possuir exceções legítimas.
-
----
-
-# 58. Tipos de atividade e fluxos
-
-Futuramente, um tipo de atividade pode possuir um fluxo padrão.
+Uma versão publicada não deve ser alterada retroativamente.
 
 Exemplo:
 
 ```text
-Tipo:
-Solicitação de compra
+Processo v1 aplicado em agosto
+Processo v2 publicado em setembro
 ```
 
+A atividade de agosto continua vinculada à v1.
+
+Isso permite comparar o antes e o depois sem reescrever a história.
+
+---
+
+# 56. Fluxo padrão não impede exceção
+
+Uma execução real pode precisar de ajuste.
+
+Exemplo:
+
+```text
 Fluxo padrão:
+Engenharia → Compras → Financeiro
 
-```text
-Engenharia
-↓
-Compras
-↓
-Financeiro
-↓
-Almoxarifado
+Execução real:
+Engenharia → Diretoria → Compras → Financeiro
 ```
 
-Ao criar uma atividade desse tipo, o fluxo pode ser carregado automaticamente.
+A alteração precisa:
 
-No D0, isso pode começar de forma simples.
+- respeitar autorização;
+- ficar auditada;
+- preservar o fluxo originalmente carregado;
+- preservar o caminho realmente percorrido.
 
 ---
 
-# 59. Fluxo padrão não deve impedir exceção
+# 57. Atividade sem processo
 
-Se a empresa autorizar, uma atividade específica pode precisar de ajuste.
-
-Exemplo:
-
-Fluxo padrão:
-
-```text
-Engenharia
-↓
-Compras
-↓
-Financeiro
-```
-
-Caso específico:
-
-```text
-Engenharia
-↓
-Diretoria
-↓
-Compras
-↓
-Financeiro
-```
-
-A alteração precisa ficar registrada.
-
----
-
-# 60. Atividade sem fluxo pré-configurado
-
-A LPS precisa permitir criar atividade mesmo quando ainda não existe um fluxo padrão.
+A LPS precisa continuar permitindo atividade sem processo no D0.
 
 Exemplo:
 
 ```text
-Atividade nova
+Atividade pontual
 ↓
 Usuário cria tarefas manualmente
-↓
-Define setores
-↓
-Define sequência
 ```
 
-Isso é importante para o início da adoção.
+Isso evita burocracia para demandas não recorrentes ou ainda não padronizadas.
 
 ---
 
-# 61. Fluxo criado a partir da experiência
+# 58. Processo pode nascer da repetição
+
+A empresa pode executar atividades manualmente e perceber:
+
+```text
+Essas atividades têm os mesmos inputs, tarefas e output.
+```
+
+Então transforma o padrão em processo reutilizável.
+
+---
+
+# 59. Tarefas do processo são modelos
+
+As tarefas cadastradas no processo não são trabalho executado.
+
+Elas são modelos.
+
+Quando o processo é aplicado:
+
+```text
+Tarefa modelo
+↓
+Tarefa operacional real
+```
+
+Tempo, fila, devolução, executor e histórico pertencem à tarefa operacional real.
+
+---
+
+# 60. Aprendizado futuro sobre processos
+
+Com histórico suficiente, a LPS poderá identificar:
+
+- tarefas que sempre são adicionadas fora do padrão;
+- etapas que quase nunca são utilizadas;
+- inputs que mais faltam;
+- critérios que mais impedem conclusão;
+- diferenças entre versões;
+- desvios de fluxo recorrentes.
+
+A LPS pode sugerir revisão do processo.
+
+A decisão continua humana.
+
+---
+
+# 61. Processo criado a partir da experiência
 
 A empresa pode executar algumas atividades manualmente.
 
 Depois perceber:
 
 ```text
-Essas atividades seguem praticamente o mesmo caminho.
+Essas atividades recebem praticamente os mesmos inputs,
+seguem o mesmo caminho
+e geram o mesmo tipo de output.
 ```
 
-Então transforma esse caminho em fluxo padrão.
+Então transforma esse padrão em processo reutilizável.
+
+O fluxo passa a ser uma parte desse processo.
 
 A LPS deve favorecer esse amadurecimento.
 

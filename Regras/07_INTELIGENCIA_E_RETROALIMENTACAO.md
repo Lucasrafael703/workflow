@@ -1322,26 +1322,40 @@ Mas precisa considerar complexidade.
 
 # 69. Comparação entre processos
 
-A LPS deve permitir comparar:
+Processo passa a ser uma dimensão explícita de comparação.
 
-- fluxo A x fluxo B;
-- antes x depois;
-- equipe A x equipe B;
-- unidade A x unidade B;
-- mesma atividade em períodos diferentes.
+A LPS deve conseguir analisar:
+
+- execuções do mesmo processo;
+- versão A x versão B do mesmo processo;
+- fluxo padrão x fluxo real;
+- antes x depois de uma mudança;
+- unidades ou equipes executando o mesmo processo.
+
+Exemplo:
+
+```text
+Processo: Elaborar orçamento
+Versão 2: mediana 18h
+Versão 3: mediana 14h
+```
+
+Isso não prova sozinho que a versão 3 é melhor. A análise precisa considerar contexto e qualidade do resultado.
 
 ---
 
-# 70. Comparação precisa ser justa
+# 70. Não misturar versões silenciosamente
 
-Não comparar diretamente processos com:
+Se o processo mudou, a LPS precisa saber qual versão originou cada atividade.
 
-- complexidade diferente;
-- escopo diferente;
-- cliente diferente;
-- volume diferente;
+Relatórios podem consolidar várias versões, mas devem permitir separar:
 
-sem contexto.
+```text
+processo_id
+processo_versao_id
+```
+
+Sem isso, uma melhoria ou piora pode ser escondida pela média.
 
 ---
 
@@ -1349,6 +1363,8 @@ sem contexto.
 
 Para melhorar comparabilidade, a LPS pode usar:
 
+- processo;
+- versão do processo;
 - tipo de atividade;
 - empresa;
 - setor;
@@ -1356,9 +1372,16 @@ Para melhorar comparabilidade, a LPS pode usar:
 - cliente;
 - porte;
 - complexidade;
-- fluxo.
+- fluxo real.
 
 Nem todos estarão disponíveis no D0.
+
+Para processos, também podem ser observados:
+
+- input incompleto;
+- quantidade de desvios;
+- critérios de aceite reabertos;
+- output aprovado na primeira tentativa.
 
 ---
 
