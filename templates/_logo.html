@@ -1,24 +1,36 @@
 {% comment %}
-Marca da LPS: dois blocos em perspectiva formando um "L".
-Desenhada em SVG para ficar nítida em qualquer tamanho e para poder trocar
-de cor conforme o fundo.
+Marca da LPS — quatro planos isométricos formando um "L" que sugere
+edificações.
+
+A geometria não foi desenhada de memória: os vértices vieram do contorno real
+de Logo_LPS.jpeg, extraído por varredura da imagem e simplificado. Por isso os
+números têm casa decimal.
 
 Parâmetros:
   variant — "color" (padrão, sobre fundo claro) ou "light" (sobre fundo escuro)
   size    — altura do símbolo em px (padrão 32)
-  wordmark— se verdadeiro, desenha "LPS" ao lado do símbolo
+  wordmark— se verdadeiro, escreve "LPS" ao lado do símbolo
 {% endcomment %}
 <span class="logo logo--{{ variant|default:'color' }}" style="--logo-size:{{ size|default:32 }}px">
-    <svg class="logo__mark" viewBox="0 0 120 120" role="img"
-         aria-label="LPS">
-        {# Bloco escuro da esquerda: a base do "L" #}
-        <path class="logo__face logo__face--dark" d="M8 50.5 L36 40 L36 107.5 L8 118 Z"/>
-        {# Torre central, em azul médio #}
-        <path class="logo__face logo__face--mid" d="M44 14 L76 2 L76 66 L44 78 Z"/>
-        {# Pé do "L", ligando a base à torre #}
-        <path class="logo__face logo__face--mid" d="M44 86 L76 74 L76 106 L44 118 Z"/>
-        {# Lateral clara, dando a profundidade #}
-        <path class="logo__face logo__face--light" d="M84 26 L112 40 L112 104 L84 118 Z"/>
+    <svg class="logo__mark" viewBox="0 0 92 120" role="img" aria-label="LPS">
+        {# Torre alta, azul médio: topo cortado na diagonal #}
+        <path class="logo__face logo__face--mid"
+              d="M31.0 17.1 L58.3 0.8 L59.4 70.5 L31.5 84.6 Z"/>
+
+        {# Ala direita, azul claro: as duas arestas horizontais descem para a
+           esquerda — é o que dá a leitura de volume #}
+        <path class="logo__face logo__face--light"
+              d="M65.8 26.6 L91.0 40.0 L91.0 91.6 L65.8 102.8 Z"/>
+
+        {# Pé do "L": faixa inferior ligando a haste à ala #}
+        <path class="logo__face logo__face--mid"
+              d="M31.2 97.4 L64.4 80.6 L64.4 104.6 L31.2 119.0 Z"/>
+
+        {# Haste navy da esquerda: cantos superior e inferior chanfrados.
+           Desenhada por último para ficar à frente do pé. #}
+        <path class="logo__face logo__face--dark"
+              d="M24.9 41.5 L24.9 119.4 L20.5 117.8 L0.3 107.5
+                 L0.3 55.5 L20.0 44.0 Z"/>
     </svg>
     {% if wordmark %}<span class="logo__word">LPS</span>{% endif %}
 </span>
