@@ -185,7 +185,22 @@
         <div class="card card--flush">
             <div class="card__head"><h2>Preciso fazer alguma coisa?</h2></div>
             <div class="card__body">
-                {% if pending.proposals or pending.conflicts %}
+                {% if pending.assignments or pending.proposals or pending.conflicts %}
+                    {% for assignment in pending.assignments %}
+                    <div class="attention attention--warning">
+                        <div class="attention__title">Tarefa atribuída aguardando seu aceite</div>
+                        <div class="muted small">
+                            {{ assignment.task.title }} — atribuída por {{ assignment.assigned_by.get_username }}
+                            em {{ assignment.assigned_at|date:"d/m/Y H:i" }}
+                        </div>
+                        <div class="actions-row" style="margin-top:8px">
+                            <form method="post" action="{% url 'task-assignment-accept' assignment.task.pk assignment.pk %}">
+                                {% csrf_token %}<button type="submit" class="btn btn--primary btn--sm">Aceitar</button>
+                            </form>
+                            <a href="{% url 'task-detail' assignment.task.pk %}" class="btn btn--sm">Analisar</a>
+                        </div>
+                    </div>
+                    {% endfor %}
                     {% for proposal in pending.proposals %}
                     <div class="attention attention--warning">
                         <div class="attention__title">Novo prazo aguardando sua decisão</div>

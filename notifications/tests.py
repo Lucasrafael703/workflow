@@ -26,6 +26,8 @@ OPERATOR_ACTIONS = [
     catalog.ATIVIDADE_EDITAR,
     catalog.TAREFA_CRIAR,
     catalog.TAREFA_ATRIBUIR,
+    catalog.TAREFA_ACEITAR,
+    catalog.TAREFA_RECUSAR,
     catalog.TAREFA_INICIAR,
     catalog.TAREFA_CONCLUIR,
     catalog.TAREFA_BLOQUEAR,
@@ -54,7 +56,8 @@ class NotificationsTestCase(TestCase):
         self.task = TaskService.create_task(
             self.activity, self.sector, "Cotação de cabos", created_by=self.owner
         )
-        TaskService.add_executor(self.task, self.executor, added_by=self.owner)
+        assignment = TaskService.add_executor(self.task, self.executor, added_by=self.owner)
+        TaskService.accept_assignment(assignment, self.executor)
 
 
 class StaleActionRequiredTests(NotificationsTestCase):

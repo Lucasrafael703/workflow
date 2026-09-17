@@ -2,6 +2,7 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Q
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.generic import FormView, TemplateView, View
@@ -38,6 +39,11 @@ from .services import (
 )
 
 User = get_user_model()
+
+
+def _is_ajax(request):
+    """Requisição feita pelo modal via JS (openModal), não navegação de página."""
+    return request.headers.get("X-Requested-With") == "XMLHttpRequest"
 
 
 class CadastroHomeView(OrganizationRequiredMixin, TemplateView):
@@ -81,6 +87,34 @@ class CadastroHomeView(OrganizationRequiredMixin, TemplateView):
             }
         )
         return context
+
+
+class PersonSearchView(OrganizationRequiredMixin, View):
+    """Busca de pessoas para o seletor com autocomplete (substitui dropdowns
+    de usuário que só crescem — ex.: dono da atividade, executor da tarefa)."""
+
+    MAX_RESULTS = 20
+
+    def get(self, request):
+        term = request.GET.get("q", "").strip()
+        queryset = User.objects.filter(
+            profile__organization=self.organization, is_active=True
+        ).order_by("first_name", "username")
+        if term:
+            queryset = queryset.filter(
+                Q(first_name__icontains=term)
+                | Q(last_name__icontains=term)
+                | Q(username__icontains=term)
+            )
+        results = [
+            {
+                "id": user.pk,
+                "name": user.get_full_name() or user.get_username(),
+                "username": user.get_username(),
+            }
+            for user in queryset[: self.MAX_RESULTS]
+        ]
+        return JsonResponse({"results": results})
 
 
 class CadastroFormView(OrganizationRequiredMixin, ActionRequiredMixin, FormView):
@@ -505,7 +539,16 @@ class UserFormView(OrganizationRequiredMixin, ActionRequiredMixin, FormView):
             managed_sectors=data.get("managed_sectors") or [],
             changed_by=self.request.user,
         )
+        if _is_ajax(self.request):
+            return JsonResponse(
+                {"id": instance.pk, "name": instance.get_full_name() or instance.get_username()}
+            )
         return redirect("user-list")
+
+    def form_invalid(self, form):
+        if _is_ajax(self.request):
+            return JsonResponse({"errors": form.errors}, status=400)
+        return super().form_invalid(form)
 
 
 class UserAccessView(OrganizationRequiredMixin, ActionRequiredMixin, FormView):

@@ -24,6 +24,8 @@ TAREFA_CRIAR = "tarefa.criar"
 TAREFA_EDITAR = "tarefa.editar"
 TAREFA_ATRIBUIR = "tarefa.atribuir"
 TAREFA_ASSUMIR = "tarefa.assumir"
+TAREFA_ACEITAR = "tarefa.aceitar"
+TAREFA_RECUSAR = "tarefa.recusar"
 TAREFA_INICIAR = "tarefa.iniciar"
 TAREFA_PAUSAR = "tarefa.pausar"
 TAREFA_RETOMAR = "tarefa.retomar"
@@ -104,6 +106,8 @@ GROUPS = [
             (TAREFA_EDITAR, "Editar tarefa", "Permite alterar título, descrição, ordem e dependência.", False),
             (TAREFA_ATRIBUIR, "Atribuir executor", "Permite incluir ou remover executores de uma tarefa.", False),
             (TAREFA_ASSUMIR, "Assumir tarefa", "Permite que a pessoa se torne executora de uma tarefa disponível.", False),
+            (TAREFA_ACEITAR, "Aceitar atribuição", "Permite aceitar uma tarefa que outra pessoa atribuiu, tornando-se executor.", False),
+            (TAREFA_RECUSAR, "Recusar atribuição", "Permite recusar uma tarefa atribuída por outra pessoa, com motivo obrigatório.", False),
             (TAREFA_INICIAR, "Iniciar tarefa", "Permite iniciar a execução e o registro de tempo.", False),
             (TAREFA_PAUSAR, "Pausar tarefa", "Permite pausar a própria sessão de trabalho.", False),
             (TAREFA_RETOMAR, "Retomar tarefa", "Permite retomar a execução de uma tarefa pausada.", False),
@@ -198,6 +202,8 @@ SUGGESTED_PROFILES = {
         ATIVIDADE_CRIAR,
         TAREFA_VISUALIZAR,
         TAREFA_ASSUMIR,
+        TAREFA_ACEITAR,
+        TAREFA_RECUSAR,
         TAREFA_INICIAR,
         TAREFA_PAUSAR,
         TAREFA_RETOMAR,
@@ -222,6 +228,8 @@ SUGGESTED_PROFILES = {
         TAREFA_EDITAR,
         TAREFA_ATRIBUIR,
         TAREFA_ASSUMIR,
+        TAREFA_ACEITAR,
+        TAREFA_RECUSAR,
         TAREFA_INICIAR,
         TAREFA_PAUSAR,
         TAREFA_RETOMAR,

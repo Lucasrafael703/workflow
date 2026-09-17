@@ -8,7 +8,7 @@ from acessos.models import Scope
 from acessos.testing import grant_action, grant_actions
 from core.models import Organization, Sector
 
-from .models import QueueEntry, Task
+from .models import QueueEntry, ReturnReason, Task
 from .services import ActivityService, TaskService
 
 User = get_user_model()
@@ -219,6 +219,67 @@ class TaskActionViewTests(ViewTestCase):
         self.client.force_login(self.member)
         response = self.client.post(reverse("task-start", args=[self.task.pk]), follow=True)
         self.assertContains(response, "executores atribuídos")
+
+
+class TaskAssignmentViewTests(ViewTestCase):
+    """Atribuir a outra pessoa gera pendência de aceite; ela decide (doc 02 — novo)."""
+
+    def _assign_member(self):
+        grant_actions(self.requester, [catalog.TAREFA_ATRIBUIR], sector=self.sector)
+        self.client.force_login(self.requester)
+        self.client.post(
+            reverse("task-executor-add", args=[self.task.pk]), {"user": self.member.pk}
+        )
+        return self.task.assignments.get(user=self.member)
+
+    def test_assigning_another_person_does_not_create_executor_immediately(self):
+        assignment = self._assign_member()
+        self.assertEqual(assignment.status, "PENDENTE")
+        self.assertFalse(self.task.executors.filter(user=self.member).exists())
+
+    def test_member_accepts_assignment_and_becomes_executor(self):
+        assignment = self._assign_member()
+        grant_actions(self.member, [catalog.TAREFA_ACEITAR], sector=self.sector)
+        self.client.force_login(self.member)
+
+        self.client.post(
+            reverse("task-assignment-accept", args=[self.task.pk, assignment.pk])
+        )
+
+        assignment.refresh_from_db()
+        self.assertEqual(assignment.status, "ACEITA")
+        self.assertTrue(
+            self.task.executors.filter(user=self.member, removed_at__isnull=True).exists()
+        )
+
+    def test_member_rejects_assignment_with_reason(self):
+        assignment = self._assign_member()
+        grant_actions(self.member, [catalog.TAREFA_RECUSAR], sector=self.sector)
+        self.client.force_login(self.member)
+        reason = ReturnReason.objects.create(organization=self.org, name="Fora da minha área")
+
+        self.client.post(
+            reverse("task-assignment-reject", args=[self.task.pk, assignment.pk]),
+            {"reason": reason.pk, "observation": "Isso é do orçamentista, não meu."},
+        )
+
+        assignment.refresh_from_db()
+        self.assertEqual(assignment.status, "RECUSADA")
+        self.assertEqual(assignment.reason, reason)
+        self.assertFalse(self.task.executors.filter(user=self.member).exists())
+
+    def test_someone_else_cannot_accept_another_persons_assignment(self):
+        assignment = self._assign_member()
+        third_party = self._user("terceiro", self.org)
+        grant_actions(third_party, [catalog.TAREFA_ACEITAR], sector=self.sector)
+        self.client.force_login(third_party)
+
+        self.client.post(
+            reverse("task-assignment-accept", args=[self.task.pk, assignment.pk]), follow=True
+        )
+
+        assignment.refresh_from_db()
+        self.assertEqual(assignment.status, "PENDENTE")
 
 
 class TaskAuthorizationTests(ViewTestCase):

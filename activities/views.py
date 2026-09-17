@@ -18,6 +18,7 @@ from core.models import Sector
 from .forms import (
     ActivityEditForm,
     ActivityQuickCreateForm,
+    AssignmentRejectForm,
     CancelForm,
     ChangeOwnerForm,
     ConflictResolutionForm,
@@ -37,6 +38,7 @@ from .models import (
     DeadlineProposal,
     QueueEntry,
     Task,
+    TaskAssignment,
     TaskExecutor,
     WorkSession,
 )
@@ -112,7 +114,14 @@ def pending_items(user, organization):
     conflicts = conflicts.filter(
         Q(task__sector_id__in=resolvable) | Q(task__activity__owner=user)
     )
-    return {"proposals": proposals, "conflicts": conflicts}
+    assignments = (
+        TaskAssignment.objects.filter(
+            task__activity__organization=organization, user=user, status=TaskAssignment.Status.PENDENTE
+        )
+        .select_related("task", "task__activity", "assigned_by")
+        .order_by("-assigned_at")
+    )
+    return {"proposals": proposals, "conflicts": conflicts, "assignments": assignments}
 
 
 class ServiceActionView(OrganizationRequiredMixin, View):
@@ -191,7 +200,7 @@ class HomeView(OrganizationRequiredMixin, TemplateView):
                 committed_deadline__lt=timezone.now(),
             ).exclude(status=Task.Status.CONCLUIDA).count(),
             "blocked": my_open.filter(status=Task.Status.BLOQUEADA).count(),
-            "waiting_decision": pending["proposals"].count() + pending["conflicts"].count(),
+            "waiting_decision": pending["proposals"].count() + pending["conflicts"].count() + pending["assignments"].count(),
         }
 
         context.update(
@@ -294,6 +303,7 @@ class ActivityCreateView(OrganizationRequiredMixin, FormView):
         kwargs = super().get_form_kwargs()
         kwargs["organization"] = self.organization
         kwargs["user"] = self.request.user
+        kwargs["can_create_person"] = can(self.request.user, catalog.USUARIO_CRIAR)
         return kwargs
 
     def form_valid(self, form):
@@ -476,6 +486,7 @@ class ActivityChangeOwnerView(OrganizationRequiredMixin, FormView):
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["organization"] = self.organization
+        kwargs["can_create_person"] = can(self.request.user, catalog.USUARIO_CRIAR)
         return kwargs
 
     def get_context_data(self, **kwargs):
@@ -599,6 +610,9 @@ class TaskDetailView(OrganizationRequiredMixin, DetailView):
         pending_proposal = task.deadline_proposals.filter(
             status=DeadlineProposal.Status.PENDENTE
         ).select_related("proposed_by").first()
+        my_pending_assignment = task.assignments.filter(
+            user=user, status=TaskAssignment.Status.PENDENTE
+        ).select_related("assigned_by").first()
 
         context.update(
             {
@@ -611,6 +625,10 @@ class TaskDetailView(OrganizationRequiredMixin, DetailView):
                 "queue_info": queue_position(task),
                 "open_block": open_block,
                 "pending_proposal": pending_proposal,
+                "my_pending_assignment": my_pending_assignment,
+                "can_accept_assignment": can(user, catalog.TAREFA_ACEITAR, task),
+                "can_reject_assignment": can(user, catalog.TAREFA_RECUSAR, task),
+                "assignment_reject_form": AssignmentRejectForm(organization=self.organization),
                 "conflicts": task.deadline_conflicts.select_related("resolved_by").order_by("-opened_at"),
                 "proposals": task.deadline_proposals.select_related("proposed_by", "decided_by"),
                 "returns": task.returns.select_related("from_sector", "to_sector", "reason", "returned_by"),
@@ -632,7 +650,10 @@ class TaskDetailView(OrganizationRequiredMixin, DetailView):
                 "can_propose": can(user, catalog.PRAZO_PROPOR, task),
                 "can_resolve_conflict": can(user, catalog.ESCALONAMENTO_RESOLVER, task),
                 "can_message": can(user, catalog.COMUNICACAO_PARTICIPAR, task),
-                "executor_form": ExecutorForm(organization=self.organization),
+                "executor_form": ExecutorForm(
+                    organization=self.organization,
+                    can_create_person=can(user, catalog.USUARIO_CRIAR),
+                ),
                 "manual_time_form": ManualTimeForm(),
                 "deadline_form": DeadlineProposalForm(),
                 "return_form": TaskReturnForm(organization=self.organization, task=task),
@@ -888,8 +909,12 @@ class TaskExecutorAddView(ServiceActionView):
         form = ExecutorForm(request.POST, organization=self.organization)
         if not form.is_valid():
             raise ActivityError("Selecione um executor válido.")
-        TaskService.add_executor(task, form.cleaned_data["user"], added_by=request.user)
-        messages.success(request, "Executor incluído.")
+        user = form.cleaned_data["user"]
+        result = TaskService.add_executor(task, user, added_by=request.user)
+        if isinstance(result, TaskAssignment):
+            messages.success(request, "Atribuição enviada, aguardando aceite.")
+        else:
+            messages.success(request, "Executor incluído.")
 
     def redirect_to(self):
         return reverse("task-detail", args=[self.kwargs["pk"]])
@@ -906,6 +931,54 @@ class TaskExecutorRemoveView(ServiceActionView):
 
     def redirect_to(self):
         return reverse("task-detail", args=[self.kwargs["pk"]])
+
+
+class TaskAssignmentAcceptView(ServiceActionView):
+    def get_assignment(self, pk, assignment_pk):
+        return get_object_or_404(
+            TaskAssignment,
+            pk=assignment_pk,
+            task_id=pk,
+            task__activity__organization=self.organization,
+        )
+
+    def perform(self, request, pk, assignment_pk):
+        assignment = self.get_assignment(pk, assignment_pk)
+        TaskService.accept_assignment(assignment, request.user)
+        messages.success(request, "Atribuição aceita.")
+
+    def redirect_to(self):
+        return reverse("task-detail", args=[self.kwargs["pk"]])
+
+
+class TaskAssignmentRejectView(TaskFormActionView):
+    form_class = AssignmentRejectForm
+    required_action = catalog.TAREFA_RECUSAR
+    title = "Recusar atribuição"
+    submit_label = "Recusar"
+
+    def get_assignment(self):
+        return get_object_or_404(
+            TaskAssignment,
+            pk=self.kwargs["assignment_pk"],
+            task_id=self.kwargs["pk"],
+            task__activity__organization=self.organization,
+        )
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["organization"] = self.organization
+        return kwargs
+
+    def run(self, task, data):
+        assignment = self.get_assignment()
+        TaskService.reject_assignment(
+            assignment,
+            self.request.user,
+            reason=data["reason"],
+            observation=data.get("observation") or "",
+        )
+        messages.success(self.request, "Atribuição recusada.")
 
 
 class TaskMessageCreateView(ServiceActionView):

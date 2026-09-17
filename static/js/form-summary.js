@@ -21,6 +21,11 @@
             var option = field.options[field.selectedIndex];
             return option ? option.text.trim() : "";
         }
+        var picker = field.closest(".person-picker");
+        if (picker) {
+            var label = picker.querySelector(".person-picker__label");
+            return label && !label.classList.contains("muted") ? label.textContent.trim() : "";
+        }
         if (field.type === "datetime-local" && field.value) {
             var parsed = new Date(field.value);
             if (!isNaN(parsed)) {

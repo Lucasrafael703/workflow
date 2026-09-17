@@ -1,7 +1,9 @@
 from django import forms
 from django.contrib.auth import get_user_model
+from django.urls import reverse
 
 from core.models import Company, CostCenter, Sector, Site
+from core.widgets import PersonPickerWidget
 
 from .models import Activity, ReturnReason, Task
 
@@ -22,12 +24,16 @@ class DateTimeLocalInput(forms.DateTimeInput):
 class OrganizationScopedFormMixin:
     """Todo select só pode oferecer registros da própria organização."""
 
-    def scope_querysets(self, organization):
+    def scope_querysets(self, organization, can_create_person=False):
         fields = self.fields
         if "owner" in fields:
             fields["owner"].queryset = User.objects.filter(
                 profile__organization=organization, is_active=True
             ).order_by("first_name", "username")
+            if isinstance(fields["owner"].widget, PersonPickerWidget):
+                fields["owner"].widget.queryset = fields["owner"].queryset
+                if can_create_person:
+                    fields["owner"].widget.create_url = reverse("user-create")
         if "company" in fields:
             fields["company"].queryset = Company.objects.filter(
                 organization=organization, is_active=True
@@ -66,13 +72,14 @@ class ActivityQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
         }
         widgets = {
             "title": forms.TextInput(attrs={"autofocus": True, "placeholder": "Ex.: Material disponível na obra"}),
+            "owner": PersonPickerWidget(),
             "description": forms.Textarea(attrs={"rows": 3}),
             "requested_deadline": DateTimeLocalInput(),
         }
 
-    def __init__(self, *args, organization=None, user=None, **kwargs):
+    def __init__(self, *args, organization=None, user=None, can_create_person=False, **kwargs):
         super().__init__(*args, **kwargs)
-        self.scope_querysets(organization)
+        self.scope_querysets(organization, can_create_person=can_create_person)
         self.fields["owner"].empty_label = None
         if user is not None and not self.is_bound:
             self.fields["owner"].initial = user
@@ -98,13 +105,19 @@ class ActivityEditForm(OrganizationScopedFormMixin, forms.ModelForm):
 
 
 class ChangeOwnerForm(forms.Form):
-    new_owner = forms.ModelChoiceField(queryset=User.objects.none(), label="Novo dono")
+    new_owner = forms.ModelChoiceField(
+        queryset=User.objects.none(), label="Novo dono", widget=PersonPickerWidget()
+    )
 
-    def __init__(self, *args, organization=None, **kwargs):
+    def __init__(self, *args, organization=None, can_create_person=False, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["new_owner"].queryset = User.objects.filter(
+        queryset = User.objects.filter(
             profile__organization=organization, is_active=True
         ).order_by("first_name", "username")
+        self.fields["new_owner"].queryset = queryset
+        self.fields["new_owner"].widget.queryset = queryset
+        if can_create_person:
+            self.fields["new_owner"].widget.create_url = reverse("user-create")
 
 
 class TaskForm(OrganizationScopedFormMixin, forms.ModelForm):
@@ -168,6 +181,21 @@ class TaskReturnForm(forms.Form):
         )
 
 
+class AssignmentRejectForm(forms.Form):
+    """Recusa de atribuição: motivo sempre obrigatório, mesmo princípio da devolução."""
+
+    reason = forms.ModelChoiceField(queryset=ReturnReason.objects.none(), label="Motivo")
+    observation = forms.CharField(
+        label="Observação", required=False, widget=forms.Textarea(attrs={"rows": 3})
+    )
+
+    def __init__(self, *args, organization=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["reason"].queryset = ReturnReason.objects.filter(
+            organization=organization, is_active=True
+        )
+
+
 class TaskBlockForm(forms.Form):
     reason = forms.CharField(label="Motivo do bloqueio", max_length=255)
     observation = forms.CharField(
@@ -188,13 +216,19 @@ class MoveSectorForm(forms.Form):
 
 
 class ExecutorForm(forms.Form):
-    user = forms.ModelChoiceField(queryset=User.objects.none(), label="Executor")
+    user = forms.ModelChoiceField(
+        queryset=User.objects.none(), label="Executor", widget=PersonPickerWidget()
+    )
 
-    def __init__(self, *args, organization=None, **kwargs):
+    def __init__(self, *args, organization=None, can_create_person=False, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["user"].queryset = User.objects.filter(
+        queryset = User.objects.filter(
             profile__organization=organization, is_active=True
         ).order_by("first_name", "username")
+        self.fields["user"].queryset = queryset
+        self.fields["user"].widget.queryset = queryset
+        if can_create_person:
+            self.fields["user"].widget.create_url = reverse("user-create")
 
 
 class DeadlineProposalForm(forms.Form):

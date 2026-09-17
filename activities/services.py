@@ -22,6 +22,7 @@ from .models import (
     QueuePositionChange,
     SectorTransfer,
     Task,
+    TaskAssignment,
     TaskBlock,
     TaskExecutor,
     TaskMessage,
@@ -409,17 +410,64 @@ class TaskService:
     @staticmethod
     @transaction.atomic
     def add_executor(task, user, added_by):
-        # Assumir a si mesmo e atribuir outra pessoa são capacidades distintas.
+        # Assumir a si mesmo é imediato — a própria pessoa decidiu. Atribuir
+        # outra pessoa passa por um pedido de aceite: ela pode recusar (ex.:
+        # "isso não é comigo"), então ainda não vira executora aqui.
         if user.id == added_by.id:
             require_action(added_by, catalog.TAREFA_ASSUMIR, task)
-        else:
-            require_action(added_by, catalog.TAREFA_ATRIBUIR, task)
+            if TaskExecutor.objects.filter(task=task, user=user, removed_at__isnull=True).exists():
+                raise ActivityError("Este usuário já é executor desta tarefa.")
+
+            TaskExecutor.objects.create(task=task, user=user, added_by=added_by)
+            AuditService.log(
+                user=added_by, action=AuditLog.Action.EXECUTOR_ADDED, activity=task.activity, task=task, new_value=user.get_username()
+            )
+            return task
+
+        require_action(added_by, catalog.TAREFA_ATRIBUIR, task)
+        if TaskExecutor.objects.filter(task=task, user=user, removed_at__isnull=True).exists():
+            raise ActivityError("Este usuário já é executor desta tarefa.")
+        if TaskAssignment.objects.filter(task=task, user=user, status=TaskAssignment.Status.PENDENTE).exists():
+            raise ActivityError("Este usuário já possui uma atribuição pendente de aceite nesta tarefa.")
+
+        assignment = TaskAssignment.objects.create(task=task, user=user, assigned_by=added_by)
+        AuditService.log(
+            user=added_by, action=AuditLog.Action.ASSIGNMENT_CREATED, activity=task.activity, task=task, new_value=user.get_username()
+        )
+        NotificationService.notify(
+            users={user},
+            event_type=Notification.EventType.TASK_ASSIGNMENT_PENDING,
+            title="Uma tarefa foi atribuída a você",
+            message=f"'{task.title}' foi atribuída a você. Aceite ou recuse a atribuição.",
+            activity=task.activity,
+            task=task,
+            actor=added_by,
+        )
+        return assignment
+
+    @staticmethod
+    @transaction.atomic
+    def accept_assignment(assignment, user):
+        require_action(user, catalog.TAREFA_ACEITAR, assignment.task)
+        if assignment.status != TaskAssignment.Status.PENDENTE:
+            raise ActivityError("Esta atribuição já foi decidida.")
+        if user.id != assignment.user_id:
+            raise ActivityError("Somente a pessoa designada pode aceitar esta atribuição.")
+
+        task = assignment.task
         if TaskExecutor.objects.filter(task=task, user=user, removed_at__isnull=True).exists():
             raise ActivityError("Este usuário já é executor desta tarefa.")
 
-        TaskExecutor.objects.create(task=task, user=user, added_by=added_by)
+        assignment.status = TaskAssignment.Status.ACEITA
+        assignment.decided_at = timezone.now()
+        assignment.save(update_fields=["status", "decided_at"])
+
+        TaskExecutor.objects.create(task=task, user=user, added_by=assignment.assigned_by)
         AuditService.log(
-            user=added_by, action=AuditLog.Action.EXECUTOR_ADDED, activity=task.activity, task=task, new_value=user.get_username()
+            user=user, action=AuditLog.Action.ASSIGNMENT_ACCEPTED, activity=task.activity, task=task, new_value=user.get_username()
+        )
+        AuditService.log(
+            user=user, action=AuditLog.Action.EXECUTOR_ADDED, activity=task.activity, task=task, new_value=user.get_username()
         )
         NotificationService.notify(
             users={user},
@@ -428,9 +476,41 @@ class TaskService:
             message=f"Você foi incluído como executor de '{task.title}'.",
             activity=task.activity,
             task=task,
-            actor=added_by,
+            actor=user,
         )
         return task
+
+    @staticmethod
+    @transaction.atomic
+    def reject_assignment(assignment, user, reason, observation=""):
+        require_action(user, catalog.TAREFA_RECUSAR, assignment.task)
+        if assignment.status != TaskAssignment.Status.PENDENTE:
+            raise ActivityError("Esta atribuição já foi decidida.")
+        if user.id != assignment.user_id:
+            raise ActivityError("Somente a pessoa designada pode recusar esta atribuição.")
+        if reason is None:
+            raise ActivityError("Informe o motivo da recusa.")
+
+        assignment.status = TaskAssignment.Status.RECUSADA
+        assignment.decided_at = timezone.now()
+        assignment.reason = reason
+        assignment.observation = observation
+        assignment.save(update_fields=["status", "decided_at", "reason", "observation"])
+
+        task = assignment.task
+        AuditService.log(
+            user=user, action=AuditLog.Action.ASSIGNMENT_REJECTED, activity=task.activity, task=task, reason=str(reason)
+        )
+        NotificationService.notify(
+            users={assignment.assigned_by},
+            event_type=Notification.EventType.TASK_ASSIGNMENT_REJECTED,
+            title="Atribuição recusada",
+            message=f"{user.get_username()} recusou a atribuição de '{task.title}'. Motivo: {reason}.",
+            activity=task.activity,
+            task=task,
+            actor=user,
+        )
+        return assignment
 
     @staticmethod
     @transaction.atomic

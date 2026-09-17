@@ -51,7 +51,22 @@
         <div class="card card--flush">
             <div class="card__head"><h2>O que fazer agora</h2></div>
             <div class="card__body">
-                {% if task.status == "CONCLUIDA" %}
+                {% if my_pending_assignment %}
+                    <div class="message message--warning" style="margin:0">
+                        <strong>{{ my_pending_assignment.assigned_by.get_username }}</strong> atribuiu esta tarefa a você em {{ my_pending_assignment.assigned_at|date:"d/m/Y H:i" }}.
+                        <div class="small">Aceite para se tornar executor, ou recuse informando o motivo.</div>
+                        <div class="actions-row" style="margin-top:10px">
+                            {% if can_accept_assignment %}
+                            <form method="post" action="{% url 'task-assignment-accept' task.pk my_pending_assignment.pk %}">
+                                {% csrf_token %}<button type="submit" class="btn btn--sm btn--primary">Aceitar</button>
+                            </form>
+                            {% endif %}
+                            {% if can_reject_assignment %}
+                            <a href="{% url 'task-assignment-reject' task.pk my_pending_assignment.pk %}" class="btn btn--sm btn--danger">Recusar</a>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% elif task.status == "CONCLUIDA" %}
                     <p class="message message--success" style="margin:0">Concluída em {{ task.completed_at|date:"d/m/Y H:i" }}
                        {% if task.completed_by %}por {{ task.completed_by.get_username }}{% endif %}.</p>
                 {% elif task.status == "CANCELADA" %}

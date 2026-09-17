@@ -251,6 +251,50 @@ class Task(models.Model):
         return f"{self.activity} - {self.title}"
 
 
+class TaskAssignment(models.Model):
+    """Atribuição de tarefa a outra pessoa, pendente de aceite antes de virar executor.
+
+    Distinto de devolução (TaskReturn): a devolução trata de um trabalho já
+    assumido que precisa retornar a etapa anterior; aqui a pessoa nunca chegou
+    a ser executora — ela pode aceitar ou recusar a designação em si, com
+    motivo obrigatório na recusa (mesmo princípio de TaskReturn).
+    """
+
+    class Status(models.TextChoices):
+        PENDENTE = "PENDENTE", "Aguardando aceite"
+        ACEITA = "ACEITA", "Aceita"
+        RECUSADA = "RECUSADA", "Recusada"
+
+    task = models.ForeignKey(Task, verbose_name="tarefa", on_delete=models.CASCADE, related_name="assignments")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, verbose_name="designado", on_delete=models.PROTECT, related_name="task_assignments"
+    )
+    assigned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, verbose_name="atribuído por", on_delete=models.PROTECT, related_name="+"
+    )
+    assigned_at = models.DateTimeField("atribuído em", auto_now_add=True)
+
+    status = models.CharField("status", max_length=10, choices=Status.choices, default=Status.PENDENTE)
+    decided_at = models.DateTimeField("decidido em", null=True, blank=True)
+    reason = models.ForeignKey(
+        ReturnReason,
+        verbose_name="motivo da recusa",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="+",
+    )
+    observation = models.TextField("observação", blank=True)
+
+    class Meta:
+        verbose_name = "atribuição de tarefa"
+        verbose_name_plural = "atribuições de tarefa"
+        ordering = ["-assigned_at"]
+
+    def __str__(self):
+        return f"{self.task}: {self.user} ({self.get_status_display()})"
+
+
 class TaskExecutor(models.Model):
     """Vínculo executor↔tarefa (Regras 02 §17-19, §87-89). Remoção não apaga histórico."""
 

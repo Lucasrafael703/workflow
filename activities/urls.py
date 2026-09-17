@@ -35,6 +35,16 @@ urlpatterns = [
         views.TaskExecutorRemoveView.as_view(),
         name="task-executor-remove",
     ),
+    path(
+        "tarefas/<int:pk>/atribuicoes/<int:assignment_pk>/aceitar/",
+        views.TaskAssignmentAcceptView.as_view(),
+        name="task-assignment-accept",
+    ),
+    path(
+        "tarefas/<int:pk>/atribuicoes/<int:assignment_pk>/recusar/",
+        views.TaskAssignmentRejectView.as_view(),
+        name="task-assignment-reject",
+    ),
     path("tarefas/<int:pk>/tempo/", views.TaskManualTimeView.as_view(), name="task-manual-time"),
     path("tarefas/<int:pk>/mensagem/", views.TaskMessageCreateView.as_view(), name="task-message"),
     # Prazos

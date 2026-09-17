@@ -15,6 +15,8 @@ from .models import (
     QueuePositionChange,
     ReturnReason,
     Task,
+    TaskAssignment,
+    TaskExecutor,
     WorkSession,
 )
 from .services import (
@@ -39,6 +41,8 @@ OPERATOR_ACTIONS = [
     catalog.TAREFA_EDITAR,
     catalog.TAREFA_ASSUMIR,
     catalog.TAREFA_ATRIBUIR,
+    catalog.TAREFA_ACEITAR,
+    catalog.TAREFA_RECUSAR,
     catalog.TAREFA_INICIAR,
     catalog.TAREFA_PAUSAR,
     catalog.TAREFA_RETOMAR,
@@ -110,10 +114,14 @@ class TaskExecutionTests(ActivitiesTestCase):
         )
         return TaskService.create_task(activity, self.sector, "Levantar quantitativos", created_by=self.creator)
 
+    def _assign_and_accept(self, task, user, assigned_by):
+        assignment = TaskService.add_executor(task, user, added_by=assigned_by)
+        TaskService.accept_assignment(assignment, user)
+
     def test_multiple_executors_track_individual_time(self):
         task = self._make_task()
-        TaskService.add_executor(task, self.executor, added_by=self.creator)
-        TaskService.add_executor(task, self.executor2, added_by=self.creator)
+        self._assign_and_accept(task, self.executor, assigned_by=self.creator)
+        self._assign_and_accept(task, self.executor2, assigned_by=self.creator)
 
         TaskService.start(task, self.executor)
         TaskService.start(task, self.executor2)
@@ -141,8 +149,8 @@ class TaskExecutionTests(ActivitiesTestCase):
         )
         task1 = TaskService.create_task(activity, self.sector, "Tarefa 1", created_by=self.creator)
         task2 = TaskService.create_task(activity, self.sector, "Tarefa 2", created_by=self.creator)
-        TaskService.add_executor(task1, self.executor, added_by=self.creator)
-        TaskService.add_executor(task2, self.executor, added_by=self.creator)
+        self._assign_and_accept(task1, self.executor, assigned_by=self.creator)
+        self._assign_and_accept(task2, self.executor, assigned_by=self.creator)
 
         TaskService.start(task1, self.executor)
         self.assertTrue(WorkSession.objects.filter(task=task1, user=self.executor, ended_at__isnull=True).exists())
@@ -158,7 +166,7 @@ class TaskExecutionTests(ActivitiesTestCase):
 
     def test_first_action_recorded_once(self):
         task = self._make_task()
-        TaskService.add_executor(task, self.executor, added_by=self.creator)
+        self._assign_and_accept(task, self.executor, assigned_by=self.creator)
         TaskService.start(task, self.executor)
         task.refresh_from_db()
         first_action = task.first_action_at
@@ -168,6 +176,78 @@ class TaskExecutionTests(ActivitiesTestCase):
         TaskService.start(task, self.executor)
         task.refresh_from_db()
         self.assertEqual(task.first_action_at, first_action)
+
+
+class TaskAssignmentTests(ActivitiesTestCase):
+    """Atribuir uma tarefa a outra pessoa exige aceite; assumir é imediato (doc 02 — novo)."""
+
+    def _make_task(self):
+        activity = ActivityService.create_activity(
+            organization=self.org, title="Orçamento", owner=self.owner, created_by=self.creator
+        )
+        return TaskService.create_task(activity, self.sector, "Buscar bomba", created_by=self.creator)
+
+    def test_assigning_another_person_creates_pending_assignment_not_executor(self):
+        task = self._make_task()
+        result = TaskService.add_executor(task, self.executor, added_by=self.creator)
+
+        self.assertIsInstance(result, TaskAssignment)
+        self.assertEqual(result.status, TaskAssignment.Status.PENDENTE)
+        self.assertFalse(TaskExecutor.objects.filter(task=task, user=self.executor).exists())
+
+    def test_self_assignment_is_immediate_and_creates_no_pending_assignment(self):
+        task = self._make_task()
+        result = TaskService.add_executor(task, self.executor, added_by=self.executor)
+
+        self.assertIsInstance(result, Task)
+        self.assertTrue(
+            TaskExecutor.objects.filter(task=task, user=self.executor, removed_at__isnull=True).exists()
+        )
+        self.assertFalse(TaskAssignment.objects.filter(task=task, user=self.executor).exists())
+
+    def test_accepting_turns_assignment_into_executor(self):
+        task = self._make_task()
+        assignment = TaskService.add_executor(task, self.executor, added_by=self.creator)
+
+        TaskService.accept_assignment(assignment, self.executor)
+        assignment.refresh_from_db()
+
+        self.assertEqual(assignment.status, TaskAssignment.Status.ACEITA)
+        self.assertTrue(
+            TaskExecutor.objects.filter(task=task, user=self.executor, removed_at__isnull=True).exists()
+        )
+
+    def test_rejecting_requires_reason_and_creates_no_executor(self):
+        task = self._make_task()
+        assignment = TaskService.add_executor(task, self.executor, added_by=self.creator)
+
+        with self.assertRaises(ActivityError):
+            TaskService.reject_assignment(assignment, self.executor, reason=None)
+
+        TaskService.reject_assignment(assignment, self.executor, reason=self.reason, observation="Não é da minha área")
+        assignment.refresh_from_db()
+
+        self.assertEqual(assignment.status, TaskAssignment.Status.RECUSADA)
+        self.assertEqual(assignment.reason, self.reason)
+        self.assertFalse(TaskExecutor.objects.filter(task=task, user=self.executor).exists())
+
+    def test_only_the_designated_person_can_accept_or_reject(self):
+        task = self._make_task()
+        assignment = TaskService.add_executor(task, self.executor, added_by=self.creator)
+
+        with self.assertRaises(ActivityError):
+            TaskService.accept_assignment(assignment, self.executor2)
+
+        with self.assertRaises(ActivityError):
+            TaskService.reject_assignment(assignment, self.executor2, reason=self.reason)
+
+    def test_cannot_decide_an_assignment_twice(self):
+        task = self._make_task()
+        assignment = TaskService.add_executor(task, self.executor, added_by=self.creator)
+        TaskService.accept_assignment(assignment, self.executor)
+
+        with self.assertRaises(ActivityError):
+            TaskService.accept_assignment(assignment, self.executor)
 
 
 class TaskReturnTests(ActivitiesTestCase):
@@ -366,7 +446,8 @@ class ManualTimeTests(ActivitiesTestCase):
             organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
         )
         task = TaskService.create_task(activity, self.sector, "Tarefa", created_by=self.creator)
-        TaskService.add_executor(task, self.executor, added_by=self.creator)
+        assignment = TaskService.add_executor(task, self.executor, added_by=self.creator)
+        TaskService.accept_assignment(assignment, self.executor)
         return task
 
     def test_time_can_only_be_logged_for_an_executor(self):
@@ -491,7 +572,8 @@ class MessageTests(ActivitiesTestCase):
             organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
         )
         task = TaskService.create_task(activity, self.sector, "Tarefa", created_by=self.creator)
-        TaskService.add_executor(task, self.executor, added_by=self.creator)
+        assignment = TaskService.add_executor(task, self.executor, added_by=self.creator)
+        TaskService.accept_assignment(assignment, self.executor)
 
         MessageService.post_task_message(task, self.owner, "Fornecedor informou 7 dias")
 

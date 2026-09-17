@@ -35,6 +35,8 @@ CATEGORY_PRESENTATION = {
 
 EVENT_CATEGORY = {
     Notification.EventType.TASK_ASSIGNED: DELEGACAO,
+    Notification.EventType.TASK_ASSIGNMENT_PENDING: DELEGACAO,
+    Notification.EventType.TASK_ASSIGNMENT_REJECTED: ALERTA,
     Notification.EventType.TASK_RETURNED: ALERTA,
     Notification.EventType.TASK_BLOCKED: ALERTA,
     Notification.EventType.TASK_UNBLOCKED: INFORMATIVO,
@@ -64,6 +66,7 @@ ACTION_REQUIRED_EVENTS = {
     Notification.EventType.TASK_RETURNED,
     Notification.EventType.TASK_OVERDUE,
     Notification.EventType.TASK_ASSIGNED,
+    Notification.EventType.TASK_ASSIGNMENT_PENDING,
     Notification.EventType.TASK_BLOCKED,
 }
 
@@ -77,6 +80,7 @@ EVENTS_WITH_EXTRA_MESSAGE = {
     Notification.EventType.ACTIVITY_CANCELLED,
     Notification.EventType.ACTIVITY_REOPENED,
     Notification.EventType.DEADLINE_REJECTED,
+    Notification.EventType.TASK_ASSIGNMENT_REJECTED,
     Notification.EventType.OWNER_CHANGED,
     Notification.EventType.MESSAGE_POSTED,
     Notification.EventType.MENTIONED,
@@ -112,6 +116,11 @@ def _still_needs_action(notification):
         if task is None:
             return False
         return task.status not in ("CONCLUIDA", "CANCELADA")
+
+    if event == Notification.EventType.TASK_ASSIGNMENT_PENDING:
+        if task is None:
+            return False
+        return task.assignments.filter(user=notification.recipient, status="PENDENTE").exists()
 
     if event == Notification.EventType.TASK_BLOCKED:
         # Só pede ação enquanto o bloqueio que a gerou seguir aberto —

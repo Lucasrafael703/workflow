@@ -683,6 +683,56 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     border-radius: 0 0 14px 14px;
 }
 
+/* Seletor de pessoa com busca (substitui <select> de usuário — cresce sem virar
+   lista suspensa infinita). O input real é escondido; isto é só apresentação. */
+.person-picker { position: relative; }
+.person-picker__trigger {
+    width: 100%; display: flex; align-items: center; gap: 8px;
+    padding: 9px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+    background: var(--surface); font: inherit; text-align: left; cursor: pointer; color: var(--text);
+}
+.person-picker__trigger:hover { border-color: var(--muted); }
+.person-picker__trigger:focus, .person-picker.is-open .person-picker__trigger {
+    outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(27, 98, 196, .13);
+}
+.person-picker__icon { flex: 0 0 auto; width: 16px; height: 16px; color: var(--muted); }
+.person-picker__label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.person-picker__label.muted { color: var(--muted); }
+
+.person-picker__popup {
+    position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 70;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow-lg); overflow: hidden;
+}
+.person-picker__search {
+    width: 100%; border: none; border-bottom: 1px solid var(--border);
+    padding: 10px 12px; font: inherit; background: var(--surface); color: var(--text);
+}
+.person-picker__search:focus { outline: none; background: var(--surface-alt); }
+.person-picker__results { list-style: none; margin: 0; padding: 4px; max-height: 240px; overflow-y: auto; }
+.person-picker__option {
+    display: block; width: 100%; text-align: left; padding: 8px 10px; border: none;
+    background: none; border-radius: var(--radius-sm); font: inherit; cursor: pointer; color: var(--text);
+}
+.person-picker__option:hover, .person-picker__option.is-active { background: var(--primary-soft); }
+.person-picker__empty { padding: 14px 12px; color: var(--muted); font-size: 13px; text-align: center; }
+.person-picker__create {
+    display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+    padding: 10px 12px; border: none; border-top: 1px solid var(--border);
+    background: var(--surface-alt); font: inherit; font-weight: 600; color: var(--primary); cursor: pointer;
+}
+.person-picker__create:hover { background: var(--primary-soft); }
+.person-picker__create svg { width: 15px; height: 15px; flex: 0 0 auto; }
+
+/* Modal via JS (fetch + injeta HTML): abre por cima da tela atual sem navegar,
+   ao contrário do .modal-backdrop de página cheia usado em Cadastros. */
+.js-modal-backdrop {
+    position: fixed; inset: 0; background: rgba(16, 28, 44, .45); z-index: 80;
+    display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto;
+}
+.js-modal-backdrop .modal { animation: js-modal-in .12s ease-out; }
+@keyframes js-modal-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
 /* Resumo ao lado do formulário */
 .form-layout { display: grid; grid-template-columns: 1fr 290px; gap: 20px; align-items: start; }
 .summary-panel {
