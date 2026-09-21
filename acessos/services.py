@@ -111,6 +111,7 @@ class ResourceContext:
             return cls(
                 organization_id=resource.organization_id,
                 company_id=resource.company_id,
+                sector_id=resource.sector_id,
                 site_id=resource.site_id,
                 cost_center_id=resource.cost_center_id,
                 owner_id=resource.owner_id,

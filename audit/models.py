@@ -29,6 +29,8 @@ class AuditLog(models.Model):
         COMPLETE = "COMPLETE", "Concluída"
         REOPEN = "REOPEN", "Reaberta"
         CANCEL = "CANCEL", "Cancelada"
+        PENDENCY_OPENED = "PENDENCY_OPENED", "Marcada como pendente"
+        PENDENCY_APPROVED = "PENDENCY_APPROVED", "Pendência aprovada"
         # Segurança: toda mudança no que alguém pode fazer deixa rastro
         # (Regras 05 §41, doc 08 §30).
         PROFILE_CREATED = "PROFILE_CREATED", "Perfil criado"
@@ -39,6 +41,8 @@ class AuditLog(models.Model):
         ACTION_GRANTED = "ACTION_GRANTED", "Concessão direta registrada"
         ACTION_REVOKED = "ACTION_REVOKED", "Concessão direta removida"
         SECTORS_CHANGED = "SECTORS_CHANGED", "Setores do usuário alterados"
+        USER_CREATED = "USER_CREATED", "Usuário criado"
+        PASSWORD_RESET = "PASSWORD_RESET", "Senha redefinida"
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,

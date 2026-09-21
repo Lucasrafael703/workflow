@@ -2,6 +2,7 @@ from django.contrib import admin
 
 from .models import (
     Activity,
+    ActivityAttachment,
     ActivityMessage,
     DeadlineConflict,
     DeadlineProposal,
@@ -34,14 +35,20 @@ class OwnerChangeLogInline(admin.TabularInline):
     can_delete = False
 
 
+class ActivityAttachmentInline(admin.TabularInline):
+    model = ActivityAttachment
+    extra = 0
+    readonly_fields = ("uploaded_by", "uploaded_at")
+
+
 @admin.register(Activity)
 class ActivityAdmin(admin.ModelAdmin):
-    list_display = ("title", "organization", "owner", "status", "requested_deadline", "created_at")
-    list_filter = ("organization", "status")
-    search_fields = ("title", "owner__username", "created_by__username")
-    autocomplete_fields = ("owner", "created_by", "company", "site", "cost_center")
-    inlines = [TaskInline, OwnerChangeLogInline]
-    readonly_fields = ("created_at", "first_action_at", "completed_at", "cancelled_at", "reopened_at")
+    list_display = ("title", "code", "organization", "client", "owner", "urgency", "status", "requested_deadline", "created_at")
+    list_filter = ("organization", "status", "urgency")
+    search_fields = ("title", "code", "owner__username", "created_by__username", "client__name")
+    autocomplete_fields = ("owner", "created_by", "company", "site", "cost_center", "client", "sector")
+    inlines = [TaskInline, OwnerChangeLogInline, ActivityAttachmentInline]
+    readonly_fields = ("code", "created_at", "first_action_at", "completed_at", "cancelled_at", "reopened_at")
 
 
 @admin.register(ActivityMessage)

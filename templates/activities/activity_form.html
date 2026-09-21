@@ -10,10 +10,15 @@
             {% if is_edit %}{{ activity.title }}{% else %}Nova atividade{% endif %}
         </div>
         <h1>{% if is_edit %}Editar atividade{% else %}Nova atividade{% endif %}</h1>
-        <p class="sub">Descreva o resultado esperado. Os passos vêm depois, como tarefas.</p>
+        <p class="sub">
+            Descreva o resultado esperado. Os passos vêm depois, como tarefas.
+            {% if is_edit and activity.code %}<span class="id-badge">{{ activity.code }}</span>{% endif %}
+        </p>
     </div>
 </div>
 
+{# Campo único, sem etapas nem coluna de resumo: tudo visível de uma vez,
+   em duas colunas largas (o mesmo espírito do cadastro de orçamentos). #}
 <form method="post" id="activity-form">
     {% csrf_token %}
     {% if form.non_field_errors %}
@@ -22,97 +27,73 @@
     </ul>
     {% endif %}
 
-    <div class="form-layout">
-        <div>
-            {# O essencial primeiro; o resto sob demanda (doc 09 §43-56). #}
-            <div class="form-section">
-                <div class="form-section__head">
-                    <span class="form-section__num">1</span>
-                    <div>
-                        <h3>O essencial</h3>
-                        <div class="sub">Preencha isto e a atividade já existe.</div>
-                    </div>
-                </div>
+    <div class="card card--form">
+        <h2 class="form-title-bar">Informações da atividade</h2>
 
-                {% for field in form %}
-                    {% if field.name == "title" or field.name == "owner" or field.name == "requested_deadline" %}
-                    <div class="form-row">
-                        <label for="{{ field.id_for_label }}">
-                            {{ field.label }}{% if field.field.required %} <span class="req">*</span>{% endif %}
-                        </label>
-                        {{ field }}
-                        {% if field.help_text %}<div class="helptext">{{ field.help_text }}</div>{% endif %}
-                        {% if field.errors %}<ul class="errorlist">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
-                    </div>
-                    {% endif %}
-                {% endfor %}
+        <div class="form-grid form-grid--wide">
+            {% for field in form %}
+            <div class="form-row
+                {% if field.name == 'urgency' %} form-row--urgency{% endif %}
+                {% if field.name == 'address' or field.name == 'description' %} form-row--full{% endif %}
+                {% if field.name == 'cost_center' %} form-row--with-link{% endif %}">
+                <label for="{{ field.id_for_label }}">
+                    {{ field.label }}{% if field.field.required %} <span class="req">*</span>{% endif %}
+                </label>
+                {{ field }}
+                {% if field.name == "client" %}
+                <div class="field-hint">
+                    {% if not is_edit %}Comece a digitar para buscar um cliente já cadastrado, ou use o botão de busca para ver todos.{% endif %}
+                </div>
+                {% endif %}
+                {% if field.name == "cost_center" %}
+                <button type="button" class="link-button field-link" data-create-trigger
+                        data-create-url="{% url 'costcenter-create' %}">
+                    <svg class="field-link__icon" width="12" height="12" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg> Criar novo centro de custo
+                </button>
+                {% endif %}
+                {% if field.help_text %}<div class="helptext">{{ field.help_text }}</div>{% endif %}
+                {% if field.errors %}<ul class="errorlist">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
             </div>
-
-            <details class="disclosure" {% if is_edit %}open{% endif %}>
-                <summary>Mais opções — empresa, obra, centro de custo e descrição</summary>
-                <div class="disclosure__body">
-                    {% for field in form %}
-                        {% if field.name != "title" and field.name != "owner" and field.name != "requested_deadline" %}
-                        <div class="form-row">
-                            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-                            {{ field }}
-                            {% if field.help_text %}<div class="helptext">{{ field.help_text }}</div>{% endif %}
-                            {% if field.errors %}<ul class="errorlist">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
-                        </div>
-                        {% endif %}
-                    {% endfor %}
-                </div>
-            </details>
-
-            {# Uma ação principal e, no máximo, uma continuação lógica (Benchmark §8.7) #}
-            <div class="form-foot form-foot--split">
-                <a href="{% if is_edit %}{% url 'activity-detail' activity.pk %}{% else %}{% url 'activity-list' %}{% endif %}" class="btn btn--ghost">Cancelar</a>
-                <div class="actions-row">
-                    {% if not is_edit %}
-                    <button type="submit" name="salvar_e_tarefas" value="1" class="btn">Criar e adicionar tarefas</button>
-                    {% endif %}
-                    <button type="submit" class="btn btn--primary">
-                        {% if is_edit %}Salvar alterações{% else %}Criar atividade{% endif %}
-                    </button>
-                </div>
-            </div>
+            {% endfor %}
         </div>
+    </div>
 
-        {# Resumo do que será criado, atualizado enquanto a pessoa digita #}
-        <aside class="summary-panel">
-            <h3>Resumo da atividade</h3>
-            <div class="summary-item">
-                <div>
-                    <div class="k">Resultado esperado</div>
-                    <div class="v" data-summary="title">Descreva o que precisa ser resolvido</div>
-                </div>
-            </div>
-            <div class="summary-item">
-                <div>
-                    <div class="k">Dono</div>
-                    <div class="v" data-summary="owner">—</div>
-                </div>
-            </div>
-            <div class="summary-item">
-                <div>
-                    <div class="k">Prazo solicitado</div>
-                    <div class="v" data-summary="requested_deadline">Sem prazo</div>
-                </div>
-            </div>
-            <div class="summary-item">
-                <div>
-                    <div class="k">Tarefas</div>
-                    <div class="v">Definidas no próximo passo</div>
-                </div>
-            </div>
-            <p class="muted small" style="margin:12px 0 0">
-                O dono responde pelo resultado. Cada tarefa pode ter executores de setores diferentes.
-            </p>
-        </aside>
+    {# Uma ação principal e, no máximo, uma continuação lógica (Benchmark §8.7) #}
+    <div class="form-foot form-foot--split">
+        <a href="{% if is_edit %}{% url 'activity-detail' activity.pk %}{% else %}{% url 'activity-list' %}{% endif %}" class="btn btn--ghost">Cancelar</a>
+        <div class="actions-row">
+            {% if not is_edit %}
+            <button type="submit" name="salvar_e_tarefas" value="1" class="btn">Criar e adicionar tarefas</button>
+            {% endif %}
+            <button type="submit" class="btn btn--primary">
+                {% if is_edit %}Salvar alterações{% else %}Criar atividade{% endif %}
+            </button>
+        </div>
     </div>
 </form>
 {% endblock %}
 
 {% block scripts %}
-<script src="{% static 'js/form-summary.js' %}"></script>
+<script>
+(function () {
+    "use strict";
+    document.querySelectorAll("[data-create-trigger]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+            var row = btn.closest(".form-row");
+            var select = row ? row.querySelector("select") : null;
+            if (!select || !window.LPSModal) return;
+            window.LPSModal.open(btn.getAttribute("data-create-url"), {
+                onSuccess: function (data) {
+                    var option = document.createElement("option");
+                    option.value = data.id;
+                    option.textContent = data.name;
+                    option.selected = true;
+                    select.appendChild(option);
+                    select.dispatchEvent(new Event("change", { bubbles: true }));
+                }
+            });
+        });
+    });
+})();
+</script>
 {% endblock %}

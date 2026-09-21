@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Nova tarefa — LPS{% endblock %}
+
+{% block content %}
+<div class="modal-backdrop">
+    <div class="modal">
+        <div class="modal__head">
+            <div>
+                <h2>Nova tarefa</h2>
+                <div class="sub">{{ activity.title }}</div>
+            </div>
+            <a href="{% url 'activity-detail' activity.pk %}" class="modal__close" title="Fechar">&times;</a>
+        </div>
+
+        <form method="post">
+            {% csrf_token %}
+            <div class="modal__body">
+                {% if form.non_field_errors %}
+                <ul class="messages">
+                    {% for error in form.non_field_errors %}<li class="message message--error">{{ error }}</li>{% endfor %}
+                </ul>
+                {% endif %}
+
+                {% for field in form %}
+                    {% if field.is_hidden %}
+                        {{ field }}
+                    {% elif field.name == "title" or field.name == "requested_deadline" or field.name == "sector" %}
+                    <div class="form-row">
+                        <label for="{{ field.id_for_label }}">
+                            {{ field.label }}{% if field.field.required %} <span class="req">*</span>{% endif %}
+                        </label>
+                        {{ field }}
+                        {% if field.errors %}<ul class="errorlist">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                    </div>
+                    {% endif %}
+                {% endfor %}
+
+                <details class="disclosure disclosure--mini">
+                    <summary>Descrição (opcional)</summary>
+                    <div class="disclosure__body">
+                        {{ form.description }}
+                        {% if form.description.errors %}<ul class="errorlist">{% for e in form.description.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                    </div>
+                </details>
+            </div>
+            <div class="modal__foot">
+                <a href="{% url 'activity-detail' activity.pk %}" class="btn">Cancelar</a>
+                <button type="submit" class="btn btn--primary">Adicionar tarefa</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

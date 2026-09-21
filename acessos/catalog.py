@@ -14,9 +14,12 @@ ATIVIDADE_VISUALIZAR_TODAS = "atividade.visualizar_todas"
 ATIVIDADE_CRIAR = "atividade.criar"
 ATIVIDADE_EDITAR = "atividade.editar"
 ATIVIDADE_ALTERAR_DONO = "atividade.alterar_dono"
+ATIVIDADE_ASSUMIR = "atividade.assumir"
 ATIVIDADE_CONCLUIR = "atividade.concluir"
 ATIVIDADE_CANCELAR = "atividade.cancelar"
 ATIVIDADE_REABRIR = "atividade.reabrir"
+ATIVIDADE_MARCAR_PENDENTE = "atividade.marcar_pendente"
+ATIVIDADE_APROVAR_PENDENCIA = "atividade.aprovar_pendencia"
 
 # Tarefas
 TAREFA_VISUALIZAR = "tarefa.visualizar"
@@ -57,6 +60,7 @@ SETOR_INATIVAR = "setor.inativar"
 EMPRESA_GERIR = "empresa.gerir"
 OBRA_GERIR = "obra.gerir"
 CENTRO_CUSTO_GERIR = "centro_custo.gerir"
+CLIENTE_GERIR = "cliente.gerir"
 MOTIVO_DEVOLUCAO_GERIR = "motivo_devolucao.gerir"
 
 # Processos
@@ -92,9 +96,12 @@ GROUPS = [
             (ATIVIDADE_CRIAR, "Criar atividade", "Permite registrar um novo resultado a ser alcançado.", False),
             (ATIVIDADE_EDITAR, "Editar atividade", "Permite alterar título, descrição, prazo e contexto da atividade.", False),
             (ATIVIDADE_ALTERAR_DONO, "Alterar dono da atividade", "Permite transferir a responsabilidade pelo resultado para outra pessoa.", True),
+            (ATIVIDADE_ASSUMIR, "Assumir atividade do grupo", "Permite se tornar dono de uma atividade endereçada ao setor da pessoa, direto na fila do grupo.", False),
             (ATIVIDADE_CONCLUIR, "Concluir atividade", "Permite encerrar a atividade quando o resultado foi alcançado.", False),
             (ATIVIDADE_CANCELAR, "Cancelar atividade", "Permite cancelar a atividade registrando o motivo.", True),
             (ATIVIDADE_REABRIR, "Reabrir atividade", "Permite reabrir uma atividade já concluída.", True),
+            (ATIVIDADE_MARCAR_PENDENTE, "Marcar atividade como pendente", "Permite pausar a atividade registrando o motivo da pendência, com comentário obrigatório.", False),
+            (ATIVIDADE_APROVAR_PENDENCIA, "Aprovar pendência da atividade", "Permite decidir uma pendência que aguarda aprovação do gestor, devolvendo a atividade para quem a designou.", True),
         ],
     ),
     (
@@ -155,6 +162,7 @@ GROUPS = [
             (EMPRESA_GERIR, "Gerir empresas", "Permite criar, editar e inativar empresas da organização.", False),
             (OBRA_GERIR, "Gerir obras", "Permite criar, editar e inativar obras.", False),
             (CENTRO_CUSTO_GERIR, "Gerir centros de custo", "Permite criar, editar e inativar centros de custo.", False),
+            (CLIENTE_GERIR, "Gerir clientes", "Permite criar, editar e inativar clientes da organização.", False),
             (MOTIVO_DEVOLUCAO_GERIR, "Gerir motivos de devolução", "Permite manter a lista de motivos usada nas devoluções.", False),
         ],
     ),
@@ -217,12 +225,18 @@ SUGGESTED_PROFILES = {
         COMUNICACAO_PARTICIPAR,
         PROCESSO_VISUALIZAR,
         PROCESSO_APLICAR,
+        CLIENTE_GERIR,
+        ATIVIDADE_ASSUMIR,
+        ATIVIDADE_MARCAR_PENDENTE,
     ],
     "Gestor de Setor": [
         ATIVIDADE_VISUALIZAR,
         ATIVIDADE_VISUALIZAR_TODAS,
         ATIVIDADE_CRIAR,
         ATIVIDADE_EDITAR,
+        ATIVIDADE_ASSUMIR,
+        ATIVIDADE_MARCAR_PENDENTE,
+        ATIVIDADE_APROVAR_PENDENCIA,
         TAREFA_VISUALIZAR,
         TAREFA_CRIAR,
         TAREFA_EDITAR,
@@ -255,6 +269,7 @@ SUGGESTED_PROFILES = {
         PROCESSO_CRIAR_VERSAO,
         PROCESSO_INATIVAR,
         PROCESSO_APLICAR,
+        CLIENTE_GERIR,
     ],
     "Administrador": [key for _, _, actions in GROUPS for key, _, _, _ in actions],
 }

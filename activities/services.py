@@ -9,12 +9,14 @@ from acessos.services import AuthorizationError, AuthorizationService, ResourceC
 from audit.models import AuditLog
 from audit.services import AuditService
 from notifications.models import Notification
-from notifications.recipients import resolve_sector_and_admins
-from notifications.services import NotificationService
+from notifications.recipients import resolve_sector_and_admins, resolve_sector_managers
+from notifications.services import EmailService, NotificationService
 
 from .models import (
     Activity,
+    ActivityAttachment,
     ActivityMessage,
+    ActivityPendency,
     DeadlineConflict,
     DeadlineProposal,
     OwnerChangeLog,
@@ -56,6 +58,19 @@ def _same_organization(*objects):
     return len(orgs) <= 1
 
 
+def _pick_sector_manager(sector):
+    """Um gestor do setor para virar dono temporário da atividade pendente.
+
+    Vira dono só para aparecer na fila certa ("Minhas atividades"); quem de
+    fato pode aprovar continua decidido pelo motor de autorização
+    (`ATIVIDADE_APROVAR_PENDENCIA`), não por este vínculo organizacional —
+    por isso os demais gestores do setor também são avisados, mesmo sem
+    virar dono (ver `resolve_sector_managers`).
+    """
+    managers = sorted(resolve_sector_managers(sector), key=lambda u: u.get_username())
+    return managers[0] if managers else None
+
+
 class ActivityService:
     # ------------------------------------------------------------------
     # Criação e responsabilidade
@@ -73,12 +88,16 @@ class ActivityService:
         site=None,
         cost_center=None,
         requested_deadline=None,
+        client=None,
+        urgency=None,
+        sector=None,
+        address="",
     ):
         require_action(
             created_by,
             catalog.ATIVIDADE_CRIAR,
             ResourceContext.for_new(
-                organization, company=company, site=site, cost_center=cost_center, owner=owner
+                organization, company=company, sector=sector, site=site, cost_center=cost_center, owner=owner
             ),
         )
         if not title:
@@ -88,11 +107,15 @@ class ActivityService:
 
         activity = Activity.objects.create(
             organization=organization,
+            client=client,
             company=company,
             site=site,
             cost_center=cost_center,
+            sector=sector,
             title=title,
             description=description,
+            urgency=urgency or Activity.Urgency.MEDIA,
+            address=address,
             owner=owner,
             created_by=created_by,
             requested_deadline=requested_deadline,
@@ -144,6 +167,46 @@ class ActivityService:
 
     @staticmethod
     @transaction.atomic
+    def claim(activity, user):
+        """Assumir uma atividade da fila do próprio grupo (fila por setor):
+        a pessoa vira dona sem precisar de quem tinha autorização para
+        transferir para qualquer um — só para o que já está endereçado ao
+        setor dela (Regra 6, tela de fila)."""
+        require_action(user, catalog.ATIVIDADE_ASSUMIR, activity)
+        if activity.status in (Activity.Status.CONCLUIDA, Activity.Status.CANCELADA):
+            raise ActivityError("Não é possível assumir uma atividade concluída ou cancelada.")
+        if activity.sector_id is None:
+            raise ActivityError("Esta atividade não possui um grupo designado para ser assumida pela fila.")
+        if user.id == activity.owner_id:
+            raise ActivityError("Você já é o dono desta atividade.")
+
+        previous_owner = activity.owner
+        activity.owner = user
+        activity.save(update_fields=["owner"])
+
+        OwnerChangeLog.objects.create(
+            activity=activity, previous_owner=previous_owner, new_owner=user, changed_by=user
+        )
+        AuditService.log(
+            user=user,
+            action=AuditLog.Action.OWNER_CHANGED,
+            activity=activity,
+            old_value=previous_owner.get_username(),
+            new_value=user.get_username(),
+            reason="Assumida da fila do grupo",
+        )
+        NotificationService.notify(
+            users={previous_owner, user},
+            event_type=Notification.EventType.OWNER_CHANGED,
+            title="Atividade assumida",
+            message=f"{user.get_username()} assumiu a atividade '{activity.title}'.",
+            activity=activity,
+            actor=user,
+        )
+        return activity
+
+    @staticmethod
+    @transaction.atomic
     def update_activity(activity, user, **fields):
         """Edita campos não sensíveis da atividade, auditando cada alteração.
 
@@ -153,7 +216,18 @@ class ActivityService:
         if activity.status in (Activity.Status.CONCLUIDA, Activity.Status.CANCELADA):
             raise ActivityError("Não é possível editar uma atividade concluída ou cancelada.")
 
-        editable = {"title", "description", "requested_deadline", "company", "site", "cost_center"}
+        editable = {
+            "title",
+            "description",
+            "requested_deadline",
+            "company",
+            "site",
+            "cost_center",
+            "client",
+            "urgency",
+            "sector",
+            "address",
+        }
         changed = []
         for field, value in fields.items():
             if field not in editable:
@@ -276,6 +350,312 @@ class ActivityService:
             actor=user,
         )
         return activity
+
+    # ------------------------------------------------------------------
+    # Finalização (popup único) e pendências (fila do gestor)
+    # ------------------------------------------------------------------
+
+    #: Resultados que encerram a atividade como concluída — os demais
+    #: (declinado/cancelado) encerram como cancelada (Regras avulsas).
+    OUTCOMES_AS_CONCLUDED = (
+        Activity.CompletionOutcome.SUCESSO,
+        Activity.CompletionOutcome.CONCLUIDO_COM_PENDENCIAS,
+    )
+
+    @staticmethod
+    @transaction.atomic
+    def finalize(activity, user, outcome, comment):
+        """Popup único de finalização: um resultado explícito — Sucesso,
+        Concluído com pendências, Declinado ou Cancelado — sempre com
+        comentário obrigatório, no lugar dos antigos "Concluir"/"Cancelar"
+        em ações separadas e sem exigir explicação."""
+        if outcome not in Activity.CompletionOutcome.values:
+            raise ActivityError("Selecione um resultado válido para a finalização.")
+        comment = (comment or "").strip()
+        if not comment:
+            raise ActivityError("O comentário de finalização é obrigatório.")
+        if activity.status in (Activity.Status.CONCLUIDA, Activity.Status.CANCELADA):
+            raise ActivityError("Esta atividade já foi finalizada.")
+
+        as_concluded = outcome in ActivityService.OUTCOMES_AS_CONCLUDED
+        action_key = catalog.ATIVIDADE_CONCLUIR if as_concluded else catalog.ATIVIDADE_CANCELAR
+        require_action(user, action_key, activity)
+
+        if as_concluded:
+            open_tasks = activity.tasks.exclude(status__in=[Task.Status.CONCLUIDA, Task.Status.CANCELADA])
+            if open_tasks.exists():
+                raise ActivityError("Existem tarefas ainda não concluídas ou canceladas nesta atividade.")
+
+        now = timezone.now()
+        old_status = activity.status
+        activity.completion_outcome = outcome
+        update_fields = ["completion_outcome"]
+        if as_concluded:
+            activity.status = Activity.Status.CONCLUIDA
+            activity.completed_at = now
+            activity.completed_by = user
+            update_fields += ["status", "completed_at", "completed_by"]
+        else:
+            activity.status = Activity.Status.CANCELADA
+            activity.cancelled_at = now
+            activity.cancelled_reason = comment
+            update_fields += ["status", "cancelled_at", "cancelled_reason"]
+        activity.save(update_fields=update_fields)
+
+        # Uma finalização enquanto ainda pendente encerra a pendência aberta
+        # — não faz sentido seguir esperando aprovação de algo já finalizado.
+        activity.pendencies.filter(status=ActivityPendency.Status.ABERTA).update(
+            status=ActivityPendency.Status.ENCERRADA, resolved_by=user, resolved_at=now
+        )
+
+        outcome_label = Activity.CompletionOutcome(outcome).label
+        AuditService.log(
+            user=user,
+            action=AuditLog.Action.COMPLETE if as_concluded else AuditLog.Action.CANCEL,
+            activity=activity,
+            old_value=old_status,
+            new_value=activity.status,
+            reason=f"{outcome_label}: {comment}",
+        )
+        # O comentário é obrigatório e entra no histórico único da tela —
+        # a mesma conversa que já mostra comentários e anexos (Regra pedida).
+        ActivityMessage.objects.create(
+            activity=activity, author=user, body=f"Finalização ({outcome_label}): {comment}"
+        )
+
+        event_type = (
+            Notification.EventType.ACTIVITY_COMPLETED
+            if as_concluded
+            else Notification.EventType.ACTIVITY_CANCELLED
+        )
+        NotificationService.notify(
+            users={activity.owner},
+            event_type=event_type,
+            title="Atividade finalizada" if as_concluded else "Atividade cancelada",
+            message=f"A atividade '{activity.title}' foi finalizada como \"{outcome_label}\". {comment}",
+            activity=activity,
+            actor=user,
+        )
+        return activity
+
+    @staticmethod
+    @transaction.atomic
+    def mark_pending(activity, user, reason, comment, decision_deadline=None, notify_client=False):
+        """Marca a atividade como pendente (Regras avulsas — fila do gestor).
+
+        Dois motivos pedem decisão do gestor do setor, com prazo obrigatório
+        para essa decisão: a atividade vai temporariamente para a fila dele
+        ("Minhas atividades"). Os demais motivos só avisam — a atividade
+        fica visível como pendente, sem trocar de dono.
+        """
+        require_action(user, catalog.ATIVIDADE_MARCAR_PENDENTE, activity)
+        if activity.status not in (Activity.Status.ABERTA, Activity.Status.EM_ANDAMENTO):
+            raise ActivityError("Só é possível marcar como pendente uma atividade aberta ou em andamento.")
+        if reason not in ActivityPendency.Reason.values:
+            raise ActivityError("Selecione um motivo de pendência válido.")
+        comment = (comment or "").strip()
+        if not comment:
+            raise ActivityError("O comentário da pendência é obrigatório.")
+
+        requires_approval = reason in ActivityPendency.APPROVAL_REASONS
+        approver = None
+        previous_owner = None
+        if requires_approval:
+            if not decision_deadline:
+                raise ActivityError("Informe o prazo para o gestor decidir.")
+            if activity.sector_id is None:
+                raise ActivityError(
+                    "Esta atividade não possui um grupo designado — defina um grupo antes de "
+                    "marcar uma pendência que precisa de aprovação do gestor."
+                )
+            approver = _pick_sector_manager(activity.sector)
+            if approver is None:
+                raise ActivityError(
+                    f"O grupo \"{activity.sector.name}\" não possui um gestor cadastrado para aprovar esta pendência."
+                )
+            previous_owner = activity.owner
+
+        pendency = ActivityPendency.objects.create(
+            activity=activity,
+            reason=reason,
+            comment=comment,
+            decision_deadline=decision_deadline,
+            notify_client=bool(notify_client) and reason == ActivityPendency.Reason.INFORMACOES_CLIENTE,
+            previous_owner=previous_owner,
+            approver=approver,
+            opened_by=user,
+        )
+
+        old_status = activity.status
+        activity.status = Activity.Status.PENDENTE
+        activity.save(update_fields=["status"])
+
+        AuditService.log(
+            user=user,
+            action=AuditLog.Action.PENDENCY_OPENED,
+            activity=activity,
+            old_value=old_status,
+            new_value=activity.status,
+            reason=pendency.get_reason_display(),
+        )
+        ActivityMessage.objects.create(
+            activity=activity, author=user, body=f"Pendência ({pendency.get_reason_display()}): {comment}"
+        )
+
+        if requires_approval and approver.id != activity.owner_id:
+            activity.owner = approver
+            activity.save(update_fields=["owner"])
+            OwnerChangeLog.objects.create(
+                activity=activity, previous_owner=previous_owner, new_owner=approver, changed_by=user
+            )
+            AuditService.log(
+                user=user,
+                action=AuditLog.Action.OWNER_CHANGED,
+                activity=activity,
+                old_value=previous_owner.get_username(),
+                new_value=approver.get_username(),
+                reason="Pendência aguardando aprovação do gestor",
+            )
+
+        if requires_approval:
+            recipients = resolve_sector_managers(activity.sector)
+            NotificationService.notify(
+                users=recipients,
+                event_type=Notification.EventType.ACTIVITY_APPROVAL_NEEDED,
+                title="Atividade aguardando sua aprovação",
+                message=f"A atividade '{activity.title}' está pendente: {pendency.get_reason_display()}. Prazo: {decision_deadline:%d/%m/%Y %H:%M}.",
+                activity=activity,
+                actor=user,
+            )
+            EmailService.send_activity_approval_needed(activity, pendency, recipients)
+            if previous_owner is not None:
+                NotificationService.notify(
+                    users={previous_owner},
+                    event_type=Notification.EventType.ACTIVITY_PENDING,
+                    title="Atividade pendente",
+                    message=f"A atividade '{activity.title}' está pendente e aguarda aprovação do gestor.",
+                    activity=activity,
+                    actor=user,
+                )
+        else:
+            NotificationService.notify(
+                users={activity.owner},
+                event_type=Notification.EventType.ACTIVITY_PENDING,
+                title="Atividade pendente",
+                message=f"A atividade '{activity.title}' está pendente: {pendency.get_reason_display()}.",
+                activity=activity,
+                actor=user,
+            )
+            if pendency.notify_client:
+                EmailService.send_client_information_request(activity, pendency)
+
+        return pendency
+
+    @staticmethod
+    @transaction.atomic
+    def approve_pendency(activity, user, comment=""):
+        """Gestor aprova a pendência: a atividade volta para quem a
+        designou (ou segue com o gestor, se não houver a quem devolver),
+        com status "Em andamento" (Regra pedida — item 4)."""
+        require_action(user, catalog.ATIVIDADE_APROVAR_PENDENCIA, activity)
+        if activity.status != Activity.Status.PENDENTE:
+            raise ActivityError("Esta atividade não está pendente de aprovação.")
+
+        pendency = (
+            activity.pendencies.filter(status=ActivityPendency.Status.ABERTA).order_by("-opened_at").first()
+        )
+        if pendency is None or not pendency.requires_approval:
+            raise ActivityError("Não há uma pendência aguardando aprovação nesta atividade.")
+
+        comment = (comment or "").strip()
+        now = timezone.now()
+        pendency.status = ActivityPendency.Status.APROVADA
+        pendency.resolved_by = user
+        pendency.resolved_at = now
+        pendency.resolution_comment = comment
+        pendency.save(update_fields=["status", "resolved_by", "resolved_at", "resolution_comment"])
+
+        old_status = activity.status
+        activity.status = Activity.Status.EM_ANDAMENTO
+        activity.save(update_fields=["status"])
+
+        new_owner = pendency.previous_owner
+        if new_owner is not None and new_owner.id != activity.owner_id:
+            previous_owner = activity.owner
+            activity.owner = new_owner
+            activity.save(update_fields=["owner"])
+            OwnerChangeLog.objects.create(
+                activity=activity, previous_owner=previous_owner, new_owner=new_owner, changed_by=user
+            )
+
+        AuditService.log(
+            user=user,
+            action=AuditLog.Action.PENDENCY_APPROVED,
+            activity=activity,
+            old_value=old_status,
+            new_value=activity.status,
+            reason=comment,
+        )
+        ActivityMessage.objects.create(
+            activity=activity,
+            author=user,
+            body=f"Pendência aprovada.{' ' + comment if comment else ''}",
+        )
+
+        NotificationService.notify(
+            users={activity.owner},
+            event_type=Notification.EventType.ACTIVITY_APPROVED,
+            title="Pendência aprovada",
+            message=f"A pendência de '{activity.title}' foi aprovada. A atividade voltou para a sua fila.",
+            activity=activity,
+            actor=user,
+        )
+        return pendency
+
+
+class ActivityAttachmentService:
+    """Anexos de uma atividade (Regra 13): cada arquivo vai para a pasta da
+    atividade dentro de `MEDIA_ROOT`, nomeada pelo código gerado ao criar a
+    atividade — mesmo princípio da regra original, adaptado para um caminho
+    portátil em vez do disco local de uma máquina específica."""
+
+    @staticmethod
+    @transaction.atomic
+    def add(activity, uploaded_file, uploaded_by):
+        require_action(uploaded_by, catalog.ATIVIDADE_EDITAR, activity)
+        if not uploaded_file:
+            raise ActivityError("Selecione um arquivo para anexar.")
+
+        attachment = ActivityAttachment.objects.create(
+            activity=activity,
+            file=uploaded_file,
+            original_name=getattr(uploaded_file, "name", "") or "",
+            uploaded_by=uploaded_by,
+        )
+        AuditService.log(
+            user=uploaded_by,
+            action=AuditLog.Action.UPDATE,
+            activity=activity,
+            field_name="anexo",
+            new_value=attachment.original_name,
+        )
+        return attachment
+
+    @staticmethod
+    @transaction.atomic
+    def remove(attachment, removed_by):
+        activity = attachment.activity
+        require_action(removed_by, catalog.ATIVIDADE_EDITAR, activity)
+        name = attachment.original_name
+        attachment.file.delete(save=False)
+        attachment.delete()
+        AuditService.log(
+            user=removed_by,
+            action=AuditLog.Action.UPDATE,
+            activity=activity,
+            field_name="anexo",
+            old_value=name,
+        )
 
 
 class TaskService:

@@ -29,6 +29,8 @@ ACTION_PHRASES = {
     AuditLog.Action.COMPLETE: "concluiu",
     AuditLog.Action.REOPEN: "reabriu",
     AuditLog.Action.CANCEL: "cancelou",
+    AuditLog.Action.PENDENCY_OPENED: "marcou como pendente: {new}",
+    AuditLog.Action.PENDENCY_APPROVED: "aprovou a pendência e devolveu a atividade",
 }
 
 FIELD_LABELS = {

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load lps %}
 {% block title %}{{ activity.title }} — LPS{% endblock %}
 
 {% block content %}
@@ -7,18 +8,25 @@
         <div class="breadcrumb">
             <a href="{% url 'activity-list' %}">Atividades</a><span>›</span>{{ activity.title|truncatechars:48 }}
         </div>
-        <h1>{{ activity.title }}</h1>
+        <h1>{{ activity.title }} {% if activity.code %}<span class="id-badge">{{ activity.code }}</span>{% endif %}</h1>
         <div class="sub">
             <span class="tag tag--{{ activity.status }}">{{ activity.get_status_display }}</span>
-            · Dono: <strong>{{ activity.owner.get_username }}</strong>
+            <span class="tag tag--{{ activity.urgency }}">{{ activity.get_urgency_display }}</span>
+            {% if activity.client %} · Cliente: {{ activity.client.name }}{% endif %}
+            · Atribuída para: <strong>{{ activity.owner.get_username }}</strong>
             {% if activity.requested_deadline %}
             · Prazo solicitado: {{ activity.requested_deadline|date:"d/m/Y H:i" }}
             {% else %}· Sem prazo{% endif %}
-            {% if activity.company %} · {{ activity.company.name }}{% endif %}
-            {% if activity.site %} · Obra: {{ activity.site.name }}{% endif %}
+            {% if activity.sector %} · Grupo: {{ activity.sector.name }}{% endif %}
         </div>
     </div>
     <div class="page-head__actions">
+        {% if can_assumir %}
+        <form method="post" action="{% url 'activity-claim' activity.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn--primary">{% include "_icon.html" with name="check" %} Assumir</button>
+        </form>
+        {% endif %}
         {% if activity.status != "CONCLUIDA" and activity.status != "CANCELADA" %}
         <a href="{% url 'activity-edit' activity.pk %}" class="btn">Editar</a>
         <a href="{% url 'task-create' activity.pk %}" class="btn btn--primary">
@@ -28,161 +36,225 @@
     </div>
 </div>
 
-<nav class="tabs">
-    <a href="?tab=visao-geral" class="{% if tab == 'visao-geral' %}is-active{% endif %}">Visão geral</a>
-    <a href="?tab=tarefas" class="{% if tab == 'tarefas' %}is-active{% endif %}">Tarefas <span class="count">({{ tasks_total }})</span></a>
-    <a href="?tab=historico" class="{% if tab == 'historico' %}is-active{% endif %}">Histórico</a>
-    <a href="?tab=conversa" class="{% if tab == 'conversa' %}is-active{% endif %}">Conversa</a>
-</nav>
-
-{% if tab == "tarefas" %}
-    {% include "activities/_tasks_block.html" %}
-
-{% elif tab == "historico" %}
-    <div class="card card--flush">
-        <div class="card__head"><h2>Linha do tempo</h2></div>
-        <div class="card__body">{% include "activities/_timeline.html" with entries=history %}</div>
-    </div>
-    {% if owner_changes %}
-    <div class="card card--flush">
-        <div class="card__head"><h2>Mudanças de dono</h2></div>
-        <div class="card__body">
-            <ul class="list-rows">
-                {% for change in owner_changes %}
-                <li>{{ change.previous_owner.get_username }} → <strong>{{ change.new_owner.get_username }}</strong>
-                    <div class="muted small">por {{ change.changed_by.get_username }} em {{ change.changed_at|date:"d/m/Y H:i" }}</div></li>
-                {% endfor %}
-            </ul>
-        </div>
-    </div>
-    {% endif %}
-
-{% elif tab == "conversa" %}
-    <div class="card card--flush">
-        <div class="card__head"><h2>Conversa</h2></div>
-        <div class="card__body">
-            <div class="context-banner">
-                {% include "_icon.html" with name="info" %}
-                <span>Você está comentando na atividade <strong>{{ activity.title }}</strong>.</span>
+{# Tudo em uma tela: campos, progresso e tarefas na coluna principal; o
+   histórico (comentários + anexos + eventos) numa lateral menor, sem abas. #}
+<div class="split split--history">
+    <div>
+        {% if activity.status != "CONCLUIDA" and activity.status != "CANCELADA" %}
+        <div class="card">
+            <div class="actions-row">
+                {% if can_finalize %}
+                <a href="{% url 'activity-finalize' activity.pk %}" class="btn btn--primary js-activity-finalize">
+                    {% include "_icon.html" with name="check" %} Finalizar atividade
+                </a>
+                {% endif %}
+                {% if can_mark_pending %}
+                <a href="{% url 'activity-mark-pending' activity.pk %}" class="btn btn--sm js-activity-mark-pending">
+                    {% include "_icon.html" with name="clock" %} Marcar como pendente
+                </a>
+                {% endif %}
+                {% if can_change_owner %}<a href="{% url 'activity-change-owner' activity.pk %}" class="btn btn--sm">{% include "_icon.html" with name="arrow-right" %} Repassar</a>{% endif %}
             </div>
+        </div>
+        {% elif activity.status == "CONCLUIDA" and can_reopen %}
+        <div class="card">
+            <a href="{% url 'activity-reopen' activity.pk %}" class="btn btn--block">Reabrir atividade</a>
+        </div>
+        {% endif %}
 
-            {% if activity_messages %}
-            <ul class="chat">
-                {% for message in activity_messages %}
-                <li>
-                    <span class="avatar">{{ message.author.get_username|slice:":2"|upper }}</span>
-                    <div>
-                        <span class="who">{{ message.author.get_username }}</span>
-                        <span class="when">{{ message.created_at|date:"d/m/Y H:i" }}</span>
-                        <div class="body">{{ message.body|linebreaksbr }}</div>
-                    </div>
-                </li>
-                {% endfor %}
-            </ul>
-            {% else %}
-            <div class="empty-state" style="padding:28px 10px">
-                <div class="empty-state__icon">{% include "_icon.html" with name="activity" %}</div>
-                <h3>Nenhuma mensagem ainda</h3>
-                <p style="margin-bottom:0">Use a conversa para alinhar contexto. Decisões que mudam prazo ou status têm ação própria.</p>
+        {% if open_pendency %}
+        <div class="pendency-banner" id="pendencia">
+            <span class="pendency-banner__icon">{% include "_icon.html" with name="clock" %}</span>
+            <div>
+                <div class="pendency-banner__title">Pendente — {{ open_pendency.get_reason_display }}</div>
+                <div class="pendency-banner__body">{{ open_pendency.comment|linebreaksbr }}</div>
+                <div class="pendency-banner__meta">
+                    Marcada por {{ open_pendency.opened_by.get_username }} em {{ open_pendency.opened_at|date:"d/m/Y H:i" }}
+                    {% if open_pendency.decision_deadline %} · Prazo para decisão: {{ open_pendency.decision_deadline|date:"d/m/Y H:i" }}{% endif %}
+                </div>
+            </div>
+            {% if can_approve_pendency %}
+            <div class="pendency-banner__actions">
+                <a href="{% url 'activity-approve-pendency' activity.pk %}" class="btn btn--primary btn--sm js-activity-approve-pendency">
+                    {% include "_icon.html" with name="check" %} Aprovar
+                </a>
             </div>
             {% endif %}
-
-            <form method="post" action="{% url 'activity-message' activity.pk %}" style="margin-top:16px">
-                {% csrf_token %}
-                <div class="form-row">{{ message_form.body }}</div>
-                <div class="form-foot">
-                    <button type="submit" class="btn btn--primary">Enviar mensagem</button>
-                </div>
-            </form>
-            <p class="muted small" style="margin:0">
-                Uma mensagem não altera prazo, status ou responsável. Para isso, use a ação correspondente na tarefa.
-            </p>
         </div>
+        {% endif %}
+
+        {% if activity.status == "CANCELADA" %}
+        <p class="message message--warning">Cancelada em {{ activity.cancelled_at|date:"d/m/Y H:i" }}. Motivo: {{ activity.cancelled_reason }}</p>
+        {% elif activity.status == "CONCLUIDA" %}
+        <p class="message message--success">Concluída em {{ activity.completed_at|date:"d/m/Y H:i" }} por {{ activity.completed_by.get_username }}.</p>
+        {% endif %}
+
+        <div class="card card--flush">
+            <div class="card__head"><h2>Informações da atividade</h2></div>
+            <div class="card__body">
+                <div class="info-grid">
+                    <div>
+                        <div class="k">Cliente</div>
+                        <div class="v{% if not activity.client %} muted{% endif %}">{{ activity.client.name|default:"Sem cliente" }}</div>
+                    </div>
+                    <div>
+                        <div class="k">Atribuída para</div>
+                        <div class="v">{{ activity.owner.get_username }}</div>
+                    </div>
+                    <div>
+                        <div class="k">Urgência</div>
+                        <div class="v"><span class="tag tag--{{ activity.urgency }}">{{ activity.get_urgency_display }}</span></div>
+                    </div>
+                    <div>
+                        <div class="k">Prazo solicitado</div>
+                        <div class="v{% if not activity.requested_deadline %} muted{% endif %}">{{ activity.requested_deadline|date:"d/m/Y H:i"|default:"Sem prazo" }}</div>
+                    </div>
+                    <div>
+                        <div class="k">Grupo designado</div>
+                        <div class="v{% if not activity.sector %} muted{% endif %}">{{ activity.sector.name|default:"Sem grupo" }}</div>
+                    </div>
+                    <div>
+                        <div class="k">Centro de custo</div>
+                        <div class="v{% if not activity.cost_center %} muted{% endif %}">{{ activity.cost_center.name|default:"Sem centro de custo" }}</div>
+                    </div>
+                    <div>
+                        <div class="k">Empresa</div>
+                        <div class="v{% if not activity.company %} muted{% endif %}">{{ activity.company.name|default:"—" }}</div>
+                    </div>
+                    <div>
+                        <div class="k">Obra</div>
+                        <div class="v{% if not activity.site %} muted{% endif %}">{{ activity.site.name|default:"Sem obra" }}</div>
+                    </div>
+                    <div class="full">
+                        <div class="k">Endereço</div>
+                        <div class="v{% if not activity.address %} muted{% endif %}">{{ activity.address|default:"Sem endereço extra" }}</div>
+                    </div>
+                    <div class="full">
+                        <div class="k">Descrição</div>
+                        <div class="v{% if not activity.description %} muted{% endif %}">{{ activity.description|linebreaksbr|default:"Sem descrição." }}</div>
+                    </div>
+                </div>
+
+                {# Progresso em contagem, nunca porcentagem (doc 09 §62) #}
+                <div class="summary-item" style="border:none; padding-left:0; margin-top:6px">
+                    <div style="flex:1">
+                        <div class="k">Progresso</div>
+                        <div class="v">{{ tasks_done }} de {{ tasks_total }} tarefas concluídas</div>
+                        {% if tasks_total %}
+                        <div class="progress"><div class="progress__bar" style="width:{% widthratio tasks_done tasks_total 100 %}%"></div></div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% if sectors_involved %}
+                <p style="margin:10px 0 0"><strong>Setores envolvidos:</strong> {{ sectors_involved|join:" → " }}</p>
+                {% endif %}
+                <p class="muted small" style="margin:10px 0 0">
+                    Criada por {{ activity.created_by.get_username }} em {{ activity.created_at|date:"d/m/Y H:i" }}
+                    {% if activity.first_action_at %} · Primeira ação em {{ activity.first_action_at|date:"d/m/Y H:i" }}{% endif %}
+                </p>
+            </div>
+        </div>
+
+        {% include "activities/_tasks_block.html" %}
     </div>
 
-{% else %}
-    <div class="split">
-        <div>
-            <div class="card card--flush">
-                <div class="card__head"><h2>Visão geral</h2></div>
-                <div class="card__body">
-                    {% if activity.description %}<p>{{ activity.description|linebreaksbr }}</p>{% endif %}
+    <aside class="side-scroll" id="feed-panel">
+        <div class="card card--flush">
+            <div class="card__head"><h2>Histórico</h2></div>
+            <div class="card__body">
+                {% if can_message or can_manage_attachments %}
+                <form method="post" action="{% url 'activity-continue' activity.pk %}" enctype="multipart/form-data" class="continue-form">
+                    {% csrf_token %}
+                    <textarea name="body" rows="3" placeholder="Escreva uma atualização… use @usuario para mencionar alguém"></textarea>
+                    <div class="continue-form__foot">
+                        {% if can_manage_attachments %}
+                        <label class="btn btn--ghost btn--sm" for="continue-file">
+                            {% include "_icon.html" with name="archive" %} Anexar arquivo
+                        </label>
+                        <input type="file" id="continue-file" name="file" hidden>
+                        <span class="muted small" id="continue-file-name"></span>
+                        {% endif %}
+                        <button type="submit" class="btn btn--primary btn--sm" style="margin-left:auto">Publicar</button>
+                    </div>
+                </form>
+                {% endif %}
 
-                    {# Progresso em contagem, nunca porcentagem (doc 09 §62) #}
-                    <div class="summary-item" style="border:none;padding-left:0">
-                        <div style="flex:1">
-                            <div class="k">Progresso</div>
-                            <div class="v">{{ tasks_done }} de {{ tasks_total }} tarefas concluídas</div>
-                            {% if tasks_total %}
-                            <div class="progress"><div class="progress__bar" style="width:{% widthratio tasks_done tasks_total 100 %}%"></div></div>
+                {% if feed %}
+                <ul class="feed">
+                    {% for event in feed %}
+                    <li class="feed-item feed-item--{{ event.kind }}">
+                        {% if event.kind == "message" %}
+                        <span class="avatar">{{ event.message.author.get_username|slice:":2"|upper }}</span>
+                        <div>
+                            <div class="feed-item__meta"><strong>{{ event.message.author.get_username }}</strong> comentou <span class="when">{{ event.timestamp|date:"d/m/Y H:i" }}</span></div>
+                            <div class="feed-item__body">{{ event.message.body|linebreaksbr }}</div>
+                        </div>
+                        {% elif event.kind == "attachment" %}
+                        <span class="feed-item__icon">{% include "_icon.html" with name="archive" %}</span>
+                        <div>
+                            <div class="feed-item__meta">
+                                <strong>{{ event.attachment.uploaded_by.get_username }}</strong> anexou
+                                <a href="{{ event.attachment.file.url }}" target="_blank" rel="noopener">{{ event.attachment.original_name|default:event.attachment.file.name }}</a>
+                                <span class="when">{{ event.timestamp|date:"d/m/Y H:i" }}</span>
+                            </div>
+                            {% if can_manage_attachments %}
+                            <form method="post" action="{% url 'activity-attachment-delete' activity.pk event.attachment.pk %}"
+                                  onsubmit="return confirm('Remover este anexo?');">
+                                {% csrf_token %}
+                                <button type="submit" class="link-button small">Remover</button>
+                            </form>
                             {% endif %}
                         </div>
-                    </div>
-
-                    {% if sectors_involved %}
-                    <p><strong>Setores envolvidos:</strong> {{ sectors_involved|join:" → " }}</p>
-                    {% endif %}
-
-                    <p class="muted small">
-                        Criada por {{ activity.created_by.get_username }} em {{ activity.created_at|date:"d/m/Y H:i" }}
-                        {% if activity.first_action_at %} · Primeira ação em {{ activity.first_action_at|date:"d/m/Y H:i" }}{% endif %}
-                    </p>
-
-                    {% if activity.status == "CANCELADA" %}
-                    <p class="message message--warning">Cancelada em {{ activity.cancelled_at|date:"d/m/Y H:i" }}. Motivo: {{ activity.cancelled_reason }}</p>
-                    {% elif activity.status == "CONCLUIDA" %}
-                    <p class="message message--success">Concluída em {{ activity.completed_at|date:"d/m/Y H:i" }} por {{ activity.completed_by.get_username }}.</p>
-                    {% endif %}
-                </div>
-            </div>
-
-            <div class="card card--flush">
-                <div class="card__head"><h2>Situação atual</h2></div>
-                <div class="card__body">
-                    {% if open_tasks %}
-                    <ul class="list-rows">
-                        {% for task in open_tasks %}
-                        <li>
-                            <a href="{% url 'task-detail' task.pk %}" class="title">{{ task.title }}</a>
-                            <span class="tag tag--{{ task.status }}">{{ task.get_status_display }}</span>
-                            <div class="muted small">
-                                {{ task.sector.name }}
-                                {% if task.queue_info %} · Posição {{ task.queue_info.position }} de {{ task.queue_info.total }}{% endif %}
-                                {% if task.committed_deadline %} · Comprometido: {{ task.committed_deadline|date:"d/m/Y H:i" }}{% endif %}
+                        {% else %}
+                        <span class="feed-item__icon feed-item__icon--muted">{% include "_icon.html" with name="clock" %}</span>
+                        <div>
+                            <div class="feed-item__meta">
+                                <strong>{% if event.entry.user %}{{ event.entry.user.get_username }}{% else %}Sistema{% endif %}</strong>
+                                {{ event.entry|audit_phrase }}
+                                {% if event.entry.task %} — <a href="{% url 'task-detail' event.entry.task.pk %}">{{ event.entry.task.title }}</a>{% endif %}
+                                <span class="when">{{ event.timestamp|date:"d/m/Y H:i" }}</span>
                             </div>
-                        </li>
-                        {% endfor %}
-                    </ul>
-                    {% else %}
-                    <p class="muted" style="margin:0">Nenhuma tarefa em aberto.</p>
-                    {% endif %}
+                            {% if event.entry.reason %}<div class="muted small">Motivo: {{ event.entry.reason }}</div>{% endif %}
+                        </div>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <div class="empty-state" style="padding:24px 10px">
+                    <div class="empty-state__icon">{% include "_icon.html" with name="clock" %}</div>
+                    <h3>Nada por aqui ainda</h3>
+                    <p style="margin-bottom:0">Comentários, anexos e eventos do sistema aparecem juntos, em ordem.</p>
                 </div>
+                {% endif %}
             </div>
         </div>
+    </aside>
+</div>
+{% endblock %}
 
-        <div>
-            <div class="card card--flush">
-                <div class="card__head"><h2>Ações</h2></div>
-                <div class="card__body">
-                    {% if activity.status != "CONCLUIDA" and activity.status != "CANCELADA" %}
-                    <form method="post" action="{% url 'activity-complete' activity.pk %}"
-                          onsubmit="return confirm('Confirmar conclusão: o resultado “{{ activity.title|escapejs }}” foi alcançado?');">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn--primary btn--block">Concluir atividade</button>
-                    </form>
-                    <div class="actions-row" style="margin-top:8px">
-                        {% if can_change_owner %}<a href="{% url 'activity-change-owner' activity.pk %}" class="btn btn--sm">Alterar dono</a>{% endif %}
-                        {% if can_cancel %}<a href="{% url 'activity-cancel' activity.pk %}" class="btn btn--sm btn--danger">Cancelar</a>{% endif %}
-                    </div>
-                    {% elif activity.status == "CONCLUIDA" and can_reopen %}
-                    <a href="{% url 'activity-reopen' activity.pk %}" class="btn btn--block">Reabrir atividade</a>
-                    {% else %}
-                    <p class="muted" style="margin:0">Nenhuma ação disponível nesta situação.</p>
-                    {% endif %}
-                </div>
-            </div>
-            {% include "activities/_tasks_block.html" %}
-        </div>
-    </div>
-{% endif %}
+{% block scripts %}
+<script>
+(function () {
+    "use strict";
+    var fileInput = document.getElementById("continue-file");
+    var fileName = document.getElementById("continue-file-name");
+    if (fileInput && fileName) {
+        fileInput.addEventListener("change", function () {
+            fileName.textContent = fileInput.files.length ? fileInput.files[0].name : "";
+        });
+    }
+
+    document.querySelectorAll(".js-activity-finalize, .js-activity-mark-pending, .js-activity-approve-pendency")
+        .forEach(function (link) {
+            link.addEventListener("click", function (event) {
+                if (!window.LPSModal) return;
+                event.preventDefault();
+                window.LPSModal.open(link.getAttribute("href"), {
+                    onSuccess: function () { window.location.reload(); }
+                });
+            });
+        });
+})();
+</script>
 {% endblock %}

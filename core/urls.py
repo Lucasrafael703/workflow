@@ -4,6 +4,7 @@ from . import views
 
 urlpatterns = [
     path("api/pessoas/", views.PersonSearchView.as_view(), name="person-search"),
+    path("api/clientes/", views.ClientSearchView.as_view(), name="client-search"),
     path("cadastros/", views.CadastroHomeView.as_view(), name="cadastros"),
     path("cadastros/setores/novo/", views.SectorFormView.as_view(), name="sector-create"),
     path("cadastros/setores/<int:pk>/", views.SectorFormView.as_view(), name="sector-edit"),
@@ -13,6 +14,8 @@ urlpatterns = [
     path("cadastros/obras/<int:pk>/", views.SiteFormView.as_view(), name="site-edit"),
     path("cadastros/centros-de-custo/novo/", views.CostCenterFormView.as_view(), name="costcenter-create"),
     path("cadastros/centros-de-custo/<int:pk>/", views.CostCenterFormView.as_view(), name="costcenter-edit"),
+    path("cadastros/clientes/novo/", views.ClientFormView.as_view(), name="client-create"),
+    path("cadastros/clientes/<int:pk>/", views.ClientFormView.as_view(), name="client-edit"),
     path("cadastros/motivos/novo/", views.ReturnReasonFormView.as_view(), name="returnreason-create"),
     path("cadastros/motivos/<int:pk>/", views.ReturnReasonFormView.as_view(), name="returnreason-edit"),
     path(

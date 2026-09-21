@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Definir como pendente — LPS{% endblock %}
+
+{% block content %}
+<div class="modal-backdrop">
+    <div class="modal">
+        <div class="modal__head">
+            <div>
+                <h2>Definir como Pendente</h2>
+                <div class="sub">{{ activity.title }}</div>
+            </div>
+            <a href="{% url 'activity-detail' activity.pk %}" class="modal__close" title="Fechar">&times;</a>
+        </div>
+
+        <form method="post" id="pending-form">
+            {% csrf_token %}
+            <div class="modal__body">
+                {% if form.non_field_errors %}
+                <ul class="messages">
+                    {% for error in form.non_field_errors %}<li class="message message--error">{{ error }}</li>{% endfor %}
+                </ul>
+                {% endif %}
+
+                <div class="form-row">
+                    <label for="{{ form.reason.id_for_label }}">{{ form.reason.label }} <span class="req">*</span></label>
+                    {{ form.reason }}
+                    {% if form.reason.errors %}<ul class="errorlist">{% for e in form.reason.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                </div>
+
+                <div class="message message--info" id="pending-hint" data-approval="Um e-mail será enviado automaticamente para o gestor do setor informando que a continuação depende da aprovação dele."
+                     data-material="Atividade ficará em pendência até a chegada do material."
+                     data-cliente="Atividade ficará em pendência até o recebimento das informações do cliente."></div>
+
+                <div class="form-row">
+                    <label for="{{ form.comment.id_for_label }}">{{ form.comment.label }} <span class="req">*</span></label>
+                    {{ form.comment }}
+                    {% if form.comment.errors %}<ul class="errorlist">{% for e in form.comment.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                </div>
+
+                <div class="form-row pending-extra is-visible" id="pending-deadline-row">
+                    <label for="{{ form.decision_deadline.id_for_label }}" id="pending-deadline-label">
+                        {{ form.decision_deadline.label }} <span class="req" id="pending-deadline-req">*</span>
+                    </label>
+                    {{ form.decision_deadline }}
+                    {% if form.decision_deadline.errors %}<ul class="errorlist">{% for e in form.decision_deadline.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                </div>
+
+                <div class="form-row pending-extra" id="pending-notify-row">
+                    <label class="field field--check">
+                        {{ form.notify_client }} {{ form.notify_client.label }}
+                    </label>
+                </div>
+
+                <div class="message message--info" id="pending-email-note" style="display:none">
+                    {% include "_icon.html" with name="check" %}
+                    O e-mail já mostra o link e as informações da atividade.
+                </div>
+            </div>
+            <div class="modal__foot">
+                <a href="{% url 'activity-detail' activity.pk %}" class="btn">Cancelar</a>
+                <button type="submit" class="btn btn--primary">{% include "_icon.html" with name="clock" %} Definir como Pendente</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    "use strict";
+    var APPROVAL_REASONS = {{ approval_reasons|safe|default:"[]" }};
+    var select = document.getElementById("{{ form.reason.id_for_label }}");
+    var deadlineRow = document.getElementById("pending-deadline-row");
+    var deadlineLabel = document.getElementById("pending-deadline-label");
+    var deadlineReq = document.getElementById("pending-deadline-req");
+    var deadlineInput = document.getElementById("{{ form.decision_deadline.id_for_label }}");
+    var notifyRow = document.getElementById("pending-notify-row");
+    var hint = document.getElementById("pending-hint");
+
+    function update() {
+        if (!select) return;
+        var value = select.value;
+        var requiresApproval = APPROVAL_REASONS.indexOf(value) !== -1;
+        var isMaterial = value === "MATERIAL";
+        var isClient = value === "INFORMACOES_CLIENTE";
+
+        deadlineRow.classList.toggle("is-visible", requiresApproval || isMaterial);
+        if (deadlineInput) deadlineInput.required = requiresApproval;
+        if (deadlineReq) deadlineReq.style.display = requiresApproval ? "" : "none";
+        if (deadlineLabel) {
+            deadlineLabel.childNodes[0].textContent = requiresApproval
+                ? "Prazo para decisão do gestor "
+                : "Previsão de chegada do material ";
+        }
+
+        notifyRow.classList.toggle("is-visible", isClient);
+
+        if (hint) {
+            var text = requiresApproval
+                ? hint.getAttribute("data-approval")
+                : isMaterial
+                    ? hint.getAttribute("data-material")
+                    : isClient
+                        ? hint.getAttribute("data-cliente")
+                        : "";
+            hint.textContent = text;
+            hint.style.display = text ? "" : "none";
+        }
+    }
+
+    if (select) {
+        select.addEventListener("change", update);
+        update();
+    }
+})();
+</script>
+{% endblock %}

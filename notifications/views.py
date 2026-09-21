@@ -51,6 +51,9 @@ EVENT_CATEGORY = {
     Notification.EventType.ACTIVITY_COMPLETED: CONCLUSAO,
     Notification.EventType.ACTIVITY_CANCELLED: INFORMATIVO,
     Notification.EventType.ACTIVITY_REOPENED: DELEGACAO,
+    Notification.EventType.ACTIVITY_PENDING: INFORMATIVO,
+    Notification.EventType.ACTIVITY_APPROVAL_NEEDED: DELEGACAO,
+    Notification.EventType.ACTIVITY_APPROVED: DELEGACAO,
     Notification.EventType.OWNER_CHANGED: DELEGACAO,
     Notification.EventType.MESSAGE_POSTED: INFORMATIVO,
     Notification.EventType.MENTIONED: MENCAO,
@@ -68,6 +71,7 @@ ACTION_REQUIRED_EVENTS = {
     Notification.EventType.TASK_ASSIGNED,
     Notification.EventType.TASK_ASSIGNMENT_PENDING,
     Notification.EventType.TASK_BLOCKED,
+    Notification.EventType.ACTIVITY_APPROVAL_NEEDED,
 }
 
 # A mensagem gravada já repete o que os campos estruturados (tarefa, setor,
@@ -84,6 +88,8 @@ EVENTS_WITH_EXTRA_MESSAGE = {
     Notification.EventType.OWNER_CHANGED,
     Notification.EventType.MESSAGE_POSTED,
     Notification.EventType.MENTIONED,
+    Notification.EventType.ACTIVITY_PENDING,
+    Notification.EventType.ACTIVITY_APPROVAL_NEEDED,
 }
 
 
@@ -96,6 +102,14 @@ def _still_needs_action(notification):
     """
     event = notification.event_type
     task = notification.task
+    activity = notification.activity
+
+    if event == Notification.EventType.ACTIVITY_APPROVAL_NEEDED:
+        # Só continua pedindo decisão enquanto a pendência que a gerou
+        # seguir aberta — aprovada ou encerrada, o evento vira só registro.
+        if activity is None:
+            return False
+        return activity.status == "PENDENTE" and activity.pendencies.filter(status="ABERTA").exists()
 
     if event == Notification.EventType.DEADLINE_PROPOSED:
         if task is None:
@@ -197,6 +211,13 @@ def _decorate(notification):
     if notification.event_type == Notification.EventType.DEADLINE_CONFLICT and notification.needs_action:
         notification.open_conflict_id = _open_conflict_id(task)
 
+    # Idem para a pendência aguardando aprovação: o card leva direto ao
+    # popup de "Aprovar" na tela da atividade, não só ao detalhe.
+    notification.open_pendency_id = None
+    if notification.event_type == Notification.EventType.ACTIVITY_APPROVAL_NEEDED and notification.needs_action:
+        pendency = activity.pendencies.filter(status="ABERTA").order_by("-opened_at").first() if activity else None
+        notification.open_pendency_id = pendency.pk if pendency else None
+
     # Campos de contexto, específicos por categoria — nunca os cinco juntos.
     notification.fields = _context_fields(notification, category, task, activity, is_self)
 
@@ -211,6 +232,23 @@ def _context_fields(n, category, task, activity, is_self):
     """Devolve uma lista curta de (ícone, texto) — no máximo 3 campos,
     escolhidos pela categoria, não pelo que existir."""
     fields = []
+
+    if n.event_type == Notification.EventType.ACTIVITY_APPROVAL_NEEDED and activity is not None:
+        pendency = activity.pendencies.filter(status="ABERTA").order_by("-opened_at").first()
+        if pendency:
+            fields.append(("alert", pendency.get_reason_display()))
+            if pendency.decision_deadline:
+                fields.append(("clock", f"Decidir até {pendency.decision_deadline:%d/%m %H:%M}"))
+        if n.actor_name:
+            fields.append(("users", f"Marcada por {n.actor_name}"))
+        return fields[:3]
+
+    if n.event_type in (Notification.EventType.ACTIVITY_PENDING, Notification.EventType.ACTIVITY_APPROVED) and activity is not None:
+        pendency = activity.pendencies.order_by("-opened_at").first()
+        if pendency:
+            fields.append(("alert" if n.event_type == Notification.EventType.ACTIVITY_PENDING else "check", pendency.get_reason_display()))
+        fields.append(("clock", n.created_at.strftime("%d/%m %H:%M")))
+        return fields[:3]
 
     if category == DELEGACAO:
         if n.actor_name:
@@ -284,6 +322,21 @@ def _context_fields(n, category, task, activity, is_self):
 def _summary_sentence(n, category, task, activity, is_self):
     """Uma frase curta para a linha 3 — o que aconteceu, em português comum."""
     actor = n.actor_name
+
+    if n.event_type == Notification.EventType.ACTIVITY_APPROVAL_NEEDED:
+        if actor:
+            return f"{actor} marcou esta atividade como pendente e aguarda sua aprovação."
+        return "Esta atividade está pendente e aguarda sua aprovação."
+
+    if n.event_type == Notification.EventType.ACTIVITY_PENDING:
+        if actor:
+            return f"{actor} marcou esta atividade como pendente."
+        return "Esta atividade foi marcada como pendente."
+
+    if n.event_type == Notification.EventType.ACTIVITY_APPROVED:
+        if actor:
+            return f"{actor} aprovou a pendência — a atividade voltou para você."
+        return "A pendência foi aprovada e a atividade voltou para você."
 
     if category == DELEGACAO:
         if is_self:

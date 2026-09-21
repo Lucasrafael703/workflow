@@ -1,11 +1,11 @@
 from django import forms
-from django.contrib.auth import get_user_model
+from django.contrib.auth import get_user_model, password_validation
 
 from acessos.models import Action
 from acessos.models import Profile as AccessProfile
 from acessos.models import Scope
 
-from .models import Company, CostCenter, Sector, Site
+from .models import Client, Company, CostCenter, Sector, Site
 
 User = get_user_model()
 
@@ -44,6 +44,17 @@ class CostCenterForm(forms.Form):
         )
 
 
+class ClientForm(forms.Form):
+    """Cadastro de cliente (Regra 1-2 da tela de atividade): quem solicita o
+    serviço, distinto das empresas internas da própria organização."""
+
+    name = forms.CharField(label="Nome", max_length=150)
+    document = forms.CharField(label="CNPJ/CPF", max_length=20, required=False)
+    phone = forms.CharField(label="Telefone", max_length=30, required=False)
+    email = forms.EmailField(label="E-mail", required=False)
+    address = forms.CharField(label="Endereço", max_length=255, required=False)
+
+
 class ReturnReasonForm(forms.Form):
     name = forms.CharField(label="Motivo", max_length=150)
 
@@ -58,6 +69,16 @@ class UserForm(forms.Form):
     first_name = forms.CharField(label="Nome", max_length=150)
     email = forms.EmailField(label="E-mail")
     username = forms.CharField(label="Usuário", max_length=150)
+    password1 = forms.CharField(
+        label="Senha",
+        required=False,
+        widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}),
+    )
+    password2 = forms.CharField(
+        label="Confirmar senha",
+        required=False,
+        widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}),
+    )
     sectors = forms.ModelMultipleChoiceField(
         label="Setores em que atua",
         queryset=Sector.objects.none(),
@@ -79,6 +100,16 @@ class UserForm(forms.Form):
         sectors = Sector.objects.filter(organization=organization, is_active=True)
         self.fields["sectors"].queryset = sectors
         self.fields["managed_sectors"].queryset = sectors
+
+        if instance is None:
+            # Cadastrar exige senha na hora — não existe fluxo de convite por
+            # e-mail nesta versão, então a pessoa não teria como entrar.
+            self.fields["password1"].required = True
+            self.fields["password2"].required = True
+            self.fields["password1"].help_text = "A pessoa poderá alterá-la depois, em Perfil."
+        else:
+            self.fields["password1"].help_text = "Deixe em branco para manter a senha atual."
+            self.fields["password2"].help_text = "Repita a nova senha, se estiver redefinindo."
 
         if instance is not None and not self.is_bound:
             from accounts.models import UserSector
@@ -111,6 +142,17 @@ class UserForm(forms.Form):
                 "managed_sectors",
                 "Só é possível gerenciar um setor do qual a pessoa participa.",
             )
+
+        password1 = cleaned.get("password1")
+        password2 = cleaned.get("password2")
+        if password1 or password2:
+            if password1 != password2:
+                self.add_error("password2", "As senhas não coincidem.")
+            elif password1:
+                try:
+                    password_validation.validate_password(password1, user=self.instance)
+                except forms.ValidationError as exc:
+                    self.add_error("password1", exc)
         return cleaned
 
 

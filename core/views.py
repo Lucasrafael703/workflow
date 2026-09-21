@@ -17,6 +17,7 @@ from acessos.services import AccessService, AuthorizationService
 from .forms import (
     AccessProfileForm,
     AssignProfileForm,
+    ClientForm,
     CompanyForm,
     CostCenterForm,
     GrantActionForm,
@@ -27,9 +28,10 @@ from .forms import (
     UserForm,
 )
 from .mixins import ActionRequiredMixin, OrganizationRequiredMixin
-from .models import Company, CostCenter, Sector, Site
+from .models import Client, Company, CostCenter, Sector, Site
 from .services import (
     CadastroError,
+    ClientService,
     CompanyService,
     CostCenterService,
     ReturnReasonService,
@@ -66,6 +68,7 @@ class CadastroHomeView(OrganizationRequiredMixin, TemplateView):
         companies = Company.objects.filter(organization=org)
         sites = Site.objects.filter(organization=org).select_related("company")
         cost_centers = CostCenter.objects.filter(organization=org).select_related("site")
+        clients = Client.objects.filter(organization=org)
         reasons = ReturnReason.objects.filter(organization=org)
 
         if search:
@@ -73,6 +76,7 @@ class CadastroHomeView(OrganizationRequiredMixin, TemplateView):
             companies = companies.filter(name__icontains=search)
             sites = sites.filter(name__icontains=search)
             cost_centers = cost_centers.filter(name__icontains=search)
+            clients = clients.filter(name__icontains=search)
             reasons = reasons.filter(name__icontains=search)
 
         context.update(
@@ -83,6 +87,7 @@ class CadastroHomeView(OrganizationRequiredMixin, TemplateView):
                 "companies": companies,
                 "sites": sites,
                 "cost_centers": cost_centers,
+                "clients": clients,
                 "return_reasons": reasons,
             }
         )
@@ -117,11 +122,35 @@ class PersonSearchView(OrganizationRequiredMixin, View):
         return JsonResponse({"results": results})
 
 
+class ClientSearchView(OrganizationRequiredMixin, View):
+    """Busca de clientes para o seletor com autocomplete (Regra 1: digitar
+    "P" mostra Paulo, Pedro etc.), mesmo padrão de `PersonSearchView`."""
+
+    MAX_RESULTS = 20
+
+    def get(self, request):
+        term = request.GET.get("q", "").strip()
+        queryset = Client.objects.filter(organization=self.organization, is_active=True).order_by("name")
+        if term:
+            queryset = queryset.filter(
+                Q(name__icontains=term) | Q(document__icontains=term)
+            )
+        results = [
+            {"id": client.pk, "name": client.name}
+            for client in queryset[: self.MAX_RESULTS]
+        ]
+        return JsonResponse({"results": results})
+
+
 class CadastroFormView(OrganizationRequiredMixin, ActionRequiredMixin, FormView):
     """Base dos formulários de cadastro: criar e editar compartilham a tela.
 
     Criar e alterar cadastro é ação administrativa e exige autorização
     explícita — participar da organização não basta (Regras 05 §87-89).
+
+    Também serve como popup ajax (mesmo padrão de `UserFormView`): quando a
+    tela de atividade cria um cliente, uma obra ou um centro de custo sem
+    sair do formulário, a resposta vira JSON em vez de redirect.
     """
 
     template_name = "core/cadastro_form.html"
@@ -172,15 +201,22 @@ class CadastroFormView(OrganizationRequiredMixin, ActionRequiredMixin, FormView)
         instance = self.get_instance()
         try:
             if instance is None:
-                self.create(form.cleaned_data)
+                instance = self.create(form.cleaned_data)
                 messages.success(self.request, "Cadastro criado.")
             else:
-                self.update(instance, form.cleaned_data)
+                instance = self.update(instance, form.cleaned_data)
                 messages.success(self.request, "Cadastro atualizado.")
         except CadastroError as exc:
             form.add_error(None, str(exc))
             return self.form_invalid(form)
+        if _is_ajax(self.request):
+            return JsonResponse({"id": instance.pk, "name": str(instance)})
         return redirect(self.success_url_for_tab())
+
+    def form_invalid(self, form):
+        if _is_ajax(self.request):
+            return JsonResponse({"errors": form.errors}, status=400)
+        return super().form_invalid(form)
 
 
 class SectorFormView(CadastroFormView):
@@ -194,12 +230,12 @@ class SectorFormView(CadastroFormView):
         return {"name": instance.name, "description": instance.description}
 
     def create(self, data):
-        SectorService.create(
+        return SectorService.create(
             self.organization, data["name"], self.request.user, description=data.get("description", "")
         )
 
     def update(self, instance, data):
-        SectorService.update(instance, name=data["name"], description=data.get("description", ""))
+        return SectorService.update(instance, name=data["name"], description=data.get("description", ""))
 
 
 class CompanyFormView(CadastroFormView):
@@ -213,10 +249,10 @@ class CompanyFormView(CadastroFormView):
         return {"name": instance.name, "document": instance.document}
 
     def create(self, data):
-        CompanyService.create(self.organization, data["name"], document=data.get("document", ""))
+        return CompanyService.create(self.organization, data["name"], document=data.get("document", ""))
 
     def update(self, instance, data):
-        CompanyService.update(instance, name=data["name"], document=data.get("document", ""))
+        return CompanyService.update(instance, name=data["name"], document=data.get("document", ""))
 
 
 class SiteFormView(CadastroFormView):
@@ -230,10 +266,10 @@ class SiteFormView(CadastroFormView):
         return {"name": instance.name, "company": instance.company_id}
 
     def create(self, data):
-        SiteService.create(self.organization, data["name"], company=data.get("company"))
+        return SiteService.create(self.organization, data["name"], company=data.get("company"))
 
     def update(self, instance, data):
-        SiteService.update(instance, name=data["name"], company=data.get("company"))
+        return SiteService.update(instance, name=data["name"], company=data.get("company"))
 
 
 class CostCenterFormView(CadastroFormView):
@@ -247,10 +283,50 @@ class CostCenterFormView(CadastroFormView):
         return {"name": instance.name, "site": instance.site_id}
 
     def create(self, data):
-        CostCenterService.create(self.organization, data["name"], site=data.get("site"))
+        return CostCenterService.create(self.organization, data["name"], site=data.get("site"))
 
     def update(self, instance, data):
-        CostCenterService.update(instance, name=data["name"], site=data.get("site"))
+        return CostCenterService.update(instance, name=data["name"], site=data.get("site"))
+
+
+class ClientFormView(CadastroFormView):
+    """Cadastro de cliente, também acionado como popup a partir da tela de
+    atividade (Regra 2: "Cadastra cliente" sem sair do formulário)."""
+
+    form_class = ClientForm
+    model = Client
+    tab = "clientes"
+    title = "Cliente"
+    required_action = catalog.CLIENTE_GERIR
+
+    def initial_from(self, instance):
+        return {
+            "name": instance.name,
+            "document": instance.document,
+            "phone": instance.phone,
+            "email": instance.email,
+            "address": instance.address,
+        }
+
+    def create(self, data):
+        return ClientService.create(
+            self.organization,
+            data["name"],
+            document=data.get("document", ""),
+            phone=data.get("phone", ""),
+            email=data.get("email", ""),
+            address=data.get("address", ""),
+        )
+
+    def update(self, instance, data):
+        return ClientService.update(
+            instance,
+            name=data["name"],
+            document=data.get("document", ""),
+            phone=data.get("phone", ""),
+            email=data.get("email", ""),
+            address=data.get("address", ""),
+        )
 
 
 class ReturnReasonFormView(CadastroFormView):
@@ -265,10 +341,10 @@ class ReturnReasonFormView(CadastroFormView):
         return ReturnReason
 
     def create(self, data):
-        ReturnReasonService.create(self.organization, data["name"])
+        return ReturnReasonService.create(self.organization, data["name"])
 
     def update(self, instance, data):
-        ReturnReasonService.update(instance, name=data["name"])
+        return ReturnReasonService.update(instance, name=data["name"])
 
 
 class CadastroToggleActiveView(OrganizationRequiredMixin, View):
@@ -281,6 +357,7 @@ class CadastroToggleActiveView(OrganizationRequiredMixin, View):
         "empresas": (Company, catalog.EMPRESA_GERIR),
         "obras": (Site, catalog.OBRA_GERIR),
         "centros-de-custo": (CostCenter, catalog.CENTRO_CUSTO_GERIR),
+        "clientes": (Client, catalog.CLIENTE_GERIR),
     }
 
     def resolve(self, tab):
@@ -509,22 +586,39 @@ class UserFormView(OrganizationRequiredMixin, ActionRequiredMixin, FormView):
         return context
 
     def form_valid(self, form):
+        from audit.models import AuditLog
+        from audit.services import AuditService
+
         instance = self.get_instance()
         data = form.cleaned_data
 
         if instance is None:
             instance = User.objects.create_user(
-                username=data["username"], email=data["email"], first_name=data["first_name"]
+                username=data["username"],
+                email=data["email"],
+                first_name=data["first_name"],
+                password=data["password1"],
             )
-            messages.success(
-                self.request,
-                f"Usuário {instance.username} criado. Defina a senha pelo fluxo de acesso.",
+            AuditService.log(
+                user=self.request.user,
+                action=AuditLog.Action.USER_CREATED,
+                target_user=instance,
+                reason=f"Usuário {instance.username} cadastrado.",
             )
+            messages.success(self.request, f"Usuário {instance.username} criado.")
         else:
             instance.username = data["username"]
             instance.email = data["email"]
             instance.first_name = data["first_name"]
             instance.is_active = data["is_active"]
+            if data.get("password1"):
+                instance.set_password(data["password1"])
+                AuditService.log(
+                    user=self.request.user,
+                    action=AuditLog.Action.PASSWORD_RESET,
+                    target_user=instance,
+                    reason=f"Senha de {instance.username} redefinida.",
+                )
             instance.save()
             messages.success(self.request, "Usuário atualizado.")
 

@@ -1,5 +1,9 @@
+import re
+
 from django.conf import settings
-from django.db import models
+from django.core.files.storage import FileSystemStorage
+from django.db import models, transaction
+from django.utils import timezone
 
 
 # ---------------------------------------------------------------------------
@@ -17,11 +21,37 @@ class Activity(models.Model):
         ABERTA = "ABERTA", "Aberta"
         EM_ANDAMENTO = "EM_ANDAMENTO", "Em andamento"
         BLOQUEADA = "BLOQUEADA", "Bloqueada"
+        PENDENTE = "PENDENTE", "Pendente"
         CONCLUIDA = "CONCLUIDA", "Concluída"
         CANCELADA = "CANCELADA", "Cancelada"
 
+    class Urgency(models.TextChoices):
+        BAIXA = "BAIXA", "Baixa"
+        MEDIA = "MEDIA", "Média"
+        ALTA = "ALTA", "Alta"
+
+    class CompletionOutcome(models.TextChoices):
+        """Resultado explícito da finalização (popup único de "Finalizar
+        atividade"): toda finalização escolhe um destes, sempre com
+        comentário obrigatório — nunca só "concluir" ou só "cancelar" sem
+        dizer o que aconteceu."""
+
+        SUCESSO = "SUCESSO", "Sucesso"
+        CONCLUIDO_COM_PENDENCIAS = "CONCLUIDO_COM_PENDENCIAS", "Concluído com pendências"
+        DECLINADO = "DECLINADO", "Declinado"
+        CANCELADO = "CANCELADO", "Cancelado"
+
     organization = models.ForeignKey(
         "core.Organization", verbose_name="organização", on_delete=models.PROTECT, related_name="activities"
+    )
+    client = models.ForeignKey(
+        "core.Client",
+        verbose_name="cliente",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="activities",
+        help_text="Quem solicitou o serviço.",
     )
     company = models.ForeignKey(
         "core.Company",
@@ -42,9 +72,32 @@ class Activity(models.Model):
         on_delete=models.SET_NULL,
         related_name="activities",
     )
+    sector = models.ForeignKey(
+        "core.Sector",
+        verbose_name="grupo designado",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="designated_activities",
+        help_text="Setor para quem a atividade é endereçada — distinto do setor de cada tarefa.",
+    )
+
+    code = models.CharField(
+        "código",
+        max_length=20,
+        unique=True,
+        null=True,
+        blank=True,
+        editable=False,
+        help_text="Gerado automaticamente ao salvar. Identifica a atividade e a pasta de anexos.",
+    )
 
     title = models.CharField("resultado esperado", max_length=200)
     description = models.TextField("descrição", blank=True)
+    urgency = models.CharField("urgência", max_length=6, choices=Urgency.choices, default=Urgency.MEDIA)
+    address = models.CharField(
+        "endereço", max_length=255, blank=True, help_text="Endereço adicional, além do cadastro do cliente."
+    )
 
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -73,6 +126,13 @@ class Activity(models.Model):
     )
 
     status = models.CharField("status", max_length=14, choices=Status.choices, default=Status.ABERTA)
+    completion_outcome = models.CharField(
+        "resultado da finalização",
+        max_length=28,
+        choices=CompletionOutcome.choices,
+        blank=True,
+        help_text="Escolhido no popup de finalização — explica o que aconteceu além do status.",
+    )
 
     created_at = models.DateTimeField("criada em", auto_now_add=True)
     first_action_at = models.DateTimeField(
@@ -108,6 +168,33 @@ class Activity(models.Model):
     def __str__(self):
         return self.title
 
+    @classmethod
+    def _generate_code(cls):
+        """Gera o identificador único da atividade (Regra 12): `ATV-{ano}-{sequencial}`.
+
+        Usado como nome da pasta de anexos, então precisa existir antes do
+        primeiro upload — é atribuído automaticamente logo após o primeiro
+        `save()`, nunca informado manualmente.
+        """
+        year = timezone.now().year
+        prefix = f"ATV-{year}-"
+        last = cls.objects.filter(code__startswith=prefix).order_by("-code").first()
+        next_number = 1
+        if last and last.code:
+            try:
+                next_number = int(last.code.rsplit("-", 1)[-1]) + 1
+            except ValueError:
+                next_number = 1
+        return f"{prefix}{next_number:05d}"
+
+    def save(self, *args, **kwargs):
+        is_new = self._state.adding
+        super().save(*args, **kwargs)
+        if is_new and not self.code:
+            with transaction.atomic():
+                self.code = self._generate_code()
+                super().save(update_fields=["code"])
+
 
 class OwnerChangeLog(models.Model):
     """Histórico de troca de dono da atividade (Regras 02 §113-114). Nunca sobrescrito."""
@@ -133,6 +220,76 @@ class OwnerChangeLog(models.Model):
         return f"{self.activity}: {self.previous_owner} → {self.new_owner}"
 
 
+class ActivityPendency(models.Model):
+    """Pendência da atividade: por que ela está parada agora (fila do gestor).
+
+    Dois grupos de motivo, conforme pedido: os que só avisam — a atividade
+    fica visível como pendente para quem acompanha, sem sair do lugar — e os
+    que pedem decisão do gestor do setor, com prazo para essa decisão e a
+    atividade temporariamente na fila dele ("Minhas atividades"), voltando
+    para quem a designou assim que aprovada.
+    """
+
+    class Reason(models.TextChoices):
+        APROVACAO_GESTOR = "APROVACAO_GESTOR", "Aguardando aprovação do gestor"
+        AJUSTES_REVISOES = "AJUSTES_REVISOES", "Aguardando ajustes/revisões"
+        MATERIAL = "MATERIAL", "Aguardando material"
+        INFORMACOES_CLIENTE = "INFORMACOES_CLIENTE", "Aguardando informações do cliente"
+
+    # Motivos que exigem decisão do gestor, com prazo — os demais só avisam.
+    APPROVAL_REASONS = (Reason.APROVACAO_GESTOR, Reason.AJUSTES_REVISOES)
+
+    class Status(models.TextChoices):
+        ABERTA = "ABERTA", "Aberta"
+        APROVADA = "APROVADA", "Aprovada"
+        ENCERRADA = "ENCERRADA", "Encerrada"
+
+    activity = models.ForeignKey(Activity, verbose_name="atividade", on_delete=models.CASCADE, related_name="pendencies")
+    reason = models.CharField("motivo", max_length=20, choices=Reason.choices)
+    comment = models.TextField("comentário")
+    decision_deadline = models.DateTimeField(
+        "prazo para decisão do gestor",
+        null=True,
+        blank=True,
+        help_text="Obrigatório quando o motivo pede aprovação do gestor.",
+    )
+    notify_client = models.BooleanField(
+        "enviar e-mail ao cliente", default=False, help_text="Só usado no motivo 'Aguardando informações do cliente'."
+    )
+    status = models.CharField("status", max_length=10, choices=Status.choices, default=Status.ABERTA)
+
+    # Preenchidos só quando o motivo exige aprovação: para onde a atividade
+    # foi endereçada, e para quem ela volta quando aprovada.
+    previous_owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, verbose_name="dono anterior", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    approver = models.ForeignKey(
+        settings.AUTH_USER_MODEL, verbose_name="gestor responsável", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+
+    opened_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, verbose_name="marcada por", on_delete=models.PROTECT, related_name="+"
+    )
+    opened_at = models.DateTimeField("marcada em", auto_now_add=True)
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, verbose_name="resolvida por", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    resolved_at = models.DateTimeField("resolvida em", null=True, blank=True)
+    resolution_comment = models.TextField("comentário da aprovação", blank=True)
+
+    class Meta:
+        verbose_name = "pendência da atividade"
+        verbose_name_plural = "pendências da atividade"
+        ordering = ["-opened_at"]
+
+    def __str__(self):
+        return f"{self.activity}: {self.get_reason_display()}"
+
+    @property
+    def requires_approval(self):
+        return self.reason in self.APPROVAL_REASONS
+
+
 class ActivityMessage(models.Model):
     """Comunicação contextual ligada à atividade (Regras 06). Não altera dados oficiais."""
 
@@ -150,6 +307,54 @@ class ActivityMessage(models.Model):
 
     def __str__(self):
         return f"{self.author} em {self.activity}"
+
+
+def activity_files_storage():
+    """Armazenamento dos anexos: `settings.ACTIVITY_FILES_ROOT` (LPS_ERP/Atividade),
+    separado do `MEDIA_ROOT`. Função para o caminho não entrar nas migrações."""
+    return FileSystemStorage(location=settings.ACTIVITY_FILES_ROOT, base_url=settings.ACTIVITY_FILES_URL)
+
+
+def _folder_name(value, fallback):
+    """Nome de pasta seguro no Windows: tira caracteres proibidos e pontos/espaços nas pontas."""
+    cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "", value or "").strip(" .")
+    return cleaned or fallback
+
+
+def activity_attachment_upload_to(instance, filename):
+    """Cada atividade tem sua própria pasta de anexos, dentro da pasta da empresa:
+    `<empresa>/<code>/<arquivo>` (Regra 12/13). Sem empresa cai em `sem-empresa`;
+    antes do primeiro save do código (não deveria acontecer — o anexo só existe
+    depois da atividade salva), cai em `sem-codigo/<id>` para nunca quebrar o upload."""
+    activity = instance.activity
+    company = _folder_name(activity.company.name if activity.company_id else "", "sem-empresa")
+    code = activity.code or f"sem-codigo/{instance.activity_id}"
+    return f"{company}/{code}/{filename}"
+
+
+class ActivityAttachment(models.Model):
+    """Arquivo anexado à atividade (Regra 13). Fica em `ACTIVITY_FILES_ROOT`
+    (LPS_ERP/Atividade), organizado por empresa e por atividade."""
+
+    activity = models.ForeignKey(
+        Activity, verbose_name="atividade", on_delete=models.CASCADE, related_name="attachments"
+    )
+    file = models.FileField(
+        "arquivo", upload_to=activity_attachment_upload_to, storage=activity_files_storage, max_length=255
+    )
+    original_name = models.CharField("nome original", max_length=255, blank=True)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, verbose_name="enviado por", on_delete=models.PROTECT, related_name="+"
+    )
+    uploaded_at = models.DateTimeField("enviado em", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "anexo da atividade"
+        verbose_name_plural = "anexos da atividade"
+        ordering = ["-uploaded_at"]
+
+    def __str__(self):
+        return self.original_name or self.file.name
 
 
 # ---------------------------------------------------------------------------

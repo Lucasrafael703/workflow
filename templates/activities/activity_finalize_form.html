@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Finalizar atividade — LPS{% endblock %}
+
+{% block content %}
+<div class="modal-backdrop">
+    <div class="modal modal--wide">
+        <div class="modal__head">
+            <div>
+                <h2>Finalizar {{ activity.code|default:activity.title }}</h2>
+                <div class="sub">Informe o resultado da finalização.</div>
+            </div>
+            <a href="{% url 'activity-detail' activity.pk %}" class="modal__close" title="Fechar">&times;</a>
+        </div>
+
+        <form method="post">
+            {% csrf_token %}
+            <div class="modal__body">
+                {% if form.non_field_errors %}
+                <ul class="messages">
+                    {% for error in form.non_field_errors %}<li class="message message--error">{{ error }}</li>{% endfor %}
+                </ul>
+                {% endif %}
+
+                <div class="message message--info">
+                    Ao finalizar a atividade, ela será movida para Concluídas ou Declinadas/Canceladas,
+                    conforme o resultado informado. Esta ação não pode ser desfeita.
+                </div>
+
+                <div class="form-row">
+                    <label>Resultado da finalização <span class="req">*</span></label>
+                    <div class="outcome-picker">
+                        {% for radio in form.outcome %}
+                        <label class="outcome-card outcome-card--{{ radio.data.value|lower }}">
+                            {{ radio.tag }}
+                            <span class="outcome-card__icon">
+                                {% if radio.data.value == "SUCESSO" %}{% include "_icon.html" with name="check" %}
+                                {% elif radio.data.value == "CONCLUIDO_COM_PENDENCIAS" %}{% include "_icon.html" with name="clock" %}
+                                {% elif radio.data.value == "DECLINADO" %}{% include "_icon.html" with name="block" %}
+                                {% else %}{% include "_icon.html" with name="alert" %}{% endif %}
+                            </span>
+                            <span class="outcome-card__label">{{ radio.choice_label }}</span>
+                            <span class="outcome-card__hint">
+                                {% if radio.data.value == "SUCESSO" %}Atividade concluída com sucesso
+                                {% elif radio.data.value == "CONCLUIDO_COM_PENDENCIAS" %}Concluída, mas com itens pendentes
+                                {% elif radio.data.value == "DECLINADO" %}Cliente optou por não seguir com a atividade
+                                {% else %}Cancelada por motivos internos{% endif %}
+                            </span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                    {% if form.outcome.errors %}<ul class="errorlist">{% for e in form.outcome.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                </div>
+
+                <div class="form-row">
+                    <label for="{{ form.comment.id_for_label }}">{{ form.comment.label }} <span class="req">*</span></label>
+                    {{ form.comment }}
+                    {% if form.comment.errors %}<ul class="errorlist">{% for e in form.comment.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                </div>
+            </div>
+            <div class="modal__foot">
+                <a href="{% url 'activity-detail' activity.pk %}" class="btn">Cancelar</a>
+                <button type="submit" class="btn btn--primary">{% include "_icon.html" with name="check" %} Finalizar atividade</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
