@@ -12,6 +12,274 @@
     </div>
 </div>
 
+{# Painel filtrado: período, cliente, responsável, status e centro de
+   custo, com o filtro de setor e o quadro "Filas por setor" acrescentados
+   ao que o modelo trazia. #}
+<form method="get">
+    <div class="card filters-card">
+        <div class="card__head"><h2>Indicadores</h2></div>
+        <div class="filters-grid">
+            <div class="form-row">
+                <label>Período (de)</label>
+                <input type="date" name="periodo_de" value="{{ f_periodo_de }}">
+            </div>
+            <div class="form-row">
+                <label>Período (até)</label>
+                <input type="date" name="periodo_ate" value="{{ f_periodo_ate }}">
+            </div>
+            <div class="form-row">
+                <label>Cliente</label>
+                <select name="cliente">
+                    <option value="">Todos</option>
+                    {% for client in dash_clients %}
+                    <option value="{{ client.pk }}" {% if f_dash_cliente == client.pk|stringformat:"s" %}selected{% endif %}>{{ client.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-row">
+                <label>Responsável</label>
+                <select name="responsavel">
+                    <option value="">Todos</option>
+                    {% for owner in dash_owners %}
+                    <option value="{{ owner.pk }}" {% if f_dash_responsavel == owner.pk|stringformat:"s" %}selected{% endif %}>{{ owner.get_username }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-row">
+                <label>Status</label>
+                <select name="status">
+                    <option value="">Todos</option>
+                    {% for value, label in dash_status_choices %}
+                    <option value="{{ value }}" {% if f_dash_status == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-row">
+                <label>Centro de custo</label>
+                <select name="centro_custo">
+                    <option value="">Todos</option>
+                    {% for cc in dash_cost_centers %}
+                    <option value="{{ cc.pk }}" {% if f_dash_centro_custo == cc.pk|stringformat:"s" %}selected{% endif %}>{{ cc.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-row">
+                <label>Setor</label>
+                <select name="grupo">
+                    <option value="">Todos</option>
+                    {% for sector in dash_sectors %}
+                    <option value="{{ sector.pk }}" {% if f_dash_setor == sector.pk|stringformat:"s" %}selected{% endif %}>{{ sector.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="card__foot actions-row">
+            <button type="submit" class="btn btn--primary">Filtrar</button>
+            {% if dash_has_filters %}<a href="{% url 'management' %}" class="btn btn--ghost">Limpar</a>{% endif %}
+        </div>
+    </div>
+</form>
+
+<div class="stat-grid">
+    <div class="stat-card">
+        <div class="stat-card__icon stat-card__icon--neutral">{% include "_icon.html" with name="activity" %}</div>
+        <div class="value">{{ dash_total }}</div>
+        <div class="label">Total de atividades</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__icon stat-card__icon--info">{% include "_icon.html" with name="task" %}</div>
+        <div class="value">{{ dash_em_andamento }}</div>
+        <div class="label">Em andamento</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__icon stat-card__icon--warning">{% include "_icon.html" with name="clock" %}</div>
+        <div class="value">{{ dash_pendentes }}</div>
+        <div class="label">Pendentes</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__icon stat-card__icon--success">{% include "_icon.html" with name="check" %}</div>
+        <div class="value">{{ dash_concluidas }}</div>
+        <div class="label">Concluídas (sucesso)</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__icon stat-card__icon--neutral">{% include "_icon.html" with name="block" %}</div>
+        <div class="value">{{ dash_declinadas }}</div>
+        <div class="label">Declinadas</div>
+        <div class="hint">Atividades canceladas</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__icon stat-card__icon--danger">{% include "_icon.html" with name="alert" %}</div>
+        <div class="value">{{ dash_atrasadas }}</div>
+        <div class="label">Atrasadas</div>
+    </div>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-card">
+        <div class="stat-card__icon stat-card__icon--primary">{% include "_icon.html" with name="clock" %}</div>
+        <div class="value">{% if dash_tempo_medio %}{{ dash_tempo_medio }} <small>dias</small>{% else %}—{% endif %}</div>
+        <div class="label">Tempo médio de conclusão</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__icon stat-card__icon--success">{% include "_icon.html" with name="check" %}</div>
+        <div class="value">{% if dash_taxa_sucesso is not None %}{{ dash_taxa_sucesso }}<small>%</small>{% else %}—{% endif %}</div>
+        <div class="label">Taxa de sucesso</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__icon stat-card__icon--neutral">{% include "_icon.html" with name="block" %}</div>
+        <div class="value">{% if dash_taxa_declinio is not None %}{{ dash_taxa_declinio }}<small>%</small>{% else %}—{% endif %}</div>
+        <div class="label">Taxa de declínio</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__icon stat-card__icon--warning">{% include "_icon.html" with name="alert" %}</div>
+        <div class="value">{{ dash_concluidas_pendencias }}</div>
+        <div class="label">Concluídas com pendências</div>
+        <div class="hint">Tiveram devolução no caminho</div>
+    </div>
+</div>
+
+<div class="split">
+    <div>
+        <div class="card card--flush">
+            <div class="card__head"><h2>Filas por setor</h2></div>
+            {% if dash_filas_por_setor %}
+            <div class="table-wrap">
+                <table class="responsive">
+                    <thead><tr><th>Setor</th><th>Na fila</th><th class="col-actions">Ações</th></tr></thead>
+                    <tbody>
+                    {% for sector in dash_filas_por_setor %}
+                    <tr>
+                        <td data-label="Setor"><span class="title">{{ sector.name }}</span></td>
+                        <td data-label="Na fila">{{ sector.queue_size }}</td>
+                        <td data-label="Ações" class="col-actions"><a href="{% url 'queue-sector' sector.pk %}">Ver fila</a></td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="card__body"><p class="muted" style="margin:0">Nenhum setor cadastrado.</p></div>
+            {% endif %}
+        </div>
+
+        <div class="card card--flush">
+            <div class="card__head"><h2>Atividades com maior atraso</h2></div>
+            {% if dash_maiores_atrasos %}
+            <div class="table-wrap">
+                <table class="responsive">
+                    <thead><tr><th>ID</th><th>Cliente</th><th>Título</th><th>Responsável</th><th>Prazo</th></tr></thead>
+                    <tbody>
+                    {% for activity in dash_maiores_atrasos %}
+                    <tr>
+                        <td data-label="ID"><span class="id-badge">{{ activity.code|default:"—" }}</span></td>
+                        <td data-label="Cliente">{{ activity.client.name|default:"—" }}</td>
+                        <td data-label="Título"><a href="{% url 'activity-detail' activity.pk %}">{{ activity.title }}</a></td>
+                        <td data-label="Responsável">{{ activity.owner.get_username }}</td>
+                        <td data-label="Prazo">{{ activity.requested_deadline|date:"d/m/Y H:i" }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="card__body"><p class="muted" style="margin:0">Nenhuma atividade atrasada no recorte atual.</p></div>
+            {% endif %}
+        </div>
+
+        <div class="card card--flush">
+            <div class="card__head"><h2>Atividades recentemente concluídas</h2></div>
+            {% if dash_recem_concluidas %}
+            <div class="table-wrap">
+                <table class="responsive">
+                    <thead><tr><th>ID</th><th>Cliente</th><th>Título</th><th>Responsável</th><th>Concluída em</th></tr></thead>
+                    <tbody>
+                    {% for activity in dash_recem_concluidas %}
+                    <tr>
+                        <td data-label="ID"><span class="id-badge">{{ activity.code|default:"—" }}</span></td>
+                        <td data-label="Cliente">{{ activity.client.name|default:"—" }}</td>
+                        <td data-label="Título"><a href="{% url 'activity-detail' activity.pk %}">{{ activity.title }}</a></td>
+                        <td data-label="Responsável">{{ activity.owner.get_username }}</td>
+                        <td data-label="Concluída em">{{ activity.completed_at|date:"d/m/Y H:i" }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="card__body"><p class="muted" style="margin:0">Nenhuma atividade concluída no recorte atual.</p></div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div>
+        <div class="card card--flush">
+            <div class="card__head"><h2>Atividades por cliente</h2></div>
+            {% if dash_por_cliente %}
+            <div class="table-wrap">
+                <table class="responsive">
+                    <thead><tr><th>Cliente</th><th>Atividades</th></tr></thead>
+                    <tbody>
+                    {% for row in dash_por_cliente %}
+                    <tr>
+                        <td data-label="Cliente">{{ row.client__name }}</td>
+                        <td data-label="Atividades">{{ row.total }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="card__body"><p class="muted" style="margin:0">Nenhuma atividade com cliente no recorte atual.</p></div>
+            {% endif %}
+        </div>
+
+        <div class="card card--flush">
+            <div class="card__head"><h2>Desempenho por responsável</h2></div>
+            {% if dash_por_responsavel %}
+            <div class="table-wrap">
+                <table class="responsive">
+                    <thead><tr><th>Responsável</th><th>Total</th><th>Concluídas</th></tr></thead>
+                    <tbody>
+                    {% for row in dash_por_responsavel %}
+                    <tr>
+                        <td data-label="Responsável">{{ row.owner__username }}</td>
+                        <td data-label="Total">{{ row.total }}</td>
+                        <td data-label="Concluídas">{{ row.concluidas }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="card__body"><p class="muted" style="margin:0">Nenhuma atividade no recorte atual.</p></div>
+            {% endif %}
+        </div>
+
+        <div class="card card--flush">
+            <div class="card__head"><h2>Por centro de custo</h2></div>
+            {% if dash_por_centro_custo %}
+            <div class="table-wrap">
+                <table class="responsive">
+                    <thead><tr><th>Centro de custo</th><th>Atividades</th></tr></thead>
+                    <tbody>
+                    {% for row in dash_por_centro_custo %}
+                    <tr>
+                        <td data-label="Centro de custo">{{ row.cost_center__name }}</td>
+                        <td data-label="Atividades">{{ row.total }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="card__body"><p class="muted" style="margin:0">Nenhuma atividade com centro de custo no recorte atual.</p></div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<hr style="border:none; border-top:1px solid var(--border); margin: 6px 0 22px">
+
 {# Indicadores voltados à decisão, não à exibição de totais (Benchmark §10) #}
 <div class="stat-grid">
     <a href="{% url 'task-list' %}?tab=setor" class="stat-card">
@@ -42,28 +310,6 @@
 
 <div class="split">
     <div>
-        <div class="card card--flush">
-            <div class="card__head"><h2>Filas por setor</h2></div>
-            {% if sectors %}
-            <div class="table-wrap">
-                <table class="responsive">
-                    <thead><tr><th>Setor</th><th>Na fila</th><th class="col-actions">Ações</th></tr></thead>
-                    <tbody>
-                    {% for sector in sectors %}
-                    <tr>
-                        <td data-label="Setor"><span class="title">{{ sector.name }}</span></td>
-                        <td data-label="Na fila">{{ sector.queue_size }}</td>
-                        <td data-label="Ações" class="col-actions"><a href="{% url 'queue-sector' sector.pk %}">Ver fila</a></td>
-                    </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% else %}
-            <div class="card__body"><p class="muted" style="margin:0">Nenhum setor cadastrado.</p></div>
-            {% endif %}
-        </div>
-
         <div class="card card--flush">
             <div class="card__head">
                 <h2>Atrasos</h2>

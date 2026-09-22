@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Aprovar pendência — LPS{% endblock %}
+
+{% block content %}
+<div class="modal-backdrop">
+    <div class="modal">
+        <div class="modal__head">
+            <div>
+                <h2>Aprovar pendência</h2>
+                <div class="sub">{{ activity.title }}</div>
+            </div>
+            <a href="{% url 'activity-detail' activity.pk %}" class="modal__close" title="Fechar">&times;</a>
+        </div>
+
+        <form method="post">
+            {% csrf_token %}
+            <div class="modal__body">
+                {% if form.non_field_errors %}
+                <ul class="messages">
+                    {% for error in form.non_field_errors %}<li class="message message--error">{{ error }}</li>{% endfor %}
+                </ul>
+                {% endif %}
+
+                {% if pendency %}
+                <div class="info-grid" style="margin-bottom:16px">
+                    <div>
+                        <div class="k">Motivo</div>
+                        <div class="v">{{ pendency.get_reason_display }}</div>
+                    </div>
+                    <div>
+                        <div class="k">Marcada por</div>
+                        <div class="v">{{ pendency.opened_by.get_username }}</div>
+                    </div>
+                    <div>
+                        <div class="k">Prazo para decisão</div>
+                        <div class="v{% if not pendency.decision_deadline %} muted{% endif %}">{{ pendency.decision_deadline|date:"d/m/Y H:i"|default:"—" }}</div>
+                    </div>
+                    <div>
+                        <div class="k">Devolve para</div>
+                        <div class="v{% if not pendency.previous_owner %} muted{% endif %}">{{ pendency.previous_owner.get_username|default:"—" }}</div>
+                    </div>
+                    <div class="full">
+                        <div class="k">Comentário</div>
+                        <div class="v">{{ pendency.comment|linebreaksbr }}</div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="message message--info">
+                    Ao aprovar, a atividade volta com status "Em andamento" para quem a designou.
+                </div>
+
+                <div class="form-row">
+                    <label for="{{ form.comment.id_for_label }}">{{ form.comment.label }}</label>
+                    {{ form.comment }}
+                    {% if form.comment.errors %}<ul class="errorlist">{% for e in form.comment.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                </div>
+            </div>
+            <div class="modal__foot">
+                <a href="{% url 'activity-detail' activity.pk %}" class="btn">Cancelar</a>
+                <button type="submit" class="btn btn--primary">{% include "_icon.html" with name="check" %} Aprovar</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

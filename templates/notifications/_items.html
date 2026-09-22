@@ -63,11 +63,13 @@
                         <a href="{% url 'task-detail' n.task_id %}#prazo" class="btn btn--soft-danger">Recusar</a>
                     {% elif n.event_type == "DEADLINE_CONFLICT" and n.open_conflict_id %}
                         <a href="{% url 'conflict-resolve' n.open_conflict_id %}" class="btn btn--primary">Analisar</a>
+                    {% elif n.event_type == "ACTIVITY_APPROVAL_NEEDED" and n.activity_id %}
+                        <a href="{% url 'activity-detail' n.activity_id %}#pendencia" class="btn btn--primary">Analisar pendência</a>
                     {% elif n.category == "mencao" %}
                         {% if n.task_id %}
                         <a href="{% url 'task-detail' n.task_id %}#conversa" class="btn">Ver menção</a>
                         {% else %}
-                        <a href="{% url 'activity-detail' n.activity_id %}?tab=conversa" class="btn">Ver menção</a>
+                        <a href="{% url 'activity-detail' n.activity_id %}#feed-panel" class="btn">Ver menção</a>
                         {% endif %}
                     {% elif n.category == "delegacao" %}
                         <a href="{% if n.task_id %}{% url 'task-detail' n.task_id %}{% else %}{% url 'activity-detail' n.activity_id %}{% endif %}" class="btn btn--primary">Abrir atividade</a>
@@ -94,7 +96,7 @@
                             {% include "_icon.html" with name="clock" %} Ver histórico
                         </a>
                         {% elif n.activity_id %}
-                        <a href="{% url 'activity-detail' n.activity_id %}?tab=historico">
+                        <a href="{% url 'activity-detail' n.activity_id %}#feed-panel">
                             {% include "_icon.html" with name="clock" %} Ver histórico
                         </a>
                         {% endif %}

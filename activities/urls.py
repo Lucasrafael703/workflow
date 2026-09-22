@@ -13,8 +13,28 @@ urlpatterns = [
     path("atividades/<int:pk>/cancelar/", views.ActivityCancelView.as_view(), name="activity-cancel"),
     path("atividades/<int:pk>/reabrir/", views.ActivityReopenView.as_view(), name="activity-reopen"),
     path("atividades/<int:pk>/dono/", views.ActivityChangeOwnerView.as_view(), name="activity-change-owner"),
+    path("atividades/<int:pk>/assumir/", views.ActivityClaimView.as_view(), name="activity-claim"),
+    path("atividades/<int:pk>/finalizar/", views.ActivityFinalizeView.as_view(), name="activity-finalize"),
+    path("atividades/<int:pk>/pendente/", views.ActivityMarkPendingView.as_view(), name="activity-mark-pending"),
+    path(
+        "atividades/<int:pk>/pendencia/aprovar/",
+        views.ActivityApprovePendencyView.as_view(),
+        name="activity-approve-pendency",
+    ),
     path("atividades/<int:pk>/mensagem/", views.ActivityMessageCreateView.as_view(), name="activity-message"),
+    path("atividades/<int:pk>/continuar/", views.ActivityContinueView.as_view(), name="activity-continue"),
     path("atividades/<int:activity_pk>/tarefas/nova/", views.TaskCreateView.as_view(), name="task-create"),
+    path(
+        "atividades/<int:activity_pk>/tarefas/rapida/",
+        views.TaskQuickCreateView.as_view(),
+        name="task-quick-create",
+    ),
+    path("atividades/<int:pk>/anexos/", views.ActivityAttachmentUploadView.as_view(), name="activity-attachment-upload"),
+    path(
+        "atividades/<int:pk>/anexos/<int:attachment_pk>/remover/",
+        views.ActivityAttachmentDeleteView.as_view(),
+        name="activity-attachment-delete",
+    ),
     # Tarefas
     path("tarefas/", views.TaskListView.as_view(), name="task-list"),
     path("tarefas/<int:pk>/", views.TaskDetailView.as_view(), name="task-detail"),

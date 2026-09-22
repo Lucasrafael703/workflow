@@ -1050,8 +1050,8 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     }
     .sidebar__toggle:hover { background: var(--surface-alt); }
     .container { padding: 18px 14px 50px; }
-    .split, .split--even, .form-layout { grid-template-columns: 1fr; }
-    .summary-panel { position: static; }
+    .split, .split--even, .split--history, .form-layout { grid-template-columns: 1fr; }
+    .summary-panel, .side-scroll { position: static; max-height: none; }
     .topbar__user .who { display: none; }
 }
 
@@ -1091,3 +1091,184 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     .sidebar, .topbar, .page-head__actions, .toolbar { display: none; }
     .content { margin: 0; padding: 0; }
 }
+
+/* ==========================================================================
+   Tela de atividade — campos das Regras 1-13 (cliente, urgência, grupo
+   designado, tarefa rápida em popup, anexos por atividade).
+   ========================================================================== */
+
+/* Urgência: MEDIA reaproveita a cor neutra/info já usada para outros status
+   "normais"; ALTA/BAIXA já existiam no sistema de tags. */
+.tag--MEDIA { background: var(--info-soft); color: var(--info); }
+
+/* Segmentado simples a partir do RadioSelect padrão do Django — sem widget
+   próprio, só o CSS lendo a marcação genérica de <ul><li><label><input>. */
+.form-row--urgency ul { display: flex; gap: 8px; flex-wrap: wrap; list-style: none; padding: 0; margin: 4px 0 0; }
+.form-row--urgency li { margin: 0; }
+.form-row--urgency label {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 14px; border: 1px solid var(--border-strong); border-radius: 999px;
+    cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-2);
+}
+.form-row--urgency input[type="radio"] { accent-color: var(--primary); margin: 0; }
+.form-row--urgency input[type="radio"]:checked ~ * { color: var(--primary); }
+.form-row--urgency label:has(input:checked) { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); }
+
+/* Identificador gerado automaticamente (Regra 12): sempre ao lado do título,
+   nunca como se fosse editável. */
+.id-badge {
+    display: inline-block; vertical-align: middle;
+    padding: 2px 9px; border-radius: 999px;
+    background: var(--neutral-soft); color: var(--text-2);
+    font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums;
+    letter-spacing: .02em;
+}
+
+/* Link de "criar novo X sem sair da tela" (centro de custo, cliente já usa o
+   combo-picker próprio) — cor primária, nunca a cor de perigo do .link-button. */
+.field-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: none; border: none; padding: 6px 0 0; margin: 0;
+    color: var(--primary); cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 600;
+}
+.field-link:hover { text-decoration: underline; }
+.field-link svg { width: 1em; height: 1em; flex: 0 0 1em; }
+.field-hint { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.field-hint:empty { display: none; }
+
+/* Disclosure compacto para a descrição opcional dentro do popup de tarefa */
+.disclosure--mini { margin-bottom: 0; }
+.disclosure--mini > summary { padding: 9px 12px; font-size: 12.5px; }
+.disclosure--mini .disclosure__body { padding: 12px; }
+
+/* Área de upload de anexos (Regra 13) */
+.dropzone {
+    border: 1px dashed var(--border-strong); border-radius: var(--radius);
+    padding: 14px 16px; background: var(--surface-alt);
+}
+.dropzone .form-row { margin-bottom: 10px; }
+
+/* ==========================================================================
+   Nova atividade — campo único, sem coluna de resumo (revisão da tela):
+   uma tela maior e mais espaçosa, com os mesmos campos e comandos.
+   ========================================================================== */
+.card--form { padding: 26px 32px; }
+.form-title-bar {
+    font-size: 16px; margin: 0 0 22px; padding-bottom: 12px;
+    border-bottom: 2px solid var(--primary); display: inline-block;
+}
+.form-grid--wide { gap: 6px 32px; }
+.form-grid--wide .form-row { margin-bottom: 22px; }
+.form-grid--wide .form-row--full { grid-column: 1 / -1; }
+.form-grid--wide .form-row input[type="text"],
+.form-grid--wide .form-row input[type="search"],
+.form-grid--wide .form-row input[type="datetime-local"],
+.form-grid--wide .form-row select,
+.form-grid--wide .form-row textarea,
+.form-grid--wide .form-row .person-picker__trigger {
+    padding: 12px 14px; font-size: 14.5px;
+}
+.form-grid--wide .form-row textarea { min-height: 130px; }
+@media (max-width: 860px) { .form-grid--wide { grid-template-columns: 1fr; } }
+
+/* ==========================================================================
+   Fila de atividades — filtros amplos (cliente, status, urgência, grupo,
+   centro de custo, datas) e ações rápidas (Assumir/Repassar) na tabela.
+   ========================================================================== */
+.filters-card .card__head { padding-bottom: 0; border-bottom: none; }
+.filters-card .filters-grid { padding: 14px 20px 4px; }
+.filters-card .card__foot { background: transparent; }
+
+/* ==========================================================================
+   Detalhe da atividade em uma tela só — sem abas: campos e tarefas na
+   coluna principal, histórico (comentários + anexos + eventos) na lateral.
+   ========================================================================== */
+.split--history { grid-template-columns: 3fr 2fr; }
+.side-scroll { position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow-y: auto; }
+
+.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 28px; }
+.info-grid .k { color: var(--muted); font-size: 11.5px; font-weight: 600; margin-bottom: 3px; }
+.info-grid .v { font-weight: 600; font-size: 13.5px; }
+.info-grid .v.muted { font-weight: 500; }
+.info-grid .full { grid-column: 1 / -1; }
+@media (max-width: 720px) { .info-grid { grid-template-columns: 1fr; } }
+
+/* Formulário único de "continuar" (comentário e/ou anexo) no topo do
+   histórico lateral — uma só ação para dar continuidade, sem trocar de aba. */
+.continue-form textarea {
+    width: 100%; min-height: 70px; padding: 9px 12px;
+    border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+    font: inherit; background: var(--surface); color: var(--text); resize: vertical;
+}
+.continue-form textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(27, 98, 196, .13); }
+.continue-form__foot { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+
+/* Linha do tempo unificada: histórico do sistema, comentários e anexos
+   juntos, ordenados por data (em vez de três abas separadas). */
+.feed { list-style: none; padding: 0; margin: 16px 0 0; }
+.feed-item { display: flex; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.feed-item:last-child { border-bottom: none; }
+.feed-item .avatar {
+    flex: 0 0 auto; width: 28px; height: 28px; border-radius: 50%;
+    background: var(--primary-soft); color: var(--primary);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 11px;
+}
+.feed-item__icon {
+    flex: 0 0 auto; width: 28px; height: 28px; border-radius: 50%;
+    background: var(--neutral-soft); color: var(--text-2);
+    display: inline-flex; align-items: center; justify-content: center;
+}
+.feed-item__icon svg { width: 14px; height: 14px; }
+.feed-item__icon--muted { background: var(--surface-alt); color: var(--muted); }
+.feed-item__meta { font-size: 13px; }
+.feed-item__meta .when { color: var(--muted); font-size: 11.5px; margin-left: 6px; }
+.feed-item__body { margin-top: 3px; white-space: pre-wrap; font-size: 13px; }
+.feed-item--history .feed-item__meta { color: var(--text-2); }
+
+/* Popup único de "Finalizar atividade": um resultado explícito por cartão,
+   sempre com comentário obrigatório (substitui Concluir/Cancelar soltos). */
+.outcome-picker {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px; margin-top: 6px;
+}
+.outcome-card {
+    position: relative; display: flex; flex-direction: column; gap: 6px;
+    padding: 14px; border: 1.5px solid var(--border-strong); border-radius: var(--radius);
+    cursor: pointer; background: var(--surface); transition: border-color .12s ease, box-shadow .12s ease;
+}
+.outcome-card:hover { border-color: var(--muted); }
+.outcome-card input[type="radio"] { position: absolute; top: 12px; right: 12px; margin: 0; }
+.outcome-card__icon {
+    width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+    background: var(--neutral-soft); color: var(--text-2);
+}
+.outcome-card__icon svg { width: 15px; height: 15px; }
+.outcome-card__label { font-weight: 700; font-size: 13.5px; }
+.outcome-card__hint { color: var(--muted); font-size: 12px; line-height: 1.35; }
+.outcome-card--sucesso .outcome-card__icon { background: var(--success-soft); color: var(--success); }
+.outcome-card--concluido_com_pendencias .outcome-card__icon { background: var(--warning-soft); color: var(--warning); }
+.outcome-card--declinado .outcome-card__icon { background: var(--danger-soft); color: var(--danger); }
+.outcome-card--cancelado .outcome-card__icon { background: var(--neutral-soft); color: var(--text-2); }
+.outcome-card:has(input:checked) { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(27, 98, 196, .13); }
+
+/* Popup de "Definir como pendente": campos extras aparecem só para o
+   motivo escolhido (prazo obrigatório nos que pedem aprovação do gestor). */
+.pending-extra { display: none; }
+.pending-extra.is-visible { display: block; }
+
+/* Faixa de pendência na tela da atividade (pedidos 2-4): motivo, quem
+   marcou e o prazo para o gestor decidir, sempre visível no topo. */
+.pendency-banner {
+    display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px;
+    border: 1px solid #f0dcb4; background: var(--warning-soft); border-radius: var(--radius);
+    margin-bottom: 16px;
+}
+.pendency-banner__icon { flex: 0 0 auto; width: 22px; height: 22px; color: var(--warning); }
+.pendency-banner__title { font-weight: 700; font-size: 13.5px; color: #8a5a0f; }
+.pendency-banner__body { font-size: 13px; color: var(--text); margin-top: 3px; }
+.pendency-banner__meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.pendency-banner__actions { margin-left: auto; flex: 0 0 auto; }
+
+.field--check { display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 13.5px; cursor: pointer; }
+.field--check input[type="checkbox"] { margin: 0; }

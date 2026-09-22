@@ -88,6 +88,37 @@ class Site(models.Model):
         return self.name
 
 
+class Client(models.Model):
+    """Cliente da organização — pessoa física ou jurídica que solicita a atividade.
+
+    Distinto de `Company` (empresa operacional da própria organização, usada
+    para separar contratos/unidades internas): o cliente é quem pede o
+    serviço, e uma atividade pode ou não ter um associado.
+    """
+
+    organization = models.ForeignKey(
+        Organization, verbose_name="organização", on_delete=models.CASCADE, related_name="clients"
+    )
+    name = models.CharField("nome", max_length=150)
+    document = models.CharField("CNPJ/CPF", max_length=20, blank=True)
+    phone = models.CharField("telefone", max_length=30, blank=True)
+    email = models.EmailField("e-mail", blank=True)
+    address = models.CharField("endereço", max_length=255, blank=True)
+    is_active = models.BooleanField("ativo", default=True)
+    created_at = models.DateTimeField("criado em", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "cliente"
+        verbose_name_plural = "clientes"
+        ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(fields=["organization", "name"], name="unique_client_name_per_org"),
+        ]
+
+    def __str__(self):
+        return self.name
+
+
 class CostCenter(models.Model):
     """Centro de custo (Regras 10 §11). Opcional; pode estar ligado a uma obra."""
 

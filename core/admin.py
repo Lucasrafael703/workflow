@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Company, CostCenter, Organization, Sector, Site
+from .models import Client, Company, CostCenter, Organization, Sector, Site
 
 
 @admin.register(Organization)
@@ -36,3 +36,10 @@ class CostCenterAdmin(admin.ModelAdmin):
     list_display = ("name", "organization", "site", "is_active")
     list_filter = ("organization", "is_active")
     search_fields = ("name",)
+
+
+@admin.register(Client)
+class ClientAdmin(admin.ModelAdmin):
+    list_display = ("name", "organization", "document", "phone", "is_active")
+    list_filter = ("organization", "is_active")
+    search_fields = ("name", "document", "phone", "email")

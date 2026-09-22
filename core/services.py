@@ -1,6 +1,6 @@
 from django.db import transaction
 
-from .models import Company, CostCenter, Sector, Site
+from .models import Client, Company, CostCenter, Sector, Site
 
 
 class CadastroError(Exception):
@@ -127,6 +127,10 @@ class SiteService(SimpleCadastroService):
 
 class CostCenterService(SimpleCadastroService):
     model = CostCenter
+
+
+class ClientService(SimpleCadastroService):
+    model = Client
 
 
 class ReturnReasonService(SimpleCadastroService):

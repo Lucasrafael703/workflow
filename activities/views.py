@@ -1,8 +1,10 @@
 from datetime import timedelta
 
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
-from django.db.models import Count, Prefetch, Q
+from django.db.models import Avg, Count, F, Prefetch, Q
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils import timezone
@@ -13,10 +15,14 @@ from audit.models import AuditLog
 from acessos import catalog
 from acessos.services import AuthorizationService
 from core.mixins import ActionRequiredMixin, OrganizationRequiredMixin, user_sectors
-from core.models import Sector
+from core.models import Client, CostCenter, Sector
 
 from .forms import (
+    ActivityApprovePendencyForm,
+    ActivityAttachmentForm,
     ActivityEditForm,
+    ActivityFinalizeForm,
+    ActivityPendingForm,
     ActivityQuickCreateForm,
     AssignmentRejectForm,
     CancelForm,
@@ -30,19 +36,24 @@ from .forms import (
     ReorderForm,
     TaskBlockForm,
     TaskForm,
+    TaskQuickCreateForm,
     TaskReturnForm,
 )
 from .models import (
     Activity,
+    ActivityAttachment,
+    ActivityPendency,
     DeadlineConflict,
     DeadlineProposal,
     QueueEntry,
     Task,
     TaskAssignment,
     TaskExecutor,
+    TaskReturn,
     WorkSession,
 )
 from .services import (
+    ActivityAttachmentService,
     ActivityError,
     ActivityService,
     DeadlineService,
@@ -50,6 +61,14 @@ from .services import (
     QueueService,
     TaskService,
 )
+
+
+User = get_user_model()
+
+
+def _is_ajax(request):
+    """Requisição feita pelo modal via JS (LPSModal.open), não navegação de página."""
+    return request.headers.get("X-Requested-With") == "XMLHttpRequest"
 
 OPEN_TASK_STATUSES = [
     Task.Status.DISPONIVEL,
@@ -224,16 +243,34 @@ class HomeView(OrganizationRequiredMixin, TemplateView):
 
 
 class ActivityListView(OrganizationRequiredMixin, ListView):
+    """Fila de atividades (doc 09, ampliado pelo pedido de filtros §1): busca
+    por cliente/título/ID, filtros por status, urgência, cliente, grupo,
+    centro de custo e datas — os mesmos campos criados na Regra 1-13."""
+
     template_name = "activities/activity_list.html"
     context_object_name = "activities"
     paginate_by = 20
+
+    FILTER_KEYS = (
+        "status",
+        "urgencia",
+        "cliente",
+        "grupo",
+        "centro_custo",
+        "criado_de",
+        "criado_ate",
+        "prazo_de",
+        "prazo_ate",
+    )
 
     def get_queryset(self):
         user = self.request.user
         tab = self.request.GET.get("tab", "minhas")
         queryset = Activity.objects.filter(organization=self.organization)
 
-        if tab == "participando":
+        if tab == "grupo":
+            queryset = queryset.filter(sector__in=user_sectors(user))
+        elif tab == "participando":
             queryset = queryset.filter(
                 tasks__executors__user=user, tasks__executors__removed_at__isnull=True
             ).exclude(owner=user)
@@ -248,25 +285,55 @@ class ActivityListView(OrganizationRequiredMixin, ListView):
         else:
             queryset = queryset.filter(owner=user)
 
-        if tab != "concluidas":
-            queryset = queryset.exclude(
-                status__in=[Activity.Status.CONCLUIDA, Activity.Status.CANCELADA]
-            )
-
         search = self.request.GET.get("q", "").strip()
         if search:
             queryset = queryset.filter(
                 Q(title__icontains=search)
-                | Q(description__icontains=search)
+                | Q(code__icontains=search)
+                | Q(client__name__icontains=search)
                 | Q(site__name__icontains=search)
             )
 
-        sector = self.request.GET.get("sector")
-        if sector:
-            queryset = queryset.filter(tasks__sector_id=sector)
+        status = self.request.GET.get("status", "")
+        if status:
+            queryset = queryset.filter(status=status)
+        elif tab != "concluidas":
+            # Sem filtro explícito de status, cada visão esconde o que já
+            # terminou — quem quiser ver concluída/cancelada escolhe o status.
+            queryset = queryset.exclude(status__in=[Activity.Status.CONCLUIDA, Activity.Status.CANCELADA])
+
+        urgency = self.request.GET.get("urgencia", "")
+        if urgency:
+            queryset = queryset.filter(urgency=urgency)
+
+        client_id = self.request.GET.get("cliente", "")
+        if client_id:
+            queryset = queryset.filter(client_id=client_id)
+
+        sector_id = self.request.GET.get("grupo", "")
+        if sector_id:
+            queryset = queryset.filter(sector_id=sector_id)
+
+        cost_center_id = self.request.GET.get("centro_custo", "")
+        if cost_center_id:
+            queryset = queryset.filter(cost_center_id=cost_center_id)
+
+        created_from = self.request.GET.get("criado_de", "")
+        if created_from:
+            queryset = queryset.filter(created_at__date__gte=created_from)
+        created_to = self.request.GET.get("criado_ate", "")
+        if created_to:
+            queryset = queryset.filter(created_at__date__lte=created_to)
+
+        deadline_from = self.request.GET.get("prazo_de", "")
+        if deadline_from:
+            queryset = queryset.filter(requested_deadline__date__gte=deadline_from)
+        deadline_to = self.request.GET.get("prazo_ate", "")
+        if deadline_to:
+            queryset = queryset.filter(requested_deadline__date__lte=deadline_to)
 
         return (
-            queryset.select_related("owner", "company", "site")
+            queryset.select_related("owner", "company", "site", "client", "sector", "cost_center")
             .annotate(
                 total_tasks=Count("tasks", distinct=True),
                 done_tasks=Count("tasks", filter=Q(tasks__status=Task.Status.CONCLUIDA), distinct=True),
@@ -286,12 +353,42 @@ class ActivityListView(OrganizationRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["tab"] = self.request.GET.get("tab", "minhas")
+        user = self.request.user
+        tab = self.request.GET.get("tab", "minhas")
+        my_sector_ids = set(user_sectors(user).values_list("id", flat=True))
+
+        context["tab"] = tab
         context["search"] = self.request.GET.get("q", "")
         context["ordem"] = self.request.GET.get("ordem", "prazo")
+        context["can_view_all"] = can(user, catalog.ATIVIDADE_VISUALIZAR_TODAS)
+
+        # Opções dos filtros: mesmos campos criados na Regra 1-13.
+        params = self.request.GET.copy()
+        params.pop("page", None)
+        context["querystring"] = params.urlencode()
+
+        context["status_choices"] = Activity.Status.choices
+        context["urgency_choices"] = Activity.Urgency.choices
+        context["clients"] = Client.objects.filter(organization=self.organization, is_active=True)
         context["sectors"] = Sector.objects.filter(organization=self.organization, is_active=True)
-        context["selected_sector"] = self.request.GET.get("sector", "")
-        context["can_view_all"] = can(self.request.user, catalog.ATIVIDADE_VISUALIZAR_TODAS)
+        context["cost_centers"] = CostCenter.objects.filter(organization=self.organization, is_active=True)
+        for key in self.FILTER_KEYS:
+            context[f"f_{key}"] = self.request.GET.get(key, "")
+        context["has_filters"] = bool(self.request.GET.get("q")) or any(
+            self.request.GET.get(key) for key in self.FILTER_KEYS
+        )
+
+        for activity in context["activities"]:
+            activity.can_assumir = (
+                activity.sector_id in my_sector_ids
+                and activity.owner_id != user.id
+                and activity.status not in (Activity.Status.CONCLUIDA, Activity.Status.CANCELADA)
+                and can(user, catalog.ATIVIDADE_ASSUMIR, activity)
+            )
+            activity.can_repassar = activity.status not in (
+                Activity.Status.CONCLUIDA,
+                Activity.Status.CANCELADA,
+            ) and can(user, catalog.ATIVIDADE_ALTERAR_DONO, activity)
         return context
 
 
@@ -304,6 +401,7 @@ class ActivityCreateView(OrganizationRequiredMixin, FormView):
         kwargs["organization"] = self.organization
         kwargs["user"] = self.request.user
         kwargs["can_create_person"] = can(self.request.user, catalog.USUARIO_CRIAR)
+        kwargs["can_create_client"] = can(self.request.user, catalog.CLIENTE_GERIR)
         return kwargs
 
     def form_valid(self, form):
@@ -319,6 +417,10 @@ class ActivityCreateView(OrganizationRequiredMixin, FormView):
                 site=data.get("site"),
                 cost_center=data.get("cost_center"),
                 requested_deadline=data.get("requested_deadline"),
+                client=data.get("client"),
+                urgency=data.get("urgency"),
+                sector=data.get("sector"),
+                address=data.get("address") or "",
             )
         except ActivityError as exc:
             form.add_error(None, str(exc))
@@ -337,18 +439,38 @@ class ActivityCreateView(OrganizationRequiredMixin, FormView):
         return context
 
 
+def build_activity_feed(activity, limit=150):
+    """Uma única linha do tempo lateral, misturando histórico do sistema,
+    comentários e anexos por data — em vez de três abas separadas (pedido 2:
+    "tudo em uma tela e uma aba lateral com o histórico")."""
+    events = []
+    for entry in activity.audit_entries.select_related("user", "task").order_by("-timestamp")[:limit]:
+        events.append({"kind": "history", "timestamp": entry.timestamp, "entry": entry})
+    for message in activity.messages.select_related("author").order_by("-created_at")[:limit]:
+        events.append({"kind": "message", "timestamp": message.created_at, "message": message})
+    for attachment in activity.attachments.select_related("uploaded_by").order_by("-uploaded_at")[:limit]:
+        events.append({"kind": "attachment", "timestamp": attachment.uploaded_at, "attachment": attachment})
+    events.sort(key=lambda event: event["timestamp"], reverse=True)
+    return events[:limit]
+
+
 class ActivityDetailView(OrganizationRequiredMixin, DetailView):
+    """Tudo em uma tela só (pedido 2): campos da criação e tarefas na coluna
+    principal, histórico + comentário + anexos na aba lateral — sem abas
+    para trocar de visão-geral/tarefas/anexos/histórico/conversa."""
+
     template_name = "activities/activity_detail.html"
     context_object_name = "activity"
 
     def get_queryset(self):
         return Activity.objects.filter(organization=self.organization).select_related(
-            "owner", "created_by", "company", "site", "cost_center", "completed_by"
+            "owner", "created_by", "client", "sector", "company", "site", "cost_center", "completed_by"
         )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         activity = self.object
+        user = self.request.user
 
         tasks = list(
             activity.tasks.select_related("sector", "depends_on")
@@ -366,30 +488,54 @@ class ActivityDetailView(OrganizationRequiredMixin, DetailView):
 
         done = sum(1 for t in tasks if t.status == Task.Status.CONCLUIDA)
         open_tasks = [t for t in tasks if t.status in OPEN_TASK_STATUSES]
+        my_sector_ids = set(user_sectors(user).values_list("id", flat=True))
 
         context.update(
             {
-                "tab": self.request.GET.get("tab", "visao-geral"),
                 "tasks": tasks,
                 "tasks_done": done,
                 "tasks_total": len(tasks),
                 "open_tasks": open_tasks,
                 "sectors_involved": sorted({t.sector.name for t in tasks}),
-                "history": activity.audit_entries.select_related("user", "task").order_by("-timestamp")[:100],
-                "history_filter": self.request.GET.get("event", ""),
-                "activity_messages": activity.messages.select_related("author"),
-                "message_form": MessageForm(),
+                "feed": build_activity_feed(activity),
                 "owner_changes": activity.owner_changes.select_related(
                     "previous_owner", "new_owner", "changed_by"
                 ),
-                "can_change_owner": can(self.request.user, catalog.ATIVIDADE_ALTERAR_DONO, activity),
-                "can_cancel": can(self.request.user, catalog.ATIVIDADE_CANCELAR, activity),
-                "can_reopen": can(self.request.user, catalog.ATIVIDADE_REABRIR, activity),
-                "can_complete": can(self.request.user, catalog.ATIVIDADE_CONCLUIR, activity),
-                "can_edit": can(self.request.user, catalog.ATIVIDADE_EDITAR, activity),
-                "can_add_task": can(self.request.user, catalog.TAREFA_CRIAR, activity),
-                "can_message": can(self.request.user, catalog.COMUNICACAO_PARTICIPAR, activity),
-                "is_owner": activity.owner_id == self.request.user.id,
+                "can_change_owner": can(user, catalog.ATIVIDADE_ALTERAR_DONO, activity),
+                "can_assumir": (
+                    activity.sector_id in my_sector_ids
+                    and activity.owner_id != user.id
+                    and activity.status not in (Activity.Status.CONCLUIDA, Activity.Status.CANCELADA)
+                    and can(user, catalog.ATIVIDADE_ASSUMIR, activity)
+                ),
+                "can_cancel": can(user, catalog.ATIVIDADE_CANCELAR, activity),
+                "can_reopen": can(user, catalog.ATIVIDADE_REABRIR, activity),
+                "can_complete": can(user, catalog.ATIVIDADE_CONCLUIR, activity),
+                # Finalizar (popup único) aparece para quem pode concluir OU
+                # cancelar — o popup decide o resultado real, não o botão.
+                "can_finalize": can(user, catalog.ATIVIDADE_CONCLUIR, activity)
+                or can(user, catalog.ATIVIDADE_CANCELAR, activity),
+                "can_mark_pending": (
+                    activity.status in (Activity.Status.ABERTA, Activity.Status.EM_ANDAMENTO)
+                    and can(user, catalog.ATIVIDADE_MARCAR_PENDENTE, activity)
+                ),
+                "can_approve_pendency": (
+                    activity.status == Activity.Status.PENDENTE
+                    and can(user, catalog.ATIVIDADE_APROVAR_PENDENCIA, activity)
+                ),
+                "open_pendency": (
+                    activity.pendencies.select_related("opened_by", "previous_owner")
+                    .filter(status=ActivityPendency.Status.ABERTA)
+                    .order_by("-opened_at")
+                    .first()
+                    if activity.status == Activity.Status.PENDENTE
+                    else None
+                ),
+                "can_edit": can(user, catalog.ATIVIDADE_EDITAR, activity),
+                "can_add_task": can(user, catalog.TAREFA_CRIAR, activity),
+                "can_message": can(user, catalog.COMUNICACAO_PARTICIPAR, activity),
+                "is_owner": activity.owner_id == user.id,
+                "can_manage_attachments": can(user, catalog.ATIVIDADE_EDITAR, activity),
             }
         )
         return context
@@ -406,6 +552,7 @@ class ActivityEditView(OrganizationRequiredMixin, FormView):
         kwargs = super().get_form_kwargs()
         kwargs["organization"] = self.organization
         kwargs["instance"] = self.get_activity()
+        kwargs["can_create_client"] = can(self.request.user, catalog.CLIENTE_GERIR)
         return kwargs
 
     def get_context_data(self, **kwargs):
@@ -507,6 +654,140 @@ class ActivityChangeOwnerView(OrganizationRequiredMixin, FormView):
         return redirect("activity-detail", pk=activity.pk)
 
 
+class ActivityFinalizeView(OrganizationRequiredMixin, FormView):
+    """Popup único de finalização: Sucesso, Concluído com pendências,
+    Declinado ou Cancelado, sempre com comentário obrigatório — no lugar de
+    "Concluir" e "Cancelar" como ações separadas e sem explicação."""
+
+    template_name = "activities/activity_finalize_form.html"
+    form_class = ActivityFinalizeForm
+
+    def get_activity(self):
+        return get_object_or_404(Activity, pk=self.kwargs["pk"], organization=self.organization)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["activity"] = self.get_activity()
+        return context
+
+    def form_valid(self, form):
+        activity = self.get_activity()
+        try:
+            ActivityService.finalize(
+                activity, self.request.user, form.cleaned_data["outcome"], form.cleaned_data["comment"]
+            )
+        except ActivityError as exc:
+            form.add_error(None, str(exc))
+            return self.form_invalid(form)
+        if _is_ajax(self.request):
+            return JsonResponse({"status": activity.status})
+        messages.success(self.request, "Atividade finalizada.")
+        return redirect("activity-detail", pk=activity.pk)
+
+    def form_invalid(self, form):
+        if _is_ajax(self.request):
+            return JsonResponse({"errors": form.errors}, status=400)
+        return super().form_invalid(form)
+
+
+class ActivityMarkPendingView(OrganizationRequiredMixin, FormView):
+    """Popup de "Definir como pendente": motivo + comentário obrigatório;
+    os motivos que pedem aprovação do gestor também exigem prazo — a
+    atividade vai então para a fila dele (pedidos 2 e 3)."""
+
+    template_name = "activities/activity_pending_form.html"
+    form_class = ActivityPendingForm
+
+    def get_activity(self):
+        return get_object_or_404(Activity, pk=self.kwargs["pk"], organization=self.organization)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["activity"] = self.get_activity()
+        context["approval_reasons"] = [reason.value for reason in ActivityPendency.APPROVAL_REASONS]
+        return context
+
+    def form_valid(self, form):
+        activity = self.get_activity()
+        data = form.cleaned_data
+        try:
+            ActivityService.mark_pending(
+                activity,
+                self.request.user,
+                reason=data["reason"],
+                comment=data["comment"],
+                decision_deadline=data.get("decision_deadline"),
+                notify_client=data.get("notify_client", False),
+            )
+        except ActivityError as exc:
+            form.add_error(None, str(exc))
+            return self.form_invalid(form)
+        if _is_ajax(self.request):
+            return JsonResponse({"status": activity.status})
+        messages.success(self.request, "Atividade marcada como pendente.")
+        return redirect("activity-detail", pk=activity.pk)
+
+    def form_invalid(self, form):
+        if _is_ajax(self.request):
+            return JsonResponse({"errors": form.errors}, status=400)
+        return super().form_invalid(form)
+
+
+class ActivityApprovePendencyView(OrganizationRequiredMixin, FormView):
+    """Popup de aprovação da pendência: devolve a atividade para quem a
+    designou, com status "Em andamento" (pedido 4)."""
+
+    template_name = "activities/activity_approve_pendency_form.html"
+    form_class = ActivityApprovePendencyForm
+
+    def get_activity(self):
+        return get_object_or_404(Activity, pk=self.kwargs["pk"], organization=self.organization)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        activity = self.get_activity()
+        context["activity"] = activity
+        context["pendency"] = (
+            activity.pendencies.filter(status=ActivityPendency.Status.ABERTA).order_by("-opened_at").first()
+        )
+        return context
+
+    def form_valid(self, form):
+        activity = self.get_activity()
+        try:
+            ActivityService.approve_pendency(activity, self.request.user, form.cleaned_data.get("comment", ""))
+        except ActivityError as exc:
+            form.add_error(None, str(exc))
+            return self.form_invalid(form)
+        if _is_ajax(self.request):
+            return JsonResponse({"status": activity.status})
+        messages.success(self.request, "Pendência aprovada.")
+        return redirect("activity-detail", pk=activity.pk)
+
+    def form_invalid(self, form):
+        if _is_ajax(self.request):
+            return JsonResponse({"errors": form.errors}, status=400)
+        return super().form_invalid(form)
+
+
+class ActivityClaimView(ServiceActionView):
+    """"Assumir" na fila do grupo (pedido 1 do esquema de fila): vira dono
+    sem precisar de quem tem autorização para transferir para qualquer um."""
+
+    def perform(self, request, pk):
+        activity = get_object_or_404(Activity, pk=pk, organization=self.organization)
+        ActivityService.claim(activity, request.user)
+        messages.success(request, "Atividade assumida — agora está em Minhas atividades.")
+
+    def redirect_to(self):
+        referer = self.request.META.get("HTTP_REFERER")
+        if referer and url_has_allowed_host_and_scheme(
+            referer, allowed_hosts={self.request.get_host()}, require_https=self.request.is_secure()
+        ):
+            return referer
+        return reverse("activity-detail", args=[self.kwargs["pk"]])
+
+
 class ActivityMessageCreateView(ServiceActionView):
     def perform(self, request, pk):
         activity = get_object_or_404(Activity, pk=pk, organization=self.organization)
@@ -516,7 +797,28 @@ class ActivityMessageCreateView(ServiceActionView):
         MessageService.post_activity_message(activity, request.user, form.cleaned_data["body"])
 
     def redirect_to(self):
-        return f"{reverse('activity-detail', args=[self.kwargs['pk']])}?tab=conversa"
+        return reverse("activity-detail", args=[self.kwargs["pk"]])
+
+
+class ActivityContinueView(ServiceActionView):
+    """Continuação da atividade em um único envio (pedido 2): comentário e/ou
+    anexo, sem precisar trocar de aba — ambos opcionais, mas ao menos um dos
+    dois é obrigatório para o envio fazer sentido."""
+
+    def perform(self, request, pk):
+        activity = get_object_or_404(Activity, pk=pk, organization=self.organization)
+        body = (request.POST.get("body") or "").strip()
+        uploaded = request.FILES.get("file")
+        if not body and not uploaded:
+            raise ActivityError("Escreva um comentário ou selecione um arquivo para continuar.")
+        if body:
+            MessageService.post_activity_message(activity, request.user, body)
+        if uploaded:
+            ActivityAttachmentService.add(activity, uploaded, uploaded_by=request.user)
+        messages.success(request, "Atualização adicionada ao histórico.")
+
+    def redirect_to(self):
+        return reverse("activity-detail", args=[self.kwargs["pk"]])
 
 
 # ---------------------------------------------------------------------------
@@ -711,6 +1013,86 @@ class TaskCreateView(OrganizationRequiredMixin, FormView):
         if "save_and_add" in self.request.POST:
             return redirect("task-create", activity_pk=activity.pk)
         return redirect("activity-detail", pk=activity.pk)
+
+
+class TaskQuickCreateView(OrganizationRequiredMixin, FormView):
+    """Popup ajax de "+ Adicionar tarefa" na tela da atividade (Regra 12):
+    mesma criação de `TaskCreateView`, só que sem sair da página, no mesmo
+    padrão ajax de `UserFormView`."""
+
+    template_name = "activities/task_quick_form.html"
+    form_class = TaskQuickCreateForm
+
+    def get_activity(self):
+        return get_object_or_404(
+            Activity, pk=self.kwargs["activity_pk"], organization=self.organization
+        )
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["organization"] = self.organization
+        kwargs["activity"] = self.get_activity()
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["activity"] = self.get_activity()
+        return context
+
+    def form_valid(self, form):
+        activity = self.get_activity()
+        data = form.cleaned_data
+        next_order = (activity.tasks.count() or 0) + 1
+        try:
+            task = TaskService.create_task(
+                activity=activity,
+                sector=data["sector"],
+                title=data["title"],
+                created_by=self.request.user,
+                description=data.get("description") or "",
+                order=next_order,
+                requested_deadline=data.get("requested_deadline"),
+            )
+        except ActivityError as exc:
+            form.add_error(None, str(exc))
+            return self.form_invalid(form)
+
+        if _is_ajax(self.request):
+            return JsonResponse({"id": task.pk, "title": task.title})
+        messages.success(self.request, "Tarefa adicionada.")
+        return redirect("activity-detail", pk=activity.pk)
+
+    def form_invalid(self, form):
+        if _is_ajax(self.request):
+            return JsonResponse({"errors": form.errors}, status=400)
+        return super().form_invalid(form)
+
+
+class ActivityAttachmentUploadView(ServiceActionView):
+    """Upload de anexo (Regra 13): guardado em uma pasta própria da atividade
+    dentro de `MEDIA_ROOT`, nomeada pelo código gerado automaticamente."""
+
+    def perform(self, request, pk):
+        activity = get_object_or_404(Activity, pk=pk, organization=self.organization)
+        form = ActivityAttachmentForm(request.POST, request.FILES)
+        if not form.is_valid():
+            raise ActivityError("Selecione um arquivo válido.")
+        ActivityAttachmentService.add(activity, form.cleaned_data["file"], uploaded_by=request.user)
+        messages.success(request, "Anexo enviado.")
+
+    def redirect_to(self):
+        return f"{reverse('activity-detail', args=[self.kwargs['pk']])}#feed-panel"
+
+
+class ActivityAttachmentDeleteView(ServiceActionView):
+    def perform(self, request, pk, attachment_pk):
+        activity = get_object_or_404(Activity, pk=pk, organization=self.organization)
+        attachment = get_object_or_404(ActivityAttachment, pk=attachment_pk, activity=activity)
+        ActivityAttachmentService.remove(attachment, removed_by=request.user)
+        messages.success(request, "Anexo removido.")
+
+    def redirect_to(self):
+        return f"{reverse('activity-detail', args=[self.kwargs['pk']])}#feed-panel"
 
 
 class TaskEditView(OrganizationRequiredMixin, FormView):
@@ -1240,6 +1622,143 @@ class ManagementView(OrganizationRequiredMixin, TemplateView):
                 ).count(),
                 "open_total": open_tasks.count(),
                 "can_resolve_conflicts": can(self.request.user, catalog.ESCALONAMENTO_RESOLVER),
+            }
+        )
+
+        # ------------------------------------------------------------------
+        # Painel filtrado — modelo enviado como exemplo (período, cliente,
+        # responsável, status e centro de custo), acrescido do filtro de
+        # setor e do quadro "Filas por setor" pedidos além da imagem.
+        # ------------------------------------------------------------------
+        dash_activities = Activity.objects.filter(organization=org)
+
+        d_status = self.request.GET.get("status", "")
+        if d_status:
+            dash_activities = dash_activities.filter(status=d_status)
+
+        d_client = self.request.GET.get("cliente", "")
+        if d_client:
+            dash_activities = dash_activities.filter(client_id=d_client)
+
+        d_owner = self.request.GET.get("responsavel", "")
+        if d_owner:
+            dash_activities = dash_activities.filter(owner_id=d_owner)
+
+        d_cost_center = self.request.GET.get("centro_custo", "")
+        if d_cost_center:
+            dash_activities = dash_activities.filter(cost_center_id=d_cost_center)
+
+        d_sector = self.request.GET.get("grupo", "")
+        if d_sector:
+            dash_activities = dash_activities.filter(sector_id=d_sector)
+
+        d_period_from = self.request.GET.get("periodo_de", "")
+        if d_period_from:
+            dash_activities = dash_activities.filter(created_at__date__gte=d_period_from)
+        d_period_to = self.request.GET.get("periodo_ate", "")
+        if d_period_to:
+            dash_activities = dash_activities.filter(created_at__date__lte=d_period_to)
+
+        dash_total = dash_activities.count()
+        dash_em_andamento = dash_activities.filter(
+            status__in=[Activity.Status.EM_ANDAMENTO, Activity.Status.BLOQUEADA]
+        ).count()
+        dash_pendentes = dash_activities.filter(status=Activity.Status.ABERTA).count()
+        dash_concluidas = dash_activities.filter(status=Activity.Status.CONCLUIDA).count()
+        # "Declinadas" (imagem) não existe como status próprio aqui — a
+        # atividade equivalente, que não seguirá adiante, é a Cancelada.
+        dash_declinadas = dash_activities.filter(status=Activity.Status.CANCELADA).count()
+        dash_atrasadas = (
+            dash_activities.filter(requested_deadline__lt=now)
+            .exclude(status__in=[Activity.Status.CONCLUIDA, Activity.Status.CANCELADA])
+            .count()
+        )
+
+        avg_duration = dash_activities.filter(
+            status=Activity.Status.CONCLUIDA, completed_at__isnull=False
+        ).aggregate(media=Avg(F("completed_at") - F("created_at")))["media"]
+        dash_tempo_medio = round(avg_duration.total_seconds() / 86400, 1) if avg_duration else None
+
+        dash_taxa_sucesso = round((dash_concluidas / dash_total) * 100, 1) if dash_total else None
+        dash_taxa_declinio = round((dash_declinadas / dash_total) * 100, 1) if dash_total else None
+        # "Concluídas com pendências": chegaram ao fim mas passaram por ao
+        # menos uma devolução de tarefa no caminho (Regras 02 §36-39).
+        dash_concluidas_pendencias = (
+            dash_activities.filter(status=Activity.Status.CONCLUIDA, tasks__returns__isnull=False)
+            .distinct()
+            .count()
+        )
+
+        dash_maiores_atrasos = (
+            dash_activities.filter(requested_deadline__lt=now)
+            .exclude(status__in=[Activity.Status.CONCLUIDA, Activity.Status.CANCELADA])
+            .select_related("client", "owner")
+            .order_by("requested_deadline")[:10]
+        )
+        dash_recem_concluidas = (
+            dash_activities.filter(status=Activity.Status.CONCLUIDA)
+            .select_related("client", "owner")
+            .order_by("-completed_at")[:10]
+        )
+        dash_por_cliente = (
+            dash_activities.exclude(client__isnull=True)
+            .values("client_id", "client__name")
+            .annotate(total=Count("id", distinct=True))
+            .order_by("-total")[:10]
+        )
+        dash_por_responsavel = (
+            dash_activities.values("owner_id", "owner__username")
+            .annotate(
+                total=Count("id", distinct=True),
+                concluidas=Count("id", filter=Q(status=Activity.Status.CONCLUIDA), distinct=True),
+            )
+            .order_by("-total")[:10]
+        )
+        dash_por_centro_custo = (
+            dash_activities.exclude(cost_center__isnull=True)
+            .values("cost_center_id", "cost_center__name")
+            .annotate(total=Count("id", distinct=True))
+            .order_by("-total")[:10]
+        )
+
+        context.update(
+            {
+                "dash_clients": Client.objects.filter(organization=org, is_active=True),
+                "dash_owners": User.objects.filter(
+                    profile__organization=org, is_active=True
+                ).order_by("first_name", "username"),
+                "dash_cost_centers": CostCenter.objects.filter(organization=org, is_active=True),
+                "dash_sectors": Sector.objects.filter(organization=org, is_active=True),
+                "dash_status_choices": Activity.Status.choices,
+                "f_periodo_de": d_period_from,
+                "f_periodo_ate": d_period_to,
+                "f_dash_cliente": d_client,
+                "f_dash_responsavel": d_owner,
+                "f_dash_status": d_status,
+                "f_dash_centro_custo": d_cost_center,
+                "f_dash_setor": d_sector,
+                "dash_has_filters": bool(
+                    d_status or d_client or d_owner or d_cost_center or d_sector or d_period_from or d_period_to
+                ),
+                "dash_total": dash_total,
+                "dash_em_andamento": dash_em_andamento,
+                "dash_pendentes": dash_pendentes,
+                "dash_concluidas": dash_concluidas,
+                "dash_declinadas": dash_declinadas,
+                "dash_atrasadas": dash_atrasadas,
+                "dash_tempo_medio": dash_tempo_medio,
+                "dash_taxa_sucesso": dash_taxa_sucesso,
+                "dash_taxa_declinio": dash_taxa_declinio,
+                "dash_concluidas_pendencias": dash_concluidas_pendencias,
+                "dash_maiores_atrasos": dash_maiores_atrasos,
+                "dash_recem_concluidas": dash_recem_concluidas,
+                "dash_por_cliente": dash_por_cliente,
+                "dash_por_responsavel": dash_por_responsavel,
+                "dash_por_centro_custo": dash_por_centro_custo,
+                # Mesmo quadro de "Filas por setor" já existente na página,
+                # trazido também para dentro do painel filtrado; respeita o
+                # filtro de setor quando um setor específico é escolhido.
+                "dash_filas_por_setor": sectors.filter(pk=d_sector) if d_sector else sectors,
             }
         )
         return context

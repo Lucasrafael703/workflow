@@ -74,3 +74,28 @@ class EmailService:
             context={"task": task, "activity": task.activity},
             recipients=recipients,
         )
+
+    @classmethod
+    def send_activity_approval_needed(cls, activity, pendency, recipients):
+        """E-mail para quem pode aprovar a pendência (Regras avulsas — fila do
+        gestor): motivo, comentário e prazo para a decisão."""
+        cls._send(
+            subject=f"[{activity.title}] Aguardando sua aprovação",
+            template_prefix="activity_approval_needed",
+            context={"activity": activity, "pendency": pendency},
+            recipients=recipients,
+        )
+
+    @classmethod
+    def send_client_information_request(cls, activity, pendency):
+        """E-mail ao cliente pedindo as informações pendentes — só quando a
+        pessoa marca a caixa correspondente no popup de pendência."""
+        client = activity.client
+        if client is None or not client.email:
+            return
+        cls._send(
+            subject=f"[{activity.title}] Informações pendentes",
+            template_prefix="activity_client_information_request",
+            context={"activity": activity, "pendency": pendency, "client": client},
+            recipients=[client],
+        )

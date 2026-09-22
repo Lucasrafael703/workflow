@@ -63,3 +63,55 @@ class PersonPickerWidget(forms.HiddenInput):
 _SEARCH_ICON = format_html(
     '<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg>'
 )
+
+
+class ClientPickerWidget(forms.HiddenInput):
+    """Seletor de cliente com busca (Regras 1-2 da tela de atividade).
+
+    Mesmo padrão do `PersonPickerWidget` — digitar filtra, "Cadastra cliente"
+    cria sem sair da tela — mas aponta para o cadastro de clientes em vez de
+    usuários. Reaproveita as classes `.person-picker*` do design system: o
+    JS (`static/js/person-picker.js`) já é genérico o bastante para servir os
+    dois, e diferencia só o rótulo do botão de criação via `data-create-label`.
+    """
+
+    search_url_name = "client-search"
+
+    def __init__(self, attrs=None, create_url=None, queryset=None):
+        super().__init__(attrs)
+        self.create_url = create_url
+        self.queryset = queryset
+
+    def _label_for(self, value):
+        if not value or self.queryset is None:
+            return ""
+        try:
+            client = self.queryset.get(pk=value)
+        except (self.queryset.model.DoesNotExist, ValueError, TypeError):
+            return ""
+        return client.name
+
+    def render(self, name, value, attrs=None, renderer=None):
+        hidden_html = super().render(name, value, attrs, renderer)
+        label = self._label_for(value)
+        search_url = reverse_lazy(self.search_url_name)
+
+        create_attr = format_html(' data-create-url="{}"', self.create_url) if self.create_url else ""
+        label_class = "" if label else " muted"
+
+        return format_html(
+            '<div class="person-picker" data-person-picker data-search-url="{search_url}"'
+            ' data-create-label="Cadastrar cliente"{create_attr}>'
+            '{hidden_html}'
+            '<button type="button" class="person-picker__trigger">'
+            '<span class="person-picker__icon">{icon}</span>'
+            '<span class="person-picker__label{label_class}">{label}</span>'
+            "</button>"
+            "</div>",
+            search_url=search_url,
+            create_attr=create_attr,
+            hidden_html=hidden_html,
+            icon=_SEARCH_ICON,
+            label_class=label_class,
+            label=label or "Selecionar cliente",
+        )

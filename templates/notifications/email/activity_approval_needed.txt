@@ -1,0 +1,8 @@
+Uma atividade está aguardando sua aprovação.
+
+Atividade: {{ activity.title }}
+Motivo da pendência: {{ pendency.get_reason_display }}
+Comentário: {{ pendency.comment }}
+Prazo para decisão: {{ pendency.decision_deadline|date:"d/m/Y H:i" }}
+
+Acesse o sistema para analisar e aprovar esta pendência.

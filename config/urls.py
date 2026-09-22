@@ -17,3 +17,4 @@ urlpatterns = [
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.ACTIVITY_FILES_URL, document_root=settings.ACTIVITY_FILES_ROOT)

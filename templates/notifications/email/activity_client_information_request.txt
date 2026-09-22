@@ -1,0 +1,7 @@
+Olá, {{ client.name }}.
+
+Precisamos de algumas informações para continuar o atendimento da atividade "{{ activity.title }}".
+
+{{ pendency.comment }}
+
+Por favor, responda a este e-mail com as informações solicitadas.

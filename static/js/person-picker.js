@@ -12,6 +12,7 @@
         var label = root.querySelector(".person-picker__label");
         var searchUrl = root.getAttribute("data-search-url");
         var createUrl = root.getAttribute("data-create-url");
+        var createLabel = root.getAttribute("data-create-label") || "Criar novo usuário";
 
         var popup = null;
         var results = [];
@@ -106,7 +107,7 @@
                 createButton.className = "person-picker__create";
                 createButton.innerHTML =
                     '<svg width="15" height="15" viewBox="0 0 20 20" aria-hidden="true"><use href="#i-plus"></use></svg>' +
-                    "<span>Criar novo usuário</span>";
+                    "<span>" + createLabel + "</span>";
                 createButton.addEventListener("click", function () {
                     closePopup();
                     openCreateModal();

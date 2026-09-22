@@ -17,6 +17,12 @@
 
     function readable(field) {
         if (!field) return "";
+        if (field.type === "radio") {
+            var checked = form.querySelector("[name='" + field.name + "']:checked");
+            if (!checked) return "";
+            var radioLabel = checked.closest("label") || form.querySelector("label[for='" + checked.id + "']");
+            return radioLabel ? radioLabel.textContent.trim() : checked.value;
+        }
         if (field.tagName === "SELECT") {
             var option = field.options[field.selectedIndex];
             return option ? option.text.trim() : "";
