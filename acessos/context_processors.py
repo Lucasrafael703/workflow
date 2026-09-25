@@ -27,6 +27,8 @@ def navigation(request):
                 can(user, catalog.SETOR_EDITAR)
                 or can(user, catalog.EMPRESA_GERIR)
                 or can(user, catalog.MOTIVO_DEVOLUCAO_GERIR)
+                or can(user, catalog.ESTAGIO_TAREFA_GERIR)
+                or can(user, catalog.TAG_GERIR)
                 or AuthorizationService.can_anywhere(user, catalog.PROCESSO_VISUALIZAR)
             ),
             "users": can(user, catalog.USUARIO_VISUALIZAR),
@@ -51,6 +53,8 @@ _NAV_BY_URL_NAME = {
     "activity-reopen": "activities",
     "activity-change-owner": "activities",
     "task-list": "tasks",
+    "task-kanban": "tasks",
+    "task-calendar": "tasks",
     "task-detail": "tasks",
     "task-create": "tasks",
     "task-edit": "tasks",
@@ -73,6 +77,10 @@ _NAV_BY_URL_NAME = {
     "costcenter-edit": "cadastros",
     "returnreason-create": "cadastros",
     "returnreason-edit": "cadastros",
+    "taskstage-create": "cadastros",
+    "taskstage-edit": "cadastros",
+    "tag-create": "cadastros",
+    "tag-edit": "cadastros",
     "user-list": "users",
     "user-create": "users",
     "user-edit": "users",
@@ -107,6 +115,10 @@ _CADASTROS_TAB_BY_URL_NAME = {
     "costcenter-edit": "centros-de-custo",
     "returnreason-create": "motivos",
     "returnreason-edit": "motivos",
+    "taskstage-create": "estagios-de-tarefa",
+    "taskstage-edit": "estagios-de-tarefa",
+    "tag-create": "tags",
+    "tag-edit": "tags",
 }
 
 

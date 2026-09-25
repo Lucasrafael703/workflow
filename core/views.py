@@ -25,10 +25,12 @@ from .forms import (
     ReturnReasonForm,
     SectorForm,
     SiteForm,
+    TagForm,
+    TaskStageForm,
     UserForm,
 )
 from .mixins import ActionRequiredMixin, OrganizationRequiredMixin
-from .models import Client, Company, CostCenter, Sector, Site
+from .models import Client, Company, CostCenter, Sector, Site, Tag, TaskStage
 from .services import (
     CadastroError,
     ClientService,
@@ -38,6 +40,8 @@ from .services import (
     SectorService,
     SimpleCadastroService,
     SiteService,
+    TagService,
+    TaskStageService,
 )
 
 User = get_user_model()
@@ -70,6 +74,8 @@ class CadastroHomeView(OrganizationRequiredMixin, TemplateView):
         cost_centers = CostCenter.objects.filter(organization=org).select_related("site")
         clients = Client.objects.filter(organization=org)
         reasons = ReturnReason.objects.filter(organization=org)
+        task_stages = TaskStage.objects.filter(organization=org).order_by("order")
+        tags = Tag.objects.filter(organization=org)
 
         if search:
             sectors = sectors.filter(name__icontains=search)
@@ -78,6 +84,8 @@ class CadastroHomeView(OrganizationRequiredMixin, TemplateView):
             cost_centers = cost_centers.filter(name__icontains=search)
             clients = clients.filter(name__icontains=search)
             reasons = reasons.filter(name__icontains=search)
+            task_stages = task_stages.filter(name__icontains=search)
+            tags = tags.filter(name__icontains=search)
 
         context.update(
             {
@@ -89,6 +97,8 @@ class CadastroHomeView(OrganizationRequiredMixin, TemplateView):
                 "cost_centers": cost_centers,
                 "clients": clients,
                 "return_reasons": reasons,
+                "task_stages": task_stages,
+                "tags": tags,
             }
         )
         return context
@@ -138,6 +148,24 @@ class ClientSearchView(OrganizationRequiredMixin, View):
         results = [
             {"id": client.pk, "name": client.name}
             for client in queryset[: self.MAX_RESULTS]
+        ]
+        return JsonResponse({"results": results})
+
+
+class TagSearchView(OrganizationRequiredMixin, View):
+    """Busca de marcadores para o `TagPickerWidget` (M2M em Activity/Task),
+    mesmo padrão de `ClientSearchView`."""
+
+    MAX_RESULTS = 20
+
+    def get(self, request):
+        term = request.GET.get("q", "").strip()
+        queryset = Tag.objects.filter(organization=self.organization, is_active=True).order_by("name")
+        if term:
+            queryset = queryset.filter(name__icontains=term)
+        results = [
+            {"id": tag.pk, "name": tag.name, "color": tag.color}
+            for tag in queryset[: self.MAX_RESULTS]
         ]
         return JsonResponse({"results": results})
 
@@ -347,6 +375,55 @@ class ReturnReasonFormView(CadastroFormView):
         return ReturnReasonService.update(instance, name=data["name"])
 
 
+class TaskStageFormView(CadastroFormView):
+    form_class = TaskStageForm
+    model = TaskStage
+    tab = "estagios-de-tarefa"
+    title = "Estágio de tarefa"
+    required_action = catalog.ESTAGIO_TAREFA_GERIR
+
+    def initial_from(self, instance):
+        return {"name": instance.name}
+
+    def create(self, data):
+        return TaskStageService.create(self.organization, data["name"], created_by=self.request.user)
+
+    def update(self, instance, data):
+        return TaskStageService.update(instance, name=data["name"])
+
+
+class TaskStageReorderView(OrganizationRequiredMixin, ActionRequiredMixin, View):
+    """Recebe a ordem final das colunas do Kanban (drag-and-drop na tela de
+    cadastro) e renumera — nunca expõe `order` como campo editável à mão."""
+
+    required_action = catalog.ESTAGIO_TAREFA_GERIR
+
+    def post(self, request):
+        ordered_ids = [int(value) for value in request.POST.getlist("stage_id") if value.isdigit()]
+        TaskStageService.reorder(self.organization, ordered_ids)
+        if _is_ajax(request):
+            return JsonResponse({"ok": True})
+        messages.success(request, "Ordem dos estágios atualizada.")
+        return redirect(f"{reverse('cadastros')}?tab=estagios-de-tarefa")
+
+
+class TagFormView(CadastroFormView):
+    form_class = TagForm
+    model = Tag
+    tab = "tags"
+    title = "Marcador"
+    required_action = catalog.TAG_GERIR
+
+    def initial_from(self, instance):
+        return {"name": instance.name, "color": instance.color}
+
+    def create(self, data):
+        return TagService.create(self.organization, data["name"], color=data["color"])
+
+    def update(self, instance, data):
+        return TagService.update(instance, name=data["name"], color=data["color"])
+
+
 class CadastroToggleActiveView(OrganizationRequiredMixin, View):
     """Inativar preserva o histórico; excluir não é oferecido (Regras 05 §89-90)."""
 
@@ -358,6 +435,8 @@ class CadastroToggleActiveView(OrganizationRequiredMixin, View):
         "obras": (Site, catalog.OBRA_GERIR),
         "centros-de-custo": (CostCenter, catalog.CENTRO_CUSTO_GERIR),
         "clientes": (Client, catalog.CLIENTE_GERIR),
+        "estagios-de-tarefa": (TaskStage, catalog.ESTAGIO_TAREFA_GERIR),
+        "tags": (Tag, catalog.TAG_GERIR),
     }
 
     def resolve(self, tab):

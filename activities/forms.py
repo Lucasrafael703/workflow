@@ -2,10 +2,17 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 
-from core.models import Client, Company, CostCenter, Sector, Site
-from core.widgets import ClientPickerWidget, PersonPickerWidget
+from core.models import Client, Company, CostCenter, Sector, Site, Tag
+from core.sanitize import sanitize_description
+from core.widgets import (
+    ActivityPickerWidget,
+    ClientPickerWidget,
+    PersonPickerWidget,
+    RichTextWidget,
+    TagPickerWidget,
+)
 
-from .models import Activity, ActivityPendency, ReturnReason, Task
+from .models import Activity, ActivityPendency, MessageKind, ReturnReason, Task
 
 User = get_user_model()
 
@@ -54,6 +61,11 @@ class OrganizationScopedFormMixin:
             fields["sector"].queryset = Sector.objects.filter(
                 organization=organization, is_active=True
             )
+        if "tags" in fields:
+            queryset = Tag.objects.filter(organization=organization, is_active=True)
+            fields["tags"].queryset = queryset
+            if isinstance(fields["tags"].widget, TagPickerWidget):
+                fields["tags"].widget.queryset = queryset
 
 
 class ActivityQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
@@ -77,6 +89,7 @@ class ActivityQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
             "site",
             "cost_center",
             "address",
+            "tags",
             "description",
         ]
         labels = {
@@ -91,6 +104,7 @@ class ActivityQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
             "site": "Obra",
             "cost_center": "Centro de custo",
             "address": "Endereço",
+            "tags": "Marcadores",
         }
         help_texts = {
             "title": "Descreva o resultado esperado, não a ação. Ex.: “Material disponível na obra”.",
@@ -105,9 +119,10 @@ class ActivityQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
             "client": ClientPickerWidget(),
             "owner": PersonPickerWidget(),
             "urgency": forms.RadioSelect(),
-            "description": forms.Textarea(attrs={"rows": 3}),
+            "description": RichTextWidget(),
             "requested_deadline": DateTimeLocalInput(),
             "address": forms.TextInput(attrs={"placeholder": "Ex.: Rua, número, bairro"}),
+            "tags": TagPickerWidget(),
         }
 
     def __init__(
@@ -128,8 +143,23 @@ class ActivityQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
             "sector",
             "address",
             "requested_deadline",
+            "tags",
         ):
             self.fields[optional].required = False
+
+    def clean_description(self):
+        return sanitize_description(self.cleaned_data.get("description"))
+
+
+class ActivityMiniCreateForm(forms.Form):
+    """Criação mínima de atividade dentro do popup aninhado do "+ Nova
+    tarefa": só o título — dono é sempre quem está criando."""
+
+    title = forms.CharField(
+        label="O que precisa ser resolvido?",
+        max_length=200,
+        widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "Ex.: Material disponível na obra"}),
+    )
 
 
 class ActivityEditForm(OrganizationScopedFormMixin, forms.ModelForm):
@@ -145,14 +175,16 @@ class ActivityEditForm(OrganizationScopedFormMixin, forms.ModelForm):
             "site",
             "cost_center",
             "address",
+            "tags",
             "description",
         ]
         labels = ActivityQuickCreateForm.Meta.labels
         widgets = {
             "client": ClientPickerWidget(),
             "urgency": forms.RadioSelect(),
-            "description": forms.Textarea(attrs={"rows": 4}),
+            "description": RichTextWidget(),
             "requested_deadline": DateTimeLocalInput(),
+            "tags": TagPickerWidget(),
         }
 
     def __init__(self, *args, organization=None, can_create_client=False, **kwargs):
@@ -168,8 +200,12 @@ class ActivityEditForm(OrganizationScopedFormMixin, forms.ModelForm):
             "sector",
             "address",
             "requested_deadline",
+            "tags",
         ):
             self.fields[optional].required = False
+
+    def clean_description(self):
+        return sanitize_description(self.cleaned_data.get("description"))
 
 
 class ChangeOwnerForm(forms.Form):
@@ -188,29 +224,37 @@ class ChangeOwnerForm(forms.Form):
             self.fields["new_owner"].widget.create_url = reverse("user-create")
 
 
+class ActivityDeadlineChangeForm(forms.Form):
+    requested_deadline = forms.DateTimeField(
+        label="Novo prazo solicitado", widget=DateTimeLocalInput(), required=False
+    )
+
+
 class TaskForm(OrganizationScopedFormMixin, forms.ModelForm):
     """Adicionar tarefa: o mínimo para a atividade avançar (doc 09 §81-84)."""
 
     class Meta:
         model = Task
-        fields = ["title", "sector", "requested_deadline", "description", "depends_on"]
+        fields = ["title", "sector", "requested_deadline", "tags", "description", "depends_on"]
         labels = {
             "title": "O que precisa ser feito?",
             "sector": "Setor responsável",
             "requested_deadline": "Prazo solicitado",
             "description": "Descrição",
             "depends_on": "Depende de",
+            "tags": "Marcadores",
         }
         widgets = {
             "title": forms.TextInput(attrs={"autofocus": True, "placeholder": "Ex.: Realizar cotação"}),
-            "description": forms.Textarea(attrs={"rows": 3}),
+            "description": RichTextWidget(),
             "requested_deadline": DateTimeLocalInput(),
+            "tags": TagPickerWidget(),
         }
 
     def __init__(self, *args, organization=None, activity=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.scope_querysets(organization)
-        for optional in ("description", "requested_deadline", "depends_on"):
+        for optional in ("description", "requested_deadline", "depends_on", "tags"):
             self.fields[optional].required = False
 
         siblings = Task.objects.none()
@@ -221,6 +265,9 @@ class TaskForm(OrganizationScopedFormMixin, forms.ModelForm):
         self.fields["depends_on"].queryset = siblings
         self.fields["depends_on"].empty_label = "Nenhuma"
 
+    def clean_description(self):
+        return sanitize_description(self.cleaned_data.get("description"))
+
 
 class TaskQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
     """Popup "+ Adicionar tarefa" (Regra 12): título e prazo à vista, descrição
@@ -230,17 +277,22 @@ class TaskQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
 
     class Meta:
         model = Task
-        fields = ["title", "sector", "requested_deadline", "description"]
+        fields = ["title", "sector", "requested_deadline", "tags", "description"]
         labels = {
             "title": "Título da tarefa",
             "sector": "Setor responsável",
             "requested_deadline": "Prazo",
             "description": "Descrição",
+            "tags": "Marcadores",
+        }
+        help_texts = {
+            "title": "Use #marcador e @usuario no título para preenchê-los automaticamente.",
         }
         widgets = {
             "title": forms.TextInput(attrs={"autofocus": True, "placeholder": "Ex.: Realizar cotação"}),
-            "description": forms.Textarea(attrs={"rows": 3}),
+            "description": RichTextWidget(),
             "requested_deadline": DateTimeLocalInput(),
+            "tags": TagPickerWidget(),
         }
 
     def __init__(self, *args, organization=None, activity=None, **kwargs):
@@ -248,6 +300,7 @@ class TaskQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
         self.scope_querysets(organization)
         self.fields["description"].required = False
         self.fields["requested_deadline"].required = False
+        self.fields["tags"].required = False
         if activity is not None and activity.sector_id:
             # Herda o "Grupo designado" da atividade: o campo some do popup,
             # mas o hidden ainda submete o valor inicial normalmente.
@@ -255,6 +308,43 @@ class TaskQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
             self.fields["sector"].widget = forms.HiddenInput()
         else:
             self.fields["sector"].required = True
+
+    def clean_description(self):
+        return sanitize_description(self.cleaned_data.get("description"))
+
+
+class TaskQuickCreateStandaloneForm(TaskQuickCreateForm):
+    """Variante do popup "+ Adicionar tarefa" acessível fora do contexto de
+    uma atividade já aberta (botão "+ Nova tarefa" em Minhas tarefas): ganha
+    um campo `activity` real, resolvido por busca/criação no
+    `ActivityPickerWidget`, em vez de vir fixo da URL."""
+
+    # Mesmo conjunto de `ActivitySearchView.OPEN_STATUSES`: só atividades
+    # ainda não encerradas fazem sentido como destino de uma tarefa nova.
+    OPEN_ACTIVITY_STATUSES = [
+        Activity.Status.ABERTA,
+        Activity.Status.EM_ANDAMENTO,
+        Activity.Status.BLOQUEADA,
+        Activity.Status.PENDENTE,
+    ]
+
+    activity = forms.ModelChoiceField(
+        queryset=Activity.objects.none(), label="Atividade", widget=ActivityPickerWidget()
+    )
+
+    def __init__(self, *args, organization=None, can_create_activity=False, **kwargs):
+        # `activity=None` para o TaskQuickCreateForm.__init__: aqui o setor
+        # nunca é herdado automaticamente, porque a atividade só é conhecida
+        # depois do campo `activity` ser escolhido — o campo sector permanece
+        # sempre visível e obrigatório nesta variante.
+        super().__init__(*args, organization=organization, activity=None, **kwargs)
+        self.order_fields(["activity", "title", "sector", "requested_deadline", "tags", "description"])
+        queryset = Activity.objects.filter(organization=organization, status__in=self.OPEN_ACTIVITY_STATUSES)
+        self.fields["activity"].queryset = queryset
+        self.fields["activity"].widget.queryset = queryset
+        if can_create_activity:
+            self.fields["activity"].widget.create_url = reverse("activity-mini-create")
+        self.fields["sector"].required = True
 
 
 class ActivityAttachmentForm(forms.Form):
@@ -365,6 +455,9 @@ class MessageForm(forms.Form):
         widget=forms.Textarea(
             attrs={"rows": 3, "placeholder": "Escreva uma mensagem… use @usuario para mencionar alguém"}
         ),
+    )
+    kind = forms.ChoiceField(
+        choices=MessageKind.choices, initial=MessageKind.NORMAL, required=False, label="Tipo"
     )
 
 

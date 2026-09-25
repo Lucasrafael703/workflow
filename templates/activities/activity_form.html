@@ -17,8 +17,8 @@
     </div>
 </div>
 
-{# Campo único, sem etapas nem coluna de resumo: tudo visível de uma vez,
-   em duas colunas largas (o mesmo espírito do cadastro de orçamentos). #}
+{% comment %}Campo único, sem etapas nem coluna de resumo: tudo visível de uma vez,
+em duas colunas largas (o mesmo espírito do cadastro de orçamentos).{% endcomment %}
 <form method="post" id="activity-form">
     {% csrf_token %}
     {% if form.non_field_errors %}

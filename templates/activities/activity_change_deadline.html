@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Alterar prazo — LPS{% endblock %}
+
+{% block content %}
+<div class="modal-backdrop">
+    <div class="modal">
+        <div class="modal__head">
+            <div>
+                <h2>Alterar prazo da atividade</h2>
+                <div class="sub">{{ activity.title }}</div>
+            </div>
+            <a href="{% url 'activity-detail' activity.pk %}" class="modal__close" title="Fechar">&times;</a>
+        </div>
+
+        <form method="post">
+            {% csrf_token %}
+            <div class="modal__body">
+                {% include "activities/_form_fields.html" %}
+            </div>
+            <div class="modal__foot">
+                <a href="{% url 'activity-detail' activity.pk %}" class="btn">Voltar</a>
+                <button type="submit" class="btn btn--primary">Salvar prazo</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

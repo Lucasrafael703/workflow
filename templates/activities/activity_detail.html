@@ -12,12 +12,9 @@
         <div class="sub">
             <span class="tag tag--{{ activity.status }}">{{ activity.get_status_display }}</span>
             <span class="tag tag--{{ activity.urgency }}">{{ activity.get_urgency_display }}</span>
-            {% if activity.client %} · Cliente: {{ activity.client.name }}{% endif %}
-            · Atribuída para: <strong>{{ activity.owner.get_username }}</strong>
-            {% if activity.requested_deadline %}
-            · Prazo solicitado: {{ activity.requested_deadline|date:"d/m/Y H:i" }}
-            {% else %}· Sem prazo{% endif %}
-            {% if activity.sector %} · Grupo: {{ activity.sector.name }}{% endif %}
+            {% if activity.sector %}<span class="tag">{{ activity.sector.name }}</span>{% endif %}
+            {% if activity.client %} · {{ activity.client.name }}{% endif %}
+            {% if activity.site %} · {{ activity.site.name }}{% endif %}
         </div>
     </div>
     <div class="page-head__actions">
@@ -27,146 +24,183 @@
             <button type="submit" class="btn btn--primary">{% include "_icon.html" with name="check" %} Assumir</button>
         </form>
         {% endif %}
-        {% if activity.status != "CONCLUIDA" and activity.status != "CANCELADA" %}
-        <a href="{% url 'activity-edit' activity.pk %}" class="btn">Editar</a>
+        <div class="deadline-owner-pill">
+            <div>
+                <div class="k">Responsável</div>
+                <div class="v">{{ activity.owner.get_username }}</div>
+            </div>
+            <div>
+                <div class="k">Prazo</div>
+                <div class="v{% if not activity.requested_deadline %} muted{% endif %}">{{ activity.requested_deadline|date:"d/m/Y H:i"|default:"Sem prazo" }}</div>
+            </div>
+        </div>
+        {% if activity.status != "CONCLUIDA" and activity.status != "CANCELADA" and can_add_task %}
         <a href="{% url 'task-create' activity.pk %}" class="btn btn--primary">
             {% include "_icon.html" with name="plus" %} Adicionar tarefa
         </a>
         {% endif %}
+        {% if is_menu_active %}
+        <div class="menu-dots js-menu-dots">
+            <button type="button" class="menu-dots__trigger" title="Mais ações">{% include "_icon.html" with name="more" %}</button>
+            <div class="menu-dots__popup" hidden>
+                {% if activity.status != "CONCLUIDA" and activity.status != "CANCELADA" %}
+                {% if can_edit %}<a href="{% url 'activity-edit' activity.pk %}" class="menu-dots__item">Editar</a>{% endif %}
+                {% if can_change_owner %}<a href="{% url 'activity-change-owner' activity.pk %}" class="menu-dots__item">Transferir responsável</a>{% endif %}
+                {% if can_edit %}<a href="{% url 'activity-change-deadline' activity.pk %}" class="menu-dots__item">Alterar prazo</a>{% endif %}
+                {% if can_mark_pending %}<a href="{% url 'activity-mark-pending' activity.pk %}" class="menu-dots__item js-activity-mark-pending">Marcar como pendente</a>{% endif %}
+                {% if can_finalize %}
+                <div class="menu-dots__divider"></div>
+                <a href="{% url 'activity-finalize' activity.pk %}?outcome=SUCESSO" class="menu-dots__item js-activity-finalize">Concluir</a>
+                <a href="{% url 'activity-finalize' activity.pk %}?outcome=CANCELADO" class="menu-dots__item menu-dots__item--danger js-activity-finalize">Cancelar</a>
+                {% endif %}
+                {% elif can_reopen %}
+                <a href="{% url 'activity-reopen' activity.pk %}" class="menu-dots__item">Reabrir atividade</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
 
-{# Tudo em uma tela: campos, progresso e tarefas na coluna principal; o
-   histórico (comentários + anexos + eventos) numa lateral menor, sem abas. #}
+{% if open_pendency %}
+<div class="pendency-banner" id="pendencia">
+    <span class="pendency-banner__icon">{% include "_icon.html" with name="clock" %}</span>
+    <div>
+        <div class="pendency-banner__title">Pendente — {{ open_pendency.get_reason_display }}</div>
+        <div class="pendency-banner__body">{{ open_pendency.comment|linebreaksbr }}</div>
+        <div class="pendency-banner__meta">
+            Marcada por {{ open_pendency.opened_by.get_username }} em {{ open_pendency.opened_at|date:"d/m/Y H:i" }}
+            {% if open_pendency.decision_deadline %} · Prazo para decisão: {{ open_pendency.decision_deadline|date:"d/m/Y H:i" }}{% endif %}
+        </div>
+    </div>
+    {% if can_approve_pendency %}
+    <div class="pendency-banner__actions">
+        <a href="{% url 'activity-approve-pendency' activity.pk %}" class="btn btn--primary btn--sm js-activity-approve-pendency">
+            {% include "_icon.html" with name="check" %} Aprovar
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if activity.status == "CANCELADA" %}
+<p class="message message--warning">Cancelada em {{ activity.cancelled_at|date:"d/m/Y H:i" }}. Motivo: {{ activity.cancelled_reason }}</p>
+{% elif activity.status == "CONCLUIDA" %}
+<p class="message message--success">Concluída em {{ activity.completed_at|date:"d/m/Y H:i" }} por {{ activity.completed_by.get_username }}.</p>
+{% endif %}
+
 <div class="split split--history">
     <div>
-        {% if activity.status != "CONCLUIDA" and activity.status != "CANCELADA" %}
+        {# Situação atual: progresso por contagem + para onde olhar agora — nunca porcentagem (doc 09 §62) #}
         <div class="card">
-            <div class="actions-row">
-                {% if can_finalize %}
-                <a href="{% url 'activity-finalize' activity.pk %}" class="btn btn--primary js-activity-finalize">
-                    {% include "_icon.html" with name="check" %} Finalizar atividade
-                </a>
-                {% endif %}
-                {% if can_mark_pending %}
-                <a href="{% url 'activity-mark-pending' activity.pk %}" class="btn btn--sm js-activity-mark-pending">
-                    {% include "_icon.html" with name="clock" %} Marcar como pendente
-                </a>
-                {% endif %}
-                {% if can_change_owner %}<a href="{% url 'activity-change-owner' activity.pk %}" class="btn btn--sm">{% include "_icon.html" with name="arrow-right" %} Repassar</a>{% endif %}
-            </div>
-        </div>
-        {% elif activity.status == "CONCLUIDA" and can_reopen %}
-        <div class="card">
-            <a href="{% url 'activity-reopen' activity.pk %}" class="btn btn--block">Reabrir atividade</a>
-        </div>
-        {% endif %}
-
-        {% if open_pendency %}
-        <div class="pendency-banner" id="pendencia">
-            <span class="pendency-banner__icon">{% include "_icon.html" with name="clock" %}</span>
-            <div>
-                <div class="pendency-banner__title">Pendente — {{ open_pendency.get_reason_display }}</div>
-                <div class="pendency-banner__body">{{ open_pendency.comment|linebreaksbr }}</div>
-                <div class="pendency-banner__meta">
-                    Marcada por {{ open_pendency.opened_by.get_username }} em {{ open_pendency.opened_at|date:"d/m/Y H:i" }}
-                    {% if open_pendency.decision_deadline %} · Prazo para decisão: {{ open_pendency.decision_deadline|date:"d/m/Y H:i" }}{% endif %}
-                </div>
-            </div>
-            {% if can_approve_pendency %}
-            <div class="pendency-banner__actions">
-                <a href="{% url 'activity-approve-pendency' activity.pk %}" class="btn btn--primary btn--sm js-activity-approve-pendency">
-                    {% include "_icon.html" with name="check" %} Aprovar
-                </a>
-            </div>
-            {% endif %}
-        </div>
-        {% endif %}
-
-        {% if activity.status == "CANCELADA" %}
-        <p class="message message--warning">Cancelada em {{ activity.cancelled_at|date:"d/m/Y H:i" }}. Motivo: {{ activity.cancelled_reason }}</p>
-        {% elif activity.status == "CONCLUIDA" %}
-        <p class="message message--success">Concluída em {{ activity.completed_at|date:"d/m/Y H:i" }} por {{ activity.completed_by.get_username }}.</p>
-        {% endif %}
-
-        <div class="card card--flush">
-            <div class="card__head"><h2>Informações da atividade</h2></div>
-            <div class="card__body">
-                <div class="info-grid">
+            <div class="situation-block">
+                <div class="situation-counts">
                     <div>
-                        <div class="k">Cliente</div>
-                        <div class="v{% if not activity.client %} muted{% endif %}">{{ activity.client.name|default:"Sem cliente" }}</div>
-                    </div>
-                    <div>
-                        <div class="k">Atribuída para</div>
-                        <div class="v">{{ activity.owner.get_username }}</div>
-                    </div>
-                    <div>
-                        <div class="k">Urgência</div>
-                        <div class="v"><span class="tag tag--{{ activity.urgency }}">{{ activity.get_urgency_display }}</span></div>
-                    </div>
-                    <div>
-                        <div class="k">Prazo solicitado</div>
-                        <div class="v{% if not activity.requested_deadline %} muted{% endif %}">{{ activity.requested_deadline|date:"d/m/Y H:i"|default:"Sem prazo" }}</div>
-                    </div>
-                    <div>
-                        <div class="k">Grupo designado</div>
-                        <div class="v{% if not activity.sector %} muted{% endif %}">{{ activity.sector.name|default:"Sem grupo" }}</div>
-                    </div>
-                    <div>
-                        <div class="k">Centro de custo</div>
-                        <div class="v{% if not activity.cost_center %} muted{% endif %}">{{ activity.cost_center.name|default:"Sem centro de custo" }}</div>
-                    </div>
-                    <div>
-                        <div class="k">Empresa</div>
-                        <div class="v{% if not activity.company %} muted{% endif %}">{{ activity.company.name|default:"—" }}</div>
-                    </div>
-                    <div>
-                        <div class="k">Obra</div>
-                        <div class="v{% if not activity.site %} muted{% endif %}">{{ activity.site.name|default:"Sem obra" }}</div>
-                    </div>
-                    <div class="full">
-                        <div class="k">Endereço</div>
-                        <div class="v{% if not activity.address %} muted{% endif %}">{{ activity.address|default:"Sem endereço extra" }}</div>
-                    </div>
-                    <div class="full">
-                        <div class="k">Descrição</div>
-                        <div class="v{% if not activity.description %} muted{% endif %}">{{ activity.description|linebreaksbr|default:"Sem descrição." }}</div>
-                    </div>
-                </div>
-
-                {# Progresso em contagem, nunca porcentagem (doc 09 §62) #}
-                <div class="summary-item" style="border:none; padding-left:0; margin-top:6px">
-                    <div style="flex:1">
-                        <div class="k">Progresso</div>
                         <div class="v">{{ tasks_done }} de {{ tasks_total }} tarefas concluídas</div>
-                        {% if tasks_total %}
-                        <div class="progress"><div class="progress__bar" style="width:{% widthratio tasks_done tasks_total 100 %}%"></div></div>
-                        {% endif %}
+                        {% if tasks_total %}<div class="progress"><div class="progress__bar" style="width:{% widthratio tasks_done tasks_total 100 %}%"></div></div>{% endif %}
                     </div>
                 </div>
-                {% if sectors_involved %}
-                <p style="margin:10px 0 0"><strong>Setores envolvidos:</strong> {{ sectors_involved|join:" → " }}</p>
+                <div class="situation-counts">
+                    <div class="situation-count situation-count--in_progress"><span class="n">{{ status_counts.in_progress }}</span><span class="k">Em execução</span></div>
+                    <div class="situation-count"><span class="n">{{ status_counts.waiting }}</span><span class="k">Na fila</span></div>
+                    <div class="situation-count situation-count--blocked"><span class="n">{{ status_counts.blocked }}</span><span class="k">Bloqueadas</span></div>
+                    <div class="situation-count"><span class="n">{{ status_counts.done }}</span><span class="k">Concluídas</span></div>
+                </div>
+
+                {% if next_attention %}
+                <div class="situation-attention{% if next_attention.attention_reason == 'blocked' or next_attention.attention_reason == 'overdue' %} situation-attention--danger{% endif %}">
+                    <span class="situation-attention__icon">{% include "_icon.html" with name="alert" %}</span>
+                    <div>
+                        <div class="situation-attention__title">Próxima atenção: <a href="{% url 'task-detail' next_attention.pk %}">{{ next_attention.title }}</a></div>
+                        <div class="situation-attention__body">
+                            {% if next_attention.attention_reason == "blocked" %}Esta tarefa está bloqueada e trava o andamento da atividade.
+                            {% elif next_attention.attention_reason == "overdue" %}Atrasada desde {{ next_attention.committed_deadline|date:"d/m/Y H:i" }}.
+                            {% elif next_attention.attention_reason == "negotiating" %}Prazo em negociação, aguardando decisão.
+                            {% else %}Prazo mais próximo entre as tarefas em aberto: {{ next_attention.committed_deadline|default:next_attention.requested_deadline|date:"d/m/Y H:i" }}.{% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% elif is_ready_to_complete %}
+                <div class="situation-attention" style="background:var(--success-soft)">
+                    <span class="situation-attention__icon" style="color:var(--success)">{% include "_icon.html" with name="check" %}</span>
+                    <div>
+                        <div class="situation-attention__title">Pronta para concluir</div>
+                        <div class="situation-attention__body">Todas as tarefas foram finalizadas.</div>
+                    </div>
+                </div>
                 {% endif %}
-                <p class="muted small" style="margin:10px 0 0">
-                    Criada por {{ activity.created_by.get_username }} em {{ activity.created_at|date:"d/m/Y H:i" }}
-                    {% if activity.first_action_at %} · Primeira ação em {{ activity.first_action_at|date:"d/m/Y H:i" }}{% endif %}
-                </p>
+
+                {% if sectors_involved %}
+                <p class="muted small" style="margin:0">Setores envolvidos: {{ sectors_involved|join:" → " }}</p>
+                {% endif %}
             </div>
         </div>
 
         {% include "activities/_tasks_block.html" %}
+
+        {% if activity.process_version_id %}
+        <div class="card">
+            <div class="card__head" style="padding:0 0 10px"><h2 style="margin:0">Processo</h2></div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap">
+                <div>{{ activity.process_version.process.name }} · v{{ activity.process_version.number }}</div>
+                <a href="{% url 'process-edit' activity.process_version.process_id %}?v={{ activity.process_version.pk }}" class="btn btn--sm">Ver processo →</a>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="card card--flush">
+            <div class="card__head"><h2>Informações</h2></div>
+            <div class="card__body">
+                <div class="info-grid">
+                    {% if activity.client %}<div><div class="k">Cliente</div><div class="v">{{ activity.client.name }}</div></div>{% endif %}
+                    {% if activity.cost_center %}<div><div class="k">Centro de custo</div><div class="v">{{ activity.cost_center.name }}</div></div>{% endif %}
+                    {% if activity.company %}<div><div class="k">Empresa</div><div class="v">{{ activity.company.name }}</div></div>{% endif %}
+                    {% if activity.address %}<div class="full"><div class="k">Endereço</div><div class="v">{{ activity.address }}</div></div>{% endif %}
+                    {% if activity.tags.all %}
+                    <div class="full">
+                        <div class="k">Marcadores</div>
+                        <div class="v">{% for tag in activity.tags.all %}<span class="tag-chip tag-chip--{{ tag.color }}">{{ tag.name }}</span>{% endfor %}</div>
+                    </div>
+                    {% endif %}
+                    {% if activity.description %}<div class="full"><div class="k">Descrição</div><div class="v rich-text-content">{{ activity.description|safe }}</div></div>{% endif %}
+                </div>
+
+                <details class="disclosure disclosure--mini" style="margin-top:14px">
+                    <summary>Ver mais</summary>
+                    <div class="disclosure__body">
+                        <div class="info-grid">
+                            <div><div class="k">Urgência</div><div class="v"><span class="tag tag--{{ activity.urgency }}">{{ activity.get_urgency_display }}</span></div></div>
+                            <div><div class="k">Grupo designado</div><div class="v{% if not activity.sector %} muted{% endif %}">{{ activity.sector.name|default:"Sem grupo" }}</div></div>
+                            <div><div class="k">Obra</div><div class="v{% if not activity.site %} muted{% endif %}">{{ activity.site.name|default:"Sem obra" }}</div></div>
+                        </div>
+                        <p class="muted small" style="margin:10px 0 0">
+                            Criada por {{ activity.created_by.get_username }} em {{ activity.created_at|date:"d/m/Y H:i" }}
+                            {% if activity.first_action_at %} · Primeira ação em {{ activity.first_action_at|date:"d/m/Y H:i" }}{% endif %}
+                        </p>
+                    </div>
+                </details>
+            </div>
+        </div>
     </div>
 
     <aside class="side-scroll" id="feed-panel">
         <div class="card card--flush">
-            <div class="card__head"><h2>Histórico</h2></div>
-            <div class="card__body">
+            <div class="side-tabs js-side-tabs">
+                <button type="button" class="side-tabs__tab is-active" data-tab="conversa">Conversa</button>
+                <button type="button" class="side-tabs__tab" data-tab="historico">Histórico</button>
+            </div>
+
+            <div class="card__body side-tabs__panel is-active" data-tab-panel="conversa">
                 {% if can_message or can_manage_attachments %}
                 <form method="post" action="{% url 'activity-continue' activity.pk %}" enctype="multipart/form-data" class="continue-form">
                     {% csrf_token %}
                     <textarea name="body" rows="3" placeholder="Escreva uma atualização… use @usuario para mencionar alguém"></textarea>
                     <div class="continue-form__foot">
+                        <select name="kind" style="margin-right:auto">
+                            {% for value, label in message_kind_choices %}
+                            <option value="{{ value }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
                         {% if can_manage_attachments %}
                         <label class="btn btn--ghost btn--sm" for="continue-file">
                             {% include "_icon.html" with name="archive" %} Anexar arquivo
@@ -174,59 +208,57 @@
                         <input type="file" id="continue-file" name="file" hidden>
                         <span class="muted small" id="continue-file-name"></span>
                         {% endif %}
-                        <button type="submit" class="btn btn--primary btn--sm" style="margin-left:auto">Publicar</button>
+                        <button type="submit" class="btn btn--primary btn--sm">Publicar</button>
                     </div>
                 </form>
                 {% endif %}
 
-                {% if feed %}
+                {% if conversation or attachments %}
                 <ul class="feed">
-                    {% for event in feed %}
-                    <li class="feed-item feed-item--{{ event.kind }}">
-                        {% if event.kind == "message" %}
-                        <span class="avatar">{{ event.message.author.get_username|slice:":2"|upper }}</span>
+                    {% for message in conversation %}
+                    <li class="feed-item feed-item--message{% if message.kind == 'DECISAO' %} chat-item--decision{% endif %}">
+                        <span class="avatar">{{ message.author.get_username|slice:":2"|upper }}</span>
                         <div>
-                            <div class="feed-item__meta"><strong>{{ event.message.author.get_username }}</strong> comentou <span class="when">{{ event.timestamp|date:"d/m/Y H:i" }}</span></div>
-                            <div class="feed-item__body">{{ event.message.body|linebreaksbr }}</div>
+                            <div class="feed-item__meta">
+                                <strong>{{ message.author.get_username }}</strong> comentou
+                                {% if message.kind == "DECISAO" %}<span class="chat-item__kind">✓ Decisão registrada</span>{% endif %}
+                                <span class="when">{{ message.created_at|date:"d/m/Y H:i" }}</span>
+                            </div>
+                            <div class="feed-item__body">{{ message.body|linebreaksbr }}</div>
                         </div>
-                        {% elif event.kind == "attachment" %}
+                    </li>
+                    {% endfor %}
+                    {% for attachment in attachments %}
+                    <li class="feed-item feed-item--attachment">
                         <span class="feed-item__icon">{% include "_icon.html" with name="archive" %}</span>
                         <div>
                             <div class="feed-item__meta">
-                                <strong>{{ event.attachment.uploaded_by.get_username }}</strong> anexou
-                                <a href="{{ event.attachment.file.url }}" target="_blank" rel="noopener">{{ event.attachment.original_name|default:event.attachment.file.name }}</a>
-                                <span class="when">{{ event.timestamp|date:"d/m/Y H:i" }}</span>
+                                <strong>{{ attachment.uploaded_by.get_username }}</strong> anexou
+                                <a href="{{ attachment.file.url }}" target="_blank" rel="noopener">{{ attachment.original_name|default:attachment.file.name }}</a>
+                                <span class="when">{{ attachment.uploaded_at|date:"d/m/Y H:i" }}</span>
                             </div>
                             {% if can_manage_attachments %}
-                            <form method="post" action="{% url 'activity-attachment-delete' activity.pk event.attachment.pk %}"
+                            <form method="post" action="{% url 'activity-attachment-delete' activity.pk attachment.pk %}"
                                   onsubmit="return confirm('Remover este anexo?');">
                                 {% csrf_token %}
                                 <button type="submit" class="link-button small">Remover</button>
                             </form>
                             {% endif %}
                         </div>
-                        {% else %}
-                        <span class="feed-item__icon feed-item__icon--muted">{% include "_icon.html" with name="clock" %}</span>
-                        <div>
-                            <div class="feed-item__meta">
-                                <strong>{% if event.entry.user %}{{ event.entry.user.get_username }}{% else %}Sistema{% endif %}</strong>
-                                {{ event.entry|audit_phrase }}
-                                {% if event.entry.task %} — <a href="{% url 'task-detail' event.entry.task.pk %}">{{ event.entry.task.title }}</a>{% endif %}
-                                <span class="when">{{ event.timestamp|date:"d/m/Y H:i" }}</span>
-                            </div>
-                            {% if event.entry.reason %}<div class="muted small">Motivo: {{ event.entry.reason }}</div>{% endif %}
-                        </div>
-                        {% endif %}
                     </li>
                     {% endfor %}
                 </ul>
                 {% else %}
                 <div class="empty-state" style="padding:24px 10px">
-                    <div class="empty-state__icon">{% include "_icon.html" with name="clock" %}</div>
+                    <div class="empty-state__icon">{% include "_icon.html" with name="info" %}</div>
                     <h3>Nada por aqui ainda</h3>
-                    <p style="margin-bottom:0">Comentários, anexos e eventos do sistema aparecem juntos, em ordem.</p>
+                    <p style="margin-bottom:0">Comentários e anexos aparecem aqui.</p>
                 </div>
                 {% endif %}
+            </div>
+
+            <div class="card__body side-tabs__panel" data-tab-panel="historico">
+                {% include "activities/_timeline.html" with entries=history_entries %}
             </div>
         </div>
     </aside>
@@ -255,6 +287,31 @@
                 });
             });
         });
+
+    document.querySelectorAll(".js-menu-dots").forEach(function (root) {
+        var trigger = root.querySelector(".menu-dots__trigger");
+        var popup = root.querySelector(".menu-dots__popup");
+        trigger.addEventListener("click", function (event) {
+            event.stopPropagation();
+            popup.hidden = !popup.hidden;
+        });
+        document.addEventListener("click", function (event) {
+            if (!root.contains(event.target)) popup.hidden = true;
+        });
+    });
+
+    document.querySelectorAll(".js-side-tabs").forEach(function (tabs) {
+        var container = tabs.closest(".card--flush");
+        tabs.querySelectorAll(".side-tabs__tab").forEach(function (tab) {
+            tab.addEventListener("click", function () {
+                tabs.querySelectorAll(".side-tabs__tab").forEach(function (t) { t.classList.remove("is-active"); });
+                tab.classList.add("is-active");
+                container.querySelectorAll(".side-tabs__panel").forEach(function (panel) {
+                    panel.classList.toggle("is-active", panel.dataset.tabPanel === tab.dataset.tab);
+                });
+            });
+        });
+    });
 })();
 </script>
 {% endblock %}

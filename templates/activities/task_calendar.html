@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Tarefas — Calendário — LPS{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div class="page-head__text">
+        <h1>Tarefas</h1>
+        <p class="sub">Prazo comprometido, ou solicitado quando ainda não há comprometido.</p>
+    </div>
+    <div class="page-head__actions">
+        <a href="{% url 'task-quick-create-standalone' %}" class="btn btn--primary js-new-task">{% include "_icon.html" with name="plus" %} Nova tarefa</a>
+        <a href="{% url 'queue' %}" class="btn">Ver fila do setor</a>
+    </div>
+</div>
+
+{% include "activities/_task_view_filters.html" %}
+
+<div class="calendar-nav">
+    <a class="btn btn--sm" href="?ano={{ prev_year }}&mes={{ prev_month }}&{{ filter_querystring }}">&larr; Anterior</a>
+    <span class="calendar-nav__title">{{ month_date|date:"F Y"|capfirst }}</span>
+    <a class="btn btn--sm" href="?ano={{ next_year }}&mes={{ next_month }}&{{ filter_querystring }}">Próximo &rarr;</a>
+</div>
+
+<div class="calendar-grid">
+    <div class="calendar-grid__weekday">Dom</div>
+    <div class="calendar-grid__weekday">Seg</div>
+    <div class="calendar-grid__weekday">Ter</div>
+    <div class="calendar-grid__weekday">Qua</div>
+    <div class="calendar-grid__weekday">Qui</div>
+    <div class="calendar-grid__weekday">Sex</div>
+    <div class="calendar-grid__weekday">Sáb</div>
+
+    {% for week in weeks %}
+        {% for day in week %}
+        <div class="calendar-day {% if not day.in_month %}is-outside-month{% endif %} {% if day.is_today %}is-today{% endif %}">
+            <div class="calendar-day__number">{{ day.date|date:"j" }}</div>
+            {% for task in day.tasks|slice:":3" %}
+            <a href="{% url 'task-detail' task.pk %}" class="calendar-day__task tag tag--{{ task.status }}">{{ task.title }}</a>
+            {% endfor %}
+            {% if day.tasks|length > 3 %}
+            <div class="calendar-day__more muted small">+{{ day.tasks|length|add:"-3" }} mais</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    {% endfor %}
+</div>
+
+{% if undated_tasks %}
+<div class="card card--flush">
+    <div class="table-wrap">
+        <h3 style="padding: 14px 16px 0;">Sem prazo definido</h3>
+        <table class="responsive">
+            <thead><tr><th>Tarefa</th><th>Atividade</th><th>Setor</th><th>Situação</th></tr></thead>
+            <tbody>
+            {% for task in undated_tasks %}
+            <tr>
+                <td data-label="Tarefa"><a href="{% url 'task-detail' task.pk %}" class="title">{{ task.title }}</a></td>
+                <td data-label="Atividade"><a href="{% url 'activity-detail' task.activity.pk %}">{{ task.activity.title }}</a></td>
+                <td data-label="Setor">{{ task.sector.name }}</td>
+                <td data-label="Situação"><span class="tag tag--{{ task.status }}">{{ task.get_status_display }}</span></td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+<script>
+(function () {
+    "use strict";
+    document.querySelectorAll(".js-new-task").forEach(function (link) {
+        link.addEventListener("click", function (event) {
+            if (!window.LPSModal) return;
+            event.preventDefault();
+            window.LPSModal.open(link.getAttribute("href"), {
+                onSuccess: function () { window.location.reload(); }
+            });
+        });
+    });
+})();
+</script>
+{% endblock %}

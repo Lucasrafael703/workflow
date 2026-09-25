@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Nova atividade — LPS{% endblock %}
+
+{% block content %}
+<div class="modal-backdrop">
+    <div class="modal">
+        <div class="modal__head">
+            <div>
+                <h2>Nova atividade</h2>
+                <div class="sub">Só o essencial — os demais dados podem ser preenchidos depois.</div>
+            </div>
+            <button type="button" class="modal__close" title="Fechar">&times;</button>
+        </div>
+
+        <form method="post">
+            {% csrf_token %}
+            <div class="modal__body">
+                {% if form.non_field_errors %}
+                <ul class="messages">
+                    {% for error in form.non_field_errors %}<li class="message message--error">{{ error }}</li>{% endfor %}
+                </ul>
+                {% endif %}
+                <div class="form-row">
+                    <label for="{{ form.title.id_for_label }}">
+                        {{ form.title.label }} <span class="req">*</span>
+                    </label>
+                    {{ form.title }}
+                    {% if form.title.errors %}<ul class="errorlist">{% for e in form.title.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                </div>
+            </div>
+            <div class="modal__foot">
+                <a href="#" class="btn">Cancelar</a>
+                <button type="submit" class="btn btn--primary">Criar atividade</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

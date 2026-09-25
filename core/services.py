@@ -1,6 +1,6 @@
-from django.db import transaction
+from django.db import models, transaction
 
-from .models import Client, Company, CostCenter, Sector, Site
+from .models import Client, Company, CostCenter, Sector, Site, Tag, TaskStage
 
 
 class CadastroError(Exception):
@@ -131,6 +131,43 @@ class CostCenterService(SimpleCadastroService):
 
 class ClientService(SimpleCadastroService):
     model = Client
+
+
+class TagService(SimpleCadastroService):
+    model = Tag
+
+
+class TaskStageService(SimpleCadastroService):
+    """Estágios de Kanban de tarefa (cadastro configurável por organização).
+
+    `order` nunca é digitado — nasce no fim da lista e só muda via `reorder`,
+    chamado pelo drag-and-drop da tela de cadastro.
+    """
+
+    model = TaskStage
+
+    @classmethod
+    @transaction.atomic
+    def create(cls, organization, name, created_by=None, **extra):
+        last_order = cls.model.objects.filter(organization=organization).aggregate(models.Max("order"))[
+            "order__max"
+        ] or 0
+        extra.setdefault("order", last_order + 1)
+        extra.setdefault("created_by", created_by)
+        return super().create(organization, name, **extra)
+
+    @classmethod
+    @transaction.atomic
+    def reorder(cls, organization, ordered_ids):
+        """Recebe a lista completa de IDs de TaskStage na nova ordem e
+        renumera 1..N. Ignora IDs que não pertencem à organização (defesa
+        contra manipulação do payload)."""
+        stages = {s.pk: s for s in cls.model.objects.filter(organization=organization, pk__in=ordered_ids)}
+        for position, stage_id in enumerate(ordered_ids, start=1):
+            stage = stages.get(stage_id)
+            if stage and stage.order != position:
+                stage.order = position
+                stage.save(update_fields=["order"])
 
 
 class ReturnReasonService(SimpleCadastroService):

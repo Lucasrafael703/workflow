@@ -8,48 +8,50 @@
         <p class="sub">Os passos que você executa. Cada tarefa pertence a uma atividade.</p>
     </div>
     <div class="page-head__actions">
+        <a href="{% url 'task-quick-create-standalone' %}" class="btn btn--primary js-new-task">{% include "_icon.html" with name="plus" %} Nova tarefa</a>
         <a href="{% url 'queue' %}" class="btn">Ver fila do setor</a>
     </div>
 </div>
 
-<nav class="tabs">
-    <a href="?tab=minhas" class="{% if tab == 'minhas' and status != 'concluidas' %}is-active{% endif %}">Atribuídas a mim</a>
-    <a href="?tab=setor" class="{% if tab == 'setor' and status != 'concluidas' %}is-active{% endif %}">Dos meus setores</a>
-    <a href="?tab={{ tab }}&status=concluidas" class="{% if status == 'concluidas' %}is-active{% endif %}">Concluídas</a>
-</nav>
+{% include "activities/_task_view_filters.html" %}
 
-{# Visões salvas por exceção operacional (Benchmark §3) #}
-<form method="get">
-    <input type="hidden" name="tab" value="{{ tab }}">
-    {% if status == 'concluidas' %}<input type="hidden" name="status" value="concluidas">{% endif %}
-    <div class="toolbar">
-        <div class="toolbar__search">
-            {% include "_icon.html" with name="search" %}
-            <input type="search" name="q" value="{{ search }}" placeholder="Buscar por tarefa ou atividade…">
+{% if view_mode == "atividade" %}
+    {% if activity_groups %}
+    {% for group in activity_groups %}
+    <div class="card card--flush">
+        <div class="table-wrap">
+            <h3 style="padding: 14px 16px 0;"><a href="{% url 'activity-detail' group.activity.pk %}">{{ group.activity.title }}</a></h3>
+            <table class="responsive">
+                <thead><tr><th>Tarefa</th><th>Setor</th><th>Prazo</th><th>Situação</th></tr></thead>
+                <tbody>
+                {% for task in group.tasks %}
+                <tr>
+                    <td data-label="Tarefa"><a href="{% url 'task-detail' task.pk %}" class="title">{{ task.title }}</a></td>
+                    <td data-label="Setor">{{ task.sector.name }}</td>
+                    <td data-label="Prazo">
+                        {% if task.committed_deadline %}{{ task.committed_deadline|date:"d/m/Y H:i" }}
+                        {% elif task.requested_deadline %}<span class="muted">{{ task.requested_deadline|date:"d/m/Y H:i" }} (solicitado)</span>
+                        {% else %}<span class="muted">Sem prazo</span>{% endif %}
+                    </td>
+                    <td data-label="Situação"><span class="tag tag--{{ task.status }}">{{ task.get_status_display }}</span></td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
         </div>
-        <label class="inline" for="filtro">Visão</label>
-        <select id="filtro" name="filtro">
-            <option value="">Todas</option>
-            <option value="em-execucao" {% if view_filter == 'em-execucao' %}selected{% endif %}>Em execução</option>
-            <option value="atrasadas" {% if view_filter == 'atrasadas' %}selected{% endif %}>Atrasadas</option>
-            <option value="bloqueadas" {% if view_filter == 'bloqueadas' %}selected{% endif %}>Bloqueadas</option>
-            <option value="devolvidas" {% if view_filter == 'devolvidas' %}selected{% endif %}>Devolvidas</option>
-        </select>
-        <label class="inline" for="sector">Setor</label>
-        <select id="sector" name="sector">
-            <option value="">Todos</option>
-            {% for sector in sectors %}
-            <option value="{{ sector.pk }}" {% if selected_sector == sector.pk|stringformat:"s" %}selected{% endif %}>{{ sector.name }}</option>
-            {% endfor %}
-        </select>
-        <button type="submit" class="btn">Aplicar</button>
-        {% if search or view_filter or selected_sector %}
-        <a href="?tab={{ tab }}" class="btn btn--ghost">Limpar</a>
-        {% endif %}
     </div>
-</form>
+    {% endfor %}
+    {% else %}
+    <div class="card">
+        <div class="empty-state">
+            <div class="empty-state__icon">{% include "_icon.html" with name="task" %}</div>
+            <h3>Nenhuma tarefa nesta visão</h3>
+            <p>Quando uma tarefa for atribuída a você — ou chegar na fila do seu setor — ela aparece aqui.</p>
+        </div>
+    </div>
+    {% endif %}
 
-{% if tasks %}
+{% elif tasks %}
 <div class="card card--flush">
     <div class="table-wrap">
         <table class="responsive">
@@ -103,4 +105,18 @@
     </div>
 </div>
 {% endif %}
+<script>
+(function () {
+    "use strict";
+    document.querySelectorAll(".js-new-task").forEach(function (link) {
+        link.addEventListener("click", function (event) {
+            if (!window.LPSModal) return;
+            event.preventDefault();
+            window.LPSModal.open(link.getAttribute("href"), {
+                onSuccess: function () { window.location.reload(); }
+            });
+        });
+    });
+})();
+</script>
 {% endblock %}

@@ -8,6 +8,7 @@ from acessos import catalog
 from acessos.services import AuthorizationError, AuthorizationService, ResourceContext
 from audit.models import AuditLog
 from audit.services import AuditService
+from core.models import Tag
 from notifications.models import Notification
 from notifications.recipients import resolve_sector_and_admins, resolve_sector_managers
 from notifications.services import EmailService, NotificationService
@@ -19,6 +20,7 @@ from .models import (
     ActivityPendency,
     DeadlineConflict,
     DeadlineProposal,
+    MessageKind,
     OwnerChangeLog,
     QueueEntry,
     QueuePositionChange,
@@ -26,6 +28,7 @@ from .models import (
     Task,
     TaskAssignment,
     TaskBlock,
+    TaskChecklistItem,
     TaskExecutor,
     TaskMessage,
     TaskReturn,
@@ -92,6 +95,7 @@ class ActivityService:
         urgency=None,
         sector=None,
         address="",
+        tags=None,
     ):
         require_action(
             created_by,
@@ -120,6 +124,8 @@ class ActivityService:
             created_by=created_by,
             requested_deadline=requested_deadline,
         )
+        if tags:
+            activity.tags.set(tags)
 
         AuditService.log(user=created_by, action=AuditLog.Action.CREATE, activity=activity, new_value=title)
         NotificationService.notify(
@@ -250,6 +256,13 @@ class ActivityService:
 
         if changed:
             activity.save(update_fields=changed)
+
+        # M2M não passa por setattr/save — camada puramente informativa,
+        # sem auditoria de valor anterior (mesmo espírito de TaskStage: não
+        # é regra de negócio).
+        if "tags" in fields:
+            activity.tags.set(fields["tags"])
+
         return activity
 
     @staticmethod
@@ -658,14 +671,75 @@ class ActivityAttachmentService:
         )
 
 
+# Atalhos de título no "+ Nova tarefa" (mesma ideia do Odoo: #tag e
+# @pessoa digitados no título já preenchem os campos correspondentes, sem
+# abrir mais campos). O grupo \s antes evita casar um # ou @ no meio de uma
+# palavra (ex.: "cotação#123" não devia virar tag "123"). A menção aceita
+# @ no meio do token (não só no início) porque o username aqui é o
+# e-mail completo (ex. "@paulo@biasiengenharia.com.br") — só a tag exclui
+# @ do meio, para "#tag@algo" não grudar os dois num token só.
+TAG_TOKEN_PATTERN = re.compile(r"(?:^|\s)#([^\s#@]+)")
+MENTION_TOKEN_PATTERN = re.compile(r"(?:^|\s)@([^\s#]+)")
+
+
 class TaskService:
     # ------------------------------------------------------------------
     # Criação e execução
     # ------------------------------------------------------------------
 
     @staticmethod
+    def parse_quick_title(title, organization):
+        """Extrai #tag e @pessoa do título digitado no popup "+ Nova
+        tarefa" (mesmo espírito do parser de atalhos do Odoo). Só resolve
+        e retorna os dados — quem chama decide o que fazer com eles
+        (`task.tags.set(...)`, `TaskService.add_executor(...)`) depois da
+        tarefa já criada; este método nunca grava nada sozinho.
+
+        Uma @menção ambígua (mais de um usuário) ou que não corresponde a
+        ninguém permanece como texto no título, sem tentar adivinhar —
+        mesma regra usada em `MessageService._mentioned_users`.
+        """
+        tag_names = TAG_TOKEN_PATTERN.findall(title)
+        mentioned_usernames = MENTION_TOKEN_PATTERN.findall(title)
+
+        clean_title = TAG_TOKEN_PATTERN.sub(" ", title)
+        clean_title = MENTION_TOKEN_PATTERN.sub(" ", clean_title)
+
+        tags = []
+        seen_tag_names = set()
+        for name in tag_names:
+            key = name.lower()
+            if key in seen_tag_names:
+                continue
+            seen_tag_names.add(key)
+            tag = Tag.objects.filter(organization=organization, name__iexact=name).first()
+            if tag is None:
+                tag = Tag.objects.create(organization=organization, name=name)
+            tags.append(tag)
+
+        assignee = None
+        unresolved_usernames = []
+        for username in mentioned_usernames:
+            candidates = User.objects.filter(
+                username__iexact=username, profile__organization=organization, is_active=True
+            )
+            if candidates.count() == 1:
+                assignee = candidates.first()
+            else:
+                unresolved_usernames.append(username)
+
+        if unresolved_usernames:
+            clean_title = clean_title.rstrip() + " " + " ".join(f"@{u}" for u in unresolved_usernames)
+
+        clean_title = " ".join(clean_title.split())
+        return {"title": clean_title, "tags": tags, "assignee": assignee}
+
+    @staticmethod
     @transaction.atomic
-    def create_task(activity, sector, title, created_by, description="", order=1, depends_on=None, requested_deadline=None):
+    def create_task(
+        activity, sector, title, created_by, description="", order=1, depends_on=None,
+        requested_deadline=None, tags=None,
+    ):
         # A tarefa nasce no setor informado: é esse o escopo que autoriza.
         require_action(
             created_by,
@@ -695,6 +769,8 @@ class TaskService:
             status=Task.Status.DISPONIVEL,
             created_by=created_by,
         )
+        if tags:
+            task.tags.set(tags)
         AuditService.log(user=created_by, action=AuditLog.Action.TASK_CREATED, activity=activity, task=task, new_value=title)
 
         QueueService.enqueue(task, sector, user=created_by)
@@ -749,6 +825,10 @@ class TaskService:
 
         if changed:
             task.save(update_fields=changed)
+
+        if "tags" in fields:
+            task.tags.set(fields["tags"])
+
         return task
 
     @staticmethod
@@ -1190,6 +1270,36 @@ class TaskService:
         return task
 
 
+    # ------------------------------------------------------------------
+    # Checklist / subtarefas
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    @transaction.atomic
+    def add_checklist_item(task, user, text):
+        require_action(user, catalog.TAREFA_EDITAR, task)
+        text = (text or "").strip()
+        if not text:
+            raise ActivityError("Escreva o texto do item.")
+        next_order = (task.checklist_items.count() or 0) + 1
+        return TaskChecklistItem.objects.create(task=task, text=text, order=next_order, created_by=user)
+
+    @staticmethod
+    @transaction.atomic
+    def toggle_checklist_item(item, user, is_done):
+        require_action(user, catalog.TAREFA_EDITAR, item.task)
+        item.is_done = is_done
+        item.done_by = user if is_done else None
+        item.done_at = timezone.now() if is_done else None
+        item.save(update_fields=["is_done", "done_by", "done_at"])
+        return item
+
+    @staticmethod
+    @transaction.atomic
+    def remove_checklist_item(item, user):
+        require_action(user, catalog.TAREFA_EDITAR, item.task)
+        item.delete()
+
     @staticmethod
     def mark_overdue_tasks():
         """Verifica tarefas com prazo comprometido vencido e ainda não notificadas
@@ -1476,13 +1586,13 @@ class MessageService:
 
     @staticmethod
     @transaction.atomic
-    def post_activity_message(activity, author, body):
+    def post_activity_message(activity, author, body, kind=MessageKind.NORMAL):
         require_action(author, catalog.COMUNICACAO_PARTICIPAR, activity)
         body = (body or "").strip()
         if not body:
             raise ActivityError("Escreva uma mensagem antes de enviar.")
 
-        message = ActivityMessage.objects.create(activity=activity, author=author, body=body)
+        message = ActivityMessage.objects.create(activity=activity, author=author, body=body, kind=kind)
 
         mentioned = MessageService._mentioned_users(body, author, activity)
 
@@ -1512,13 +1622,13 @@ class MessageService:
 
     @staticmethod
     @transaction.atomic
-    def post_task_message(task, author, body):
+    def post_task_message(task, author, body, kind=MessageKind.NORMAL):
         require_action(author, catalog.COMUNICACAO_PARTICIPAR, task)
         body = (body or "").strip()
         if not body:
             raise ActivityError("Escreva uma mensagem antes de enviar.")
 
-        message = TaskMessage.objects.create(task=task, author=author, body=body)
+        message = TaskMessage.objects.create(task=task, author=author, body=body, kind=kind)
 
         mentioned = MessageService._mentioned_users(body, author, task)
 

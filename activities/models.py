@@ -98,6 +98,9 @@ class Activity(models.Model):
     address = models.CharField(
         "endereço", max_length=255, blank=True, help_text="Endereço adicional, além do cadastro do cliente."
     )
+    tags = models.ManyToManyField(
+        "core.Tag", verbose_name="marcadores", blank=True, related_name="activities"
+    )
 
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -290,6 +293,20 @@ class ActivityPendency(models.Model):
         return self.reason in self.APPROVAL_REASONS
 
 
+class MessageKind(models.TextChoices):
+    """Categoria de uma mensagem — só `DECISAO` ganha destaque visual por
+    enquanto; os demais ficam prontos para uma iteração futura sem exigir
+    nova migração. Vocabulário estrutural fixo, não cadastro configurável
+    (mesmo raciocínio de Activity.Status): compartilhado por
+    ActivityMessage e TaskMessage."""
+
+    NORMAL = "NORMAL", "Mensagem"
+    DECISAO = "DECISAO", "Decisão registrada"
+    RISCO = "RISCO", "Risco"
+    COMPROMISSO = "COMPROMISSO", "Compromisso"
+    IMPEDIMENTO = "IMPEDIMENTO", "Impedimento"
+
+
 class ActivityMessage(models.Model):
     """Comunicação contextual ligada à atividade (Regras 06). Não altera dados oficiais."""
 
@@ -298,6 +315,7 @@ class ActivityMessage(models.Model):
         settings.AUTH_USER_MODEL, verbose_name="autor", on_delete=models.PROTECT, related_name="+"
     )
     body = models.TextField("mensagem")
+    kind = models.CharField("tipo", max_length=12, choices=MessageKind.choices, default=MessageKind.NORMAL)
     created_at = models.DateTimeField("enviada em", auto_now_add=True)
 
     class Meta:
@@ -400,9 +418,25 @@ class Task(models.Model):
     sector = models.ForeignKey(
         "core.Sector", verbose_name="setor responsável", on_delete=models.PROTECT, related_name="tasks"
     )
+    stage = models.ForeignKey(
+        "core.TaskStage",
+        verbose_name="estágio",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="tasks",
+        help_text="Coluna do Kanban configurável por organização — camada visual, não altera o status operacional da tarefa.",
+    )
+    stage_changed_at = models.DateTimeField(
+        "estágio alterado em",
+        null=True,
+        blank=True,
+        help_text="Quando `stage` mudou pela última vez — usado só para o indicador de tempo parado no Kanban.",
+    )
     order = models.PositiveIntegerField("ordem", default=1)
     title = models.CharField("título", max_length=200)
     description = models.TextField("descrição", blank=True)
+    tags = models.ManyToManyField("core.Tag", verbose_name="marcadores", blank=True, related_name="tasks")
 
     depends_on = models.ForeignKey(
         "self",
@@ -640,6 +674,7 @@ class TaskMessage(models.Model):
         settings.AUTH_USER_MODEL, verbose_name="autor", on_delete=models.PROTECT, related_name="+"
     )
     body = models.TextField("mensagem")
+    kind = models.CharField("tipo", max_length=12, choices=MessageKind.choices, default=MessageKind.NORMAL)
     created_at = models.DateTimeField("enviada em", auto_now_add=True)
 
     class Meta:
@@ -649,6 +684,38 @@ class TaskMessage(models.Model):
 
     def __str__(self):
         return f"{self.author} em {self.task}"
+
+
+class TaskChecklistItem(models.Model):
+    """Item de checklist dentro de uma tarefa — granularidade abaixo da
+    tarefa, sem virar uma segunda hierarquia (Task.depends_on continua
+    sendo a única dependência entre tarefas irmãs da mesma atividade)."""
+
+    task = models.ForeignKey(Task, verbose_name="tarefa", on_delete=models.CASCADE, related_name="checklist_items")
+    text = models.CharField("item", max_length=255)
+    is_done = models.BooleanField("concluído", default=False)
+    order = models.PositiveIntegerField("ordem", default=1)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, verbose_name="criado por", on_delete=models.PROTECT, related_name="+"
+    )
+    created_at = models.DateTimeField("criado em", auto_now_add=True)
+    done_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="marcado por",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    done_at = models.DateTimeField("marcado em", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "item de checklist"
+        verbose_name_plural = "itens de checklist"
+        ordering = ["order", "created_at"]
+
+    def __str__(self):
+        return f"{self.task}: {self.text}"
 
 
 # ---------------------------------------------------------------------------

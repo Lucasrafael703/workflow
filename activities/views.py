@@ -3,7 +3,7 @@ from datetime import timedelta
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
-from django.db.models import Avg, Count, F, Prefetch, Q
+from django.db.models import Avg, Count, Exists, F, OuterRef, Prefetch, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
@@ -15,13 +15,15 @@ from audit.models import AuditLog
 from acessos import catalog
 from acessos.services import AuthorizationService
 from core.mixins import ActionRequiredMixin, OrganizationRequiredMixin, user_sectors
-from core.models import Client, CostCenter, Sector
+from core.models import Client, CostCenter, Sector, TaskStage
 
 from .forms import (
     ActivityApprovePendencyForm,
     ActivityAttachmentForm,
+    ActivityDeadlineChangeForm,
     ActivityEditForm,
     ActivityFinalizeForm,
+    ActivityMiniCreateForm,
     ActivityPendingForm,
     ActivityQuickCreateForm,
     AssignmentRejectForm,
@@ -37,6 +39,7 @@ from .forms import (
     TaskBlockForm,
     TaskForm,
     TaskQuickCreateForm,
+    TaskQuickCreateStandaloneForm,
     TaskReturnForm,
 )
 from .models import (
@@ -45,9 +48,11 @@ from .models import (
     ActivityPendency,
     DeadlineConflict,
     DeadlineProposal,
+    MessageKind,
     QueueEntry,
     Task,
     TaskAssignment,
+    TaskChecklistItem,
     TaskExecutor,
     TaskReturn,
     WorkSession,
@@ -78,6 +83,68 @@ OPEN_TASK_STATUSES = [
 ]
 
 
+def filtered_tasks_queryset(request, organization):
+    """Filtro de tarefas compartilhado entre Lista, Kanban, Calendário e
+    visão por Atividade — mesmos parâmetros GET (tab/status/filtro/q/sector),
+    para as 4 visualizações sempre mostrarem exatamente o mesmo subconjunto,
+    só reagrupado/re-renderizado de formas diferentes."""
+    user = request.user
+    tab = request.GET.get("tab", "minhas")
+    queryset = Task.objects.filter(activity__organization=organization)
+
+    if tab == "setor":
+        queryset = queryset.filter(sector__in=user_sectors(user))
+    else:
+        queryset = queryset.filter(executors__user=user, executors__removed_at__isnull=True)
+
+    if request.GET.get("status") == "concluidas":
+        queryset = queryset.filter(status=Task.Status.CONCLUIDA)
+    else:
+        queryset = queryset.filter(status__in=OPEN_TASK_STATUSES)
+
+    # Visões salvas por condição operacional, no lugar de segmentações
+    # comerciais (Benchmark §3: atrasadas, bloqueadas, devolvidas).
+    view = request.GET.get("filtro")
+    if view == "atrasadas":
+        queryset = queryset.filter(committed_deadline__lt=timezone.now()).exclude(
+            status=Task.Status.CONCLUIDA
+        )
+    elif view == "bloqueadas":
+        queryset = queryset.filter(status=Task.Status.BLOQUEADA)
+    elif view == "devolvidas":
+        queryset = queryset.filter(status=Task.Status.DEVOLVIDA)
+    elif view == "em-execucao":
+        queryset = queryset.filter(status=Task.Status.EM_EXECUCAO)
+
+    search = request.GET.get("q", "").strip()
+    if search:
+        queryset = queryset.filter(Q(title__icontains=search) | Q(activity__title__icontains=search))
+
+    sector = request.GET.get("sector")
+    if sector:
+        queryset = queryset.filter(sector_id=sector)
+
+    return queryset.select_related("activity", "sector", "stage").distinct()
+
+
+def task_filter_context(request, organization):
+    """Contexto dos filtros/abas comuns às 4 visualizações de tarefa, mais a
+    querystring atual sem `visao`/`page` — usada por cada aba do seletor de
+    visão para montar seu link preservando os filtros ativos."""
+    params = request.GET.copy()
+    params.pop("visao", None)
+    params.pop("page", None)
+    return {
+        "tab": request.GET.get("tab", "minhas"),
+        "status": request.GET.get("status", "abertas"),
+        "view_filter": request.GET.get("filtro", ""),
+        "search": request.GET.get("q", ""),
+        "sectors": Sector.objects.filter(organization=organization, is_active=True),
+        "selected_sector": request.GET.get("sector", ""),
+        "filter_querystring": params.urlencode(),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Helpers compartilhados
 # ---------------------------------------------------------------------------
@@ -93,6 +160,55 @@ def queue_position(task):
         return None
     total = QueueEntry.objects.filter(sector_id=entry.sector_id, left_at__isnull=True).count()
     return {"entry": entry, "position": entry.position, "total": total, "sector": entry.sector}
+
+
+def _next_attention(tasks):
+    """A tarefa que mais precisa de atenção agora, entre as ainda abertas —
+    "Onde está o problema?" em vez de uma lista neutra. Ordem de prioridade:
+    bloqueada > mais atrasada > com decisão de prazo parada > próxima a
+    vencer. Retorna None se não houver nenhuma tarefa aberta com sinal de
+    atenção ou prazo definido. `attention_reason` vai junto para o template
+    não precisar comparar datas de novo."""
+    blocked = [t for t in tasks if t.status == Task.Status.BLOQUEADA]
+    if blocked:
+        blocked[0].attention_reason = "blocked"
+        return blocked[0]
+
+    now = timezone.now()
+    overdue = [
+        t
+        for t in tasks
+        if t.status not in (Task.Status.CONCLUIDA, Task.Status.CANCELADA)
+        and t.committed_deadline
+        and t.committed_deadline < now
+    ]
+    if overdue:
+        task = min(overdue, key=lambda t: t.committed_deadline)
+        task.attention_reason = "overdue"
+        return task
+
+    pending_decision = [
+        t
+        for t in tasks
+        if t.status not in (Task.Status.CONCLUIDA, Task.Status.CANCELADA)
+        and (t.has_pending_proposal or t.has_open_conflict)
+    ]
+    if pending_decision:
+        pending_decision[0].attention_reason = "negotiating"
+        return pending_decision[0]
+
+    open_with_deadline = [
+        t
+        for t in tasks
+        if t.status in (Task.Status.EM_EXECUCAO, Task.Status.EM_FILA, Task.Status.DISPONIVEL)
+        and (t.committed_deadline or t.requested_deadline)
+    ]
+    if open_with_deadline:
+        task = min(open_with_deadline, key=lambda t: t.committed_deadline or t.requested_deadline)
+        task.attention_reason = "upcoming"
+        return task
+
+    return None
 
 
 def active_session(user):
@@ -253,6 +369,7 @@ class ActivityListView(OrganizationRequiredMixin, ListView):
 
     FILTER_KEYS = (
         "status",
+        "prazo",
         "urgencia",
         "cliente",
         "grupo",
@@ -302,6 +419,25 @@ class ActivityListView(OrganizationRequiredMixin, ListView):
             # terminou — quem quiser ver concluída/cancelada escolhe o status.
             queryset = queryset.exclude(status__in=[Activity.Status.CONCLUIDA, Activity.Status.CANCELADA])
 
+        deadline = self.request.GET.get("prazo", "")
+        now = timezone.now()
+        if deadline == "atrasadas":
+            queryset = queryset.filter(requested_deadline__lt=now).exclude(
+                status__in=[Activity.Status.CONCLUIDA, Activity.Status.CANCELADA]
+            )
+        elif deadline == "7_dias":
+            queryset = queryset.filter(
+                requested_deadline__gte=now,
+                requested_deadline__lte=now + timedelta(days=7),
+            )
+        elif deadline == "30_dias":
+            queryset = queryset.filter(
+                requested_deadline__gte=now,
+                requested_deadline__lte=now + timedelta(days=30),
+            )
+        elif deadline == "sem_prazo":
+            queryset = queryset.filter(requested_deadline__isnull=True)
+
         urgency = self.request.GET.get("urgencia", "")
         if urgency:
             queryset = queryset.filter(urgency=urgency)
@@ -337,6 +473,12 @@ class ActivityListView(OrganizationRequiredMixin, ListView):
             .annotate(
                 total_tasks=Count("tasks", distinct=True),
                 done_tasks=Count("tasks", filter=Q(tasks__status=Task.Status.CONCLUIDA), distinct=True),
+                blocked_tasks=Count("tasks", filter=Q(tasks__status=Task.Status.BLOQUEADA), distinct=True),
+                open_deadline_conflicts=Count(
+                    "tasks__deadline_conflicts",
+                    filter=Q(tasks__deadline_conflicts__status=DeadlineConflict.Status.ABERTO),
+                    distinct=True,
+                ),
             )
             .distinct()
             .order_by(*self._ordering())
@@ -379,6 +521,16 @@ class ActivityListView(OrganizationRequiredMixin, ListView):
         )
 
         for activity in context["activities"]:
+            activity.is_overdue = bool(
+                activity.requested_deadline
+                and activity.requested_deadline < timezone.now()
+                and activity.status not in (Activity.Status.CONCLUIDA, Activity.Status.CANCELADA)
+            )
+            activity.overdue_days = (
+                max(1, (timezone.now().date() - activity.requested_deadline.date()).days)
+                if activity.is_overdue
+                else 0
+            )
             activity.can_assumir = (
                 activity.sector_id in my_sector_ids
                 and activity.owner_id != user.id
@@ -389,6 +541,15 @@ class ActivityListView(OrganizationRequiredMixin, ListView):
                 Activity.Status.CONCLUIDA,
                 Activity.Status.CANCELADA,
             ) and can(user, catalog.ATIVIDADE_ALTERAR_DONO, activity)
+            activity.can_edit = can(user, catalog.ATIVIDADE_EDITAR, activity)
+            activity.can_complete = activity.status not in (
+                Activity.Status.CONCLUIDA,
+                Activity.Status.CANCELADA,
+            ) and can(user, catalog.ATIVIDADE_CONCLUIR, activity)
+            activity.can_cancel = activity.status not in (
+                Activity.Status.CONCLUIDA,
+                Activity.Status.CANCELADA,
+            ) and can(user, catalog.ATIVIDADE_CANCELAR, activity)
         return context
 
 
@@ -421,6 +582,7 @@ class ActivityCreateView(OrganizationRequiredMixin, FormView):
                 urgency=data.get("urgency"),
                 sector=data.get("sector"),
                 address=data.get("address") or "",
+                tags=data.get("tags"),
             )
         except ActivityError as exc:
             form.add_error(None, str(exc))
@@ -439,38 +601,87 @@ class ActivityCreateView(OrganizationRequiredMixin, FormView):
         return context
 
 
-def build_activity_feed(activity, limit=150):
-    """Uma única linha do tempo lateral, misturando histórico do sistema,
-    comentários e anexos por data — em vez de três abas separadas (pedido 2:
-    "tudo em uma tela e uma aba lateral com o histórico")."""
-    events = []
-    for entry in activity.audit_entries.select_related("user", "task").order_by("-timestamp")[:limit]:
-        events.append({"kind": "history", "timestamp": entry.timestamp, "entry": entry})
-    for message in activity.messages.select_related("author").order_by("-created_at")[:limit]:
-        events.append({"kind": "message", "timestamp": message.created_at, "message": message})
-    for attachment in activity.attachments.select_related("uploaded_by").order_by("-uploaded_at")[:limit]:
-        events.append({"kind": "attachment", "timestamp": attachment.uploaded_at, "attachment": attachment})
-    events.sort(key=lambda event: event["timestamp"], reverse=True)
-    return events[:limit]
+class ActivitySearchView(OrganizationRequiredMixin, View):
+    """Busca de atividades para o `ActivityPickerWidget` (fluxo "+ Nova
+    tarefa" fora do contexto de uma atividade já aberta), mesmo padrão de
+    `core.views.ClientSearchView`. Só oferece atividades ainda não encerradas
+    como destino de uma tarefa nova."""
+
+    MAX_RESULTS = 20
+
+    def get(self, request):
+        term = request.GET.get("q", "").strip()
+        queryset = Activity.objects.filter(
+            organization=self.organization,
+            status__in=TaskQuickCreateStandaloneForm.OPEN_ACTIVITY_STATUSES,
+        ).order_by("-created_at")
+        if term:
+            queryset = queryset.filter(Q(title__icontains=term) | Q(code__icontains=term))
+        results = [
+            {"id": activity.pk, "name": f"{activity.code} — {activity.title}" if activity.code else activity.title}
+            for activity in queryset[: self.MAX_RESULTS]
+        ]
+        return JsonResponse({"results": results})
+
+
+class ActivityMiniCreateView(OrganizationRequiredMixin, FormView):
+    """Criação mínima de atividade, usada só dentro do popup aninhado do
+    "+ Nova tarefa": título e pronto, dono = quem está criando. Quem quiser
+    os demais campos (cliente, urgência, prazo…) edita a atividade depois —
+    ver `ActivityCreateView` para o formulário completo."""
+
+    template_name = "activities/activity_mini_form.html"
+    form_class = ActivityMiniCreateForm
+
+    def form_valid(self, form):
+        try:
+            activity = ActivityService.create_activity(
+                organization=self.organization,
+                title=form.cleaned_data["title"],
+                owner=self.request.user,
+                created_by=self.request.user,
+            )
+        except ActivityError as exc:
+            form.add_error(None, str(exc))
+            return self.form_invalid(form)
+        return JsonResponse({"id": activity.pk, "name": f"{activity.code} — {activity.title}"})
+
+    def form_invalid(self, form):
+        if _is_ajax(self.request):
+            return JsonResponse({"errors": form.errors}, status=400)
+        return super().form_invalid(form)
 
 
 class ActivityDetailView(OrganizationRequiredMixin, DetailView):
-    """Tudo em uma tela só (pedido 2): campos da criação e tarefas na coluna
-    principal, histórico + comentário + anexos na aba lateral — sem abas
-    para trocar de visão-geral/tarefas/anexos/histórico/conversa."""
+    """Centro de comando da atividade: situação atual, tarefas e conversa
+    na frente; dados cadastrais e histórico do sistema atrás — não uma tela
+    de cadastro com o trabalho em segundo plano."""
 
     template_name = "activities/activity_detail.html"
     context_object_name = "activity"
 
     def get_queryset(self):
         return Activity.objects.filter(organization=self.organization).select_related(
-            "owner", "created_by", "client", "sector", "company", "site", "cost_center", "completed_by"
+            "owner",
+            "created_by",
+            "client",
+            "sector",
+            "company",
+            "site",
+            "cost_center",
+            "completed_by",
+            "process_version__process",
         )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         activity = self.object
         user = self.request.user
+
+        pending_proposals = DeadlineProposal.objects.filter(
+            task=OuterRef("pk"), status=DeadlineProposal.Status.PENDENTE
+        )
+        open_conflicts = DeadlineConflict.objects.filter(task=OuterRef("pk"), status=DeadlineConflict.Status.ABERTO)
 
         tasks = list(
             activity.tasks.select_related("sector", "depends_on")
@@ -481,14 +692,50 @@ class ActivityDetailView(OrganizationRequiredMixin, DetailView):
                     to_attr="active_executors",
                 )
             )
+            .annotate(
+                has_pending_proposal=Exists(pending_proposals),
+                has_open_conflict=Exists(open_conflicts),
+            )
             .order_by("order", "created_at")
         )
+
+        status_counts = {"done": 0, "in_progress": 0, "waiting": 0, "blocked": 0}
         for task in tasks:
             task.queue_info = queue_position(task)
+            if task.status == Task.Status.CONCLUIDA:
+                status_counts["done"] += 1
+            elif task.status == Task.Status.EM_EXECUCAO:
+                status_counts["in_progress"] += 1
+            elif task.status == Task.Status.BLOQUEADA:
+                status_counts["blocked"] += 1
+            elif task.status in (Task.Status.DISPONIVEL, Task.Status.EM_FILA):
+                status_counts["waiting"] += 1
 
-        done = sum(1 for t in tasks if t.status == Task.Status.CONCLUIDA)
+        done = status_counts["done"]
         open_tasks = [t for t in tasks if t.status in OPEN_TASK_STATUSES]
         my_sector_ids = set(user_sectors(user).values_list("id", flat=True))
+
+        now = timezone.now()
+        is_overdue = bool(
+            activity.requested_deadline
+            and activity.requested_deadline < now
+            and activity.status not in (Activity.Status.CONCLUIDA, Activity.Status.CANCELADA)
+        )
+        overdue_days = (
+            max(1, (now.date() - activity.requested_deadline.date()).days) if is_overdue else 0
+        )
+
+        is_open = activity.status not in (Activity.Status.CONCLUIDA, Activity.Status.CANCELADA)
+        can_edit = can(user, catalog.ATIVIDADE_EDITAR, activity)
+        can_change_owner = can(user, catalog.ATIVIDADE_ALTERAR_DONO, activity)
+        can_reopen = can(user, catalog.ATIVIDADE_REABRIR, activity)
+        can_mark_pending = activity.status in (
+            Activity.Status.ABERTA,
+            Activity.Status.EM_ANDAMENTO,
+        ) and can(user, catalog.ATIVIDADE_MARCAR_PENDENTE, activity)
+        can_finalize = can(user, catalog.ATIVIDADE_CONCLUIR, activity) or can(
+            user, catalog.ATIVIDADE_CANCELAR, activity
+        )
 
         context.update(
             {
@@ -497,11 +744,22 @@ class ActivityDetailView(OrganizationRequiredMixin, DetailView):
                 "tasks_total": len(tasks),
                 "open_tasks": open_tasks,
                 "sectors_involved": sorted({t.sector.name for t in tasks}),
-                "feed": build_activity_feed(activity),
+                "status_counts": status_counts,
+                "next_attention": _next_attention(tasks),
+                "is_overdue": is_overdue,
+                "overdue_days": overdue_days,
+                "has_blocked_task": status_counts["blocked"] > 0,
+                "is_negotiating_deadline": any(t.has_pending_proposal or t.has_open_conflict for t in tasks),
+                "is_ready_to_complete": len(tasks) > 0 and not open_tasks,
+                "conversation": activity.messages.select_related("author").order_by("-created_at")[:100],
+                "attachments": activity.attachments.select_related("uploaded_by").order_by("-uploaded_at"),
+                "history_entries": activity.audit_entries.select_related("user", "task").order_by("-timestamp")[
+                    :100
+                ],
                 "owner_changes": activity.owner_changes.select_related(
                     "previous_owner", "new_owner", "changed_by"
                 ),
-                "can_change_owner": can(user, catalog.ATIVIDADE_ALTERAR_DONO, activity),
+                "can_change_owner": can_change_owner,
                 "can_assumir": (
                     activity.sector_id in my_sector_ids
                     and activity.owner_id != user.id
@@ -509,16 +767,12 @@ class ActivityDetailView(OrganizationRequiredMixin, DetailView):
                     and can(user, catalog.ATIVIDADE_ASSUMIR, activity)
                 ),
                 "can_cancel": can(user, catalog.ATIVIDADE_CANCELAR, activity),
-                "can_reopen": can(user, catalog.ATIVIDADE_REABRIR, activity),
+                "can_reopen": can_reopen,
                 "can_complete": can(user, catalog.ATIVIDADE_CONCLUIR, activity),
                 # Finalizar (popup único) aparece para quem pode concluir OU
                 # cancelar — o popup decide o resultado real, não o botão.
-                "can_finalize": can(user, catalog.ATIVIDADE_CONCLUIR, activity)
-                or can(user, catalog.ATIVIDADE_CANCELAR, activity),
-                "can_mark_pending": (
-                    activity.status in (Activity.Status.ABERTA, Activity.Status.EM_ANDAMENTO)
-                    and can(user, catalog.ATIVIDADE_MARCAR_PENDENTE, activity)
-                ),
+                "can_finalize": can_finalize,
+                "can_mark_pending": can_mark_pending,
                 "can_approve_pendency": (
                     activity.status == Activity.Status.PENDENTE
                     and can(user, catalog.ATIVIDADE_APROVAR_PENDENCIA, activity)
@@ -531,11 +785,16 @@ class ActivityDetailView(OrganizationRequiredMixin, DetailView):
                     if activity.status == Activity.Status.PENDENTE
                     else None
                 ),
-                "can_edit": can(user, catalog.ATIVIDADE_EDITAR, activity),
+                "can_edit": can_edit,
                 "can_add_task": can(user, catalog.TAREFA_CRIAR, activity),
                 "can_message": can(user, catalog.COMUNICACAO_PARTICIPAR, activity),
                 "is_owner": activity.owner_id == user.id,
-                "can_manage_attachments": can(user, catalog.ATIVIDADE_EDITAR, activity),
+                "can_manage_attachments": can_edit,
+                "message_kind_choices": MessageKind.choices,
+                "is_menu_active": (
+                    (is_open and (can_edit or can_change_owner or can_mark_pending or can_finalize))
+                    or (not is_open and can_reopen)
+                ),
             }
         )
         return context
@@ -654,6 +913,36 @@ class ActivityChangeOwnerView(OrganizationRequiredMixin, FormView):
         return redirect("activity-detail", pk=activity.pk)
 
 
+class ActivityChangeDeadlineView(OrganizationRequiredMixin, FormView):
+    template_name = "activities/activity_change_deadline.html"
+    form_class = ActivityDeadlineChangeForm
+
+    def get_activity(self):
+        return get_object_or_404(Activity, pk=self.kwargs["pk"], organization=self.organization)
+
+    def get_initial(self):
+        initial = super().get_initial()
+        initial["requested_deadline"] = self.get_activity().requested_deadline
+        return initial
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["activity"] = self.get_activity()
+        return context
+
+    def form_valid(self, form):
+        activity = self.get_activity()
+        try:
+            ActivityService.update_activity(
+                activity, self.request.user, requested_deadline=form.cleaned_data["requested_deadline"]
+            )
+        except ActivityError as exc:
+            form.add_error(None, str(exc))
+            return self.form_invalid(form)
+        messages.success(self.request, "Prazo da atividade alterado.")
+        return redirect("activity-detail", pk=activity.pk)
+
+
 class ActivityFinalizeView(OrganizationRequiredMixin, FormView):
     """Popup único de finalização: Sucesso, Concluído com pendências,
     Declinado ou Cancelado, sempre com comentário obrigatório — no lugar de
@@ -664,6 +953,13 @@ class ActivityFinalizeView(OrganizationRequiredMixin, FormView):
 
     def get_activity(self):
         return get_object_or_404(Activity, pk=self.kwargs["pk"], organization=self.organization)
+
+    def get_initial(self):
+        initial = super().get_initial()
+        outcome = self.request.GET.get("outcome")
+        if outcome in Activity.CompletionOutcome.values:
+            initial["outcome"] = outcome
+        return initial
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -812,7 +1108,10 @@ class ActivityContinueView(ServiceActionView):
         if not body and not uploaded:
             raise ActivityError("Escreva um comentário ou selecione um arquivo para continuar.")
         if body:
-            MessageService.post_activity_message(activity, request.user, body)
+            kind = request.POST.get("kind") or MessageKind.NORMAL
+            if kind not in MessageKind.values:
+                kind = MessageKind.NORMAL
+            MessageService.post_activity_message(activity, request.user, body, kind=kind)
         if uploaded:
             ActivityAttachmentService.add(activity, uploaded, uploaded_by=request.user)
         messages.success(request, "Atualização adicionada ao histórico.")
@@ -832,58 +1131,146 @@ class TaskListView(OrganizationRequiredMixin, ListView):
     paginate_by = 25
 
     def get_queryset(self):
-        user = self.request.user
-        tab = self.request.GET.get("tab", "minhas")
-        queryset = Task.objects.filter(activity__organization=self.organization)
-
-        if tab == "setor":
-            queryset = queryset.filter(sector__in=user_sectors(user))
-        else:
-            queryset = queryset.filter(executors__user=user, executors__removed_at__isnull=True)
-
-        if self.request.GET.get("status") == "concluidas":
-            queryset = queryset.filter(status=Task.Status.CONCLUIDA)
-        else:
-            queryset = queryset.filter(status__in=OPEN_TASK_STATUSES)
-
-        # Visões salvas por condição operacional, no lugar de segmentações
-        # comerciais (Benchmark §3: atrasadas, bloqueadas, devolvidas).
-        view = self.request.GET.get("filtro")
-        if view == "atrasadas":
-            queryset = queryset.filter(committed_deadline__lt=timezone.now()).exclude(
-                status=Task.Status.CONCLUIDA
-            )
-        elif view == "bloqueadas":
-            queryset = queryset.filter(status=Task.Status.BLOQUEADA)
-        elif view == "devolvidas":
-            queryset = queryset.filter(status=Task.Status.DEVOLVIDA)
-        elif view == "em-execucao":
-            queryset = queryset.filter(status=Task.Status.EM_EXECUCAO)
-
-        search = self.request.GET.get("q", "").strip()
-        if search:
-            queryset = queryset.filter(
-                Q(title__icontains=search) | Q(activity__title__icontains=search)
-            )
-
-        sector = self.request.GET.get("sector")
-        if sector:
-            queryset = queryset.filter(sector_id=sector)
-
-        return (
-            queryset.select_related("activity", "sector")
-            .distinct()
-            .order_by("requested_deadline", "created_at")
+        return filtered_tasks_queryset(self.request, self.organization).order_by(
+            "requested_deadline", "created_at"
         )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["tab"] = self.request.GET.get("tab", "minhas")
-        context["status"] = self.request.GET.get("status", "abertas")
-        context["view_filter"] = self.request.GET.get("filtro", "")
-        context["search"] = self.request.GET.get("q", "")
-        context["sectors"] = Sector.objects.filter(organization=self.organization, is_active=True)
-        context["selected_sector"] = self.request.GET.get("sector", "")
+        context.update(task_filter_context(self.request, self.organization))
+        context["view_mode"] = self.request.GET.get("visao", "lista")
+        if context["view_mode"] == "atividade":
+            grouped = {}
+            order = []
+            for task in context["object_list"]:
+                if task.activity_id not in grouped:
+                    grouped[task.activity_id] = {"activity": task.activity, "tasks": []}
+                    order.append(task.activity_id)
+                grouped[task.activity_id]["tasks"].append(task)
+            context["activity_groups"] = [grouped[activity_id] for activity_id in order]
+        return context
+
+
+class TaskKanbanView(OrganizationRequiredMixin, TemplateView):
+    """Kanban de tarefas: colunas são `TaskStage` (camada visual configurável
+    por organização) — nunca `Task.status`, que continua orientando fila,
+    bloqueio e timer exatamente como antes."""
+
+    template_name = "activities/task_kanban.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        tasks = filtered_tasks_queryset(self.request, self.organization).order_by(
+            "stage__order", "requested_deadline"
+        )
+        stages = list(TaskStage.objects.filter(organization=self.organization, is_active=True).order_by("order"))
+        columns = [{"stage": stage, "tasks": []} for stage in stages]
+        unassigned_tasks = []
+        by_stage = {stage.pk: column["tasks"] for stage, column in zip(stages, columns)}
+        now = timezone.now()
+        for task in tasks:
+            # Indicador de "parado": tempo desde a última troca de estágio,
+            # ou desde a criação se nunca mudou — nunca persiste, só exibe.
+            reference = task.stage_changed_at or task.created_at
+            task.days_in_stage = (now - reference).days
+            bucket = by_stage.get(task.stage_id) if task.stage_id else None
+            (bucket if bucket is not None else unassigned_tasks).append(task)
+
+        context.update(task_filter_context(self.request, self.organization))
+        context["columns"] = columns
+        context["unassigned_column"] = {"stage": None, "tasks": unassigned_tasks}
+        context["view_mode"] = "kanban"
+        return context
+
+
+class TaskMoveStageView(OrganizationRequiredMixin, View):
+    """Move uma tarefa entre colunas do Kanban. Toca somente `Task.stage` —
+    nunca `Task.status`, nunca passa pelo `TaskService`. Qualquer pessoa que
+    já enxerga a tarefa (mesmo escopo de `filtered_tasks_queryset`) pode
+    reorganizar o board; é uma camada visual, não uma ação de negócio."""
+
+    def post(self, request, pk):
+        task = get_object_or_404(Task, pk=pk, activity__organization=self.organization)
+        stage_id = request.POST.get("stage_id") or None
+        stage = None
+        if stage_id:
+            stage = get_object_or_404(TaskStage, pk=stage_id, organization=self.organization)
+        task.stage = stage
+        task.stage_changed_at = timezone.now()
+        task.save(update_fields=["stage", "stage_changed_at"])
+        if _is_ajax(request):
+            return JsonResponse({"ok": True, "task_id": task.pk, "stage_id": stage.pk if stage else None})
+        return redirect("task-kanban")
+
+
+class TaskCalendarView(OrganizationRequiredMixin, TemplateView):
+    """Calendário mensal de tarefas: `committed_deadline` > `requested_deadline`
+    > sem prazo (fica só na lista lateral "Sem prazo definido")."""
+
+    template_name = "activities/task_calendar.html"
+
+    def get_context_data(self, **kwargs):
+        import calendar as calendar_module
+        from datetime import date as date_cls
+
+        context = super().get_context_data(**kwargs)
+        today = timezone.localdate()
+        try:
+            year = int(self.request.GET.get("ano", today.year))
+            month = int(self.request.GET.get("mes", today.month))
+        except (TypeError, ValueError):
+            year, month = today.year, today.month
+        if month < 1 or month > 12:
+            month = today.month
+
+        tasks = filtered_tasks_queryset(self.request, self.organization)
+        by_day = {}
+        undated = []
+        for task in tasks:
+            deadline = task.committed_deadline or task.requested_deadline
+            if deadline is None:
+                undated.append(task)
+                continue
+            by_day.setdefault(timezone.localtime(deadline).date(), []).append(task)
+
+        cal = calendar_module.Calendar(firstweekday=6)  # domingo primeiro
+        weeks = [
+            [
+                {
+                    "date": day,
+                    "in_month": day.month == month,
+                    "is_today": day == today,
+                    "tasks": by_day.get(day, []),
+                }
+                for day in week
+            ]
+            for week in cal.monthdatescalendar(year, month)
+        ]
+
+        if month == 1:
+            prev_year, prev_month = year - 1, 12
+        else:
+            prev_year, prev_month = year, month - 1
+        if month == 12:
+            next_year, next_month = year + 1, 1
+        else:
+            next_year, next_month = year, month + 1
+
+        context.update(task_filter_context(self.request, self.organization))
+        context.update(
+            {
+                "weeks": weeks,
+                "year": year,
+                "month": month,
+                "month_date": date_cls(year, month, 1),
+                "undated_tasks": undated,
+                "prev_year": prev_year,
+                "prev_month": prev_month,
+                "next_year": next_year,
+                "next_month": next_month,
+                "view_mode": "calendario",
+            }
+        )
         return context
 
 
@@ -926,6 +1313,7 @@ class TaskDetailView(OrganizationRequiredMixin, DetailView):
                 "man_hours": man_hours,
                 "queue_info": queue_position(task),
                 "open_block": open_block,
+                "checklist_items": task.checklist_items.select_related("created_by", "done_by"),
                 "pending_proposal": pending_proposal,
                 "my_pending_assignment": my_pending_assignment,
                 "can_accept_assignment": can(user, catalog.TAREFA_ACEITAR, task),
@@ -938,6 +1326,7 @@ class TaskDetailView(OrganizationRequiredMixin, DetailView):
                 "history": task.audit_entries.select_related("user").order_by("-timestamp")[:60],
                 "task_messages": task.messages.select_related("author"),
                 "message_form": MessageForm(),
+                "message_kind_choices": MessageKind.choices,
                 "is_owner": task.activity.owner_id == user.id,
                 "can_assume": can(user, catalog.TAREFA_ASSUMIR, task),
                 "can_assign": can(user, catalog.TAREFA_ATRIBUIR, task),
@@ -968,6 +1357,84 @@ class TaskDetailView(OrganizationRequiredMixin, DetailView):
             }
         )
         return context
+
+
+class TaskDrawerView(TaskDetailView):
+    """Mesmo contexto de `TaskDetailView`, num fragmento estreito o
+    suficiente para o painel lateral — sem navegar para fora da ficha da
+    atividade. Reaproveita o contexto por herança em vez de duplicar as
+    queries de executores/sessões/prazo já montadas ali."""
+
+    template_name = "activities/_task_drawer.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["checklist_items"] = self.object.checklist_items.select_related("created_by", "done_by")
+        context["message_kind_choices"] = MessageKind.choices
+        return context
+
+
+class TaskAjaxActionView(OrganizationRequiredMixin, View):
+    """Mesmas ações de estado de `TaskActionView` (start/pause/complete),
+    respondendo JSON em vez de redirect — para o timer do painel lateral
+    funcionar sem recarregar a página. `TaskService` não muda: só a camada
+    de transporte é diferente."""
+
+    action = None
+
+    def get_task(self, pk):
+        return get_object_or_404(Task, pk=pk, activity__organization=self.organization)
+
+    def post(self, request, pk):
+        task = self.get_task(pk)
+        try:
+            if self.action == "start":
+                TaskService.start(task, request.user)
+            elif self.action == "pause":
+                TaskService.pause(task, request.user)
+            elif self.action == "complete":
+                TaskService.complete(task, request.user)
+            else:
+                raise ActivityError("Ação desconhecida.")
+        except ActivityError as exc:
+            return JsonResponse({"error": str(exc)}, status=400)
+        task.refresh_from_db()
+        return JsonResponse({"status": task.status})
+
+
+class TaskChecklistAddView(OrganizationRequiredMixin, View):
+    def post(self, request, pk):
+        task = get_object_or_404(Task, pk=pk, activity__organization=self.organization)
+        try:
+            item = TaskService.add_checklist_item(task, request.user, request.POST.get("text"))
+        except ActivityError as exc:
+            return JsonResponse({"error": str(exc)}, status=400)
+        return JsonResponse({"id": item.pk, "text": item.text, "is_done": item.is_done})
+
+
+class TaskChecklistToggleView(OrganizationRequiredMixin, View):
+    def post(self, request, pk):
+        item = get_object_or_404(
+            TaskChecklistItem, pk=pk, task__activity__organization=self.organization
+        )
+        is_done = request.POST.get("is_done") == "1"
+        try:
+            TaskService.toggle_checklist_item(item, request.user, is_done)
+        except ActivityError as exc:
+            return JsonResponse({"error": str(exc)}, status=400)
+        return JsonResponse({"id": item.pk, "is_done": item.is_done})
+
+
+class TaskChecklistRemoveView(OrganizationRequiredMixin, View):
+    def post(self, request, pk):
+        item = get_object_or_404(
+            TaskChecklistItem, pk=pk, task__activity__organization=self.organization
+        )
+        try:
+            TaskService.remove_checklist_item(item, request.user)
+        except ActivityError as exc:
+            return JsonResponse({"error": str(exc)}, status=400)
+        return JsonResponse({"ok": True})
 
 
 class TaskCreateView(OrganizationRequiredMixin, FormView):
@@ -1004,6 +1471,7 @@ class TaskCreateView(OrganizationRequiredMixin, FormView):
                 order=next_order,
                 depends_on=data.get("depends_on"),
                 requested_deadline=data.get("requested_deadline"),
+                tags=data.get("tags"),
             )
         except ActivityError as exc:
             form.add_error(None, str(exc))
@@ -1043,16 +1511,21 @@ class TaskQuickCreateView(OrganizationRequiredMixin, FormView):
         activity = self.get_activity()
         data = form.cleaned_data
         next_order = (activity.tasks.count() or 0) + 1
+        parsed = TaskService.parse_quick_title(data["title"], self.organization)
+        merged_tags = list({t.pk: t for t in [*(data.get("tags") or []), *parsed["tags"]]}.values())
         try:
             task = TaskService.create_task(
                 activity=activity,
                 sector=data["sector"],
-                title=data["title"],
+                title=parsed["title"] or data["title"],
                 created_by=self.request.user,
                 description=data.get("description") or "",
                 order=next_order,
                 requested_deadline=data.get("requested_deadline"),
+                tags=merged_tags,
             )
+            if parsed["assignee"] is not None:
+                TaskService.add_executor(task, parsed["assignee"], added_by=self.request.user)
         except ActivityError as exc:
             form.add_error(None, str(exc))
             return self.form_invalid(form)
@@ -1061,6 +1534,55 @@ class TaskQuickCreateView(OrganizationRequiredMixin, FormView):
             return JsonResponse({"id": task.pk, "title": task.title})
         messages.success(self.request, "Tarefa adicionada.")
         return redirect("activity-detail", pk=activity.pk)
+
+    def form_invalid(self, form):
+        if _is_ajax(self.request):
+            return JsonResponse({"errors": form.errors}, status=400)
+        return super().form_invalid(form)
+
+
+class TaskQuickCreateStandaloneView(OrganizationRequiredMixin, FormView):
+    """Botão "+ Nova tarefa" em Minhas tarefas (lista/kanban/calendário):
+    mesma criação de `TaskQuickCreateView`, mas a atividade é escolhida (ou
+    criada) no próprio popup via `ActivityPickerWidget`, em vez de vir fixa
+    da URL. Chama o mesmo `TaskService.create_task` — zero mudança de regra."""
+
+    template_name = "activities/task_quick_form_standalone.html"
+    form_class = TaskQuickCreateStandaloneForm
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["organization"] = self.organization
+        kwargs["can_create_activity"] = can(self.request.user, catalog.ATIVIDADE_CRIAR)
+        return kwargs
+
+    def form_valid(self, form):
+        activity = form.cleaned_data["activity"]
+        data = form.cleaned_data
+        next_order = (activity.tasks.count() or 0) + 1
+        parsed = TaskService.parse_quick_title(data["title"], self.organization)
+        merged_tags = list({t.pk: t for t in [*(data.get("tags") or []), *parsed["tags"]]}.values())
+        try:
+            task = TaskService.create_task(
+                activity=activity,
+                sector=data["sector"],
+                title=parsed["title"] or data["title"],
+                created_by=self.request.user,
+                description=data.get("description") or "",
+                order=next_order,
+                requested_deadline=data.get("requested_deadline"),
+                tags=merged_tags,
+            )
+            if parsed["assignee"] is not None:
+                TaskService.add_executor(task, parsed["assignee"], added_by=self.request.user)
+        except ActivityError as exc:
+            form.add_error(None, str(exc))
+            return self.form_invalid(form)
+
+        if _is_ajax(self.request):
+            return JsonResponse({"id": task.pk, "title": task.title})
+        messages.success(self.request, "Tarefa adicionada.")
+        return redirect("task-list")
 
     def form_invalid(self, form):
         if _is_ajax(self.request):
@@ -1369,10 +1891,21 @@ class TaskMessageCreateView(ServiceActionView):
         form = MessageForm(request.POST)
         if not form.is_valid():
             raise ActivityError("Escreva uma mensagem antes de enviar.")
-        MessageService.post_task_message(task, request.user, form.cleaned_data["body"])
+        MessageService.post_task_message(
+            task, request.user, form.cleaned_data["body"], kind=form.cleaned_data["kind"] or MessageKind.NORMAL
+        )
 
     def redirect_to(self):
         return f"{reverse('task-detail', args=[self.kwargs['pk']])}#conversa"
+
+    def post(self, request, *args, **kwargs):
+        if _is_ajax(request):
+            try:
+                self.perform(request, *args, **kwargs)
+            except ActivityError as exc:
+                return JsonResponse({"error": str(exc)}, status=400)
+            return JsonResponse({"ok": True})
+        return super().post(request, *args, **kwargs)
 
 
 class TaskManualTimeView(TaskFormActionView):

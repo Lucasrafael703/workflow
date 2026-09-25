@@ -5,7 +5,7 @@ from acessos.models import Action
 from acessos.models import Profile as AccessProfile
 from acessos.models import Scope
 
-from .models import Client, Company, CostCenter, Sector, Site
+from .models import Client, Company, CostCenter, Sector, Site, Tag
 
 User = get_user_model()
 
@@ -57,6 +57,17 @@ class ClientForm(forms.Form):
 
 class ReturnReasonForm(forms.Form):
     name = forms.CharField(label="Motivo", max_length=150)
+
+
+class TaskStageForm(forms.Form):
+    """Estágio de Kanban de tarefa — a ordem nunca é digitada, só arrastada."""
+
+    name = forms.CharField(label="Nome", max_length=150)
+
+
+class TagForm(forms.Form):
+    name = forms.CharField(label="Nome", max_length=80)
+    color = forms.ChoiceField(label="Cor", choices=Tag.Color.choices)
 
 
 class UserForm(forms.Form):

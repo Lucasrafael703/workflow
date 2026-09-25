@@ -1,0 +1,132 @@
+{% comment %}Fragmento do painel lateral de uma tarefa — versão estreita de task_detail.html,
+sem navegar para fora da ficha da atividade. Só o essencial cabe aqui:
+descrição, checklist, timer, comentários. O resto (devoluções, "por onde
+passou" etc.) continua só na ficha completa.{% endcomment %}
+<div class="drawer-backdrop js-drawer-backdrop">
+    <div class="drawer">
+        <div class="drawer__head">
+            <div>
+                <div class="muted small">{{ task.sector.name }}</div>
+                <h2>{{ task.title }}</h2>
+                <span class="tag tag--{{ task.status }}">{{ task.get_status_display }}</span>
+                {% if queue_info %}<span class="position-pill">Posição {{ queue_info.position }} de {{ queue_info.total }}</span>{% endif %}
+            </div>
+            <div class="drawer__head-actions">
+                <a href="{% url 'task-detail' task.pk %}" class="btn btn--sm">Abrir ficha completa</a>
+                <button type="button" class="modal__close js-drawer-close" title="Fechar">&times;</button>
+            </div>
+        </div>
+
+        <div class="drawer__body" data-task-id="{{ task.pk }}">
+            {% if open_block %}
+            <div class="message message--warning">
+                <strong>Bloqueada — {{ open_block.reason }}</strong>
+                <div>Desde {{ open_block.started_at|date:"d/m/Y H:i" }}{% if open_block.observation %} · {{ open_block.observation }}{% endif %}</div>
+            </div>
+            {% endif %}
+
+            {% if dependency_blocking %}
+            <div class="message message--info">
+                Aguardando a conclusão de <a href="{% url 'task-detail' task.depends_on.pk %}">{{ task.depends_on.title }}</a>.
+            </div>
+            {% endif %}
+
+            <div class="drawer__section">
+                {% if my_open_session %}
+                <div class="timer-hero timer-hero--drawer">
+                    <div class="timer-hero__clock" data-started-at="{{ my_open_session.started_at.isoformat }}">--:--:--</div>
+                    <div class="actions-row" style="justify-content:center">
+                        <button type="button" class="btn js-task-ajax" data-url="{% url 'task-pause-ajax' task.pk %}">Pausar</button>
+                        <button type="button" class="btn btn--primary js-task-ajax" data-url="{% url 'task-complete-ajax' task.pk %}">Concluir tarefa</button>
+                    </div>
+                </div>
+                {% elif task.status == "CONCLUIDA" %}
+                <p class="message message--success" style="margin:0">Concluída em {{ task.completed_at|date:"d/m/Y H:i" }}{% if task.completed_by %} por {{ task.completed_by.get_username }}{% endif %}.</p>
+                {% elif task.status == "CANCELADA" %}
+                <p class="muted" style="margin:0">Tarefa cancelada em {{ task.cancelled_at|date:"d/m/Y H:i" }}.</p>
+                {% elif open_block %}
+                <a href="{% url 'task-unblock' task.pk %}" class="btn btn--primary btn--block">Resolver bloqueio</a>
+                {% elif is_executor %}
+                <button type="button" class="btn btn--primary btn--block js-task-ajax" data-url="{% url 'task-start-ajax' task.pk %}">Iniciar tarefa</button>
+                {% elif can_assume %}
+                <a href="{% url 'task-assume' task.pk %}" class="btn btn--primary btn--block">Assumir tarefa</a>
+                {% else %}
+                <p class="muted small" style="margin:0">Sem executor definido.</p>
+                {% endif %}
+            </div>
+
+            {% if task.tags.all %}
+            <div class="drawer__section">
+                {% for tag in task.tags.all %}<span class="tag-chip tag-chip--{{ tag.color }}">{{ tag.name }}</span>{% endfor %}
+            </div>
+            {% endif %}
+
+            {% if task.description %}
+            <div class="drawer__section">
+                <h3>Descrição</h3>
+                <div class="rich-text-content">{{ task.description|safe }}</div>
+            </div>
+            {% endif %}
+
+            <div class="drawer__section">
+                <div class="drawer__section-head">
+                    <h3>Checklist</h3>
+                    {% if checklist_items %}<span class="muted small">{{ checklist_items|length }} itens</span>{% endif %}
+                </div>
+                <ul class="checklist js-checklist">
+                    {% for item in checklist_items %}
+                    <li class="checklist__item{% if item.is_done %} checklist__item--done{% endif %}"
+                        data-item-id="{{ item.pk }}"
+                        data-toggle-url="{% url 'task-checklist-toggle' item.pk %}"
+                        data-remove-url="{% url 'task-checklist-remove' item.pk %}">
+                        <label>
+                            <input type="checkbox" class="js-checklist-toggle" {% if item.is_done %}checked{% endif %}>
+                            <span>{{ item.text }}</span>
+                        </label>
+                        <button type="button" class="link-button js-checklist-remove" title="Remover">&times;</button>
+                    </li>
+                    {% empty %}
+                    <li class="muted small js-checklist-empty">Nenhum item ainda.</li>
+                    {% endfor %}
+                </ul>
+                <form class="checklist__add js-checklist-add" data-url="{% url 'task-checklist-add' task.pk %}">
+                    <input type="text" name="text" placeholder="+ item" maxlength="255">
+                </form>
+            </div>
+
+            <div class="drawer__section" id="drawer-conversa">
+                <h3>Comentários</h3>
+                {% if task_messages %}
+                <ul class="chat">
+                    {% for message in task_messages %}
+                    <li{% if message.kind == "DECISAO" %} class="chat-item--decision"{% endif %}>
+                        <span class="avatar">{{ message.author.get_username|slice:":2"|upper }}</span>
+                        <div>
+                            <span class="who">{{ message.author.get_username }}</span>
+                            <span class="when">{{ message.created_at|date:"d/m/Y H:i" }}</span>
+                            {% if message.kind == "DECISAO" %}<span class="chat-item__kind">✓ Decisão registrada</span>{% endif %}
+                            <div class="body">{{ message.body|linebreaksbr }}</div>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="muted">Nenhum comentário ainda.</p>
+                {% endif %}
+                <form class="js-drawer-message" data-url="{% url 'task-message' task.pk %}">
+                    <div class="form-row">
+                        <textarea name="body" rows="2" placeholder="Escreva um comentário…"></textarea>
+                    </div>
+                    <div class="form-foot form-foot--split">
+                        <select name="kind">
+                            {% for value, label in message_kind_choices %}
+                            <option value="{{ value }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit" class="btn btn--primary">Comentar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

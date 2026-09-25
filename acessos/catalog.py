@@ -62,6 +62,8 @@ OBRA_GERIR = "obra.gerir"
 CENTRO_CUSTO_GERIR = "centro_custo.gerir"
 CLIENTE_GERIR = "cliente.gerir"
 MOTIVO_DEVOLUCAO_GERIR = "motivo_devolucao.gerir"
+ESTAGIO_TAREFA_GERIR = "estagio_tarefa.gerir"
+TAG_GERIR = "tag.gerir"
 
 # Processos
 PROCESSO_VISUALIZAR = "processo.visualizar"
@@ -164,6 +166,8 @@ GROUPS = [
             (CENTRO_CUSTO_GERIR, "Gerir centros de custo", "Permite criar, editar e inativar centros de custo.", False),
             (CLIENTE_GERIR, "Gerir clientes", "Permite criar, editar e inativar clientes da organização.", False),
             (MOTIVO_DEVOLUCAO_GERIR, "Gerir motivos de devolução", "Permite manter a lista de motivos usada nas devoluções.", False),
+            (ESTAGIO_TAREFA_GERIR, "Gerir estágios de tarefa", "Permite criar, editar, reordenar e inativar os estágios (colunas do Kanban) de tarefa da organização.", False),
+            (TAG_GERIR, "Gerir marcadores", "Permite criar, editar e inativar os marcadores (tags) usados em atividades e tarefas da organização.", False),
         ],
     ),
     (
@@ -270,6 +274,8 @@ SUGGESTED_PROFILES = {
         PROCESSO_INATIVAR,
         PROCESSO_APLICAR,
         CLIENTE_GERIR,
+        ESTAGIO_TAREFA_GERIR,
+        TAG_GERIR,
     ],
     "Administrador": [key for _, _, actions in GROUPS for key, _, _, _ in actions],
 }

@@ -7,9 +7,9 @@
         <div class="modal__head">
             <div>
                 <h2>Nova tarefa</h2>
-                <div class="sub">{{ activity.title }}</div>
+                <div class="sub">Toda tarefa pertence a uma atividade — escolha uma existente ou crie uma nova.</div>
             </div>
-            <a href="{% url 'activity-detail' activity.pk %}" class="modal__close" title="Fechar">&times;</a>
+            <button type="button" class="modal__close" title="Fechar">&times;</button>
         </div>
 
         <form method="post">
@@ -22,9 +22,7 @@
                 {% endif %}
 
                 {% for field in form %}
-                    {% if field.is_hidden %}
-                        {{ field }}
-                    {% elif field.name == "title" or field.name == "requested_deadline" or field.name == "sector" %}
+                    {% if field.name == "activity" or field.name == "title" or field.name == "requested_deadline" or field.name == "sector" %}
                     <div class="form-row">
                         <label for="{{ field.id_for_label }}">
                             {{ field.label }}{% if field.field.required %} <span class="req">*</span>{% endif %}
@@ -32,6 +30,8 @@
                         {{ field }}
                         {% if field.errors %}<ul class="errorlist">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
                     </div>
+                    {% elif field.is_hidden %}
+                        {{ field }}
                     {% endif %}
                 {% endfor %}
 
@@ -49,7 +49,7 @@
                 </details>
             </div>
             <div class="modal__foot">
-                <a href="{% url 'activity-detail' activity.pk %}" class="btn">Cancelar</a>
+                <a href="#" class="btn">Cancelar</a>
                 <button type="submit" class="btn btn--primary">Adicionar tarefa</button>
             </div>
         </form>

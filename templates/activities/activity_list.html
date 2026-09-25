@@ -2,195 +2,174 @@
 {% block title %}Minhas atividades — LPS{% endblock %}
 
 {% block content %}
-<div class="page-head">
-    <div class="page-head__text">
-        <h1>Atividades{% if page_obj %} <span class="muted">({{ page_obj.paginator.count }})</span>{% endif %}</h1>
-        <p class="sub">O resultado que precisa acontecer. As tarefas são os passos até lá.</p>
-    </div>
-    <div class="page-head__actions">
-        <a href="{% url 'activity-create' %}" class="btn btn--primary">
+<section class="activities-page" aria-labelledby="activities-title">
+    <div class="activities-head">
+        <div>
+            <h1 id="activities-title">Atividades</h1>
+            <p>Os resultados que precisam acontecer.</p>
+        </div>
+        <a href="{% url 'activity-create' %}" class="btn btn--primary activities-create">
             {% include "_icon.html" with name="plus" %} Nova atividade
         </a>
     </div>
-</div>
 
-<nav class="tabs">
-    <a href="?tab=minhas" class="{% if tab == 'minhas' %}is-active{% endif %}">Minhas atividades</a>
-    <a href="?tab=grupo" class="{% if tab == 'grupo' %}is-active{% endif %}">Atividades do meu grupo</a>
-    <a href="?tab=participando" class="{% if tab == 'participando' %}is-active{% endif %}">Participando</a>
-    <a href="?tab=concluidas" class="{% if tab == 'concluidas' %}is-active{% endif %}">Concluídas</a>
-    {% if can_view_all %}
-    <a href="?tab=todas" class="{% if tab == 'todas' %}is-active{% endif %}">Todas que posso ver</a>
-    {% endif %}
-</nav>
+    <nav class="activities-tabs" aria-label="Visões de atividades">
+        <a href="?tab=minhas" class="{% if tab == 'minhas' %}is-active{% endif %}">Minhas</a>
+        <a href="?tab=grupo" class="{% if tab == 'grupo' %}is-active{% endif %}">Do meu setor</a>
+        <a href="?tab=participando" class="{% if tab == 'participando' %}is-active{% endif %}">Participando</a>
+        <a href="?tab=concluidas" class="{% if tab == 'concluidas' %}is-active{% endif %}">Concluídas</a>
+        {% if can_view_all %}<a href="?tab=todas" class="{% if tab == 'todas' %}is-active{% endif %}">Todas</a>{% endif %}
+    </nav>
 
-{# Fila com todos os filtros pedidos: cliente, status, urgência, responsável
-   (via busca), grupo, centro de custo, datas de criação e prazo. #}
-<form method="get">
-    <input type="hidden" name="tab" value="{{ tab }}">
-    <div class="card filters-card">
-        <div class="card__head"><h2>Filtros</h2></div>
-        <div class="filters-grid">
-            <div class="form-row" style="grid-column: 1 / -1">
-                <label>Pesquisar (cliente, título ou ID)</label>
-                <input type="search" name="q" value="{{ search }}" placeholder="Digite para pesquisar…">
-            </div>
-            <div class="form-row">
-                <label>Status</label>
-                <select name="status">
-                    <option value="">Todos</option>
-                    {% for value, label in status_choices %}
-                    <option value="{{ value }}" {% if f_status == value %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
+    <form method="get" class="activities-filters" data-activity-filters>
+        <input type="hidden" name="tab" value="{{ tab }}">
+        <div class="activities-toolbar">
+            <label class="activities-search">
+                <span class="sr-only">Buscar atividade</span>
+                {% include "_icon.html" with name="search" %}
+                <input type="search" name="q" value="{{ search }}" placeholder="Buscar atividade..." autocomplete="off">
+            </label>
+            <label class="activities-select">
+                <span class="sr-only">Filtrar por status</span>
+                <select name="status" data-auto-submit>
+                    <option value="">Status</option>
+                    {% for value, label in status_choices %}<option value="{{ value }}" {% if f_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
                 </select>
-            </div>
-            <div class="form-row">
-                <label>Urgência</label>
-                <select name="urgencia">
-                    <option value="">Todas</option>
-                    {% for value, label in urgency_choices %}
-                    <option value="{{ value }}" {% if f_urgencia == value %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
+            </label>
+            <label class="activities-select">
+                <span class="sr-only">Filtrar por prazo</span>
+                <select name="prazo" data-auto-submit>
+                    <option value="">Prazo</option>
+                    <option value="atrasadas" {% if f_prazo == 'atrasadas' %}selected{% endif %}>Atrasadas</option>
+                    <option value="7_dias" {% if f_prazo == '7_dias' %}selected{% endif %}>Próximos 7 dias</option>
+                    <option value="30_dias" {% if f_prazo == '30_dias' %}selected{% endif %}>Próximos 30 dias</option>
+                    <option value="sem_prazo" {% if f_prazo == 'sem_prazo' %}selected{% endif %}>Sem prazo</option>
                 </select>
-            </div>
-            <div class="form-row">
-                <label>Cliente</label>
-                <select name="cliente">
-                    <option value="">Todos</option>
-                    {% for client in clients %}
-                    <option value="{{ client.pk }}" {% if f_cliente == client.pk|stringformat:"s" %}selected{% endif %}>{{ client.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="form-row">
-                <label>Grupo</label>
-                <select name="grupo">
-                    <option value="">Todos</option>
-                    {% for sector in sectors %}
-                    <option value="{{ sector.pk }}" {% if f_grupo == sector.pk|stringformat:"s" %}selected{% endif %}>{{ sector.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="form-row">
-                <label>Centro de custo</label>
-                <select name="centro_custo">
-                    <option value="">Todos</option>
-                    {% for cc in cost_centers %}
-                    <option value="{{ cc.pk }}" {% if f_centro_custo == cc.pk|stringformat:"s" %}selected{% endif %}>{{ cc.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="form-row">
-                <label>Data criação (de)</label>
-                <input type="date" name="criado_de" value="{{ f_criado_de }}">
-            </div>
-            <div class="form-row">
-                <label>Data criação (até)</label>
-                <input type="date" name="criado_ate" value="{{ f_criado_ate }}">
-            </div>
-            <div class="form-row">
-                <label>Prazo (de)</label>
-                <input type="date" name="prazo_de" value="{{ f_prazo_de }}">
-            </div>
-            <div class="form-row">
-                <label>Prazo (até)</label>
-                <input type="date" name="prazo_ate" value="{{ f_prazo_ate }}">
-            </div>
-            <div class="form-row">
-                <label>Ordenar por</label>
-                <select name="ordem">
+            </label>
+
+            <details class="activities-more-filters" {% if f_urgencia or f_cliente or f_grupo or f_centro_custo or f_criado_de or f_criado_ate or f_prazo_de or f_prazo_ate %}open{% endif %}>
+                <summary>{% include "_icon.html" with name="sliders" %} Filtros</summary>
+                <div class="activities-filter-popover">
+                    <div class="activities-filter-grid">
+                        <label><span>Cliente</span><select name="cliente" data-auto-submit><option value="">Todos</option>{% for client in clients %}<option value="{{ client.pk }}" {% if f_cliente == client.pk|stringformat:"s" %}selected{% endif %}>{{ client.name }}</option>{% endfor %}</select></label>
+                        <label><span>Setor</span><select name="grupo" data-auto-submit><option value="">Todos</option>{% for sector in sectors %}<option value="{{ sector.pk }}" {% if f_grupo == sector.pk|stringformat:"s" %}selected{% endif %}>{{ sector.name }}</option>{% endfor %}</select></label>
+                        <label><span>Urgência</span><select name="urgencia" data-auto-submit><option value="">Todas</option>{% for value, label in urgency_choices %}<option value="{{ value }}" {% if f_urgencia == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+                        <label><span>Centro de custo</span><select name="centro_custo" data-auto-submit><option value="">Todos</option>{% for cc in cost_centers %}<option value="{{ cc.pk }}" {% if f_centro_custo == cc.pk|stringformat:"s" %}selected{% endif %}>{{ cc.name }}</option>{% endfor %}</select></label>
+                        <label><span>Criada de</span><input type="date" name="criado_de" value="{{ f_criado_de }}" data-auto-submit></label>
+                        <label><span>Criada até</span><input type="date" name="criado_ate" value="{{ f_criado_ate }}" data-auto-submit></label>
+                        <label><span>Prazo de</span><input type="date" name="prazo_de" value="{{ f_prazo_de }}" data-auto-submit></label>
+                        <label><span>Prazo até</span><input type="date" name="prazo_ate" value="{{ f_prazo_ate }}" data-auto-submit></label>
+                    </div>
+                    {% if has_filters %}<a href="?tab={{ tab }}" class="activities-clear">Limpar filtros</a>{% endif %}
+                </div>
+            </details>
+
+            <label class="activities-select activities-order">
+                <span class="sr-only">Ordenar atividades</span>
+                <select name="ordem" data-auto-submit>
                     <option value="prazo" {% if ordem == 'prazo' %}selected{% endif %}>Prazo mais próximo</option>
                     <option value="recentes" {% if ordem == 'recentes' %}selected{% endif %}>Mais recentes</option>
-                    <option value="titulo" {% if ordem == 'titulo' %}selected{% endif %}>Título A-Z</option>
+                    <option value="titulo" {% if ordem == 'titulo' %}selected{% endif %}>Nome A–Z</option>
                 </select>
+            </label>
+        </div>
+    </form>
+
+    {% if activities %}
+    <div class="activity-results" aria-label="Lista de atividades">
+        {% for activity in activities %}
+        <article class="activity-result {% if activity.is_overdue %}activity-result--overdue{% elif activity.blocked_tasks %}activity-result--blocked{% endif %}">
+            <a class="activity-result__link" href="{% url 'activity-detail' activity.pk %}" aria-label="Abrir {{ activity.title }}"></a>
+            <div class="activity-result__main">
+                <h2>{{ activity.title }}</h2>
+                <p class="activity-result__context">
+                    {% if activity.client %}{{ activity.client.name }}{% endif %}
+                    {% if activity.site %}<span>·</span> {{ activity.site.name }}{% endif %}
+                    {% if activity.sector %}<span>·</span> {{ activity.sector.name }}{% endif %}
+                    {% if not activity.client and not activity.site and not activity.sector %}Sem contexto adicional{% endif %}
+                </p>
             </div>
-        </div>
-        <div class="card__foot actions-row">
-            <button type="submit" class="btn btn--primary">Filtrar</button>
-            {% if has_filters %}<a href="?tab={{ tab }}" class="btn btn--ghost">Limpar</a>{% endif %}
-        </div>
+            <div class="activity-result__facts">
+                <div class="activity-progress-count">
+                    <strong>{{ activity.done_tasks }} de {{ activity.total_tasks }}</strong>
+                    <span>tarefas</span>
+                    {% if activity.total_tasks %}<div class="activity-progress-track"><span style="width:{% widthratio activity.done_tasks activity.total_tasks 100 %}%"></span></div>{% endif %}
+                </div>
+                <div class="activity-situation">
+                    {% if activity.open_deadline_conflicts %}
+                    <span class="activity-state activity-state--warning">Prazo em negociação</span>
+                    {% elif activity.is_overdue %}
+                    <span class="activity-state activity-state--danger">Atrasada {{ activity.overdue_days }} dia{{ activity.overdue_days|pluralize }}</span>
+                    {% elif activity.blocked_tasks or activity.status == 'BLOQUEADA' %}
+                    <span class="activity-state activity-state--danger">Bloqueada</span>
+                    {% else %}
+                    <span class="activity-state activity-state--{{ activity.status|lower }}">{{ activity.get_status_display }}</span>
+                    {% endif %}
+                </div>
+                <div class="activity-deadline">
+                    {% if activity.requested_deadline %}<span>Solicitado</span><strong>{{ activity.requested_deadline|date:"d/m/Y" }}</strong>{% else %}<span>Prazo</span><strong>Não definido</strong>{% endif %}
+                </div>
+            </div>
+            <div class="activity-result__actions">
+                <span class="activity-result__arrow" aria-hidden="true">{% include "_icon.html" with name="arrow-right" %}</span>
+                {% if activity.can_assumir or activity.can_edit or activity.can_repassar or activity.can_complete or activity.can_cancel %}
+                <details class="activity-menu">
+                    <summary aria-label="Mais ações">{% include "_icon.html" with name="more" %}</summary>
+                    <div class="activity-menu__items">
+                        {% if activity.can_assumir %}<form method="post" action="{% url 'activity-claim' activity.pk %}">{% csrf_token %}<button type="submit">Assumir atividade</button></form>{% endif %}
+                        {% if activity.can_edit %}<a href="{% url 'activity-edit' activity.pk %}">Editar</a>{% endif %}
+                        {% if activity.can_repassar %}<a href="{% url 'activity-change-owner' activity.pk %}">Transferir responsabilidade</a>{% endif %}
+                        {% if activity.can_complete %}<a href="{% url 'activity-finalize' activity.pk %}">Concluir</a>{% endif %}
+                        {% if activity.can_cancel %}<a href="{% url 'activity-cancel' activity.pk %}" class="is-danger">Cancelar</a>{% endif %}
+                    </div>
+                </details>
+                {% endif %}
+            </div>
+        </article>
+        {% endfor %}
     </div>
-</form>
 
-{% if activities %}
-<div class="card card--flush">
-    <div class="table-wrap">
-        <table class="responsive">
-            <thead>
-                <tr>
-                    <th>ID</th><th>Cliente</th><th>Título</th><th>Status</th><th>Urgência</th>
-                    <th>Responsável</th><th>Criação</th><th>Prazo</th><th>Centro de custo</th>
-                    <th class="col-actions">Ações</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for activity in activities %}
-                <tr>
-                    <td data-label="ID"><span class="id-badge">{{ activity.code|default:"—" }}</span></td>
-                    <td data-label="Cliente">{{ activity.client.name|default:"—" }}</td>
-                    <td data-label="Título">
-                        <a href="{% url 'activity-detail' activity.pk %}" class="title">{{ activity.title }}</a>
-                        {% if activity.site %}<div class="muted small">{{ activity.site.name }}</div>{% endif %}
-                    </td>
-                    <td data-label="Status"><span class="tag tag--{{ activity.status }}">{{ activity.get_status_display }}</span></td>
-                    <td data-label="Urgência"><span class="tag tag--{{ activity.urgency }}">{{ activity.get_urgency_display }}</span></td>
-                    <td data-label="Responsável">{{ activity.owner.get_username }}</td>
-                    <td data-label="Criação">{{ activity.created_at|date:"d/m/Y" }}</td>
-                    <td data-label="Prazo">
-                        {% if activity.requested_deadline %}{{ activity.requested_deadline|date:"d/m/Y H:i" }}
-                        {% else %}<span class="muted">Sem prazo</span>{% endif %}
-                    </td>
-                    <td data-label="Centro de custo">{{ activity.cost_center.name|default:"—" }}</td>
-                    <td data-label="Ações" class="col-actions">
-                        <a href="{% url 'activity-detail' activity.pk %}">Ver</a>
-                        {% if activity.can_assumir %}
-                        · <form method="post" action="{% url 'activity-claim' activity.pk %}" style="display:inline">
-                            {% csrf_token %}
-                            <button type="submit" class="link-button">Assumir</button>
-                        </form>
-                        {% endif %}
-                        {% if activity.can_repassar %}
-                        · <a href="{% url 'activity-change-owner' activity.pk %}">Repassar</a>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    {% if is_paginated %}
+    <div class="pagination">
+        {% if page_obj.has_previous %}<a class="btn btn--sm" href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>{% endif %}
+        <span class="muted small">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}<a class="btn btn--sm" href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.next_page_number }}">Próxima</a>{% endif %}
     </div>
-</div>
-
-{% if is_paginated %}
-<div class="pagination">
-    {% if page_obj.has_previous %}
-    <a class="btn btn--sm" href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
     {% endif %}
-    <span class="muted small">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
-    {% if page_obj.has_next %}
-    <a class="btn btn--sm" href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.next_page_number }}">Próxima</a>
-    {% endif %}
-</div>
-{% endif %}
-
-<div class="hint-bar">
-    {% include "_icon.html" with name="info" %}
-    <span><strong>Dica:</strong> clique em uma atividade para ver tarefas, prazos, conversa e a linha do tempo completa, tudo na mesma tela.</span>
-</div>
-
-{% else %}
-<div class="card">
-    <div class="empty-state">
-        <div class="empty-state__icon">{% include "_icon.html" with name="activity" %}</div>
+    {% else %}
+    <div class="activities-empty">
         {% if has_filters %}
-        <h3>Nenhuma atividade encontrada</h3>
-        <p>Ajuste a busca ou os filtros para localizar outra atividade.</p>
-        <a href="?tab={{ tab }}" class="btn">Limpar filtros</a>
+        <h2>Nenhuma atividade encontrada.</h2><p>Tente remover alguns filtros.</p><a href="?tab={{ tab }}" class="btn">Limpar filtros</a>
+        {% elif tab == 'minhas' %}
+        <h2>Nenhuma atividade sob sua responsabilidade.</h2><p>Crie uma atividade ou aguarde uma ser atribuída a você.</p><a href="{% url 'activity-create' %}" class="btn btn--primary">Nova atividade</a>
+        {% elif tab == 'grupo' %}
+        <h2>Nenhuma atividade exige trabalho dos seus setores agora.</h2>
+        {% elif tab == 'participando' %}
+        <h2>Você não está participando de nenhuma atividade em andamento.</h2>
+        {% elif tab == 'concluidas' %}
+        <h2>Nenhuma atividade concluída neste período.</h2>
         {% else %}
-        <h3>Você ainda não possui atividades nesta visão</h3>
-        <p>Comece registrando o que precisa ser resolvido. Depois você adiciona as tarefas e define quem executa cada passo.</p>
-        <a href="{% url 'activity-create' %}" class="btn btn--primary">Criar primeira atividade</a>
+        <h2>Nenhuma atividade nesta visão.</h2>
         {% endif %}
     </div>
-</div>
-{% endif %}
+    {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    "use strict";
+    var form = document.querySelector("[data-activity-filters]");
+    if (!form) return;
+    form.querySelectorAll("[data-auto-submit]").forEach(function (field) {
+        field.addEventListener("change", function () { form.submit(); });
+    });
+    document.addEventListener("click", function (event) {
+        document.querySelectorAll(".activity-menu[open]").forEach(function (menu) {
+            if (!menu.contains(event.target)) menu.removeAttribute("open");
+        });
+    });
+})();
+</script>
 {% endblock %}

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Cadastros — LPS{% endblock %}
 
 {% block content %}
@@ -19,6 +20,10 @@
         <a href="{% url 'client-create' %}" class="btn btn--primary">{% include "_icon.html" with name="plus" %} Novo cliente</a>
         {% elif tab == "motivos" %}
         <a href="{% url 'returnreason-create' %}" class="btn btn--primary">{% include "_icon.html" with name="plus" %} Novo motivo</a>
+        {% elif tab == "estagios-de-tarefa" %}
+        <a href="{% url 'taskstage-create' %}" class="btn btn--primary js-taskstage-modal">{% include "_icon.html" with name="plus" %} Novo estágio</a>
+        {% elif tab == "tags" %}
+        <a href="{% url 'tag-create' %}" class="btn btn--primary js-cadastro-modal">{% include "_icon.html" with name="plus" %} Novo marcador</a>
         {% elif tab == "setores" %}
         <a href="{% url 'sector-create' %}" class="btn btn--primary">{% include "_icon.html" with name="plus" %} Novo setor</a>
         {% endif %}
@@ -34,6 +39,8 @@
     <a href="?tab=clientes" class="{% if tab == 'clientes' %}is-active{% endif %}">Clientes</a>
     <a href="?tab=tipos-de-atividade" class="{% if tab == 'tipos-de-atividade' %}is-active{% endif %}">Tipos de atividade</a>
     <a href="?tab=tipos-de-tarefa" class="{% if tab == 'tipos-de-tarefa' %}is-active{% endif %}">Tipos de tarefa</a>
+    <a href="?tab=estagios-de-tarefa" class="{% if tab == 'estagios-de-tarefa' %}is-active{% endif %}">Estágios de tarefa</a>
+    <a href="?tab=tags" class="{% if tab == 'tags' %}is-active{% endif %}">Tags</a>
     <a href="?tab=motivos" class="{% if tab == 'motivos' %}is-active{% endif %}">Motivos</a>
 </nav>
 
@@ -224,6 +231,97 @@
     {% include "_icon.html" with name="info" %}
     <span>Toda devolução exige um motivo estruturado — é o que permite descobrir retrabalho recorrente.</span>
 </div>
+
+{% elif tab == "estagios-de-tarefa" %}
+<div class="card card--flush">
+    <div class="table-wrap">
+        <ul class="queue-list" id="taskstage-list">
+        {% for item in task_stages %}
+            <li data-stage-id="{{ item.pk }}" draggable="true">
+                <span class="queue-item__main">
+                    <span class="title">{{ item.name }}</span>
+                    {% if not item.is_active %}<span class="muted"> — Inativo</span>{% endif %}
+                </span>
+                <a href="{% url 'taskstage-edit' item.pk %}" class="js-taskstage-modal">Editar</a>
+                {% include "core/_toggle_form.html" with tab="estagios-de-tarefa" item=item %}
+            </li>
+        {% empty %}
+            <li>
+                <div class="empty-state">
+                    <div class="empty-state__icon">{% include "_icon.html" with name="folder" %}</div>
+                    <h3>Nenhum estágio cadastrado</h3>
+                    <p>Estágios são as colunas do Kanban de tarefas — livres para criar, renomear e reordenar, sem afetar o status operacional da tarefa.</p>
+                    <a href="{% url 'taskstage-create' %}" class="btn btn--primary js-taskstage-modal">Cadastrar estágio</a>
+                </div>
+            </li>
+        {% endfor %}
+        </ul>
+    </div>
+</div>
+<div class="hint-bar">
+    {% include "_icon.html" with name="info" %}
+    <span>Arraste para reordenar as colunas do Kanban. Isso não altera o status da tarefa, só a organização visual.</span>
+</div>
+<form id="taskstage-reorder-form" method="post" action="{% url 'taskstage-reorder' %}" hidden>
+    {% csrf_token %}
+</form>
+<script src="{% static 'js/task-stage-reorder.js' %}?v=20260919c"></script>
+<script>
+document.querySelectorAll(".js-taskstage-modal").forEach(function (link) {
+    link.addEventListener("click", function (event) {
+        if (!window.LPSModal) return;
+        event.preventDefault();
+        window.LPSModal.open(link.getAttribute("href"), {
+            onSuccess: function () { window.location.reload(); }
+        });
+    });
+});
+</script>
+
+{% elif tab == "tags" %}
+<div class="card card--flush">
+    <div class="table-wrap">
+        <table class="responsive">
+            <thead><tr><th>Nome</th><th>Cor</th><th>Situação</th><th class="col-actions">Ações</th></tr></thead>
+            <tbody>
+            {% for item in tags %}
+            <tr>
+                <td data-label="Nome"><span class="title">{{ item.name }}</span></td>
+                <td data-label="Cor"><span class="tag-chip tag-chip--{{ item.color }}">{{ item.get_color_display }}</span></td>
+                <td data-label="Situação">
+                    {% if item.is_active %}<span class="dot-state dot-state--success"></span>Ativo
+                    {% else %}<span class="dot-state"></span><span class="muted">Inativo</span>{% endif %}
+                </td>
+                <td data-label="Ações" class="col-actions">
+                    <a href="{% url 'tag-edit' item.pk %}" class="js-cadastro-modal">Editar</a>
+                    {% include "core/_toggle_form.html" with tab="tags" item=item %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4">
+                <div class="empty-state">
+                    <div class="empty-state__icon">{% include "_icon.html" with name="folder" %}</div>
+                    <h3>Nenhum marcador cadastrado</h3>
+                    <p>Marcadores ajudam a classificar atividades e tarefas livremente, sem afetar nenhuma regra do sistema.</p>
+                    <a href="{% url 'tag-create' %}" class="btn btn--primary js-cadastro-modal">Cadastrar marcador</a>
+                </div>
+            </td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+<script>
+document.querySelectorAll(".js-cadastro-modal").forEach(function (link) {
+    link.addEventListener("click", function (event) {
+        if (!window.LPSModal) return;
+        event.preventDefault();
+        window.LPSModal.open(link.getAttribute("href"), {
+            onSuccess: function () { window.location.reload(); }
+        });
+    });
+});
+</script>
 
 {% elif tab == "tipos-de-atividade" %}
 <div class="card">

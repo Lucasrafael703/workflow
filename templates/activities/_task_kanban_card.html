@@ -1,0 +1,22 @@
+{% comment %}Card de tarefa no Kanban — usado tanto pela coluna implícita "Sem
+estágio" quanto pelas colunas de TaskStage, para as duas nunca divergirem
+na estrutura do card. Espera `task` no contexto.{% endcomment %}
+<div class="kanban-card{% if task.days_in_stage >= 5 %} kanban-card--stale{% endif %}" draggable="true" data-task-id="{{ task.pk }}">
+    <a href="{% url 'task-detail' task.pk %}" class="kanban-card__title">{{ task.title }}</a>
+    <div class="kanban-card__meta muted small">{{ task.activity.title }}</div>
+    {% if task.tags.all %}
+    <div class="kanban-card__tags">
+        {% for tag in task.tags.all %}<span class="tag-chip tag-chip--{{ tag.color }}">{{ tag.name }}</span>{% endfor %}
+    </div>
+    {% endif %}
+    <div class="kanban-card__foot">
+        <span class="tag tag--{{ task.status }}">{{ task.get_status_display }}</span>
+        {% if task.committed_deadline %}<span class="muted small">{{ task.committed_deadline|date:"d/m" }}</span>
+        {% elif task.requested_deadline %}<span class="muted small">{{ task.requested_deadline|date:"d/m" }}</span>{% endif %}
+    </div>
+    {% if task.days_in_stage >= 1 %}
+    <div class="kanban-card__stale-badge muted small" title="Nesta coluna há {{ task.days_in_stage }} dia{{ task.days_in_stage|pluralize }}">
+        {{ task.days_in_stage }}d aqui
+    </div>
+    {% endif %}
+</div>

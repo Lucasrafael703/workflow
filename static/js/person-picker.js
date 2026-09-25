@@ -148,7 +148,20 @@
             if (popup) closePopup();
             else openPopup();
         });
+        root.setAttribute("data-person-picker-ready", "1");
     }
 
-    document.querySelectorAll("[data-person-picker]").forEach(init);
+    // `initIn(root)` também é chamado por modal.js depois de injetar um
+    // formulário via LPSModal.open(): o forEach abaixo só cobre o DOM que
+    // já existia quando este script rodou, então um picker dentro de um
+    // modal aninhado (ex.: "Atividade" em "+ Nova tarefa") precisa ser
+    // inicializado de novo manualmente após ser inserido na página.
+    function initIn(root) {
+        root.querySelectorAll("[data-person-picker]:not([data-person-picker-ready])").forEach(init);
+    }
+
+    window.LPSWidgets = window.LPSWidgets || [];
+    window.LPSWidgets.push(initIn);
+
+    initIn(document);
 })();

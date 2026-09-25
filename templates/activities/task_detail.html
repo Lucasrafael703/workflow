@@ -119,12 +119,49 @@
             </div>
         </div>
 
+        {% if task.tags.all %}
+        <div class="card card--flush">
+            <div class="card__head"><h2>Marcadores</h2></div>
+            <div class="card__body">
+                {% for tag in task.tags.all %}<span class="tag-chip tag-chip--{{ tag.color }}">{{ tag.name }}</span>{% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
         {% if task.description %}
         <div class="card card--flush">
             <div class="card__head"><h2>Descrição</h2></div>
-            <div class="card__body"><p style="margin:0">{{ task.description|linebreaksbr }}</p></div>
+            <div class="card__body"><div class="rich-text-content">{{ task.description|safe }}</div></div>
         </div>
         {% endif %}
+
+        <div class="card card--flush">
+            <div class="card__head">
+                <h2>Checklist</h2>
+                {% if checklist_items %}<span class="muted small">{{ checklist_items|length }} itens</span>{% endif %}
+            </div>
+            <div class="card__body">
+                <ul class="checklist js-checklist">
+                    {% for item in checklist_items %}
+                    <li class="checklist__item{% if item.is_done %} checklist__item--done{% endif %}"
+                        data-item-id="{{ item.pk }}"
+                        data-toggle-url="{% url 'task-checklist-toggle' item.pk %}"
+                        data-remove-url="{% url 'task-checklist-remove' item.pk %}">
+                        <label>
+                            <input type="checkbox" class="js-checklist-toggle" {% if item.is_done %}checked{% endif %}>
+                            <span>{{ item.text }}</span>
+                        </label>
+                        <button type="button" class="link-button js-checklist-remove" title="Remover">&times;</button>
+                    </li>
+                    {% empty %}
+                    <li class="muted small js-checklist-empty">Nenhum item ainda.</li>
+                    {% endfor %}
+                </ul>
+                <form class="checklist__add js-checklist-add" data-url="{% url 'task-checklist-add' task.pk %}">
+                    <input type="text" name="text" placeholder="+ item" maxlength="255">
+                </form>
+            </div>
+        </div>
 
         <div class="card card--flush" id="prazo">
             <div class="card__head"><h2>Prazo</h2></div>
@@ -204,11 +241,12 @@
                 {% if task_messages %}
                 <ul class="chat">
                     {% for message in task_messages %}
-                    <li>
+                    <li{% if message.kind == "DECISAO" %} class="chat-item--decision"{% endif %}>
                         <span class="avatar">{{ message.author.get_username|slice:":2"|upper }}</span>
                         <div>
                             <span class="who">{{ message.author.get_username }}</span>
                             <span class="when">{{ message.created_at|date:"d/m/Y H:i" }}</span>
+                            {% if message.kind == "DECISAO" %}<span class="chat-item__kind">✓ Decisão registrada</span>{% endif %}
                             <div class="body">{{ message.body|linebreaksbr }}</div>
                         </div>
                     </li>
@@ -221,6 +259,11 @@
                     {% csrf_token %}
                     <div class="form-row">{{ message_form.body }}</div>
                     <div class="form-foot form-foot--split">
+                        <select name="kind">
+                            {% for value, label in message_kind_choices %}
+                            <option value="{{ value }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
                         <a href="{% url 'deadline-propose' task.pk %}" class="btn">Propor novo prazo</a>
                         <button type="submit" class="btn btn--primary">Enviar mensagem</button>
                     </div>
@@ -321,6 +364,3 @@
 </div>
 {% endblock %}
 
-{% block scripts %}
-<script src="{% static 'js/timer.js' %}"></script>
-{% endblock %}

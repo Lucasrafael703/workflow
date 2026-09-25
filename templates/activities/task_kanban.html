@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Tarefas — Kanban — LPS{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div class="page-head__text">
+        <h1>Tarefas</h1>
+        <p class="sub">Arraste um card entre colunas para reorganizar — isso não altera o status da tarefa, só o estágio visual.</p>
+    </div>
+    <div class="page-head__actions">
+        <a href="{% url 'task-quick-create-standalone' %}" class="btn btn--primary js-new-task">{% include "_icon.html" with name="plus" %} Nova tarefa</a>
+        <a href="{% url 'queue' %}" class="btn">Ver fila do setor</a>
+    </div>
+</div>
+
+{% include "activities/_task_view_filters.html" %}
+
+<div class="kanban-board">
+    <div class="kanban-column" data-stage-id="">
+        <div class="kanban-column__head">
+            <span class="kanban-column__title">Sem estágio</span>
+            <span class="kanban-column__count">{{ unassigned_column.tasks|length }}</span>
+        </div>
+        <div class="kanban-column__body" data-drop-zone>
+            {% for task in unassigned_column.tasks %}
+                {% include "activities/_task_kanban_card.html" %}
+            {% endfor %}
+        </div>
+    </div>
+    {% for column in columns %}
+    <div class="kanban-column" data-stage-id="{{ column.stage.pk }}">
+        <div class="kanban-column__head">
+            <span class="kanban-column__title">{{ column.stage.name }}</span>
+            <span class="kanban-column__count">{{ column.tasks|length }}</span>
+        </div>
+        <div class="kanban-column__body" data-drop-zone>
+            {% for task in column.tasks %}
+                {% include "activities/_task_kanban_card.html" %}
+            {% endfor %}
+        </div>
+    </div>
+    {% empty %}
+    <div class="card">
+        <div class="empty-state">
+            <div class="empty-state__icon">{% include "_icon.html" with name="folder" %}</div>
+            <h3>Nenhum estágio cadastrado</h3>
+            <p>Configure as colunas do Kanban em Cadastros › Estágios de tarefa.</p>
+            <a href="{% url 'cadastros' %}?tab=estagios-de-tarefa" class="btn btn--primary">Configurar estágios</a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% comment %}URL com pk sentinela (999999999): o JS troca esse número pelo id real da
+tarefa arrastada, evitando montar a URL "na mão" fora do roteador.{% endcomment %}
+<div id="task-kanban-config" data-move-url="{% url 'task-move-stage' pk=999999999 %}" hidden></div>
+<script src="{% static 'js/task-kanban.js' %}?v=20260919c"></script>
+<script>
+(function () {
+    "use strict";
+    document.querySelectorAll(".js-new-task").forEach(function (link) {
+        link.addEventListener("click", function (event) {
+            if (!window.LPSModal) return;
+            event.preventDefault();
+            window.LPSModal.open(link.getAttribute("href"), {
+                onSuccess: function () { window.location.reload(); }
+            });
+        });
+    });
+})();
+</script>
+{% endblock %}

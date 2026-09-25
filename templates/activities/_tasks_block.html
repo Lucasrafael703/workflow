@@ -1,4 +1,6 @@
-{# Lista de tarefas da atividade. Símbolo sempre acompanhado de texto (doc 09 §66). #}
+{% comment %}Lista compacta de tarefas da atividade: clique abre o painel lateral sem
+navegar; href continua indo para task-detail como fallback (Ctrl+clique,
+nova aba, JS desabilitado).{% endcomment %}
 <div class="card card--flush">
     <div class="card__head">
         <h2>Tarefas</h2>
@@ -8,32 +10,29 @@
     </div>
 
     {% if tasks %}
-    <div class="card__body">
-        <ul class="list-rows">
-            {% for task in tasks %}
-            <li>
-                <div>
-                    {% if task.status == "CONCLUIDA" %}<span class="dot-state dot-state--success"></span>
-                    {% elif task.status == "EM_EXECUCAO" %}<span class="dot-state dot-state--success"></span>
-                    {% elif task.status == "BLOQUEADA" %}<span class="dot-state dot-state--danger"></span>
-                    {% elif task.status == "DEVOLVIDA" %}<span class="dot-state dot-state--warning"></span>
-                    {% else %}<span class="dot-state"></span>{% endif %}
-                    <a href="{% url 'task-detail' task.pk %}" class="title">{{ task.title }}</a>
-                    <span class="tag tag--{{ task.status }}">{{ task.get_status_display }}</span>
-                </div>
-                <div class="muted small">
-                    {{ task.sector.name }}
-                    {% if task.active_executors %}
-                        · {% for executor in task.active_executors %}{{ executor.user.get_username }}{% if not forloop.last %}, {% endif %}{% endfor %}
-                    {% else %}
-                        · Sem executor
-                    {% endif %}
-                    {% if task.queue_info %} · Posição {{ task.queue_info.position }} de {{ task.queue_info.total }}{% endif %}
-                    {% if task.requested_deadline %} · Prazo {{ task.requested_deadline|date:"d/m/Y H:i" }}{% endif %}
-                </div>
-            </li>
-            {% endfor %}
-        </ul>
+    <div class="card__body task-table">
+        <div class="task-table__head">
+            <span>Tarefa</span><span>Setor</span><span>Executor</span><span>Prazo</span><span>Status</span><span>Fila</span>
+        </div>
+        {% for task in tasks %}
+        <a href="{% url 'task-detail' task.pk %}" class="task-table__row js-open-drawer" data-drawer-url="{% url 'task-drawer' task.pk %}">
+            <span class="task-table__title">
+                {% if task.status == "CONCLUIDA" %}<span class="dot-state dot-state--success"></span>
+                {% elif task.status == "EM_EXECUCAO" %}<span class="dot-state dot-state--success"></span>
+                {% elif task.status == "BLOQUEADA" %}<span class="dot-state dot-state--danger"></span>
+                {% elif task.status == "DEVOLVIDA" %}<span class="dot-state dot-state--warning"></span>
+                {% else %}<span class="dot-state"></span>{% endif %}
+                {{ task.title }}
+            </span>
+            <span class="muted small">{{ task.sector.name }}</span>
+            <span class="muted small">
+                {% if task.active_executors %}{% for executor in task.active_executors %}{{ executor.user.get_username }}{% if not forloop.last %}, {% endif %}{% endfor %}{% else %}—{% endif %}
+            </span>
+            <span class="muted small">{% if task.requested_deadline %}{{ task.requested_deadline|date:"d/m/Y H:i" }}{% else %}—{% endif %}</span>
+            <span class="tag tag--{{ task.status }}">{{ task.get_status_display }}</span>
+            <span class="muted small">{% if task.queue_info %}{{ task.queue_info.position }}/{{ task.queue_info.total }}{% else %}—{% endif %}</span>
+        </a>
+        {% endfor %}
     </div>
     {% else %}
     <div class="empty-state">

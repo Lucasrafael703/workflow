@@ -1,0 +1,49 @@
+{% comment %}Seletor de visão (Lista/Por atividade/Kanban/Calendário) + tabs + busca,
+compartilhado entre task_list.html, task_kanban.html e task_calendar.html.
+Preserva a querystring de filtros (tab/status/filtro/q/sector) ao trocar
+de visão, via `filter_querystring` (montada em task_filter_context).{% endcomment %}
+<nav class="tabs">
+    <a href="{% url 'task-list' %}?{{ filter_querystring }}" class="{% if view_mode == 'lista' %}is-active{% endif %}">Lista</a>
+    <a href="{% url 'task-list' %}?visao=atividade&{{ filter_querystring }}" class="{% if view_mode == 'atividade' %}is-active{% endif %}">Por atividade</a>
+    <a href="{% url 'task-kanban' %}?{{ filter_querystring }}" class="{% if view_mode == 'kanban' %}is-active{% endif %}">Kanban</a>
+    <a href="{% url 'task-calendar' %}?{{ filter_querystring }}" class="{% if view_mode == 'calendario' %}is-active{% endif %}">Calendário</a>
+</nav>
+
+<nav class="tabs">
+    <a href="?tab=minhas" class="{% if tab == 'minhas' and status != 'concluidas' %}is-active{% endif %}">Atribuídas a mim</a>
+    <a href="?tab=setor" class="{% if tab == 'setor' and status != 'concluidas' %}is-active{% endif %}">Dos meus setores</a>
+    <a href="?tab={{ tab }}&status=concluidas" class="{% if status == 'concluidas' %}is-active{% endif %}">Concluídas</a>
+</nav>
+
+{# Visões salvas por exceção operacional (Benchmark §3) #}
+<form method="get">
+    <input type="hidden" name="tab" value="{{ tab }}">
+    {% if status == 'concluidas' %}<input type="hidden" name="status" value="concluidas">{% endif %}
+    {% if view_mode != "lista" and view_mode != "atividade" %}<input type="hidden" name="visao" value="{{ view_mode }}">{% endif %}
+    {% if view_mode == "atividade" %}<input type="hidden" name="visao" value="atividade">{% endif %}
+    <div class="toolbar">
+        <div class="toolbar__search">
+            {% include "_icon.html" with name="search" %}
+            <input type="search" name="q" value="{{ search }}" placeholder="Buscar por tarefa ou atividade…">
+        </div>
+        <label class="inline" for="filtro">Visão</label>
+        <select id="filtro" name="filtro">
+            <option value="">Todas</option>
+            <option value="em-execucao" {% if view_filter == 'em-execucao' %}selected{% endif %}>Em execução</option>
+            <option value="atrasadas" {% if view_filter == 'atrasadas' %}selected{% endif %}>Atrasadas</option>
+            <option value="bloqueadas" {% if view_filter == 'bloqueadas' %}selected{% endif %}>Bloqueadas</option>
+            <option value="devolvidas" {% if view_filter == 'devolvidas' %}selected{% endif %}>Devolvidas</option>
+        </select>
+        <label class="inline" for="sector">Setor</label>
+        <select id="sector" name="sector">
+            <option value="">Todos</option>
+            {% for sector in sectors %}
+            <option value="{{ sector.pk }}" {% if selected_sector == sector.pk|stringformat:"s" %}selected{% endif %}>{{ sector.name }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn">Aplicar</button>
+        {% if search or view_filter or selected_sector %}
+        <a href="?tab={{ tab }}{% if view_mode != 'lista' %}&visao={{ view_mode }}{% endif %}" class="btn btn--ghost">Limpar</a>
+        {% endif %}
+    </div>
+</form>

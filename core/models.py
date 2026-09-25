@@ -66,6 +66,72 @@ class Sector(models.Model):
         return self.name
 
 
+class TaskStage(models.Model):
+    """Estágio de Kanban configurável por organização — cópia do Kanban do
+    Odoo (project.task.type): coluna livre, sem regra de negócio por trás.
+    Não confundir com Task.status, que continua orientando fila, bloqueio e
+    timer exatamente como hoje; stage é só uma camada visual."""
+
+    organization = models.ForeignKey(
+        Organization, verbose_name="organização", on_delete=models.CASCADE, related_name="task_stages"
+    )
+    name = models.CharField("nome", max_length=150)
+    order = models.PositiveIntegerField("ordem", default=1)
+    is_active = models.BooleanField("ativo", default=True)
+    created_by = models.ForeignKey(
+        "auth.User", verbose_name="criado por", null=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField("criado em", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "estágio de tarefa"
+        verbose_name_plural = "estágios de tarefa"
+        ordering = ["organization", "order", "name"]
+        constraints = [
+            models.UniqueConstraint(fields=["organization", "name"], name="unique_taskstage_name_per_org"),
+        ]
+
+    def __str__(self):
+        return self.name
+
+
+class Tag(models.Model):
+    """Marcador livre, configurável por organização — cópia do
+    `project.tags` do Odoo: nome único à organização, sem vínculo fixo a
+    Activity ou Task específica, puramente informativo/de busca."""
+
+    class Color(models.IntegerChoices):
+        CINZA = 0, "Cinza"
+        AZUL = 1, "Azul"
+        VERDE = 2, "Verde"
+        AMARELO = 3, "Amarelo"
+        LARANJA = 4, "Laranja"
+        VERMELHO = 5, "Vermelho"
+        ROXO = 6, "Roxo"
+
+    organization = models.ForeignKey(
+        Organization, verbose_name="organização", on_delete=models.CASCADE, related_name="tags"
+    )
+    name = models.CharField("nome", max_length=80)
+    color = models.PositiveSmallIntegerField("cor", choices=Color.choices, default=Color.CINZA)
+    is_active = models.BooleanField("ativo", default=True)
+    created_by = models.ForeignKey(
+        "auth.User", verbose_name="criado por", null=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField("criado em", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "marcador"
+        verbose_name_plural = "marcadores"
+        ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(fields=["organization", "name"], name="unique_tag_name_per_org"),
+        ]
+
+    def __str__(self):
+        return self.name
+
+
 class Site(models.Model):
     """Obra (Regras 10 §11). Opcional na atividade."""
 

@@ -5,6 +5,7 @@ from . import views
 urlpatterns = [
     path("api/pessoas/", views.PersonSearchView.as_view(), name="person-search"),
     path("api/clientes/", views.ClientSearchView.as_view(), name="client-search"),
+    path("api/tags/", views.TagSearchView.as_view(), name="tag-search"),
     path("cadastros/", views.CadastroHomeView.as_view(), name="cadastros"),
     path("cadastros/setores/novo/", views.SectorFormView.as_view(), name="sector-create"),
     path("cadastros/setores/<int:pk>/", views.SectorFormView.as_view(), name="sector-edit"),
@@ -18,6 +19,15 @@ urlpatterns = [
     path("cadastros/clientes/<int:pk>/", views.ClientFormView.as_view(), name="client-edit"),
     path("cadastros/motivos/novo/", views.ReturnReasonFormView.as_view(), name="returnreason-create"),
     path("cadastros/motivos/<int:pk>/", views.ReturnReasonFormView.as_view(), name="returnreason-edit"),
+    path("cadastros/estagios-de-tarefa/novo/", views.TaskStageFormView.as_view(), name="taskstage-create"),
+    path("cadastros/estagios-de-tarefa/<int:pk>/", views.TaskStageFormView.as_view(), name="taskstage-edit"),
+    path(
+        "cadastros/estagios-de-tarefa/reordenar/",
+        views.TaskStageReorderView.as_view(),
+        name="taskstage-reorder",
+    ),
+    path("cadastros/tags/novo/", views.TagFormView.as_view(), name="tag-create"),
+    path("cadastros/tags/<int:pk>/", views.TagFormView.as_view(), name="tag-edit"),
     path(
         "cadastros/<str:tab>/<int:pk>/situacao/",
         views.CadastroToggleActiveView.as_view(),

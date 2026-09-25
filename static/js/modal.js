@@ -111,6 +111,12 @@
                 current = backdrop;
                 document.addEventListener("keydown", onKeydown);
 
+                // Widgets como PersonPickerWidget/TagPickerWidget/RichTextWidget
+                // só ligam seus listeners uma vez, no carregamento da página —
+                // um formulário injetado agora precisa que cada um se
+                // reinicialize dentro deste backdrop específico.
+                (window.LPSWidgets || []).forEach(function (initIn) { initIn(backdrop); });
+
                 var firstField = backdrop.querySelector(".modal__body input, .modal__body select, .modal__body textarea");
                 if (firstField) firstField.focus();
             });
