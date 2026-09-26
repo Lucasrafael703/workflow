@@ -1,10 +1,11 @@
 {% extends "base.html" %}
+{% load lps %}
 {% block title %}Minhas tarefas — LPS{% endblock %}
 
 {% block content %}
 <div class="page-head">
     <div class="page-head__text">
-        <h1>Tarefas{% if page_obj %} <span class="muted">({{ page_obj.paginator.count }})</span>{% endif %}</h1>
+        <h1>Minhas tarefas</h1>
         <p class="sub">Os passos que você executa. Cada tarefa pertence a uma atividade.</p>
     </div>
     <div class="page-head__actions">
@@ -12,6 +13,36 @@
         <a href="{% url 'queue' %}" class="btn">Ver fila do setor</a>
     </div>
 </div>
+
+{% if view_mode == "lista" %}
+<div class="stat-grid">
+    <div class="stat-card">
+        <div class="stat-card__icon stat-card__icon--info">{% include "_icon.html" with name="task" %}</div>
+        <div class="value">{{ stats.total }}</div>
+        <div class="label">minhas tarefas</div>
+    </div>
+    <a href="?tab={{ tab }}&filtro=em-execucao" class="stat-card">
+        <div class="stat-card__icon stat-card__icon--primary">{% include "_icon.html" with name="activity" %}</div>
+        <div class="value">{{ stats.in_progress }}</div>
+        <div class="label">em execução</div>
+    </a>
+    <a href="?tab={{ tab }}&filtro=em-fila" class="stat-card">
+        <div class="stat-card__icon stat-card__icon--warning">{% include "_icon.html" with name="clock" %}</div>
+        <div class="value">{{ stats.queued }}</div>
+        <div class="label">na fila</div>
+    </a>
+    <a href="?tab={{ tab }}&filtro=atrasadas" class="stat-card">
+        <div class="stat-card__icon stat-card__icon--danger">{% include "_icon.html" with name="alert" %}</div>
+        <div class="value">{{ stats.overdue }}</div>
+        <div class="label">atrasada{{ stats.overdue|pluralize }}</div>
+    </a>
+    <a href="?tab={{ tab }}&filtro=bloqueadas" class="stat-card">
+        <div class="stat-card__icon stat-card__icon--neutral">{% include "_icon.html" with name="block" %}</div>
+        <div class="value">{{ stats.blocked }}</div>
+        <div class="label">bloqueada{{ stats.blocked|pluralize }}</div>
+    </a>
+</div>
+{% endif %}
 
 {% include "activities/_task_view_filters.html" %}
 
@@ -33,7 +64,7 @@
                         {% elif task.requested_deadline %}<span class="muted">{{ task.requested_deadline|date:"d/m/Y H:i" }} (solicitado)</span>
                         {% else %}<span class="muted">Sem prazo</span>{% endif %}
                     </td>
-                    <td data-label="Situação"><span class="tag tag--{{ task.status }}">{{ task.get_status_display }}</span></td>
+                    <td data-label="Situação"><span class="tag" style="--tag-bg: {{ task.status_color }}1A; --tag-fg: {{ task.status_color }};">{{ task.get_status_display }}</span></td>
                 </tr>
                 {% endfor %}
                 </tbody>
@@ -56,20 +87,98 @@
     <div class="table-wrap">
         <table class="responsive">
             <thead>
-                <tr><th>Tarefa</th><th>Atividade</th><th>Setor</th><th>Prazo</th><th>Situação</th></tr>
+                <tr>
+                    <th class="col-check"><input type="checkbox" class="js-check-all" aria-label="Selecionar todas"></th>
+                    <th class="is-sortable{% if current_sort == 'tarefa' %} is-sorted{% if current_dir == 'desc' %} is-sorted-desc{% endif %}{% endif %}">
+                        <a href="?{{ filter_querystring }}&sort=tarefa&dir={% if current_sort == 'tarefa' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                            Tarefa {% include "_icon.html" with name="chevron-down" %}
+                        </a>
+                    </th>
+                    <th class="is-sortable{% if current_sort == 'atividade' %} is-sorted{% if current_dir == 'desc' %} is-sorted-desc{% endif %}{% endif %}">
+                        <a href="?{{ filter_querystring }}&sort=atividade&dir={% if current_sort == 'atividade' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                            Atividade {% include "_icon.html" with name="chevron-down" %}
+                        </a>
+                    </th>
+                    <th>Cliente</th>
+                    <th>Obra</th>
+                    <th>Setor</th>
+                    <th>Responsável</th>
+                    <th class="is-sortable{% if current_sort == 'prazo' %} is-sorted{% if current_dir == 'desc' %} is-sorted-desc{% endif %}{% endif %}">
+                        <a href="?{{ filter_querystring }}&sort=prazo&dir={% if current_sort == 'prazo' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                            Prazo {% include "_icon.html" with name="chevron-down" %}
+                        </a>
+                    </th>
+                    <th class="is-sortable{% if current_sort == 'situacao' %} is-sorted{% if current_dir == 'desc' %} is-sorted-desc{% endif %}{% endif %}">
+                        <a href="?{{ filter_querystring }}&sort=situacao&dir={% if current_sort == 'situacao' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                            Situação {% include "_icon.html" with name="chevron-down" %}
+                        </a>
+                    </th>
+                    <th class="col-menu"></th>
+                </tr>
             </thead>
             <tbody>
                 {% for task in tasks %}
-                <tr>
-                    <td data-label="Tarefa"><a href="{% url 'task-detail' task.pk %}" class="title">{{ task.title }}</a></td>
-                    <td data-label="Atividade"><a href="{% url 'activity-detail' task.activity.pk %}">{{ task.activity.title }}</a></td>
-                    <td data-label="Setor">{{ task.sector.name }}</td>
-                    <td data-label="Prazo">
-                        {% if task.committed_deadline %}{{ task.committed_deadline|date:"d/m/Y H:i" }}
-                        {% elif task.requested_deadline %}<span class="muted">{{ task.requested_deadline|date:"d/m/Y H:i" }} (solicitado)</span>
-                        {% else %}<span class="muted">Sem prazo</span>{% endif %}
+                <tr class="js-task-row" data-drawer-url="{% url 'task-drawer' task.pk %}">
+                    <td data-label="" class="col-check"><input type="checkbox" class="js-row-check" aria-label="Selecionar {{ task.title }}"></td>
+                    <td data-label="Tarefa">
+                        <a href="{% url 'task-detail' task.pk %}" class="title">{{ task.title }}</a>
                     </td>
-                    <td data-label="Situação"><span class="tag tag--{{ task.status }}">{{ task.get_status_display }}</span></td>
+                    <td data-label="Atividade"><a href="{% url 'activity-detail' task.activity.pk %}">{{ task.activity.title }}</a></td>
+                    <td data-label="Cliente">{% if task.activity.client %}{{ task.activity.client.name }}{% else %}<span class="muted">—</span>{% endif %}</td>
+                    <td data-label="Obra">{% if task.activity.site %}{{ task.activity.site.name }}{% else %}<span class="muted">—</span>{% endif %}</td>
+                    <td data-label="Setor"><span class="tag">{{ task.sector.name }}</span></td>
+                    <td data-label="Responsável">
+                        {% with executor=task.active_executors.0 %}
+                        {% if executor %}
+                        <span class="responsible-cell">
+                            <span class="avatar avatar--{{ executor.user|avatar_color }}">{{ executor.user.get_username|slice:":2"|upper }}</span>
+                            <span class="small">{{ executor.user.get_username }}</span>
+                        </span>
+                        {% else %}<span class="muted">—</span>{% endif %}
+                        {% endwith %}
+                    </td>
+                    <td data-label="Prazo">
+                        {% if task.effective_deadline %}
+                        <span class="deadline-cell{% if task.is_overdue %} deadline-cell--overdue{% endif %}">
+                            {% if task.is_overdue %}
+                                {% include "_icon.html" with name="alert" %}
+                            {% else %}
+                                {% include "_icon.html" with name="clock" %}
+                            {% endif %}
+                            {{ task.effective_deadline|date:"d/m/Y H:i" }}
+                        </span>
+                        {% else %}<span class="muted">—</span>{% endif %}
+                    </td>
+                    <td data-label="Situação"><span class="tag" style="--tag-bg: {{ task.status_color }}1A; --tag-fg: {{ task.status_color }};">{{ task.get_status_display }}</span></td>
+                    <td data-label="" class="col-menu">
+                        <div class="menu-dots js-menu-dots">
+                            <button type="button" class="menu-dots__trigger" title="Mais ações">{% include "_icon.html" with name="more" %}</button>
+                            <div class="menu-dots__popup" hidden>
+                                <a href="{% url 'task-detail' task.pk %}" class="menu-dots__item">Ver detalhes</a>
+                                {% comment %}Assumir/Resolver bloqueio não têm endpoint AJAX (só o de página cheia,
+                                que sempre redireciona para task-detail — aceitável, são ações que já
+                                levam a mais contexto mesmo). Iniciar/Pausar/Concluir usam o endpoint
+                                ajax já criado para o painel lateral, para permanecer na lista.{% endcomment %}
+                                {% if task.status == "DISPONIVEL" %}
+                                <form method="post" action="{% url 'task-assume' task.pk %}" class="js-menu-form">
+                                    {% csrf_token %}<button type="submit" class="menu-dots__item">Assumir</button>
+                                </form>
+                                {% endif %}
+                                {% if task.status == "DISPONIVEL" or task.status == "EM_FILA" %}
+                                <button type="button" class="menu-dots__item js-menu-ajax" data-url="{% url 'task-start-ajax' task.pk %}">Iniciar</button>
+                                {% endif %}
+                                {% if task.status == "EM_EXECUCAO" %}
+                                <button type="button" class="menu-dots__item js-menu-ajax" data-url="{% url 'task-pause-ajax' task.pk %}">Pausar</button>
+                                <button type="button" class="menu-dots__item js-menu-ajax" data-url="{% url 'task-complete-ajax' task.pk %}">Concluir</button>
+                                {% endif %}
+                                {% if task.status == "BLOQUEADA" %}
+                                <form method="post" action="{% url 'task-unblock' task.pk %}" class="js-menu-form">
+                                    {% csrf_token %}<button type="submit" class="menu-dots__item">Resolver bloqueio</button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -80,12 +189,16 @@
 {% if is_paginated %}
 <div class="pagination">
     {% if page_obj.has_previous %}
-    <a class="btn btn--sm" href="?tab={{ tab }}&q={{ search }}&filtro={{ view_filter }}&page={{ page_obj.previous_page_number }}">Anterior</a>
+    <a class="btn btn--sm" href="?{{ filter_querystring }}&sort={{ current_sort }}&dir={{ current_dir }}&page={{ page_obj.previous_page_number }}">{% include "_icon.html" with name="back" %}</a>
     {% endif %}
-    <span class="muted small">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+    <span class="muted small">Mostrando {{ page_obj.start_index }}–{{ page_obj.end_index }} de {{ page_obj.paginator.count }} tarefas</span>
     {% if page_obj.has_next %}
-    <a class="btn btn--sm" href="?tab={{ tab }}&q={{ search }}&filtro={{ view_filter }}&page={{ page_obj.next_page_number }}">Próxima</a>
+    <a class="btn btn--sm" href="?{{ filter_querystring }}&sort={{ current_sort }}&dir={{ current_dir }}&page={{ page_obj.next_page_number }}">{% include "_icon.html" with name="arrow-right" %}</a>
     {% endif %}
+</div>
+{% else %}
+<div class="pagination">
+    <span class="muted small">Mostrando {{ tasks|length }} de {{ tasks|length }} tarefa{{ tasks|length|pluralize }}</span>
 </div>
 {% endif %}
 
@@ -105,9 +218,16 @@
     </div>
 </div>
 {% endif %}
+
 <script>
 (function () {
     "use strict";
+
+    function csrfToken() {
+        var match = document.cookie.match(/csrftoken=([^;]+)/);
+        return match ? match[1] : "";
+    }
+
     document.querySelectorAll(".js-new-task").forEach(function (link) {
         link.addEventListener("click", function (event) {
             if (!window.LPSModal) return;
@@ -117,6 +237,81 @@
             });
         });
     });
+
+    // Clique na linha (fora de checkbox/link/menu) abre o painel lateral,
+    // mesmo padrão de `.js-open-drawer` em `_tasks_block.html`.
+    document.querySelectorAll("tr.js-task-row").forEach(function (row) {
+        row.addEventListener("click", function (event) {
+            if (event.target.closest("a, button, input, .menu-dots")) return;
+            if (!window.LPSDrawer) return;
+            window.LPSDrawer.open(row.dataset.drawerUrl);
+        });
+    });
+
+    // Menu "⋮" por linha: mesmo JS genérico já usado na Ficha de Atividade,
+    // mais o reposicionamento por coordenadas quando o menu vive dentro de
+    // uma tabela com overflow-x (o popup vira position:fixed nesse caso,
+    // porque overflow-x:auto sempre corta um overflow-y:visible do mesmo
+    // elemento — não há solução só em CSS aqui).
+    document.querySelectorAll(".js-menu-dots").forEach(function (root) {
+        var trigger = root.querySelector(".menu-dots__trigger");
+        var popup = root.querySelector(".menu-dots__popup");
+        var scrollParent = root.closest(".table-wrap");
+
+        function position() {
+            if (!scrollParent) return;
+            var rect = trigger.getBoundingClientRect();
+            popup.classList.add("is-fixed");
+            popup.style.top = (rect.bottom + 6) + "px";
+            popup.style.right = (window.innerWidth - rect.right) + "px";
+        }
+
+        trigger.addEventListener("click", function (event) {
+            event.stopPropagation();
+            var opening = popup.hidden;
+            popup.hidden = !popup.hidden;
+            if (opening) position();
+        });
+        document.addEventListener("click", function (event) {
+            if (!root.contains(event.target)) popup.hidden = true;
+        });
+        root.querySelectorAll(".js-menu-form").forEach(function (form) {
+            form.addEventListener("click", function (event) { event.stopPropagation(); });
+        });
+        root.querySelectorAll(".js-menu-ajax").forEach(function (button) {
+            button.addEventListener("click", function (event) {
+                event.stopPropagation();
+                button.disabled = true;
+                fetch(button.dataset.url, {
+                    method: "POST",
+                    headers: {
+                        "X-Requested-With": "XMLHttpRequest",
+                        "X-CSRFToken": csrfToken(),
+                    },
+                })
+                    .then(function (response) { return response.json().then(function (data) { return { ok: response.ok, data: data }; }); })
+                    .then(function (result) {
+                        if (!result.ok) {
+                            alert(result.data.error || "Não foi possível concluir a ação.");
+                            button.disabled = false;
+                            return;
+                        }
+                        window.location.reload();
+                    })
+                    .catch(function () { button.disabled = false; });
+            });
+        });
+    });
+
+    // Checkbox "selecionar todas" (visual, sem ação em lote ainda).
+    var checkAll = document.querySelector(".js-check-all");
+    if (checkAll) {
+        checkAll.addEventListener("change", function () {
+            document.querySelectorAll(".js-row-check").forEach(function (box) {
+                box.checked = checkAll.checked;
+            });
+        });
+    }
 })();
 </script>
 {% endblock %}

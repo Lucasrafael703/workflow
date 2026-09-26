@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Etapas e status — Configurações — LPS{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div class="page-head__text">
+        <h1>Etapas e status</h1>
+        <p class="sub">A cor é só visual — nunca muda o que o status faz no sistema.</p>
+    </div>
+    <div class="page-head__actions">
+        {% if domain %}
+        <button type="button" class="btn" data-restore-defaults
+                data-restore-url="{% url 'enumcolor-reset' domain=domain %}">
+            Restaurar cores padrão LPS
+        </button>
+        {% endif %}
+    </div>
+</div>
+
+<nav class="tabs">
+    <a href="?tab=atividade" class="{% if tab == 'atividade' %}is-active{% endif %}">Status de atividade</a>
+    <a href="?tab=tarefa" class="{% if tab == 'tarefa' %}is-active{% endif %}">Status de tarefa</a>
+    <a href="?tab=etapas" class="{% if tab == 'etapas' %}is-active{% endif %}">Etapas do Kanban</a>
+</nav>
+
+{% if tab == "etapas" %}
+<div class="card card--flush">
+    <ul class="color-config-list">
+        {% for stage in stages %}
+        <li class="color-config-row">
+            <span class="color-config-row__label">{{ stage.name }}</span>
+            <span class="color-config-row__preview">
+                <span class="tag" style="--tag-bg: {{ stage.color }}1A; --tag-fg: {{ stage.color }};">{{ stage.name }}</span>
+            </span>
+            <button type="button" class="color-swatch" data-color-swatch
+                    data-save-url="{% url 'cadastro-color-save' tab='estagios-de-tarefa' pk=stage.pk %}"
+                    style="--swatch-color: {{ stage.color }};"
+                    data-current-color="{{ stage.color }}"
+                    aria-haspopup="true" aria-label="Cor de {{ stage.name }}: clique para mudar."></button>
+        </li>
+        {% empty %}
+        <li>
+            <div class="empty-state">
+                <div class="empty-state__icon">{% include "_icon.html" with name="folder" %}</div>
+                <h3>Nenhum estágio cadastrado</h3>
+                <p>Configure as colunas do Kanban em Cadastros › Estágios de tarefa.</p>
+                <a href="{% url 'cadastros' %}?tab=estagios-de-tarefa" class="btn btn--primary">Configurar estágios</a>
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% else %}
+<div class="card card--flush">
+    <ul class="color-config-list">
+        {% for row in rows %}
+        <li class="color-config-row">
+            <span class="color-config-row__label">{{ row.label }}</span>
+            <span class="color-config-row__preview">
+                <span class="tag" style="--tag-bg: {{ row.color }}1A; --tag-fg: {{ row.color }};">{{ row.label }}</span>
+            </span>
+            <button type="button" class="color-swatch" data-color-swatch
+                    data-save-url="{% url 'enumcolor-save' domain=domain %}"
+                    data-code="{{ row.code }}"
+                    style="--swatch-color: {{ row.color }};"
+                    data-current-color="{{ row.color }}"
+                    aria-haspopup="true" aria-label="Cor de {{ row.label }}: clique para mudar."></button>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<script>
+document.querySelectorAll("[data-restore-defaults]").forEach(function (button) {
+    button.addEventListener("click", function () {
+        if (!window.confirm("Restaurar todas as cores desta aba para o padrão LPS? Isso desfaz qualquer personalização feita aqui.")) return;
+        var match = document.cookie.match(/csrftoken=([^;]+)/);
+        fetch(button.getAttribute("data-restore-url"), {
+            method: "POST",
+            headers: {
+                "X-Requested-With": "XMLHttpRequest",
+                "X-CSRFToken": match ? match[1] : "",
+            },
+        }).then(function () { window.location.reload(); });
+    });
+});
+</script>
+{% endblock %}

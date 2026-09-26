@@ -4,6 +4,110 @@
 (function () {
     "use strict";
 
+    // Menu recolhível (desktop): estado persiste entre páginas via
+    // localStorage. O <script> no <head> já aplicou a classe antes do
+    // primeiro paint — aqui só liga o clique e mantém o texto/aria em dia.
+    var collapseButton = document.querySelector("[data-sidebar-collapse]");
+    if (collapseButton) {
+        var STORAGE_KEY = "lps-sidebar-collapsed";
+
+        function syncCollapseButton(collapsed) {
+            var label = collapsed ? "Expandir menu" : "Recolher menu";
+            collapseButton.setAttribute("title", label);
+            collapseButton.setAttribute("aria-label", label);
+            collapseButton.setAttribute("aria-pressed", String(collapsed));
+        }
+
+        syncCollapseButton(document.documentElement.classList.contains("sidebar--collapsed"));
+
+        collapseButton.addEventListener("click", function () {
+            var collapsed = document.documentElement.classList.toggle("sidebar--collapsed");
+            localStorage.setItem(STORAGE_KEY, collapsed ? "1" : "0");
+            syncCollapseButton(collapsed);
+        });
+    }
+
+    // Tooltip de texto dos itens simples (Início, Fila, Notificações...)
+    // quando o menu está recolhido: mesmo motivo do flyout abaixo — a
+    // sidebar tem overflow-y:auto, que corta o ::after se ele for
+    // position:absolute. Aqui basta calcular a posição real do ícone e
+    // escrever nas custom properties que o CSS já lê (--tooltip-left/-top);
+    // o ::after em si continua sendo position:fixed puro, sem precisar
+    // mover nenhum elemento do DOM.
+    document.querySelectorAll(".nav-item[data-tooltip]").forEach(function (item) {
+        function updatePosition() {
+            var rect = item.getBoundingClientRect();
+            item.style.setProperty("--tooltip-left", (rect.right + 10) + "px");
+            item.style.setProperty("--tooltip-top", (rect.top + rect.height / 2 - 15) + "px");
+        }
+        item.addEventListener("mouseenter", updatePosition);
+        item.addEventListener("focus", updatePosition);
+    });
+
+    // Flyout dos grupos (Atividades, Tarefas, Cadastros...) quando o menu
+    // está recolhido: a sidebar tem overflow-y:auto, que corta qualquer
+    // position:absolute além da sua largura — por isso o flyout é movido
+    // para o <body> (portal) enquanto aberto, posicionado por coordenadas
+    // reais do ícone, e devolvido ao lugar original ao fechar.
+    document.querySelectorAll(".nav-group").forEach(function (group) {
+        var flyout = group.querySelector(".nav-group__flyout");
+        if (!flyout) return;
+
+        var placeholder = document.createComment("nav-group__flyout-anchor");
+        var closeTimer = null;
+
+        function isCollapsed() {
+            return document.documentElement.classList.contains("sidebar--collapsed");
+        }
+
+        function open() {
+            if (!isCollapsed()) return;
+            clearTimeout(closeTimer);
+            if (!flyout.parentElement || flyout.parentElement !== document.body) {
+                flyout.parentNode.insertBefore(placeholder, flyout);
+                document.body.appendChild(flyout);
+            }
+            var rect = group.getBoundingClientRect();
+            flyout.style.left = (rect.right + 10) + "px";
+            flyout.style.top = rect.top + "px";
+            flyout.classList.add("is-open");
+        }
+
+        function scheduleClose() {
+            clearTimeout(closeTimer);
+            closeTimer = setTimeout(close, 120);
+        }
+
+        function close() {
+            flyout.classList.remove("is-open");
+            if (placeholder.parentNode) {
+                placeholder.parentNode.insertBefore(flyout, placeholder);
+                placeholder.remove();
+            }
+        }
+
+        group.addEventListener("mouseenter", open);
+        group.addEventListener("mouseleave", scheduleClose);
+        flyout.addEventListener("mouseenter", function () { clearTimeout(closeTimer); });
+        flyout.addEventListener("mouseleave", scheduleClose);
+        group.addEventListener("focusin", open);
+        group.addEventListener("focusout", function (event) {
+            if (!group.contains(event.relatedTarget) && !flyout.contains(event.relatedTarget)) {
+                close();
+            }
+        });
+    });
+
+    // Recolher o menu fecha qualquer flyout aberto e some com o portal.
+    var collapseObserver = new MutationObserver(function () {
+        if (!document.documentElement.classList.contains("sidebar--collapsed")) {
+            document.querySelectorAll(".nav-group__flyout.is-open").forEach(function (flyout) {
+                flyout.classList.remove("is-open");
+            });
+        }
+    });
+    collapseObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+
     var toggle = document.getElementById("nav-toggle");
 
     // Ao navegar no celular, o menu não deve continuar aberto por cima.

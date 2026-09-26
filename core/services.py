@@ -1,6 +1,7 @@
 from django.db import models, transaction
 
-from .models import Client, Company, CostCenter, Sector, Site, Tag, TaskStage
+from .colors import DEFAULTS, is_valid_palette_color, valid_codes_for
+from .models import Client, Company, CostCenter, EnumColor, Sector, Site, Tag, TaskStage
 
 
 class CadastroError(Exception):
@@ -168,6 +169,58 @@ class TaskStageService(SimpleCadastroService):
             if stage and stage.order != position:
                 stage.order = position
                 stage.save(update_fields=["order"])
+
+
+class EnumColorService:
+    """Cor visual configurável por organização para os enums fixos
+    (Activity.status, Task.status, Activity.urgency). A tabela EnumColor só
+    guarda o hex — o código nunca muda de significado, e o nome exibido
+    continua vindo de get_FOO_display() no Python."""
+
+    @staticmethod
+    def get_color(organization, domain, code):
+        override = (
+            EnumColor.objects.filter(organization=organization, domain=domain, code=code)
+            .values_list("color", flat=True)
+            .first()
+        )
+        return override or DEFAULTS.get(domain, {}).get(code, "#94A3B8")
+
+    @staticmethod
+    @transaction.atomic
+    def set_color(organization, domain, code, color, updated_by=None):
+        if code not in valid_codes_for(domain):
+            raise CadastroError(f"Código “{code}” não existe no domínio “{domain}”.")
+        if not is_valid_palette_color(color):
+            raise CadastroError("Escolha uma cor da paleta oficial.")
+        obj, _created = EnumColor.objects.update_or_create(
+            organization=organization,
+            domain=domain,
+            code=code,
+            defaults={"color": color, "updated_by": updated_by},
+        )
+        return obj
+
+    @staticmethod
+    @transaction.atomic
+    def reset_to_defaults(organization, domain=None):
+        """Ação "Restaurar cores padrão LPS": apaga as customizações — a
+        resolução volta a cair no default automaticamente, sem precisar
+        recriar linhas com os hex padrão."""
+        queryset = EnumColor.objects.filter(organization=organization)
+        if domain is not None:
+            queryset = queryset.filter(domain=domain)
+        return queryset.delete()
+
+    @staticmethod
+    def list_for_domain(organization, domain):
+        """Todos os codes do domínio com a cor atualmente efetiva
+        (customizada ou default) — usado para popular a tela de
+        configuração."""
+        overrides = dict(
+            EnumColor.objects.filter(organization=organization, domain=domain).values_list("code", "color")
+        )
+        return {code: overrides.get(code, default_hex) for code, default_hex in DEFAULTS.get(domain, {}).items()}
 
 
 class ReturnReasonService(SimpleCadastroService):

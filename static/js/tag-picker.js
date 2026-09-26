@@ -45,7 +45,9 @@
 
         function renderChip(tag) {
             var chip = document.createElement("span");
-            chip.className = "tag-picker__chip tag-chip tag-chip--" + (tag.color || 0);
+            chip.className = "tag-picker__chip tag-chip";
+            chip.style.setProperty("--tag-bg", (tag.color || "#94A3B8") + "1A");
+            chip.style.setProperty("--tag-fg", tag.color || "#94A3B8");
             chip.setAttribute("data-tag-id", tag.id);
             chip.textContent = tag.name;
 
@@ -102,7 +104,9 @@
                 option.type = "button";
                 option.className = "tag-picker__option";
                 var swatch = document.createElement("span");
-                swatch.className = "tag-chip tag-chip--" + (tag.color || 0);
+                swatch.className = "tag-chip";
+                swatch.style.setProperty("--tag-bg", (tag.color || "#94A3B8") + "1A");
+                swatch.style.setProperty("--tag-fg", tag.color || "#94A3B8");
                 swatch.textContent = tag.name;
                 option.appendChild(swatch);
                 option.addEventListener("click", function () {

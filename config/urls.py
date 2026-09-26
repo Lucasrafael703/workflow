@@ -11,6 +11,7 @@ urlpatterns = [
     path("accounts/", include("accounts.urls")),
     path("notificacoes/", include("notifications.urls")),
     path("processos/", include("processes.urls")),
+    path("painel/", include("painel.urls")),
     path("", include("core.urls")),
     path("", include("activities.urls")),
 ]

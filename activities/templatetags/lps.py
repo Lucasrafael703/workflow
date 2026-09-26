@@ -68,3 +68,16 @@ def duration_hm(value):
     if hours:
         return f"{hours}h"
     return f"{minutes}min"
+
+
+AVATAR_COLOR_COUNT = 6
+
+
+@register.filter
+def avatar_color(user):
+    """Índice de cor determinístico por pessoa (0-5): mesma pessoa sempre a
+    mesma cor entre reloads, sem guardar nada no banco — só o resto de
+    `user.pk` por uma paleta fixa (`.avatar--0`..`--5` em app.css)."""
+    if not user or not getattr(user, "pk", None):
+        return 0
+    return user.pk % AVATAR_COLOR_COUNT

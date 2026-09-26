@@ -168,6 +168,33 @@ class ActivityPickerWidget(forms.HiddenInput):
         )
 
 
+class ColorPaletteWidget(forms.HiddenInput):
+    """Escolha de cor via grade de 36 cores (popover), no lugar de um
+    <select> de cores ou de <input type="color">.
+
+    O <input hidden> continua sendo o valor real submetido; o swatch visível
+    ao lado é só a apresentação. static/js/color-palette-picker.js abre o
+    popover e escreve o hex escolhido diretamente no input escondido — não
+    dispara nenhuma requisição neste modo (é usado dentro de um form
+    tradicional, que quem submete é o próprio form).
+    """
+
+    def render(self, name, value, attrs=None, renderer=None):
+        hidden_html = super().render(name, value, attrs, renderer)
+        color = value or "#94A3B8"
+        return format_html(
+            '<div class="color-palette-field">'
+            "{hidden_html}"
+            '<button type="button" class="color-swatch color-swatch--form" '
+            'data-color-swatch style="--swatch-color: {color};" '
+            'data-current-color="{color}" aria-haspopup="true" '
+            'aria-label="Escolher cor"></button>'
+            "</div>",
+            hidden_html=hidden_html,
+            color=color,
+        )
+
+
 class RichTextWidget(forms.Textarea):
     """Editor de descrição com formatação básica (negrito/itálico/sublinhado/
     lista/link) sobre `contenteditable` nativo do navegador — sem editor
@@ -236,9 +263,10 @@ class TagPickerWidget(forms.SelectMultiple):
         selected = self._selected_options(value)
         chips = format_html_join(
             "",
-            '<span class="tag-picker__chip tag-chip tag-chip--{}" data-tag-id="{}">{}'
+            '<span class="tag-picker__chip tag-chip" data-tag-id="{}" '
+            'style="--tag-bg: {}1A; --tag-fg: {};">{}'
             '<button type="button" class="tag-picker__remove" aria-label="Remover">&times;</button></span>',
-            ((tag.color, tag.pk, tag.name) for tag in selected),
+            ((tag.pk, tag.color, tag.color, tag.name) for tag in selected),
         )
 
         return format_html(

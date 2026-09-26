@@ -5,7 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}LPS{% endblock %}</title>
     <link rel="icon" type="image/svg+xml" href="{% static 'img/favicon.svg' %}">
-    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20260919c">
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20260926d">
+    <script>
+    // Aplica o estado recolhido antes do primeiro paint — sem isto, a
+    // sidebar apareceria expandida por um instante e "pularia" pro estado
+    // salvo, mesmo com o CSS já carregado.
+    if (localStorage.getItem("lps-sidebar-collapsed") === "1") {
+        document.documentElement.classList.add("sidebar--collapsed");
+    }
+    </script>
 </head>
 <body>
 {% include "_icons.html" %}
@@ -18,9 +26,13 @@
 
     <aside class="sidebar">
         <div class="sidebar__brand">
-            <a href="{% url 'home' %}" aria-label="LPS — ir para a Home">
+            <a href="{% url 'home' %}" aria-label="LPS — ir para a Home" class="sidebar__brand-link">
                 {% include "_logo.html" with variant="light" size=30 wordmark=True %}
             </a>
+            <button type="button" class="sidebar__collapse" data-sidebar-collapse
+                    title="Recolher menu" aria-label="Recolher menu" aria-pressed="false">
+                {% include "_icon.html" with name="chevron-left" %}
+            </button>
         </div>
 
         {% if lps_org %}
@@ -33,87 +45,186 @@
         <nav class="sidebar__nav">
             <div class="sidebar__section">Operação</div>
 
-            <a href="{% url 'home' %}" class="nav-item {% if nav_active == 'home' %}is-active{% endif %}">
+            <a href="{% url 'home' %}" class="nav-item {% if nav_active == 'home' %}is-active{% endif %}" data-tooltip="Início">
                 <span class="nav-item__icon">{% include "_icon.html" with name="home" %}</span>
-                <span class="nav-item__label">Home</span>
+                <span class="nav-item__label">Início</span>
             </a>
-            <a href="{% url 'activity-list' %}" class="nav-item {% if nav_active == 'activities' %}is-active{% endif %}">
-                <span class="nav-item__icon">{% include "_icon.html" with name="activity" %}</span>
-                <span class="nav-item__label">Minhas atividades</span>
-            </a>
-            <a href="{% url 'task-list' %}" class="nav-item {% if nav_active == 'tasks' %}is-active{% endif %}">
-                <span class="nav-item__icon">{% include "_icon.html" with name="task" %}</span>
-                <span class="nav-item__label">Minhas tarefas</span>
-                {% if lps_open_tasks %}<span class="nav-count nav-count--quiet">{{ lps_open_tasks }}</span>{% endif %}
-            </a>
-            <a href="{% url 'queue' %}" class="nav-item {% if nav_active == 'queue' %}is-active{% endif %}">
+
+            <details class="nav-group {% if nav_active == 'activities' %}has-active{% endif %}"
+                      {% if nav_active == 'activities' %}open{% endif %}>
+                <summary data-tooltip="Atividades">
+                    <span class="nav-item__icon">{% include "_icon.html" with name="activity" %}</span>
+                    <span class="nav-item__label">Atividades</span>
+                    <span class="nav-group__chevron">{% include "_icon.html" with name="chevron-down" %}</span>
+                </summary>
+                <div class="nav-group__flyout">
+                    <div class="nav-group__flyout-title">Atividades</div>
+                    <a href="{% url 'activity-list' %}?tab=minhas" class="nav-subitem">Minhas</a>
+                    <a href="{% url 'activity-list' %}?tab=participando" class="nav-subitem">Participando</a>
+                    <a href="{% url 'activity-list' %}?tab=grupo" class="nav-subitem">Do meu setor</a>
+                    <a href="{% url 'activity-list' %}?tab=concluidas" class="nav-subitem">Concluídas</a>
+                </div>
+            </details>
+
+            <details class="nav-group {% if nav_active == 'tasks' %}has-active{% endif %}"
+                      {% if nav_active == 'tasks' %}open{% endif %}>
+                <summary data-tooltip="Tarefas">
+                    <span class="nav-item__icon">{% include "_icon.html" with name="task" %}</span>
+                    <span class="nav-item__label">Tarefas</span>
+                    {% if lps_open_tasks %}<span class="nav-count nav-count--quiet">{{ lps_open_tasks }}</span>{% endif %}
+                    <span class="nav-group__chevron">{% include "_icon.html" with name="chevron-down" %}</span>
+                </summary>
+                <div class="nav-group__flyout">
+                    <div class="nav-group__flyout-title">Tarefas</div>
+                    <a href="{% url 'task-list' %}?tab=minhas" class="nav-subitem">Minhas</a>
+                    <a href="{% url 'task-list' %}?tab=setor" class="nav-subitem">Do meu setor</a>
+                    <a href="{% url 'task-list' %}?status=concluidas" class="nav-subitem">Concluídas</a>
+                </div>
+            </details>
+
+            <a href="{% url 'queue' %}" class="nav-item {% if nav_active == 'queue' %}is-active{% endif %}" data-tooltip="Fila">
                 <span class="nav-item__icon">{% include "_icon.html" with name="queue" %}</span>
                 <span class="nav-item__label">Fila</span>
             </a>
-            <a href="{% url 'notification-list' %}" class="nav-item {% if nav_active == 'notifications' %}is-active{% endif %}">
+            <a href="{% url 'notification-list' %}" class="nav-item {% if nav_active == 'notifications' %}is-active{% endif %}" data-tooltip="Notificações">
                 <span class="nav-item__icon">{% include "_icon.html" with name="bell" %}</span>
                 <span class="nav-item__label">Notificações</span>
                 {% if unread_notifications_count %}<span class="nav-count">{{ unread_notifications_count }}</span>{% endif %}
             </a>
 
-            {% if lps_nav.management or lps_nav.cadastros or lps_nav.users or lps_nav.security %}
+            {% if lps_nav.management %}
             <div class="sidebar__section">Gestão</div>
 
-            {% if lps_nav.management %}
-            <a href="{% url 'management' %}" class="nav-item {% if nav_active == 'management' %}is-active{% endif %}">
+            <a href="{% url 'management' %}" class="nav-item {% if nav_active == 'management' %}is-active{% endif %}" data-tooltip="Visão do gestor">
                 <span class="nav-item__icon">{% include "_icon.html" with name="chart" %}</span>
                 <span class="nav-item__label">Visão do gestor</span>
             </a>
+
+            <details class="nav-group {% if nav_active == 'equipe' %}has-active{% endif %}"
+                      {% if nav_active == 'equipe' %}open{% endif %}>
+                <summary data-tooltip="Equipe">
+                    <span class="nav-item__icon">{% include "_icon.html" with name="users" %}</span>
+                    <span class="nav-item__label">Equipe</span>
+                    <span class="nav-group__chevron">{% include "_icon.html" with name="chevron-down" %}</span>
+                </summary>
+                <div class="nav-group__flyout">
+                    <div class="nav-group__flyout-title">Equipe</div>
+                    <a href="{% url 'equipe-pessoas' %}" class="nav-subitem {% if nav_active2 == 'equipe-pessoas' %}is-active{% endif %}">Pessoas</a>
+                    <a href="{% url 'equipe-capacidade' %}" class="nav-subitem {% if nav_active2 == 'equipe-capacidade' %}is-active{% endif %}">Capacidade</a>
+                    <a href="{% url 'equipe-carga-trabalho' %}" class="nav-subitem {% if nav_active2 == 'equipe-carga-trabalho' %}is-active{% endif %}">Carga de trabalho</a>
+                </div>
+            </details>
+
+            <details class="nav-group {% if nav_active == 'gargalos' %}has-active{% endif %}"
+                      {% if nav_active == 'gargalos' %}open{% endif %}>
+                <summary data-tooltip="Filas e gargalos">
+                    <span class="nav-item__icon">{% include "_icon.html" with name="queue" %}</span>
+                    <span class="nav-item__label">Filas e gargalos</span>
+                    <span class="nav-group__chevron">{% include "_icon.html" with name="chevron-down" %}</span>
+                </summary>
+                <div class="nav-group__flyout">
+                    <div class="nav-group__flyout-title">Filas e gargalos</div>
+                    <a href="{% url 'gargalos-filas' %}" class="nav-subitem {% if nav_active2 == 'gargalos-filas' %}is-active{% endif %}">Filas</a>
+                    <a href="{% url 'gargalos-gargalos' %}" class="nav-subitem {% if nav_active2 == 'gargalos-gargalos' %}is-active{% endif %}">Gargalos</a>
+                    <a href="{% url 'gargalos-bloqueios' %}" class="nav-subitem {% if nav_active2 == 'gargalos-bloqueios' %}is-active{% endif %}">Bloqueios</a>
+                    <a href="{% url 'gargalos-devolucoes' %}" class="nav-subitem {% if nav_active2 == 'gargalos-devolucoes' %}is-active{% endif %}">Devoluções</a>
+                </div>
+            </details>
+
+            {% if lps_nav.cadastros %}
+            <details class="nav-group {% if nav_active == 'processos' %}has-active{% endif %}"
+                      {% if nav_active == 'processos' %}open{% endif %}>
+                <summary data-tooltip="Processos">
+                    <span class="nav-item__icon">{% include "_icon.html" with name="folder" %}</span>
+                    <span class="nav-item__label">Processos</span>
+                    <span class="nav-group__chevron">{% include "_icon.html" with name="chevron-down" %}</span>
+                </summary>
+                <div class="nav-group__flyout">
+                    <div class="nav-group__flyout-title">Processos</div>
+                    <a href="{% url 'process-list' %}" class="nav-subitem">Meus processos</a>
+                    <a href="{% url 'process-create' %}" class="nav-subitem">Criar processo</a>
+                    <a href="{% url 'processos-modelos' %}" class="nav-subitem {% if nav_active2 == 'processos-modelos' %}is-active{% endif %}">Modelos</a>
+                </div>
+            </details>
             {% endif %}
 
+            <a href="{% url 'insights' %}" class="nav-item {% if nav_active2 == 'insights' %}is-active{% endif %}" data-tooltip="Insights">
+                <span class="nav-item__icon">{% include "_icon.html" with name="chart" %}</span>
+                <span class="nav-item__label">Insights</span>
+            </a>
+            <a href="{% url 'desenvolvimento' %}" class="nav-item {% if nav_active2 == 'desenvolvimento' %}is-active{% endif %}" data-tooltip="Desenvolvimento">
+                <span class="nav-item__icon">{% include "_icon.html" with name="activity" %}</span>
+                <span class="nav-item__label">Desenvolvimento</span>
+            </a>
+            <a href="{% url 'resultados' %}" class="nav-item {% if nav_active2 == 'resultados' %}is-active{% endif %}" data-tooltip="Resultados">
+                <span class="nav-item__icon">{% include "_icon.html" with name="chart" %}</span>
+                <span class="nav-item__label">Resultados</span>
+            </a>
+            {% endif %}
+
+            {% if lps_nav.cadastros or lps_nav.users or lps_nav.security %}
+            <div class="sidebar__section">Administração</div>
+
             {% comment %}
-            Cadastros é o único item com submenu: agrupa o que é "o que existe
-            na organização" sem abrir um terceiro nível — cada opção aqui leva
-            direto a uma aba dentro da mesma tela de Cadastros. O resto do
-            menu fica plano; status e filtros ficam dentro de cada tela.
+            Cadastros é o único item com submenu que aponta para abas de uma
+            mesma tela — cada opção aqui leva direto a uma aba dentro da tela
+            de Cadastros. O resto do menu fica plano.
             {% endcomment %}
             {% if lps_nav.cadastros %}
             <details class="nav-group {% if nav_active == 'cadastros' %}has-active{% endif %}"
                       {% if nav_active == 'cadastros' %}open{% endif %}>
-                <summary>
+                <summary data-tooltip="Cadastros">
                     <span class="nav-item__icon">{% include "_icon.html" with name="folder" %}</span>
                     <span class="nav-item__label">Cadastros</span>
                     <span class="nav-group__chevron">{% include "_icon.html" with name="chevron-down" %}</span>
                 </summary>
-                <a href="{% url 'process-list' %}" class="nav-subitem {% if nav_cadastros_tab == 'processos' %}is-active{% endif %}">Processos</a>
-                <a href="{% url 'cadastros' %}?tab=setores" class="nav-subitem {% if nav_cadastros_tab == 'setores' %}is-active{% endif %}">Setores</a>
-                <a href="{% url 'cadastros' %}?tab=empresas" class="nav-subitem {% if nav_cadastros_tab == 'empresas' %}is-active{% endif %}">Empresas</a>
-                <a href="{% url 'cadastros' %}?tab=obras" class="nav-subitem {% if nav_cadastros_tab == 'obras' %}is-active{% endif %}">Obras</a>
-                <a href="{% url 'cadastros' %}?tab=centros-de-custo" class="nav-subitem {% if nav_cadastros_tab == 'centros-de-custo' %}is-active{% endif %}">Centros de custo</a>
-                <a href="{% url 'cadastros' %}?tab=tipos-de-atividade" class="nav-subitem {% if nav_cadastros_tab == 'tipos-de-atividade' %}is-active{% endif %}">Tipos de atividade</a>
-                <a href="{% url 'cadastros' %}?tab=tipos-de-tarefa" class="nav-subitem {% if nav_cadastros_tab == 'tipos-de-tarefa' %}is-active{% endif %}">Tipos de tarefa</a>
-                <a href="{% url 'cadastros' %}?tab=estagios-de-tarefa" class="nav-subitem {% if nav_cadastros_tab == 'estagios-de-tarefa' %}is-active{% endif %}">Estágios de tarefa</a>
-                <a href="{% url 'cadastros' %}?tab=tags" class="nav-subitem {% if nav_cadastros_tab == 'tags' %}is-active{% endif %}">Tags</a>
-                <a href="{% url 'cadastros' %}?tab=motivos" class="nav-subitem {% if nav_cadastros_tab == 'motivos' %}is-active{% endif %}">Motivos</a>
+                <div class="nav-group__flyout">
+                    <div class="nav-group__flyout-title">Cadastros</div>
+                    <a href="{% url 'cadastros' %}?tab=empresas" class="nav-subitem {% if nav_cadastros_tab == 'empresas' %}is-active{% endif %}">Empresas</a>
+                    <a href="{% url 'cadastros' %}?tab=setores" class="nav-subitem {% if nav_cadastros_tab == 'setores' %}is-active{% endif %}">Setores</a>
+                    <a href="{% url 'cadastros' %}?tab=clientes" class="nav-subitem {% if nav_cadastros_tab == 'clientes' %}is-active{% endif %}">Clientes</a>
+                    <a href="{% url 'cadastros' %}?tab=obras" class="nav-subitem {% if nav_cadastros_tab == 'obras' %}is-active{% endif %}">Obras</a>
+                    <a href="{% url 'cadastros' %}?tab=centros-de-custo" class="nav-subitem {% if nav_cadastros_tab == 'centros-de-custo' %}is-active{% endif %}">Centros de custo</a>
+                </div>
             </details>
             {% endif %}
 
             {% if lps_nav.users %}
-            <a href="{% url 'user-list' %}" class="nav-item {% if nav_active == 'users' %}is-active{% endif %}">
+            <a href="{% url 'user-list' %}" class="nav-item {% if nav_active == 'users' %}is-active{% endif %}" data-tooltip="Usuários">
                 <span class="nav-item__icon">{% include "_icon.html" with name="users" %}</span>
                 <span class="nav-item__label">Usuários</span>
             </a>
             {% endif %}
             {% if lps_nav.security %}
-            <a href="{% url 'permissions' %}" class="nav-item {% if nav_active == 'permissions' %}is-active{% endif %}">
+            <a href="{% url 'permissions' %}" class="nav-item {% if nav_active == 'permissions' %}is-active{% endif %}" data-tooltip="Perfis e permissões">
                 <span class="nav-item__icon">{% include "_icon.html" with name="shield" %}</span>
                 <span class="nav-item__label">Perfis e permissões</span>
             </a>
             {% endif %}
+
+            <details class="nav-group {% if nav_active == 'config-lps' %}has-active{% endif %}"
+                      {% if nav_active == 'config-lps' %}open{% endif %}>
+                <summary data-tooltip="Configurações">
+                    <span class="nav-item__icon">{% include "_icon.html" with name="settings" %}</span>
+                    <span class="nav-item__label">Configurações</span>
+                    <span class="nav-group__chevron">{% include "_icon.html" with name="chevron-down" %}</span>
+                </summary>
+                <div class="nav-group__flyout">
+                    <div class="nav-group__flyout-title">Configurações</div>
+                    <a href="{% url 'config-etapas-status' %}" class="nav-subitem {% if nav_active2 == 'config-etapas-status' %}is-active{% endif %}">Etapas e status</a>
+                    <a href="{% url 'config-prioridades' %}" class="nav-subitem {% if nav_active2 == 'config-prioridades' %}is-active{% endif %}">Prioridades</a>
+                    <a href="{% url 'config-motivos-bloqueio' %}" class="nav-subitem {% if nav_active2 == 'config-motivos-bloqueio' %}is-active{% endif %}">Motivos de bloqueio</a>
+                    <a href="{% url 'config-motivos-devolucao' %}" class="nav-subitem {% if nav_active2 == 'config-motivos-devolucao' %}is-active{% endif %}">Motivos de devolução</a>
+                    <a href="{% url 'settings' %}" class="nav-subitem {% if nav_active == 'settings' %}is-active{% endif %}">Notificações</a>
+                </div>
+            </details>
+
+            <a href="{% url 'integracoes' %}" class="nav-item {% if nav_active2 == 'integracoes' %}is-active{% endif %}" data-tooltip="Integrações">
+                <span class="nav-item__icon">{% include "_icon.html" with name="folder" %}</span>
+                <span class="nav-item__label">Integrações</span>
+            </a>
             {% endif %}
         </nav>
-
-        <div class="sidebar__footer">
-            <a href="{% url 'settings' %}" class="nav-item {% if nav_active == 'settings' %}is-active{% endif %}">
-                <span class="nav-item__icon">{% include "_icon.html" with name="settings" %}</span>
-                <span class="nav-item__label">Configurações</span>
-            </a>
-        </div>
     </aside>
 
     <header class="topbar">
@@ -169,14 +280,16 @@
 {% endif %}
 
 {% if user.is_authenticated %}
-<script src="{% static 'js/shell.js' %}?v=20260919c"></script>
+<script src="{% static 'js/shell.js' %}?v=20260926d"></script>
 <script src="{% static 'js/modal.js' %}?v=20260919c"></script>
 <script src="{% static 'js/person-picker.js' %}?v=20260919c"></script>
-<script src="{% static 'js/tag-picker.js' %}?v=20260919c"></script>
+<script src="{% static 'js/tag-picker.js' %}?v=20260926a"></script>
 <script src="{% static 'js/rich-text.js' %}?v=20260919c"></script>
 <script src="{% static 'js/timer.js' %}?v=20260919c"></script>
 <script src="{% static 'js/checklist.js' %}?v=20260919c"></script>
 <script src="{% static 'js/task-drawer.js' %}?v=20260919c"></script>
+<script src="{% static 'js/color-utils.js' %}?v=20260926a"></script>
+<script src="{% static 'js/color-palette-picker.js' %}?v=20260926a"></script>
 {% endif %}
 {% block scripts %}{% endblock %}
 </body>

@@ -2,7 +2,7 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Q
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.generic import FormView, TemplateView, View
@@ -29,6 +29,7 @@ from .forms import (
     TaskStageForm,
     UserForm,
 )
+from .colors import is_valid_palette_color
 from .mixins import ActionRequiredMixin, OrganizationRequiredMixin
 from .models import Client, Company, CostCenter, Sector, Site, Tag, TaskStage
 from .services import (
@@ -36,6 +37,7 @@ from .services import (
     ClientService,
     CompanyService,
     CostCenterService,
+    EnumColorService,
     ReturnReasonService,
     SectorService,
     SimpleCadastroService,
@@ -424,6 +426,37 @@ class TagFormView(CadastroFormView):
         return TagService.update(instance, name=data["name"], color=data["color"])
 
 
+class SwatchColorSaveView(OrganizationRequiredMixin, ActionRequiredMixin, View):
+    """Salva a cor (campo direto do model) de UM Tag ou TaskStage por vez —
+    clique direto no chip da listagem, sem reabrir o form de editar
+    completo. Mesmo padrão de TaskStageReorderView: POST simples, JSON
+    quando XHR."""
+
+    swatch_models = {
+        "tags": (Tag, TagService, catalog.TAG_GERIR),
+        "estagios-de-tarefa": (TaskStage, TaskStageService, catalog.ESTAGIO_TAREFA_GERIR),
+    }
+
+    def dispatch(self, request, *args, **kwargs):
+        _model, _service, action = self.swatch_models.get(kwargs.get("tab"), (None, None, None))
+        if action is None:
+            raise Http404("Cadastro desconhecido.")
+        self.required_action = action
+        return super().dispatch(request, *args, **kwargs)
+
+    def post(self, request, tab, pk):
+        model, service, _action = self.swatch_models[tab]
+        instance = get_object_or_404(model, pk=pk, organization=self.organization)
+        color = request.POST.get("color", "")
+        if not is_valid_palette_color(color):
+            return JsonResponse({"error": "Escolha uma cor da paleta oficial."}, status=400)
+        service.update(instance, color=color)
+        if _is_ajax(request):
+            return JsonResponse({"ok": True, "id": instance.pk, "color": color})
+        messages.success(request, "Cor atualizada.")
+        return redirect(f"{reverse('cadastros')}?tab={tab}")
+
+
 class CadastroToggleActiveView(OrganizationRequiredMixin, View):
     """Inativar preserva o histórico; excluir não é oferecido (Regras 05 §89-90)."""
 
@@ -459,6 +492,114 @@ class CadastroToggleActiveView(OrganizationRequiredMixin, View):
             request, "Cadastro reativado." if instance.is_active else "Cadastro inativado."
         )
         return redirect(f"{reverse('cadastros')}?tab={tab}")
+
+
+class EtapasEStatusView(OrganizationRequiredMixin, ActionRequiredMixin, TemplateView):
+    """Configurações → Etapas e status: uma tela com 3 sub-seções (abas
+    internas ?tab=), reaproveitando o mesmo idioma de templates/core/cadastros.html."""
+
+    template_name = "core/etapas_e_status.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        tab = request.GET.get("tab", "atividade")
+        self.required_action = (
+            catalog.ESTAGIO_TAREFA_GERIR if tab == "etapas" else catalog.COR_STATUS_GERIR
+        )
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        from activities.models import Activity, Task
+
+        context = super().get_context_data(**kwargs)
+        tab = self.request.GET.get("tab", "atividade")
+        context["tab"] = tab
+
+        if tab == "atividade":
+            colors = EnumColorService.list_for_domain(self.organization, "activity_status")
+            context["rows"] = [
+                {"code": code, "label": label, "color": colors[code]} for code, label in Activity.Status.choices
+            ]
+        elif tab == "tarefa":
+            colors = EnumColorService.list_for_domain(self.organization, "task_status")
+            context["rows"] = [
+                {"code": code, "label": label, "color": colors[code]} for code, label in Task.Status.choices
+            ]
+        elif tab == "etapas":
+            context["stages"] = TaskStage.objects.filter(organization=self.organization).order_by("order")
+
+        context["domain"] = {"atividade": "activity_status", "tarefa": "task_status"}.get(tab)
+        return context
+
+
+class PrioridadesView(OrganizationRequiredMixin, ActionRequiredMixin, TemplateView):
+    """Configurações → Prioridades: lista única (Activity.urgency tem só 3
+    valores, sem necessidade de sub-seções)."""
+
+    template_name = "core/prioridades.html"
+    required_action = catalog.COR_PRIORIDADE_GERIR
+
+    def get_context_data(self, **kwargs):
+        from activities.models import Activity
+
+        context = super().get_context_data(**kwargs)
+        colors = EnumColorService.list_for_domain(self.organization, "activity_urgency")
+        context["rows"] = [
+            {"code": code, "label": label, "color": colors[code]} for code, label in Activity.Urgency.choices
+        ]
+        context["domain"] = "activity_urgency"
+        return context
+
+
+class EnumColorSaveView(OrganizationRequiredMixin, ActionRequiredMixin, View):
+    """Salva a cor de UM (domain, code) por vez — o clique no swatch da
+    listagem, sem modal, sem form tradicional."""
+
+    domains = {
+        "activity_status": catalog.COR_STATUS_GERIR,
+        "task_status": catalog.COR_STATUS_GERIR,
+        "activity_urgency": catalog.COR_PRIORIDADE_GERIR,
+    }
+
+    def dispatch(self, request, *args, **kwargs):
+        action = self.domains.get(kwargs.get("domain"))
+        if action is None:
+            raise Http404("Domínio de cor desconhecido.")
+        self.required_action = action
+        return super().dispatch(request, *args, **kwargs)
+
+    def post(self, request, domain):
+        code = request.POST.get("code", "")
+        color = request.POST.get("color", "")
+        try:
+            EnumColorService.set_color(self.organization, domain, code, color, updated_by=request.user)
+        except CadastroError as exc:
+            if _is_ajax(request):
+                return JsonResponse({"error": str(exc)}, status=400)
+            messages.error(request, str(exc))
+            return redirect(request.META.get("HTTP_REFERER", "cadastros"))
+        if _is_ajax(request):
+            return JsonResponse({"ok": True, "code": code, "color": color})
+        messages.success(request, "Cor atualizada.")
+        return redirect(request.META.get("HTTP_REFERER", "cadastros"))
+
+
+class EnumColorResetView(OrganizationRequiredMixin, ActionRequiredMixin, View):
+    """"Restaurar cores padrão LPS" — apaga as customizações de um domínio.
+    A confirmação acontece no client (confirm() antes do submit)."""
+
+    domains = EnumColorSaveView.domains
+
+    def dispatch(self, request, *args, **kwargs):
+        action = self.domains.get(kwargs.get("domain"))
+        if action is None:
+            raise Http404("Domínio de cor desconhecido.")
+        self.required_action = action
+        return super().dispatch(request, *args, **kwargs)
+
+    def post(self, request, domain):
+        EnumColorService.reset_to_defaults(self.organization, domain=domain)
+        messages.success(request, "Cores restauradas ao padrão LPS.")
+        return redirect(request.META.get("HTTP_REFERER", "cadastros"))
 
 
 class SettingsView(OrganizationRequiredMixin, FormView):

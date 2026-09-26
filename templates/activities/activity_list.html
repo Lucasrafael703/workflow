@@ -103,7 +103,7 @@
                     {% elif activity.blocked_tasks or activity.status == 'BLOQUEADA' %}
                     <span class="activity-state activity-state--danger">Bloqueada</span>
                     {% else %}
-                    <span class="activity-state activity-state--{{ activity.status|lower }}">{{ activity.get_status_display }}</span>
+                    <span class="activity-state" style="--state-color: {{ activity.status_color }};">{{ activity.get_status_display }}</span>
                     {% endif %}
                 </div>
                 <div class="activity-deadline">

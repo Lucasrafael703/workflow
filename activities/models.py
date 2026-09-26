@@ -171,6 +171,38 @@ class Activity(models.Model):
     def __str__(self):
         return self.title
 
+    @property
+    def status_color(self):
+        """Cor efetiva do status (customizada pela organização, ou default
+        LPS) — só decorativa, nunca usada por regra de negócio. Para telas
+        de objeto único; listagens anexam isto como atributo solto via
+        EnumColorResolver para não fazer 1 query por linha."""
+        if getattr(self, "_status_color", None):
+            return self._status_color
+        from core.colors import EnumColorResolver
+
+        return EnumColorResolver(self.organization, "activity_status").color_for(self.status)
+
+    @property
+    def status_text_color(self):
+        from core.colors import get_contrast_text
+
+        return get_contrast_text(self.status_color)
+
+    @property
+    def urgency_color(self):
+        if getattr(self, "_urgency_color", None):
+            return self._urgency_color
+        from core.colors import EnumColorResolver
+
+        return EnumColorResolver(self.organization, "activity_urgency").color_for(self.urgency)
+
+    @property
+    def urgency_text_color(self):
+        from core.colors import get_contrast_text
+
+        return get_contrast_text(self.urgency_color)
+
     @classmethod
     def _generate_code(cls):
         """Gera o identificador único da atividade (Regra 12): `ATV-{ano}-{sequencial}`.
@@ -488,6 +520,23 @@ class Task(models.Model):
 
     def __str__(self):
         return f"{self.activity} - {self.title}"
+
+    @property
+    def status_color(self):
+        """Cor efetiva do status — só decorativa, nunca regra de negócio.
+        Para telas de objeto único; listagens anexam isto como atributo
+        solto via EnumColorResolver para não fazer 1 query por linha."""
+        if getattr(self, "_status_color", None):
+            return self._status_color
+        from core.colors import EnumColorResolver
+
+        return EnumColorResolver(self.activity.organization, "task_status").color_for(self.status)
+
+    @property
+    def status_text_color(self):
+        from core.colors import get_contrast_text
+
+        return get_contrast_text(self.status_color)
 
 
 class TaskAssignment(models.Model):

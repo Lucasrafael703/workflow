@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Prioridades — Configurações — LPS{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div class="page-head__text">
+        <h1>Prioridades</h1>
+        <p class="sub">A cor é só visual — nunca muda a urgência real da atividade.</p>
+    </div>
+    <div class="page-head__actions">
+        <button type="button" class="btn" data-restore-defaults
+                data-restore-url="{% url 'enumcolor-reset' domain=domain %}">
+            Restaurar cores padrão LPS
+        </button>
+    </div>
+</div>
+
+<div class="card card--flush">
+    <ul class="color-config-list">
+        {% for row in rows %}
+        <li class="color-config-row">
+            <span class="color-config-row__label">{{ row.label }}</span>
+            <span class="color-config-row__preview">
+                <span class="tag" style="--tag-bg: {{ row.color }}1A; --tag-fg: {{ row.color }};">{{ row.label }}</span>
+            </span>
+            <button type="button" class="color-swatch" data-color-swatch
+                    data-save-url="{% url 'enumcolor-save' domain=domain %}"
+                    data-code="{{ row.code }}"
+                    style="--swatch-color: {{ row.color }};"
+                    data-current-color="{{ row.color }}"
+                    aria-haspopup="true" aria-label="Cor de {{ row.label }}: clique para mudar."></button>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+
+<script>
+document.querySelectorAll("[data-restore-defaults]").forEach(function (button) {
+    button.addEventListener("click", function () {
+        if (!window.confirm("Restaurar todas as cores de prioridade para o padrão LPS? Isso desfaz qualquer personalização feita aqui.")) return;
+        var match = document.cookie.match(/csrftoken=([^;]+)/);
+        fetch(button.getAttribute("data-restore-url"), {
+            method: "POST",
+            headers: {
+                "X-Requested-With": "XMLHttpRequest",
+                "X-CSRFToken": match ? match[1] : "",
+            },
+        }).then(function () { window.location.reload(); });
+    });
+});
+</script>
+{% endblock %}

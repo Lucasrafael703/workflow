@@ -239,6 +239,11 @@
         {% for item in task_stages %}
             <li data-stage-id="{{ item.pk }}" draggable="true">
                 <span class="queue-item__main">
+                    <button type="button" class="color-swatch" data-color-swatch
+                            data-save-url="{% url 'cadastro-color-save' tab='estagios-de-tarefa' pk=item.pk %}"
+                            style="--swatch-color: {{ item.color }};"
+                            data-current-color="{{ item.color }}"
+                            aria-haspopup="true" aria-label="Cor de {{ item.name }}: clique para mudar."></button>
                     <span class="title">{{ item.name }}</span>
                     {% if not item.is_active %}<span class="muted"> — Inativo</span>{% endif %}
                 </span>
@@ -287,7 +292,13 @@ document.querySelectorAll(".js-taskstage-modal").forEach(function (link) {
             {% for item in tags %}
             <tr>
                 <td data-label="Nome"><span class="title">{{ item.name }}</span></td>
-                <td data-label="Cor"><span class="tag-chip tag-chip--{{ item.color }}">{{ item.get_color_display }}</span></td>
+                <td data-label="Cor">
+                    <button type="button" class="color-swatch" data-color-swatch
+                            data-save-url="{% url 'cadastro-color-save' tab='tags' pk=item.pk %}"
+                            style="--swatch-color: {{ item.color }};"
+                            data-current-color="{{ item.color }}"
+                            aria-haspopup="true" aria-label="Cor de {{ item.name }}: clique para mudar."></button>
+                </td>
                 <td data-label="Situação">
                     {% if item.is_active %}<span class="dot-state dot-state--success"></span>Ativo
                     {% else %}<span class="dot-state"></span><span class="muted">Inativo</span>{% endif %}

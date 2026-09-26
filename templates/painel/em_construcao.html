@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}{{ titulo }} — LPS{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div class="page-head__text">
+        <h1>{{ titulo }}</h1>
+        {% if subtitulo %}<p class="sub">{{ subtitulo }}</p>{% endif %}
+    </div>
+</div>
+
+<div class="card card--flush">
+    <div class="empty-state">
+        <div class="empty-state__icon">{% include "_icon.html" with name="folder" %}</div>
+        <h3>Em construção</h3>
+        <p>Esta tela ainda não foi implementada.</p>
+    </div>
+</div>
+{% endblock %}

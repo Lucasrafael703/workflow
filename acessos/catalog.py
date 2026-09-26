@@ -64,6 +64,8 @@ CLIENTE_GERIR = "cliente.gerir"
 MOTIVO_DEVOLUCAO_GERIR = "motivo_devolucao.gerir"
 ESTAGIO_TAREFA_GERIR = "estagio_tarefa.gerir"
 TAG_GERIR = "tag.gerir"
+COR_STATUS_GERIR = "cor_status.gerir"
+COR_PRIORIDADE_GERIR = "cor_prioridade.gerir"
 
 # Processos
 PROCESSO_VISUALIZAR = "processo.visualizar"
@@ -168,6 +170,8 @@ GROUPS = [
             (MOTIVO_DEVOLUCAO_GERIR, "Gerir motivos de devolução", "Permite manter a lista de motivos usada nas devoluções.", False),
             (ESTAGIO_TAREFA_GERIR, "Gerir estágios de tarefa", "Permite criar, editar, reordenar e inativar os estágios (colunas do Kanban) de tarefa da organização.", False),
             (TAG_GERIR, "Gerir marcadores", "Permite criar, editar e inativar os marcadores (tags) usados em atividades e tarefas da organização.", False),
+            (COR_STATUS_GERIR, "Gerir cores de status", "Permite customizar a cor visual dos status de atividade e de tarefa da organização.", False),
+            (COR_PRIORIDADE_GERIR, "Gerir cores de prioridade", "Permite customizar a cor visual das prioridades (urgência) das atividades da organização.", False),
         ],
     ),
     (
@@ -276,6 +280,8 @@ SUGGESTED_PROFILES = {
         CLIENTE_GERIR,
         ESTAGIO_TAREFA_GERIR,
         TAG_GERIR,
+        COR_STATUS_GERIR,
+        COR_PRIORIDADE_GERIR,
     ],
     "Administrador": [key for _, _, actions in GROUPS for key, _, _, _ in actions],
 }

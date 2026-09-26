@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -77,6 +78,12 @@ class TaskStage(models.Model):
     )
     name = models.CharField("nome", max_length=150)
     order = models.PositiveIntegerField("ordem", default=1)
+    color = models.CharField(
+        "cor",
+        max_length=7,
+        default="#94A3B8",
+        help_text="Só decoração da coluna do Kanban — nunca afeta o status operacional da tarefa.",
+    )
     is_active = models.BooleanField("ativo", default=True)
     created_by = models.ForeignKey(
         "auth.User", verbose_name="criado por", null=True, on_delete=models.SET_NULL, related_name="+"
@@ -94,26 +101,26 @@ class TaskStage(models.Model):
     def __str__(self):
         return self.name
 
+    @property
+    def text_color(self):
+        from .colors import get_contrast_text
+
+        return get_contrast_text(self.color)
+
 
 class Tag(models.Model):
     """Marcador livre, configurável por organização — cópia do
     `project.tags` do Odoo: nome único à organização, sem vínculo fixo a
-    Activity ou Task específica, puramente informativo/de busca."""
+    Activity ou Task específica, puramente informativo/de busca.
 
-    class Color(models.IntegerChoices):
-        CINZA = 0, "Cinza"
-        AZUL = 1, "Azul"
-        VERDE = 2, "Verde"
-        AMARELO = 3, "Amarelo"
-        LARANJA = 4, "Laranja"
-        VERMELHO = 5, "Vermelho"
-        ROXO = 6, "Roxo"
+    A cor é hex livre (paleta oficial de 36 cores, ver core/colors.py) desde
+    que migrou da paleta fixa de 7 cores numeradas."""
 
     organization = models.ForeignKey(
         Organization, verbose_name="organização", on_delete=models.CASCADE, related_name="tags"
     )
     name = models.CharField("nome", max_length=80)
-    color = models.PositiveSmallIntegerField("cor", choices=Color.choices, default=Color.CINZA)
+    color = models.CharField("cor", max_length=7, default="#94A3B8")
     is_active = models.BooleanField("ativo", default=True)
     created_by = models.ForeignKey(
         "auth.User", verbose_name="criado por", null=True, on_delete=models.SET_NULL, related_name="+"
@@ -130,6 +137,12 @@ class Tag(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def text_color(self):
+        from .colors import get_contrast_text
+
+        return get_contrast_text(self.color)
 
 
 class Site(models.Model):
@@ -205,3 +218,47 @@ class CostCenter(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class EnumColor(models.Model):
+    """Cor visual configurável por organização para um código de enum fixo
+    (Activity.Status, Task.Status, Activity.Urgency).
+
+    O código nunca muda de significado — só a cor é customizável. O nome
+    exibido continua vindo de get_FOO_display() no Python; esta tabela nunca
+    duplica o label, e `code` não tem FK: é validado no service contra o
+    vocabulário real do TextChoices, nunca contra um cadastro editável.
+    """
+
+    class Domain(models.TextChoices):
+        ACTIVITY_STATUS = "activity_status", "Status da atividade"
+        TASK_STATUS = "task_status", "Status da tarefa"
+        ACTIVITY_URGENCY = "activity_urgency", "Prioridade da atividade"
+
+    organization = models.ForeignKey(
+        Organization, verbose_name="organização", on_delete=models.CASCADE, related_name="enum_colors"
+    )
+    domain = models.CharField("domínio", max_length=32, choices=Domain.choices)
+    code = models.CharField("código", max_length=32)
+    color = models.CharField("cor", max_length=7)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="alterado por",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    updated_at = models.DateTimeField("alterado em", auto_now=True)
+
+    class Meta:
+        verbose_name = "cor de status/prioridade"
+        verbose_name_plural = "cores de status/prioridade"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "domain", "code"], name="unique_enumcolor_per_org_domain_code"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.organization} · {self.domain} · {self.code} = {self.color}"

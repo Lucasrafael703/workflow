@@ -21,18 +21,32 @@ de visão, via `filter_querystring` (montada em task_filter_context).{% endcomme
     {% if status == 'concluidas' %}<input type="hidden" name="status" value="concluidas">{% endif %}
     {% if view_mode != "lista" and view_mode != "atividade" %}<input type="hidden" name="visao" value="{{ view_mode }}">{% endif %}
     {% if view_mode == "atividade" %}<input type="hidden" name="visao" value="atividade">{% endif %}
+    {% if view_mode == "lista" %}<input type="hidden" name="dir" value="{{ current_dir }}">{% endif %}
     <div class="toolbar">
         <div class="toolbar__search">
             {% include "_icon.html" with name="search" %}
-            <input type="search" name="q" value="{{ search }}" placeholder="Buscar por tarefa ou atividade…">
+            <input type="search" name="q" value="{{ search }}"
+                   placeholder="{% if view_mode == 'lista' %}Buscar tarefa, atividade, cliente ou obra…{% else %}Buscar por tarefa ou atividade…{% endif %}">
         </div>
-        <label class="inline" for="filtro">Visão</label>
+        {% if view_mode == "lista" %}
+        <div class="toolbar__chips">
+            <a href="?tab={{ tab }}&sort={{ current_sort }}&dir={{ current_dir }}&filtro=hoje" class="chip-filter{% if view_filter == 'hoje' %} is-active{% endif %}">Hoje</a>
+            <a href="?tab={{ tab }}&sort={{ current_sort }}&dir={{ current_dir }}&filtro=atrasadas" class="chip-filter{% if view_filter == 'atrasadas' %} is-active{% endif %}">Atrasadas</a>
+            <a href="?tab={{ tab }}&sort={{ current_sort }}&dir={{ current_dir }}&filtro=em-fila" class="chip-filter{% if view_filter == 'em-fila' %} is-active{% endif %}">Em fila</a>
+            <a href="?tab={{ tab }}&sort={{ current_sort }}&dir={{ current_dir }}&filtro=em-execucao" class="chip-filter{% if view_filter == 'em-execucao' %} is-active{% endif %}">Em execução</a>
+        </div>
+        {% endif %}
+        <label class="inline" for="filtro">Situação</label>
         <select id="filtro" name="filtro">
             <option value="">Todas</option>
             <option value="em-execucao" {% if view_filter == 'em-execucao' %}selected{% endif %}>Em execução</option>
             <option value="atrasadas" {% if view_filter == 'atrasadas' %}selected{% endif %}>Atrasadas</option>
             <option value="bloqueadas" {% if view_filter == 'bloqueadas' %}selected{% endif %}>Bloqueadas</option>
             <option value="devolvidas" {% if view_filter == 'devolvidas' %}selected{% endif %}>Devolvidas</option>
+            {% if view_mode == "lista" %}
+            <option value="hoje" {% if view_filter == 'hoje' %}selected{% endif %}>Hoje</option>
+            <option value="em-fila" {% if view_filter == 'em-fila' %}selected{% endif %}>Em fila</option>
+            {% endif %}
         </select>
         <label class="inline" for="sector">Setor</label>
         <select id="sector" name="sector">
@@ -41,6 +55,15 @@ de visão, via `filter_querystring` (montada em task_filter_context).{% endcomme
             <option value="{{ sector.pk }}" {% if selected_sector == sector.pk|stringformat:"s" %}selected{% endif %}>{{ sector.name }}</option>
             {% endfor %}
         </select>
+        {% if view_mode == "lista" %}
+        <label class="inline" for="sort">Ordenar por</label>
+        <select id="sort" name="sort">
+            <option value="prazo" {% if current_sort == 'prazo' %}selected{% endif %}>Prazo</option>
+            <option value="tarefa" {% if current_sort == 'tarefa' %}selected{% endif %}>Tarefa (A-Z)</option>
+            <option value="atividade" {% if current_sort == 'atividade' %}selected{% endif %}>Atividade (A-Z)</option>
+            <option value="situacao" {% if current_sort == 'situacao' %}selected{% endif %}>Situação</option>
+        </select>
+        {% endif %}
         <button type="submit" class="btn">Aplicar</button>
         {% if search or view_filter or selected_sector %}
         <a href="?tab={{ tab }}{% if view_mode != 'lista' %}&visao={{ view_mode }}{% endif %}" class="btn btn--ghost">Limpar</a>

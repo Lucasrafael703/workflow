@@ -55,9 +55,14 @@
     --shadow-lg: 0 10px 30px rgba(18, 41, 74, .16);
 
     --sidebar-w: 236px;
+    --sidebar-w-collapsed: 64px;
     --topbar-h: 60px;
     --content-max-w: 1600px;
 }
+
+/* Recolhido: aplicado no <html> (não no .sidebar) para --sidebar-w valer
+   também para .topbar/.content, que já dependem dessa mesma variável. */
+html.sidebar--collapsed { --sidebar-w: var(--sidebar-w-collapsed); }
 
 /* ==========================================================================
    Logotipo
@@ -128,11 +133,22 @@ h3 { font-size: 13px; font-weight: 700; margin: 0 0 8px; }
 .sidebar__brand {
     display: flex;
     align-items: center;
-    padding: 0 18px;
+    padding: 0 12px 0 18px;
     height: var(--topbar-h);
     flex: 0 0 var(--topbar-h);
 }
-.sidebar__brand a:hover { text-decoration: none; opacity: .9; }
+.sidebar__brand-link { display: flex; align-items: center; flex: 1; min-width: 0; overflow: hidden; }
+.sidebar__brand-link:hover { text-decoration: none; opacity: .9; }
+
+.sidebar__collapse {
+    flex: 0 0 auto;
+    width: 26px; height: 26px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: none; border-radius: var(--radius-sm);
+    background: none; color: var(--nav-text); cursor: pointer;
+}
+.sidebar__collapse:hover { background: var(--nav-bg-2); color: #fff; }
+.sidebar__collapse svg { width: 15px; height: 15px; }
 
 /* Contexto: organização atual, como o seletor de empresa do Zoonor (§7.1) */
 .sidebar__org {
@@ -224,6 +240,100 @@ h3 { font-size: 13px; font-weight: 700; margin: 0 0 8px; }
 }
 .nav-subitem:hover { background: var(--nav-bg-2); color: #fff; text-decoration: none; }
 .nav-subitem.is-active { background: var(--primary); color: #fff; font-weight: 600; }
+
+/* Neutro por padrão (menu expandido): vira popover só quando recolhido
+   (regras em "Menu recolhido", mais abaixo). */
+.nav-group__flyout-title { display: none; }
+
+/* ==========================================================================
+   Menu recolhido: só o ícone fica visível; texto aparece em tooltip ao
+   passar o mouse (doc "Menu e Submenus do LPS" — observações).
+   ========================================================================== */
+html.sidebar--collapsed .sidebar { width: var(--sidebar-w-collapsed); }
+html.sidebar--collapsed .sidebar__brand { flex-direction: column; height: auto; padding: 10px 0 8px; gap: 8px; }
+html.sidebar--collapsed .sidebar__brand-link { flex: 0 0 auto; justify-content: center; }
+html.sidebar--collapsed .sidebar__brand-link .logo__word { display: none; }
+html.sidebar--collapsed .sidebar__collapse { transform: rotate(180deg); }
+
+html.sidebar--collapsed .sidebar__org,
+html.sidebar--collapsed .sidebar__section,
+html.sidebar--collapsed .nav-item__label,
+html.sidebar--collapsed .nav-group__chevron,
+html.sidebar--collapsed .nav-count {
+    display: none;
+}
+html.sidebar--collapsed .nav-item,
+html.sidebar--collapsed .nav-group > summary {
+    justify-content: center;
+    margin: 1px 8px;
+    padding: 9px;
+    position: relative;
+}
+html.sidebar--collapsed .nav-item__icon { flex: 0 0 auto; }
+
+/* Tooltip de texto: só para itens simples (sem submenu) quando recolhido.
+   position:fixed (não absolute) — a sidebar tem overflow-y:auto, que corta
+   qualquer coisa que ultrapasse a largura dela; static/js/shell.js calcula
+   as coordenadas reais do ícone e escreve --tooltip-top/--tooltip-left. */
+html.sidebar--collapsed .nav-item[data-tooltip] {
+    position: relative;
+}
+html.sidebar--collapsed .nav-item[data-tooltip]:hover::after,
+html.sidebar--collapsed .nav-item[data-tooltip]:focus-visible::after {
+    content: attr(data-tooltip);
+    position: fixed;
+    left: var(--tooltip-left, 74px);
+    top: var(--tooltip-top, 0);
+    background: var(--nav-bg-2);
+    color: #fff;
+    font-size: 12.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-lg);
+    z-index: 90;
+    pointer-events: none;
+}
+
+/* Flyout: para grupos (Atividades, Tarefas, Cadastros...), o recolhido não
+   esconde os subitens — reagrupa como um mini-menu lateral (flexbox, altura
+   livre) que aparece ao passar o mouse ou focar por teclado, mantendo 100%
+   da navegação sem precisar expandir a sidebar inteira de novo.
+
+   A sidebar tem overflow-y:auto (rola quando o menu é maior que a tela), o
+   que corta qualquer position:absolute que ultrapasse a largura dela — por
+   isso static/js/shell.js move o flyout para o <body> (position:fixed,
+   coordenadas reais do ícone) enquanto ele está aberto, em vez de depender
+   só de :hover/:focus-within em CSS puro. A classe abaixo é controlada
+   pelo JS; sem JS, o flyout simplesmente não abre (mas o link do ícone
+   ainda existe — só sem submenu recolhido). */
+html.sidebar--collapsed .nav-group {
+    position: relative;
+}
+html.sidebar--collapsed .nav-group__flyout {
+    position: fixed;
+    width: max-content;
+    min-width: 170px;
+    display: none;
+    flex-direction: column;
+    background: var(--nav-bg-2);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-lg);
+    padding: 6px;
+    z-index: 90;
+}
+html.sidebar--collapsed .nav-group__flyout.is-open { display: flex; }
+html.sidebar--collapsed .nav-group__flyout-title {
+    display: block;
+    color: var(--nav-text);
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    padding: 6px 10px 4px;
+}
+html.sidebar--collapsed .nav-group .nav-subitem { margin: 0; }
 
 /* Cabeçalho */
 .topbar {
@@ -467,14 +577,18 @@ a.stat-card:hover { text-decoration: none; border-color: var(--border-strong); b
 .actions-row form { display: inline; }
 
 /* Etiquetas de estado */
+/* Cor hex livre por organização (ver core/colors.py::EnumColorResolver),
+   aplicada via CSS custom property por registro. As regras --ENUM abaixo
+   ficam como fallback para qualquer badge que ainda não passou pelo style
+   inline. */
 .tag {
     display: inline-block;
     padding: 3px 9px;
     border-radius: 999px;
     font-size: 11.5px;
     font-weight: 700;
-    background: var(--neutral-soft);
-    color: var(--text-2);
+    background: var(--tag-bg, var(--neutral-soft));
+    color: var(--tag-fg, var(--text-2));
     white-space: nowrap;
 }
 .tag--EM_ANDAMENTO, .tag--ABERTA, .tag--DISPONIVEL, .tag--NORMAL { background: var(--info-soft); color: var(--info); }
@@ -507,6 +621,39 @@ thead th {
     border-bottom: 1px solid var(--border);
 }
 tbody tr:last-child td { border-bottom: none; }
+
+/* Cabeçalho de coluna clicável (ordenação de "Minhas tarefas" — Lista) */
+th.is-sortable { padding: 0; }
+th.is-sortable a {
+    display: flex; align-items: center; gap: 4px;
+    padding: 11px 16px; color: inherit; text-decoration: none;
+}
+th.is-sortable a:hover { color: var(--text); text-decoration: none; }
+th.is-sortable svg { width: 11px; height: 11px; opacity: .35; }
+th.is-sortable.is-sorted svg { opacity: 1; color: var(--primary); }
+th.is-sortable.is-sorted-desc svg { transform: rotate(180deg); }
+
+/* Linha de tarefa clicável (abre o painel lateral), com célula de checkbox
+   e menu "⋮" que não devem disparar esse clique — mesmo espírito de
+   `.js-open-drawer` já usado em `_tasks_block.html`. */
+tr.js-task-row { cursor: pointer; }
+tr.js-task-row:hover { background: var(--surface-alt); }
+td.col-check, td.col-menu { cursor: default; }
+
+/* O menu "⋮" dentro de uma tabela com scroll horizontal (.table-wrap) seria
+   cortado por overflow-x: auto — não dá para só declarar overflow-y:visible
+   no mesmo elemento (o CSS ignora essa combinação). A correção mora no JS:
+   quando um .menu-dots está dentro de .table-wrap, o popup vira
+   position:fixed e é posicionado por coordenadas (ver task_list.html). */
+.table-wrap .menu-dots__popup.is-fixed { position: fixed; }
+
+/* Prazo na lista de tarefas: ícone pequeno + data, vermelho quando atrasado. */
+.deadline-cell { display: inline-flex; align-items: center; gap: 5px; }
+.deadline-cell svg { width: 13px; height: 13px; flex: 0 0 auto; }
+.deadline-cell--overdue { color: var(--danger); font-weight: 600; }
+
+/* Responsável na lista de tarefas: avatar + nome. */
+.responsible-cell { display: inline-flex; align-items: center; gap: 8px; }
 tbody tr:hover { background: var(--surface-alt); }
 td .title { font-weight: 600; color: var(--text); }
 td .title:hover { color: var(--primary); }
@@ -544,6 +691,18 @@ td .title:hover { color: var(--primary); }
     color: var(--text);
 }
 .toolbar label.inline { font-size: 12px; color: var(--muted); font-weight: 600; }
+
+/* Chips de atalho (Hoje/Atrasadas/Em fila/Em execução) — filtro de um clique
+   só, ao lado da busca; mesmo `filtro=` já usado pelo select "Situação". */
+.toolbar__chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip-filter {
+    display: inline-flex; align-items: center; padding: 7px 13px;
+    border: 1px solid var(--border-strong); border-radius: 999px;
+    background: var(--surface); color: var(--text-2); font-size: 12.5px; font-weight: 600;
+    text-decoration: none; white-space: nowrap;
+}
+.chip-filter:hover { background: var(--surface-alt); text-decoration: none; }
+.chip-filter.is-active { background: var(--primary); border-color: var(--primary); color: #fff; }
 
 /* Filtros recolhíveis */
 .filters-panel {
@@ -1430,6 +1589,8 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .kanban-column__head {
     display: flex; align-items: center; justify-content: space-between;
     padding: 12px 14px; border-bottom: 1px solid var(--border);
+    border-top: 3px solid var(--stage-color, transparent);
+    border-top-left-radius: var(--radius); border-top-right-radius: var(--radius);
     font-weight: 700; font-size: 13.5px;
 }
 .kanban-column__count {
@@ -1571,7 +1732,9 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     display: inline-flex; align-items: center; gap: 7px; color: var(--text-2);
     font-size: 12.5px; font-weight: 600; white-space: nowrap;
 }
-.activity-state::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--primary); }
+/* --state-color (inline) é a cor efetiva por organização; as classes --ENUM
+   abaixo ficam como fallback para status "cru" sem style inline ainda. */
+.activity-state::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--state-color, var(--primary)); }
 .activity-state--aberta::before { background: var(--info); }
 .activity-state--em_andamento::before { background: var(--primary); }
 .activity-state--pendente::before, .activity-state--warning::before { background: var(--warning); }
@@ -1676,12 +1839,16 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 }
 .calendar-day__more { padding: 0 6px; }
 
-/* Marcadores (Tag) — paleta fixa de 7 cores numeradas, mesmo espírito do
-   `color` Integer do Odoo: evita hex livre e problemas de contraste. */
+/* Marcadores (Tag) — cor hex livre por organização (paleta de 36, ver
+   core/colors.py), aplicada via CSS custom property por registro. As
+   regras --0..6 abaixo ficam como fallback para qualquer chip que ainda não
+   passou pelo style inline. */
 .tag-chip {
     display: inline-flex; align-items: center; gap: 5px;
     padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
     line-height: 1.4; white-space: nowrap;
+    background: var(--tag-bg, var(--neutral-soft));
+    color: var(--tag-fg, var(--text-2));
 }
 .tag-chip--0 { background: var(--neutral-soft); color: var(--text-2); }
 .tag-chip--1 { background: var(--info-soft); color: var(--info); }
@@ -1690,6 +1857,22 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .tag-chip--4 { background: #fde9dc; color: #b3541e; }
 .tag-chip--5 { background: var(--danger-soft); color: var(--danger); }
 .tag-chip--6 { background: #f1e6fb; color: #7239b3; }
+.tag-chip.color-swatch--trigger { cursor: pointer; border: none; font: inherit; }
+
+/* Avatar genérico (fora do contexto de .chat): círculo com iniciais, cor
+   determinística por pessoa via avatar_color (activities/templatetags/lps.py) —
+   mesma pessoa sempre a mesma cor, sem guardar nada no banco. */
+.avatar {
+    width: 28px; height: 28px; border-radius: 50%; flex: 0 0 28px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 11px; color: #fff;
+}
+.avatar--0 { background: var(--brand-blue); }
+.avatar--1 { background: #7239b3; }
+.avatar--2 { background: #b3541e; }
+.avatar--3 { background: #1b8a52; }
+.avatar--4 { background: #c0447a; }
+.avatar--5 { background: #9a7d0a; }
 
 /* TagPickerWidget — variante M2M do person-picker: chips + popup de busca
    (reaproveita .person-picker__popup/__search/__results, só o container
@@ -1721,3 +1904,67 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 }
 .tag-picker__option:hover, .tag-picker__option.is-active { background: var(--primary-soft); }
 .tag-picker__empty { padding: 14px 12px; color: var(--muted); font-size: 13px; text-align: center; }
+
+/* ==========================================================================
+   ColorPalettePicker — paleta de 36 cores fixas para status/etapas/
+   prioridades/marcadores configuráveis por organização. Nunca
+   <input type="color">: precisa de nomes de cor, WCAG e navegação por
+   teclado que o widget nativo não dá.
+   ========================================================================== */
+.color-swatch {
+    --swatch-color: var(--neutral-soft);
+    width: 26px; height: 26px; border-radius: 8px;
+    background: var(--swatch-color);
+    border: 1px solid rgba(0, 0, 0, .12);
+    cursor: pointer; padding: 0; flex: 0 0 auto;
+}
+.color-swatch:hover { transform: scale(1.06); }
+.color-swatch:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.color-swatch--form { width: 32px; height: 32px; }
+.color-palette-field { display: inline-flex; align-items: center; }
+
+.color-palette-popover {
+    position: absolute; top: calc(100% + 6px); left: 0; z-index: 75;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    padding: 12px; width: max-content;
+}
+.color-palette-popover[data-align="right"] { left: auto; right: 0; }
+.color-palette-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+
+.color-palette-cell {
+    --cell-color: transparent; --check-color: #fff;
+    width: 30px; height: 30px; border-radius: 8px;
+    background: var(--cell-color);
+    border: 1px solid rgba(0, 0, 0, .12);
+    cursor: pointer; padding: 0; position: relative; flex: 0 0 auto;
+}
+.color-palette-cell:hover { transform: scale(1.08); }
+.color-palette-cell:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; z-index: 1; }
+.color-palette-cell.is-selected::after {
+    content: "✓"; position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; font-weight: 700; color: var(--check-color);
+}
+
+.color-palette-scrim { position: fixed; inset: 0; background: rgba(16, 28, 44, .45); z-index: 74; }
+
+.color-config-list { padding: 4px 20px; }
+.color-config-row {
+    display: flex; align-items: center; gap: 16px;
+    padding: 12px 0; border-bottom: 1px solid var(--border);
+}
+.color-config-row:last-child { border-bottom: none; }
+.color-config-row__label { flex: 1 1 auto; font-weight: 600; font-size: 13.5px; }
+.color-config-row__preview { flex: 0 0 auto; }
+
+@media (max-width: 720px) {
+    .color-palette-popover {
+        position: fixed; left: 0; right: 0; bottom: 0; top: auto;
+        border-radius: 16px 16px 0 0;
+        width: auto; max-height: 60vh; overflow-y: auto;
+        padding: 16px; z-index: 76;
+    }
+    .color-palette-cell { width: 44px; height: 44px; }
+    .color-palette-grid { gap: 10px; }
+}

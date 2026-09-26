@@ -6,11 +6,11 @@ na estrutura do card. Espera `task` no contexto.{% endcomment %}
     <div class="kanban-card__meta muted small">{{ task.activity.title }}</div>
     {% if task.tags.all %}
     <div class="kanban-card__tags">
-        {% for tag in task.tags.all %}<span class="tag-chip tag-chip--{{ tag.color }}">{{ tag.name }}</span>{% endfor %}
+        {% for tag in task.tags.all %}<span class="tag-chip" style="--tag-bg: {{ tag.color }}1A; --tag-fg: {{ tag.color }};">{{ tag.name }}</span>{% endfor %}
     </div>
     {% endif %}
     <div class="kanban-card__foot">
-        <span class="tag tag--{{ task.status }}">{{ task.get_status_display }}</span>
+        <span class="tag" style="--tag-bg: {{ task.status_color }}1A; --tag-fg: {{ task.status_color }};">{{ task.get_status_display }}</span>
         {% if task.committed_deadline %}<span class="muted small">{{ task.committed_deadline|date:"d/m" }}</span>
         {% elif task.requested_deadline %}<span class="muted small">{{ task.requested_deadline|date:"d/m" }}</span>{% endif %}
     </div>

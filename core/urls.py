@@ -33,7 +33,22 @@ urlpatterns = [
         views.CadastroToggleActiveView.as_view(),
         name="cadastro-toggle",
     ),
+    path(
+        "cadastros/<str:tab>/<int:pk>/cor/",
+        views.SwatchColorSaveView.as_view(),
+        name="cadastro-color-save",
+    ),
     path("configuracoes/", views.SettingsView.as_view(), name="settings"),
+    path(
+        "configuracoes/cores/<str:domain>/salvar/",
+        views.EnumColorSaveView.as_view(),
+        name="enumcolor-save",
+    ),
+    path(
+        "configuracoes/cores/<str:domain>/restaurar/",
+        views.EnumColorResetView.as_view(),
+        name="enumcolor-reset",
+    ),
     path("permissoes/", views.PermissionMatrixView.as_view(), name="permissions"),
     path("permissoes/<int:pk>/salvar/", views.PermissionUpdateView.as_view(), name="permissions-update"),
     path("perfis/novo/", views.ProfileFormView.as_view(), name="profile-create"),

@@ -37,6 +37,7 @@ def navigation(request):
         "lps_org": organization,
         "lps_open_tasks": _open_task_count(user),
         "nav_active": _active_nav(request),
+        "nav_active2": _active_nav2(request),
         "nav_cadastros_tab": _active_cadastros_tab(request),
     }
 
@@ -89,6 +90,40 @@ _NAV_BY_URL_NAME = {
     "profile-create": "permissions",
     "profile-edit": "permissions",
     "settings": "settings",
+    "equipe-pessoas": "equipe",
+    "equipe-capacidade": "equipe",
+    "equipe-carga-trabalho": "equipe",
+    "gargalos-filas": "gargalos",
+    "gargalos-gargalos": "gargalos",
+    "gargalos-bloqueios": "gargalos",
+    "gargalos-devolucoes": "gargalos",
+    "processos-modelos": "processos",
+    "config-etapas-status": "config-lps",
+    "config-prioridades": "config-lps",
+    "config-motivos-bloqueio": "config-lps",
+    "config-motivos-devolucao": "config-lps",
+}
+
+
+# Telas do app "painel" (placeholders do menu) usam o próprio url_name como
+# identidade — cada uma se destaca individualmente dentro do seu grupo.
+_NAV2_URL_NAMES = {
+    "equipe-pessoas",
+    "equipe-capacidade",
+    "equipe-carga-trabalho",
+    "gargalos-filas",
+    "gargalos-gargalos",
+    "gargalos-bloqueios",
+    "gargalos-devolucoes",
+    "processos-modelos",
+    "insights",
+    "desenvolvimento",
+    "resultados",
+    "config-etapas-status",
+    "config-prioridades",
+    "config-motivos-bloqueio",
+    "config-motivos-devolucao",
+    "integracoes",
 }
 
 
@@ -97,6 +132,14 @@ def _active_nav(request):
     if match is None:
         return ""
     return _NAV_BY_URL_NAME.get(match.url_name, "")
+
+
+def _active_nav2(request):
+    """Identidade do subitem ativo entre as telas do app "painel"."""
+    match = getattr(request, "resolver_match", None)
+    if match is None:
+        return ""
+    return match.url_name if match.url_name in _NAV2_URL_NAMES else ""
 
 
 # Dentro de Cadastros, cada URL de criar/editar já pertence a uma aba fixa —

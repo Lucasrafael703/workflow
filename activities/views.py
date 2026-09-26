@@ -115,25 +115,73 @@ def filtered_tasks_queryset(request, organization):
         queryset = queryset.filter(status=Task.Status.DEVOLVIDA)
     elif view == "em-execucao":
         queryset = queryset.filter(status=Task.Status.EM_EXECUCAO)
+    elif view == "em-fila":
+        queryset = queryset.filter(status=Task.Status.EM_FILA)
+    elif view == "hoje":
+        today = timezone.localdate()
+        queryset = queryset.filter(
+            Q(committed_deadline__date=today) | Q(requested_deadline__date=today)
+        )
 
     search = request.GET.get("q", "").strip()
     if search:
-        queryset = queryset.filter(Q(title__icontains=search) | Q(activity__title__icontains=search))
+        queryset = queryset.filter(
+            Q(title__icontains=search)
+            | Q(activity__title__icontains=search)
+            | Q(activity__client__name__icontains=search)
+            | Q(activity__site__name__icontains=search)
+        )
 
     sector = request.GET.get("sector")
     if sector:
         queryset = queryset.filter(sector_id=sector)
 
-    return queryset.select_related("activity", "sector", "stage").distinct()
+    return (
+        queryset.select_related("activity", "activity__client", "activity__site", "sector", "stage")
+        .prefetch_related(
+            Prefetch(
+                "executors",
+                queryset=TaskExecutor.objects.filter(removed_at__isnull=True).select_related("user"),
+                to_attr="active_executors",
+            )
+        )
+        .distinct()
+    )
+
+
+def _task_stats(request, organization):
+    """Contadores da barra de estatísticas: só reagem à troca de aba
+    (`tab`), nunca aos filtros pontuais (`filtro`/`status`/`q`/`sector`) —
+    senão os cards mudariam de número ao aplicar um filtro secundário, o
+    que contradiria a própria ideia de "visão geral fixa"."""
+    user = request.user
+    tab = request.GET.get("tab", "minhas")
+    queryset = Task.objects.filter(activity__organization=organization)
+    if tab == "setor":
+        queryset = queryset.filter(sector__in=user_sectors(user))
+    else:
+        queryset = queryset.filter(executors__user=user, executors__removed_at__isnull=True)
+    queryset = queryset.filter(status__in=OPEN_TASK_STATUSES).distinct()
+
+    return {
+        "total": queryset.count(),
+        "in_progress": queryset.filter(status=Task.Status.EM_EXECUCAO).count(),
+        "queued": queryset.filter(status=Task.Status.EM_FILA).count(),
+        "overdue": queryset.filter(committed_deadline__lt=timezone.now()).count(),
+        "blocked": queryset.filter(status=Task.Status.BLOQUEADA).count(),
+    }
 
 
 def task_filter_context(request, organization):
     """Contexto dos filtros/abas comuns às 4 visualizações de tarefa, mais a
-    querystring atual sem `visao`/`page` — usada por cada aba do seletor de
-    visão para montar seu link preservando os filtros ativos."""
+    querystring atual sem `visao`/`page`/`sort`/`dir` — usada por cada aba do
+    seletor de visão e por cada cabeçalho de coluna ordenável para montar seu
+    link preservando os demais filtros ativos, sem duplicar `sort`/`dir`."""
     params = request.GET.copy()
     params.pop("visao", None)
     params.pop("page", None)
+    params.pop("sort", None)
+    params.pop("dir", None)
     return {
         "tab": request.GET.get("tab", "minhas"),
         "status": request.GET.get("status", "abertas"),
@@ -520,7 +568,14 @@ class ActivityListView(OrganizationRequiredMixin, ListView):
             self.request.GET.get(key) for key in self.FILTER_KEYS
         )
 
+        from core.colors import EnumColorResolver
+
+        status_colors = EnumColorResolver(self.organization, "activity_status")
+        urgency_colors = EnumColorResolver(self.organization, "activity_urgency")
+
         for activity in context["activities"]:
+            activity._status_color = status_colors.color_for(activity.status)
+            activity._urgency_color = urgency_colors.color_for(activity.urgency)
             activity.is_overdue = bool(
                 activity.requested_deadline
                 and activity.requested_deadline < timezone.now()
@@ -1130,15 +1185,45 @@ class TaskListView(OrganizationRequiredMixin, ListView):
     context_object_name = "tasks"
     paginate_by = 25
 
+    # Coluna do cabeçalho clicável -> campo real de ordenação. "prazo" cai no
+    # mesmo par (comprometido, solicitado) já usado como ordenação padrão.
+    SORT_FIELDS = {
+        "tarefa": ["title"],
+        "atividade": ["activity__title"],
+        "prazo": ["requested_deadline", "created_at"],
+        "situacao": ["status"],
+    }
+
     def get_queryset(self):
-        return filtered_tasks_queryset(self.request, self.organization).order_by(
-            "requested_deadline", "created_at"
-        )
+        sort = self.request.GET.get("sort", "prazo")
+        direction = self.request.GET.get("dir", "asc")
+        fields = self.SORT_FIELDS.get(sort, self.SORT_FIELDS["prazo"])
+        if direction == "desc":
+            fields = [f"-{field}" for field in fields]
+        return filtered_tasks_queryset(self.request, self.organization).order_by(*fields)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context.update(task_filter_context(self.request, self.organization))
         context["view_mode"] = self.request.GET.get("visao", "lista")
+        context["stats"] = _task_stats(self.request, self.organization)
+        context["current_sort"] = self.request.GET.get("sort", "prazo")
+        context["current_dir"] = self.request.GET.get("dir", "asc")
+
+        from core.colors import EnumColorResolver
+
+        status_colors = EnumColorResolver(self.organization, "task_status")
+
+        now = timezone.now()
+        for task in context["object_list"]:
+            task._status_color = status_colors.color_for(task.status)
+            task.effective_deadline = task.committed_deadline or task.requested_deadline
+            task.is_overdue = bool(
+                task.effective_deadline
+                and task.effective_deadline < now
+                and task.status not in (Task.Status.CONCLUIDA, Task.Status.CANCELADA)
+            )
+
         if context["view_mode"] == "atividade":
             grouped = {}
             order = []
@@ -1168,7 +1253,13 @@ class TaskKanbanView(OrganizationRequiredMixin, TemplateView):
         unassigned_tasks = []
         by_stage = {stage.pk: column["tasks"] for stage, column in zip(stages, columns)}
         now = timezone.now()
+
+        from core.colors import EnumColorResolver
+
+        status_colors = EnumColorResolver(self.organization, "task_status")
+
         for task in tasks:
+            task._status_color = status_colors.color_for(task.status)
             # Indicador de "parado": tempo desde a última troca de estágio,
             # ou desde a criação se nunca mudou — nunca persiste, só exibe.
             reference = task.stage_changed_at or task.created_at
@@ -1223,10 +1314,15 @@ class TaskCalendarView(OrganizationRequiredMixin, TemplateView):
         if month < 1 or month > 12:
             month = today.month
 
+        from core.colors import EnumColorResolver
+
+        status_colors = EnumColorResolver(self.organization, "task_status")
+
         tasks = filtered_tasks_queryset(self.request, self.organization)
         by_day = {}
         undated = []
         for task in tasks:
+            task._status_color = status_colors.color_for(task.status)
             deadline = task.committed_deadline or task.requested_deadline
             if deadline is None:
                 undated.append(task)
@@ -2039,18 +2135,29 @@ class QueueView(OrganizationRequiredMixin, TemplateView):
             }
         )
 
+        from core.colors import EnumColorResolver
+
+        status_colors = EnumColorResolver(self.organization, "task_status")
+
         if may_see_full:
-            context["entries"] = entries
+            context["entries"] = list(entries)
+            for entry in context["entries"]:
+                entry.task._status_color = status_colors.color_for(entry.task.status)
             context["in_execution"] = sum(
                 1 for e in entries if e.task.status == Task.Status.EM_EXECUCAO
             )
             context["blocked"] = sum(1 for e in entries if e.task.status == Task.Status.BLOQUEADA)
         else:
             # Só as próprias demandas: posição e prazo, sem título alheio.
-            context["my_entries"] = entries.filter(
-                Q(task__activity__owner=user)
-                | Q(task__executors__user=user, task__executors__removed_at__isnull=True)
-            ).distinct()
+            my_entries = list(
+                entries.filter(
+                    Q(task__activity__owner=user)
+                    | Q(task__executors__user=user, task__executors__removed_at__isnull=True)
+                ).distinct()
+            )
+            for entry in my_entries:
+                entry.task._status_color = status_colors.color_for(entry.task.status)
+            context["my_entries"] = my_entries
         return context
 
 

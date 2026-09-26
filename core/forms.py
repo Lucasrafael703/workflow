@@ -5,7 +5,8 @@ from acessos.models import Action
 from acessos.models import Profile as AccessProfile
 from acessos.models import Scope
 
-from .models import Client, Company, CostCenter, Sector, Site, Tag
+from .models import Client, Company, CostCenter, Sector, Site
+from .widgets import ColorPaletteWidget
 
 User = get_user_model()
 
@@ -67,7 +68,7 @@ class TaskStageForm(forms.Form):
 
 class TagForm(forms.Form):
     name = forms.CharField(label="Nome", max_length=80)
-    color = forms.ChoiceField(label="Cor", choices=Tag.Color.choices)
+    color = forms.CharField(label="Cor", widget=ColorPaletteWidget, initial="#94A3B8")
 
 
 class UserForm(forms.Form):

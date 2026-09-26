@@ -30,7 +30,7 @@
     </div>
     {% for column in columns %}
     <div class="kanban-column" data-stage-id="{{ column.stage.pk }}">
-        <div class="kanban-column__head">
+        <div class="kanban-column__head" style="--stage-color: {{ column.stage.color }};">
             <span class="kanban-column__title">{{ column.stage.name }}</span>
             <span class="kanban-column__count">{{ column.tasks|length }}</span>
         </div>
