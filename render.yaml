@@ -9,7 +9,7 @@ services:
     name: lps-web
     runtime: python
     plan: free
-    buildCommand: "pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate"
+    buildCommand: "pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate && python manage.py ensure_superuser"
     startCommand: "gunicorn config.wsgi:application"
     envVars:
       - key: DJANGO_SETTINGS_MODULE
@@ -26,6 +26,16 @@ services:
           property: connectionString
       - key: PYTHON_VERSION
         value: 3.12.7
+      # Defina estas 3 no dashboard (Environment) depois do primeiro deploy --
+      # o ensure_superuser so cria o usuario se DJANGO_SUPERUSER_USERNAME e
+      # DJANGO_SUPERUSER_PASSWORD estiverem preenchidos, e nao faz nada se
+      # esse usuario ja existir (seguro rodar em todo deploy).
+      - key: DJANGO_SUPERUSER_USERNAME
+        sync: false
+      - key: DJANGO_SUPERUSER_EMAIL
+        sync: false
+      - key: DJANGO_SUPERUSER_PASSWORD
+        sync: false
 
 # check_overdue_tasks fica de fora por enquanto: o Render nao tem plano free
 # para Cron Jobs (o mais barato, 0.5c-512mb, e' cobrado por segundo de
