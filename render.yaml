@@ -27,23 +27,7 @@ services:
       - key: PYTHON_VERSION
         value: 3.12.7
 
-  - type: cron
-    name: lps-check-overdue-tasks
-    runtime: python
-    plan: free
-    schedule: "0 * * * *"
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "python manage.py check_overdue_tasks"
-    envVars:
-      - key: DJANGO_SETTINGS_MODULE
-        value: config.settings.prod
-      - key: SECRET_KEY
-        sync: false
-      - key: ALLOWED_HOSTS
-        value: .onrender.com
-      - key: DATABASE_URL
-        fromDatabase:
-          name: lps-db
-          property: connectionString
-      - key: PYTHON_VERSION
-        value: 3.12.7
+# check_overdue_tasks fica de fora por enquanto: o Render nao tem plano free
+# para Cron Jobs (o mais barato, 0.5c-512mb, e' cobrado por segundo de
+# execucao). Ate decidir pagar por isso, rode manualmente pelo Shell do
+# servico web: `python manage.py check_overdue_tasks`.
