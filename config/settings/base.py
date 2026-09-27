@@ -106,7 +106,7 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 # Anexos das atividades (Regra 13): <ACTIVITY_FILES_ROOT>/<empresa>/<código>/<arquivo>.
 # Por padrão fica ao lado da pasta do projeto (LPS_ERP/Atividade), fora de `workflow`.
-ACTIVITY_FILES_ROOT = env.path("ACTIVITY_FILES_ROOT", default=str(BASE_DIR.parent / "Atividade"))()
+ACTIVITY_FILES_ROOT = env.path("ACTIVITY_FILES_ROOT", default=str(BASE_DIR / "atividade_arquivos"))()
 ACTIVITY_FILES_URL = "/atividade-arquivos/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
