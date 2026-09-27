@@ -57,6 +57,13 @@ def audit_phrase(entry):
 
 
 @register.filter
+def field_label(field_name):
+    """Nome amigável de um campo alterado — mesmo dicionário que audit_phrase
+    já usa internamente, agora exposto para o histórico estruturado."""
+    return FIELD_LABELS.get(field_name, field_name or "um campo")
+
+
+@register.filter
 def duration_hm(value):
     """Formata um timedelta como "4h20" ou "35min"."""
     if value is None:

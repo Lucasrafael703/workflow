@@ -1,17 +1,28 @@
 {% load lps %}
 {% if entries %}
-<ul class="timeline">
+<ul class="history-list">
     {% for entry in entries %}
-    <li>
-        <div class="when">{{ entry.timestamp|date:"d/m/Y H:i" }}</div>
-        <div>
-            <strong>{% if entry.user %}{{ entry.user.get_username }}{% else %}Sistema{% endif %}</strong>
-            {{ entry|audit_phrase }}
-            {% if entry.task %}
-            — <a href="{% url 'task-detail' entry.task.pk %}">{{ entry.task.title }}</a>
+    <li class="history-entry{% if entry.action == 'BLOCK' or entry.action == 'PENDENCY_OPENED' or entry.action == 'CONFLICT_OPENED' %} history-entry--key{% endif %}">
+        <div class="history-entry__marker" aria-hidden="true"></div>
+        <div class="history-entry__body">
+            <div class="history-entry__headline">
+                <strong>{% if entry.user %}{{ entry.user.get_full_name|default:entry.user.get_username }}{% else %}Sistema{% endif %}</strong>
+                {{ entry|audit_phrase }}
+                {% if entry.task %}<a href="{% url 'task-detail' entry.task.pk %}" class="history-entry__task-link">{{ entry.task.title }}</a>{% endif %}
+            </div>
+
+            {% if entry.old_value or entry.new_value %}
+            <div class="history-entry__change">
+                {% if entry.field_name %}<span class="history-entry__field">{{ entry.field_name|field_label }}</span>{% endif %}
+                {% if entry.old_value %}<span class="history-entry__value history-entry__value--old">{{ entry.old_value }}</span>{% endif %}
+                {% if entry.old_value and entry.new_value %}<span class="history-entry__arrow">→</span>{% endif %}
+                {% if entry.new_value %}<span class="history-entry__value history-entry__value--new">{{ entry.new_value }}</span>{% endif %}
+            </div>
             {% endif %}
+
+            {% if entry.reason %}<div class="history-entry__reason">Motivo: {{ entry.reason }}</div>{% endif %}
+            <div class="history-entry__when">{{ entry.timestamp|date:"d/m/Y H:i" }}</div>
         </div>
-        {% if entry.reason %}<div class="muted small">Motivo: {{ entry.reason }}</div>{% endif %}
     </li>
     {% endfor %}
 </ul>

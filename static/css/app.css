@@ -94,7 +94,7 @@ html, body { height: 100%; }
 
 body {
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     background: var(--bg);
     color: var(--text);
     font-size: 14px;
@@ -1006,7 +1006,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .task-table { display: flex; flex-direction: column; }
 .task-table__head, .task-table__row {
     display: grid;
-    grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1.1fr) auto minmax(0, .7fr);
+    grid-template-columns: minmax(0, 2.8fr) minmax(0, .9fr) minmax(0, 1.1fr) minmax(0, 1fr) auto minmax(0, .6fr);
     gap: 12px; align-items: center; padding: 10px 4px;
 }
 .task-table__head { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .02em; border-bottom: 1px solid var(--border); }
@@ -1486,8 +1486,65 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
    Detalhe da atividade em uma tela só — sem abas: campos e tarefas na
    coluna principal, histórico (comentários + anexos + eventos) na lateral.
    ========================================================================== */
-.split--history { grid-template-columns: 3fr 2fr; }
+.split--history { grid-template-columns: 7fr 3fr; }
 .side-scroll { position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow-y: auto; }
+
+/* Ficha da Atividade — paleta de marca oficial (Telas/Elementos/Logo/LOGO_LPS.md),
+   escopada a .activity-detail — não toca :root nem o resto do sistema.
+   status_color/urgency_color continuam intocados (cor configurável por
+   organização, já implementada — não conflitar com ela). */
+.activity-detail {
+    --ad-navy: #0F2747;
+    --ad-green: #18B981;
+}
+
+.ad-header__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap; margin-bottom: 16px; }
+.ad-header__title { color: var(--ad-navy); font-size: 26px; margin: 0; }
+.ad-header__context { color: var(--muted); font-size: 13.5px; margin: 4px 0 10px; }
+.ad-header__badges { display: flex; gap: 8px; flex-wrap: wrap; }
+.ad-header__side { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+.ad-header__actions { display: flex; gap: 8px; align-items: center; }
+
+.ad-owner-deadline { display: flex; gap: 22px; }
+.ad-owner-deadline__item { display: flex; flex-direction: column; gap: 2px; text-align: right; }
+.ad-owner-deadline__item .k { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .02em; }
+.ad-owner-deadline__item .v { font-size: 13.5px; font-weight: 600; }
+.ad-owner-deadline__original { font-size: 11.5px; color: var(--muted); }
+.ad-overdue-flag { display: inline-flex; align-items: center; gap: 5px; color: var(--danger); font-weight: 700; }
+.ad-overdue-flag svg { width: 14px; height: 14px; }
+
+.ad-situation { display: flex; flex-direction: column; gap: 14px; }
+.ad-situation__count-label { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+.progress__bar { background: var(--ad-green); }
+
+.ad-sectors { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ad-sectors .k { color: var(--muted); font-size: 11.5px; }
+.situation-attention__action { margin-top: 8px; }
+
+.executor-cell { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.executor-cell__name { font-size: 12.5px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-table__title-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.task-table__flag { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 700; flex: 0 0 auto; white-space: nowrap; }
+.task-table__flag svg { width: 12px; height: 12px; }
+.task-table__flag--danger { color: var(--danger); }
+
+/* Histórico estruturado: quem/o quê/quando/valor anterior→novo/motivo,
+   substituindo a antiga .timeline de frase corrida (ver _timeline.html). */
+.history-list { list-style: none; padding: 0; margin: 0; }
+.history-entry { position: relative; display: flex; gap: 12px; padding: 0 0 20px 0; }
+.history-entry:last-child { padding-bottom: 0; }
+.history-entry__marker { flex: 0 0 auto; width: 10px; height: 10px; margin-top: 4px; border-radius: 50%; background: var(--surface); border: 2px solid var(--border-strong); }
+.history-entry--key .history-entry__marker { background: var(--primary); border-color: var(--primary); }
+.history-entry__body { flex: 1; min-width: 0; }
+.history-entry__headline { font-size: 13px; }
+.history-entry__task-link { margin-left: 4px; }
+.history-entry__change { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 12.5px; flex-wrap: wrap; }
+.history-entry__field { color: var(--muted); }
+.history-entry__value { padding: 1px 8px; border-radius: 999px; background: var(--neutral-soft); }
+.history-entry__value--old { text-decoration: line-through; color: var(--muted); }
+.history-entry__value--new { font-weight: 600; }
+.history-entry__reason { font-size: 12px; color: var(--text-2); margin-top: 2px; }
+.history-entry__when { color: var(--muted); font-size: 11.5px; margin-top: 4px; }
 
 .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 28px; }
 .info-grid .k { color: var(--muted); font-size: 11.5px; font-weight: 600; margin-bottom: 3px; }

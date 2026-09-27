@@ -522,6 +522,16 @@ class Task(models.Model):
         return f"{self.activity} - {self.title}"
 
     @property
+    def is_overdue(self):
+        """Atrasada = tem prazo comprometido no passado e ainda não terminou —
+        mesma regra já usada por _next_attention() em activities/views.py, só
+        disponível por tarefa individual em vez de só na mais urgente. Só
+        decorativa, nunca regra de negócio."""
+        if self.status in (self.Status.CONCLUIDA, self.Status.CANCELADA):
+            return False
+        return bool(self.committed_deadline and self.committed_deadline < timezone.now())
+
+    @property
     def status_color(self):
         """Cor efetiva do status — só decorativa, nunca regra de negócio.
         Para telas de objeto único; listagens anexam isto como atributo

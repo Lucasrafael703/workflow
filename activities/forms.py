@@ -133,6 +133,8 @@ class ActivityQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
         self.fields["owner"].empty_label = None
         self.fields["client"].required = False
         self.fields["client"].empty_label = None
+        if not self.is_bound:
+            self.fields["urgency"].initial = Activity.Urgency.MEDIA
         if user is not None and not self.is_bound:
             self.fields["owner"].initial = user
         for optional in (
@@ -144,11 +146,15 @@ class ActivityQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
             "address",
             "requested_deadline",
             "tags",
+            "urgency",
         ):
             self.fields[optional].required = False
 
     def clean_description(self):
         return sanitize_description(self.cleaned_data.get("description"))
+
+    def clean_urgency(self):
+        return self.cleaned_data.get("urgency") or Activity.Urgency.MEDIA
 
 
 class ActivityMiniCreateForm(forms.Form):
@@ -201,11 +207,15 @@ class ActivityEditForm(OrganizationScopedFormMixin, forms.ModelForm):
             "address",
             "requested_deadline",
             "tags",
+            "urgency",
         ):
             self.fields[optional].required = False
 
     def clean_description(self):
         return sanitize_description(self.cleaned_data.get("description"))
+
+    def clean_urgency(self):
+        return self.cleaned_data.get("urgency") or Activity.Urgency.MEDIA
 
 
 class ChangeOwnerForm(forms.Form):

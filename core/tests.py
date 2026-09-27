@@ -151,6 +151,7 @@ class UserFormAjaxTests(TestCase):
         self.admin.profile.organization = self.org
         self.admin.profile.save(update_fields=["organization"])
         grant_action(self.admin, catalog.USUARIO_EDITAR, organization=self.org)
+        grant_action(self.admin, catalog.USUARIO_VISUALIZAR, organization=self.org)
         self.client.force_login(self.admin)
 
     def _payload(self, **overrides):
@@ -158,6 +159,8 @@ class UserFormAjaxTests(TestCase):
             "first_name": "Nova Pessoa",
             "email": "nova@example.com",
             "username": "novapessoa",
+            "password1": "senha-segura-123",
+            "password2": "senha-segura-123",
             "is_active": "on",
         }
         data.update(overrides)
