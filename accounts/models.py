@@ -1,5 +1,9 @@
+import random
+from datetime import timedelta
+
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 
 class Profile(models.Model):
@@ -73,3 +77,73 @@ class UserSector(models.Model):
 
     def __str__(self):
         return f"{self.user} em {self.sector}"
+
+
+class EmailVerification(models.Model):
+    """Código de 6 dígitos para confirmar o e-mail no cadastro (Telas/09_03).
+
+    Um novo código sempre substitui o anterior (mesma linha, campos
+    atualizados) — assim "o código anterior é invalidado" fica automático,
+    sem precisar de uma tabela de histórico.
+    """
+
+    CODE_TTL = timedelta(minutes=15)
+    RESEND_COOLDOWN = timedelta(seconds=60)
+    MAX_ATTEMPTS = 5
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, verbose_name="usuário", on_delete=models.CASCADE, related_name="email_verification"
+    )
+    code = models.CharField("código", max_length=6)
+    created_at = models.DateTimeField("gerado em", auto_now_add=True)
+    expires_at = models.DateTimeField("expira em")
+    attempts = models.PositiveSmallIntegerField("tentativas", default=0)
+    confirmed_at = models.DateTimeField("confirmado em", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "confirmação de e-mail"
+        verbose_name_plural = "confirmações de e-mail"
+
+    def __str__(self):
+        return f"Confirmação de {self.user}"
+
+    @classmethod
+    def issue(cls, user):
+        """Gera (ou substitui) o código ativo do usuário e zera tentativas."""
+        now = timezone.now()
+        code = f"{random.randint(0, 999999):06d}"
+        verification, _ = cls.objects.update_or_create(
+            user=user,
+            defaults={
+                "code": code,
+                "created_at": now,
+                "expires_at": now + cls.CODE_TTL,
+                "attempts": 0,
+                "confirmed_at": None,
+            },
+        )
+        return verification
+
+    @property
+    def is_expired(self):
+        return timezone.now() >= self.expires_at
+
+    @property
+    def can_resend(self):
+        return timezone.now() >= self.created_at + self.RESEND_COOLDOWN
+
+    def verify(self, code):
+        """Valida o código informado; registra a tentativa mesmo quando erra."""
+        if self.confirmed_at is not None:
+            return True
+        if self.is_expired:
+            return False
+        if self.attempts >= self.MAX_ATTEMPTS:
+            return False
+        self.attempts += 1
+        if code != self.code:
+            self.save(update_fields=["attempts"])
+            return False
+        self.confirmed_at = timezone.now()
+        self.save(update_fields=["attempts", "confirmed_at"])
+        return True

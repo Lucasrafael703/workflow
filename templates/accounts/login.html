@@ -3,83 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Entrar — LPS</title>
+    <title>Entrar na LPS</title>
     <link rel="icon" type="image/svg+xml" href="{% static 'img/favicon.svg' %}">
-    <link rel="stylesheet" href="{% static 'css/app.css' %}">
-    <link rel="stylesheet" href="{% static 'css/login.css' %}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'css/auth.css' %}">
 </head>
-<body class="login-page">
+<body class="auth-page">
 {% include "_icons.html" %}
 
-<div class="login">
-    {# ----- Painel da marca: o que a LPS entrega ----- #}
-    <aside class="login__brand">
-        <div class="login__brand-inner">
-            <div class="login__logo">
-                {% include "_logo.html" with variant="light" size=54 wordmark=True %}
-            </div>
-
-            <h1 class="login__headline">
-                Gestão de atividades,<br>
-                <span>filas e gargalos</span>
-            </h1>
-            <p class="login__lead">
-                Mais visibilidade, mais controle e mais resultados para a sua operação.
+<div class="auth">
+    <aside class="auth__brand">
+        <div class="auth__brand-inner">
+            <div class="auth__eyebrow">LPS</div>
+            <h1 class="auth__headline">Gestão de projetos<br><span>com mais clareza.</span></h1>
+            <p class="auth__lead">
+                Planeje, acompanhe e entregue suas atividades com mais produtividade,
+                controle e resultados.
             </p>
-
-            <ul class="login__features">
-                <li>
-                    <span class="login__feature-icon">{% include "_icon.html" with name="chart" %}</span>
-                    <span>
-                        <strong>Acompanhe</strong>
-                        o andamento das atividades
-                    </span>
-                </li>
-                <li>
-                    <span class="login__feature-icon">{% include "_icon.html" with name="queue" %}</span>
-                    <span>
-                        <strong>Identifique</strong>
-                        filas e gargalos
-                    </span>
-                </li>
-                <li>
-                    <span class="login__feature-icon">{% include "_icon.html" with name="check" %}</span>
-                    <span>
-                        <strong>Tome decisões</strong>
-                        com base em dados reais
-                    </span>
-                </li>
-            </ul>
-
-            <div class="login__tagline">
-                <span class="login__rule"></span>
-                Processos mais fluidos.<br>Resultados mais grandes.
-            </div>
         </div>
+        <img class="auth__symbol" src="{% static 'img/logo-lps-symbol.png' %}" alt="">
     </aside>
 
-    {# ----- Formulário ----- #}
-    <main class="login__panel">
-        <div class="login__card">
-            <div class="login__card-logo">
-                {% include "_logo.html" with size=44 wordmark=True %}
-            </div>
+    <main class="auth__panel">
+        <div class="auth__card">
+            <a href="{% url 'login' %}" class="auth__logo">
+                <img src="{% static 'img/logo-lps-full.png' %}" alt="LPS — O amigo do gestor.">
+            </a>
 
-            <h2 class="login__title">Bem-vindo de volta</h2>
-            <p class="login__subtitle">Acesse sua conta para continuar.</p>
+            <h2 class="auth__title">Entrar na LPS</h2>
+            <p class="auth__subtitle">Acesse sua conta para continuar.</p>
 
             {% if messages %}
-            <ul class="messages">
+            <ul class="auth__messages">
                 {% for message in messages %}
-                <li class="message message--{{ message.tags }}">{{ message }}</li>
+                <li class="message--{{ message.tags }}">{{ message }}</li>
                 {% endfor %}
             </ul>
             {% endif %}
 
             {% if form.non_field_errors %}
-            <ul class="messages">
+            <ul class="auth__messages">
                 {% for error in form.non_field_errors %}
-                <li class="message message--error">{{ error }}</li>
+                <li class="message--error">{{ error }}</li>
                 {% endfor %}
             </ul>
             {% endif %}
@@ -87,31 +54,31 @@
             <form method="post" novalidate>
                 {% csrf_token %}
 
-                <div class="form-row">
-                    <label for="{{ form.username.id_for_label }}">{{ form.username.label }}</label>
-                    <div class="field">
-                        <span class="field__icon">{% include "_icon.html" with name="users" %}</span>
-                        <input type="text" name="{{ form.username.html_name }}"
+                <div class="auth__row">
+                    <label for="{{ form.username.id_for_label }}">E-mail</label>
+                    <div class="auth__field">
+                        <span class="auth__field-icon">{% include "_icon.html" with name="at" %}</span>
+                        <input type="email" name="{{ form.username.html_name }}"
                                id="{{ form.username.id_for_label }}"
                                value="{{ form.username.value|default:'' }}"
-                               placeholder="Seu usuário"
-                               autocomplete="username" autofocus required>
+                               placeholder="seu@email.com"
+                               autocomplete="email" autofocus required>
                     </div>
                     {% if form.username.errors %}
                     <ul class="errorlist">{% for e in form.username.errors %}<li>{{ e }}</li>{% endfor %}</ul>
                     {% endif %}
                 </div>
 
-                <div class="form-row">
-                    <label for="{{ form.password.id_for_label }}">{{ form.password.label }}</label>
-                    <div class="field">
-                        <span class="field__icon">{% include "_icon.html" with name="shield" %}</span>
+                <div class="auth__row">
+                    <label for="{{ form.password.id_for_label }}">Senha</label>
+                    <div class="auth__field">
+                        <span class="auth__field-icon">{% include "_icon.html" with name="lock" %}</span>
                         <input type="password" name="{{ form.password.html_name }}"
                                id="{{ form.password.id_for_label }}"
                                placeholder="Sua senha"
                                autocomplete="current-password" required
                                data-password>
-                        <button type="button" class="field__toggle" data-password-toggle
+                        <button type="button" class="auth__field-toggle" data-password-toggle
                                 aria-label="Mostrar senha" hidden>
                             {% include "_icon.html" with name="eye" %}
                         </button>
@@ -121,21 +88,20 @@
                     {% endif %}
                 </div>
 
+                <a href="{% url 'password_reset' %}" class="auth__forgot">Esqueci minha senha</a>
+
                 <input type="hidden" name="next" value="{{ next }}">
 
-                <button type="submit" class="btn btn--primary btn--block btn--lg login__submit">
+                <button type="submit" class="auth__submit">
                     Entrar {% include "_icon.html" with name="arrow-right" %}
                 </button>
             </form>
 
-            <div class="login__divider"><span>LPS</span></div>
-            <p class="login__motto">Trabalho organizado. Resultados reais.</p>
+            <p class="auth__divider">Ainda não tem uma conta? <a href="{% url 'signup' %}">Criar conta</a></p>
         </div>
-
-        <p class="login__version">v1.0.0</p>
     </main>
 </div>
 
-<script src="{% static 'js/login.js' %}?v=20260919c"></script>
+<script src="{% static 'js/auth.js' %}?v=20260927a"></script>
 </body>
 </html>

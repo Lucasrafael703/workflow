@@ -1,0 +1,87 @@
+{% load static %}<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirme seu e-mail — LPS</title>
+    <link rel="icon" type="image/svg+xml" href="{% static 'img/favicon.svg' %}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'css/auth.css' %}">
+</head>
+<body class="auth-page">
+{% include "_icons.html" %}
+
+<div class="auth">
+    <aside class="auth__brand">
+        <div class="auth__brand-inner">
+            <div class="auth__eyebrow">LPS</div>
+            <h1 class="auth__headline">Só mais um passo<br><span>para começar.</span></h1>
+            <p class="auth__lead">
+                Confirme seu e-mail para ativar sua conta e acessar a LPS.
+            </p>
+        </div>
+        <img class="auth__symbol" src="{% static 'img/logo-lps-symbol.png' %}" alt="">
+    </aside>
+
+    <main class="auth__panel">
+        <div class="auth__card">
+            <a href="{% url 'login' %}" class="auth__logo">
+                <img src="{% static 'img/logo-lps-full.png' %}" alt="LPS — O amigo do gestor.">
+            </a>
+
+            <h2 class="auth__title">Confirme seu e-mail</h2>
+            <p class="auth__code-hint">
+                Enviamos um código de confirmação para:<br>
+                <strong>{{ masked_email }}</strong>
+            </p>
+
+            {% if messages %}
+            <ul class="auth__messages">
+                {% for message in messages %}
+                <li class="message--{{ message.tags }}">{{ message }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if form.non_field_errors %}
+            <ul class="auth__messages">
+                {% for error in form.non_field_errors %}
+                <li class="message--error">{{ error }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            <form method="post" novalidate>
+                {% csrf_token %}
+
+                <div class="auth__code" data-code-input>
+                    {% for _ in "123456" %}
+                    <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="one-time-code">
+                    {% endfor %}
+                </div>
+                <input type="hidden" name="{{ form.code.html_name }}" id="{{ form.code.id_for_label }}" data-code-value>
+                {% if form.code.errors %}
+                <ul class="errorlist">{% for e in form.code.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+                {% endif %}
+
+                <button type="submit" class="auth__submit">Confirmar e-mail</button>
+            </form>
+
+            <div class="auth__code-actions">
+                <form method="post" action="{% url 'verify-email-resend' %}">
+                    {% csrf_token %}
+                    <button type="submit" {% if not can_resend %}disabled{% endif %}>
+                        Não recebeu o código? Reenviar
+                    </button>
+                </form>
+                <a href="{% url 'verify-email-change' %}">E-mail errado? Alterar e-mail</a>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="{% static 'js/auth.js' %}?v=20260927a"></script>
+</body>
+</html>

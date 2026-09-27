@@ -111,6 +111,9 @@ ACTIVITY_FILES_URL = "/atividade-arquivos/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Login é feito por e-mail (Telas/09_01_LOGIN.md), não por username.
+AUTHENTICATION_BACKENDS = ["accounts.auth_backends.EmailBackend"]
+
 
 # Auth
 

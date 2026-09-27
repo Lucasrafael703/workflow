@@ -1,0 +1,135 @@
+{% load static %}<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Criar conta — LPS</title>
+    <link rel="icon" type="image/svg+xml" href="{% static 'img/favicon.svg' %}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'css/auth.css' %}">
+</head>
+<body class="auth-page">
+{% include "_icons.html" %}
+
+<div class="auth">
+    <aside class="auth__brand">
+        <div class="auth__brand-inner">
+            <div class="auth__eyebrow">LPS</div>
+            <h1 class="auth__headline">Comece sua gestão<br><span>com mais clareza.</span></h1>
+            <p class="auth__lead">
+                Crie seu acesso à LPS e tenha todas as ferramentas para planejar,
+                acompanhar e entregar seus projetos com mais produtividade.
+            </p>
+        </div>
+        <img class="auth__symbol" src="{% static 'img/logo-lps-symbol.png' %}" alt="">
+    </aside>
+
+    <main class="auth__panel">
+        <div class="auth__card">
+            <a href="{% url 'login' %}" class="auth__logo">
+                <img src="{% static 'img/logo-lps-full.png' %}" alt="LPS — O amigo do gestor.">
+            </a>
+
+            <h2 class="auth__title">Criar sua conta</h2>
+            <p class="auth__subtitle">Comece criando seu acesso à LPS.</p>
+
+            {% if form.non_field_errors %}
+            <ul class="auth__messages">
+                {% for error in form.non_field_errors %}
+                <li class="message--error">{{ error }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            <form method="post" novalidate>
+                {% csrf_token %}
+
+                <div class="auth__row">
+                    <label for="{{ form.display_name.id_for_label }}">Nome de exibição</label>
+                    <div class="auth__field">
+                        <span class="auth__field-icon">{% include "_icon.html" with name="users" %}</span>
+                        <input type="text" name="{{ form.display_name.html_name }}"
+                               id="{{ form.display_name.id_for_label }}"
+                               value="{{ form.display_name.value|default:'' }}"
+                               placeholder="Seu nome" autocomplete="name" autofocus required>
+                    </div>
+                    {% if form.display_name.errors %}
+                    <ul class="errorlist">{% for e in form.display_name.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+                    {% endif %}
+                </div>
+
+                <div class="auth__row">
+                    <label for="{{ form.email.id_for_label }}">E-mail</label>
+                    <div class="auth__field">
+                        <span class="auth__field-icon">{% include "_icon.html" with name="at" %}</span>
+                        <input type="email" name="{{ form.email.html_name }}"
+                               id="{{ form.email.id_for_label }}"
+                               value="{{ form.email.value|default:'' }}"
+                               placeholder="seu@email.com" autocomplete="email" required>
+                    </div>
+                    {% if form.email.errors %}
+                    <ul class="errorlist">{% for e in form.email.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+                    {% endif %}
+                </div>
+
+                <div class="auth__row">
+                    <label for="{{ form.password1.id_for_label }}">Senha</label>
+                    <div class="auth__field">
+                        <span class="auth__field-icon">{% include "_icon.html" with name="lock" %}</span>
+                        <input type="password" name="{{ form.password1.html_name }}"
+                               id="{{ form.password1.id_for_label }}"
+                               placeholder="Sua senha" autocomplete="new-password" required
+                               data-password>
+                        <button type="button" class="auth__field-toggle" data-password-toggle
+                                aria-label="Mostrar senha" hidden>
+                            {% include "_icon.html" with name="eye" %}
+                        </button>
+                    </div>
+                    {% if form.password1.errors %}
+                    <ul class="errorlist">{% for e in form.password1.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+                    {% endif %}
+                </div>
+
+                <div class="auth__row">
+                    <label for="{{ form.password2.id_for_label }}">Confirmar senha</label>
+                    <div class="auth__field">
+                        <span class="auth__field-icon">{% include "_icon.html" with name="lock" %}</span>
+                        <input type="password" name="{{ form.password2.html_name }}"
+                               id="{{ form.password2.id_for_label }}"
+                               placeholder="Confirme sua senha" autocomplete="new-password" required
+                               data-password>
+                        <button type="button" class="auth__field-toggle" data-password-toggle
+                                aria-label="Mostrar senha" hidden>
+                            {% include "_icon.html" with name="eye" %}
+                        </button>
+                    </div>
+                    {% if form.password2.errors %}
+                    <ul class="errorlist">{% for e in form.password2.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+                    {% endif %}
+                </div>
+
+                <label class="auth__checkbox">
+                    <input type="checkbox" name="{{ form.accepted_terms.html_name }}"
+                           id="{{ form.accepted_terms.id_for_label }}" required>
+                    <span>Li e aceito os <a href="#" target="_blank">Termos de Uso</a> e a
+                        <a href="#" target="_blank">Política de Privacidade</a>.</span>
+                </label>
+                {% if form.accepted_terms.errors %}
+                <ul class="errorlist">{% for e in form.accepted_terms.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+                {% endif %}
+
+                <button type="submit" class="auth__submit">
+                    Criar conta {% include "_icon.html" with name="arrow-right" %}
+                </button>
+            </form>
+
+            <p class="auth__divider">Já possui uma conta? <a href="{% url 'login' %}">Entrar</a></p>
+        </div>
+    </main>
+</div>
+
+<script src="{% static 'js/auth.js' %}?v=20260927a"></script>
+</body>
+</html>
