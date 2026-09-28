@@ -188,7 +188,7 @@
                         </form>
                         <form method="post" action="{% url 'deadline-reject' pending_proposal.pk %}" class="actions-row">
                             {% csrf_token %}
-                            <input type="text" name="note" placeholder="Motivo da recusa"
+                            <input type="text" name="note" placeholder="Motivo da recusa" data-mention
                                    style="padding:6px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font:inherit">
                             <button type="submit" class="btn btn--sm btn--danger">Recusar</button>
                         </form>

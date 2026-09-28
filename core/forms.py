@@ -5,6 +5,7 @@ from acessos.models import Action
 from acessos.models import Profile as AccessProfile
 from acessos.models import Scope
 
+from .colors import DEFAULTS
 from .models import Client, Company, CostCenter, Sector, Site
 from .widgets import ColorPaletteWidget
 
@@ -64,6 +65,26 @@ class TaskStageForm(forms.Form):
     """Estágio de Kanban de tarefa — a ordem nunca é digitada, só arrastada."""
 
     name = forms.CharField(label="Nome", max_length=150)
+    color = forms.CharField(label="Cor", widget=ColorPaletteWidget, initial="#94A3B8")
+
+
+class ActivityStageForm(forms.Form):
+    name = forms.CharField(label="Nome", max_length=150)
+    color = forms.CharField(label="Cor", widget=ColorPaletteWidget, initial="#94A3B8")
+
+
+class WorkflowStatusForm(forms.Form):
+    name = forms.CharField(label="Nome", max_length=150)
+    description = forms.CharField(label="Descricao", max_length=255, required=False)
+    behavior = forms.ChoiceField(label="Comportamento base", choices=())
+    color = forms.CharField(label="Cor", widget=ColorPaletteWidget, initial="#94A3B8")
+
+    def __init__(self, *args, domain=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        color_domain = "activity_status" if domain == "activity" else "task_status"
+        self.fields["behavior"].choices = [
+            (code, code.replace("_", " ").title()) for code in DEFAULTS.get(color_domain, {})
+        ]
 
 
 class TagForm(forms.Form):

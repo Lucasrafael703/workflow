@@ -22,10 +22,15 @@ class PersonPickerWidget(forms.HiddenInput):
 
     search_url_name = "person-search"
 
-    def __init__(self, attrs=None, create_url=None, queryset=None):
+    def __init__(
+        self, attrs=None, create_url=None, queryset=None, sector_field_id=None, placeholder=None, selection_label=None
+    ):
         super().__init__(attrs)
         self.create_url = create_url
         self.queryset = queryset
+        self.sector_field_id = sector_field_id
+        self.placeholder = placeholder or "Buscar pessoa..."
+        self.selection_label = selection_label or "Selecionar pessoa"
 
     def _label_for(self, value):
         if not value or self.queryset is None:
@@ -42,10 +47,11 @@ class PersonPickerWidget(forms.HiddenInput):
         search_url = reverse_lazy(self.search_url_name)
 
         create_attr = format_html(' data-create-url="{}"', self.create_url) if self.create_url else ""
+        sector_attr = format_html(' data-sector-field="{}"', self.sector_field_id) if self.sector_field_id else ""
         label_class = "" if label else " muted"
 
         return format_html(
-            '<div class="person-picker" data-person-picker data-search-url="{search_url}"{create_attr}>'
+            '<div class="person-picker" data-person-picker data-search-url="{search_url}"{create_attr}{sector_attr} data-placeholder="{placeholder}" data-empty-label="{empty_label}">'
             '{hidden_html}'
             '<button type="button" class="person-picker__trigger">'
             '<span class="person-picker__icon">{icon}</span>'
@@ -54,10 +60,13 @@ class PersonPickerWidget(forms.HiddenInput):
             "</div>",
             search_url=search_url,
             create_attr=create_attr,
+            sector_attr=sector_attr,
+            placeholder=self.placeholder,
+            empty_label=self.selection_label,
             hidden_html=hidden_html,
             icon=_SEARCH_ICON,
             label_class=label_class,
-            label=label or "Selecionar pessoa",
+            label=label or self.selection_label,
         )
 
 
@@ -225,11 +234,12 @@ class RichTextWidget(forms.Textarea):
             '<button type="button" class="rich-text__btn" data-command="insertUnorderedList" title="Lista">&bull;</button>'
             '<button type="button" class="rich-text__btn" data-command="createLink" title="Link">&#128279;</button>'
             "</div>"
-            '<div class="rich-text__body" contenteditable="true">{body_html}</div>'
+            '<div class="rich-text__body" contenteditable="true" data-mention data-mention-search-url="{search_url}">{body_html}</div>'
             "{textarea_html}"
             "</div>",
             body_html=body_html,
             textarea_html=textarea_html,
+            search_url=reverse_lazy("person-search"),
         )
 
 

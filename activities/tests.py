@@ -6,6 +6,7 @@ from acessos import catalog
 from acessos.testing import grant_action, grant_actions
 from audit.models import AuditLog
 from core.models import Organization, Sector
+from notifications.models import Notification
 
 from .models import (
     Activity,
@@ -26,6 +27,7 @@ from .services import (
     MessageService,
     QueueService,
     TaskService,
+    find_mentioned_users,
 )
 
 User = get_user_model()
@@ -579,4 +581,118 @@ class MessageTests(ActivitiesTestCase):
 
         self.assertTrue(
             self.executor.notifications.filter(task=task, title="Nova mensagem na tarefa").exists()
+        )
+
+
+class MentionTests(ActivitiesTestCase):
+    """@menção com autocomplete (a inserção do texto é responsabilidade do
+    front-end; aqui testamos só a extração/notificação server-side, que é
+    a mesma para qualquer campo — texto puro ou HTML sanitizado)."""
+
+    def test_mentioned_user_is_notified(self):
+        activity = ActivityService.create_activity(
+            organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
+        )
+        mentioned = find_mentioned_users(f"Olá @{self.executor.username}", self.creator, activity)
+        self.assertEqual(mentioned, {self.executor})
+
+    def test_author_never_mentions_self(self):
+        activity = ActivityService.create_activity(
+            organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
+        )
+        mentioned = find_mentioned_users(f"Olá @{self.creator.username}", self.creator, activity)
+        self.assertEqual(mentioned, set())
+
+    def test_mention_without_permission_is_silently_ignored(self):
+        activity = ActivityService.create_activity(
+            organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
+        )
+        outsider = User.objects.create_user("externo", password="x")
+        outsider.profile.organization = self.other_org
+        outsider.profile.save(update_fields=["organization"])
+
+        mentioned = find_mentioned_users(f"Olá @{outsider.username}", self.creator, activity)
+
+        self.assertEqual(mentioned, set())
+        self.assertFalse(outsider.notifications.exists())
+
+    def test_mention_in_activity_description_on_create(self):
+        activity = ActivityService.create_activity(
+            organization=self.org,
+            title="Atividade",
+            owner=self.owner,
+            created_by=self.creator,
+            description=f"Confirmar com @{self.executor.username} antes de prosseguir.",
+        )
+        self.assertTrue(
+            self.executor.notifications.filter(
+                activity=activity, event_type=Notification.EventType.MENTIONED
+            ).exists()
+        )
+
+    def test_mention_in_activity_description_on_update(self):
+        activity = ActivityService.create_activity(
+            organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
+        )
+        self.assertFalse(self.executor.notifications.filter(event_type=Notification.EventType.MENTIONED).exists())
+
+        ActivityService.update_activity(
+            activity, self.owner, description=f"Ver com @{self.executor.username}."
+        )
+
+        self.assertTrue(
+            self.executor.notifications.filter(
+                activity=activity, event_type=Notification.EventType.MENTIONED
+            ).exists()
+        )
+
+    def test_mention_in_task_description_on_update(self):
+        activity = ActivityService.create_activity(
+            organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
+        )
+        task = TaskService.create_task(activity, self.sector, "Tarefa", created_by=self.creator)
+
+        TaskService.update_task(task, self.creator, description=f"Falar com @{self.executor.username}.")
+
+        self.assertTrue(
+            self.executor.notifications.filter(task=task, event_type=Notification.EventType.MENTIONED).exists()
+        )
+
+    def test_mention_in_cancellation_reason(self):
+        activity = ActivityService.create_activity(
+            organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
+        )
+        grant_action(self.owner, catalog.ATIVIDADE_CANCELAR, organization=self.org)
+        ActivityService.cancel_activity(
+            activity, self.owner, reason=f"Cliente desistiu, @{self.executor.username} já sabe."
+        )
+
+        self.assertTrue(
+            self.executor.notifications.filter(
+                activity=activity, event_type=Notification.EventType.MENTIONED
+            ).exists()
+        )
+
+    def test_mention_in_deadline_conflict_resolution(self):
+        activity = ActivityService.create_activity(
+            organization=self.org,
+            title="Atividade",
+            owner=self.owner,
+            created_by=self.creator,
+            requested_deadline=timezone.now(),
+        )
+        task = TaskService.create_task(
+            activity, self.sector, "Tarefa", created_by=self.creator, requested_deadline=timezone.now()
+        )
+        proposal = DeadlineService.propose(task, timezone.now() + timezone.timedelta(days=2), user=self.creator)
+        DeadlineService.reject(proposal, user=self.owner, note="Sem capacidade.")
+        conflict = DeadlineConflict.objects.get(task=task)
+        grant_action(self.gestor, catalog.ESCALONAMENTO_RESOLVER, organization=self.org)
+
+        DeadlineService.resolve_conflict(
+            conflict, user=self.gestor, resolution_note=f"Decidido com @{self.executor.username}."
+        )
+
+        self.assertTrue(
+            self.executor.notifications.filter(task=task, event_type=Notification.EventType.MENTIONED).exists()
         )

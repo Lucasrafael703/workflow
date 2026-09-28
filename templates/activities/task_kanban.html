@@ -1,55 +1,87 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Tarefas — Kanban — LPS{% endblock %}
+{% block title %}Tarefas - Kanban - LPS{% endblock %}
 
 {% block content %}
-<div class="page-head">
-    <div class="page-head__text">
-        <h1>Tarefas</h1>
-        <p class="sub">Arraste um card entre colunas para reorganizar — isso não altera o status da tarefa, só o estágio visual.</p>
+<div class="tasks-kanban-page">
+    <div class="page-head tasks-kanban-head">
+        <div class="page-head__text">
+            <h1>Tarefas</h1>
+            <p class="sub">Organize o trabalho do jeito que fizer mais sentido para o seu time.</p>
+        </div>
+        <div class="page-head__actions">
+            <a href="{% url 'task-quick-create-standalone' %}" class="btn btn--primary js-new-task">
+                {% include "_icon.html" with name="plus" %} Nova tarefa
+            </a>
+            <a href="{% url 'queue' %}" class="btn">{% include "_icon.html" with name="queue" %} Ver fila do setor</a>
+        </div>
     </div>
-    <div class="page-head__actions">
-        <a href="{% url 'task-quick-create-standalone' %}" class="btn btn--primary js-new-task">{% include "_icon.html" with name="plus" %} Nova tarefa</a>
-        <a href="{% url 'queue' %}" class="btn">Ver fila do setor</a>
-    </div>
-</div>
 
-{% include "activities/_task_view_filters.html" %}
+    {% include "activities/_task_view_filters.html" %}
 
-<div class="kanban-board">
-    <div class="kanban-column" data-stage-id="">
-        <div class="kanban-column__head">
-            <span class="kanban-column__title">Sem estágio</span>
-            <span class="kanban-column__count">{{ unassigned_column.tasks|length }}</span>
-        </div>
-        <div class="kanban-column__body" data-drop-zone>
-            {% for task in unassigned_column.tasks %}
-                {% include "activities/_task_kanban_card.html" %}
+    <div class="tasks-kanban-scroll">
+        <div class="kanban-board tasks-kanban-board">
+            <div class="kanban-column" data-stage-id="">
+                <div class="kanban-column__head" style="--stage-color: #94A3B8;">
+                    <span class="kanban-column__grip">{% include "_icon.html" with name="grip" %}</span>
+                    <span class="kanban-column__title">Sem estágio</span>
+                    <span class="kanban-column__count">{{ unassigned_column.tasks|length }}</span>
+                </div>
+                <div class="kanban-column__body" data-drop-zone>
+                    {% for task in unassigned_column.tasks %}
+                        {% include "activities/_task_kanban_card.html" %}
+                    {% endfor %}
+                </div>
+                <a href="{% url 'task-quick-create-standalone' %}" class="kanban-column__add js-new-task">
+                    {% include "_icon.html" with name="plus" %} Adicionar tarefa
+                </a>
+            </div>
+
+            {% for column in columns %}
+            <div class="kanban-column" data-stage-id="{{ column.stage.pk }}">
+                <div class="kanban-column__head" style="--stage-color: {{ column.stage.color }};">
+                    <span class="kanban-column__grip">{% include "_icon.html" with name="grip" %}</span>
+                    <span class="kanban-column__title">{{ column.stage.name }}</span>
+                    <span class="kanban-column__count">{{ column.tasks|length }}</span>
+                    <details class="kanban-stage-menu">
+                        <summary aria-label="Ações do estágio {{ column.stage.name }}">{% include "_icon.html" with name="more" %}</summary>
+                        <div class="kanban-stage-menu__popup">
+                            <a href="{% url 'taskstage-edit' column.stage.pk %}" class="js-taskstage-modal">
+                                {% include "_icon.html" with name="settings" %} Editar estágio
+                            </a>
+                            <a href="{% url 'cadastros' %}?tab=estagios-de-tarefa">
+                                {% include "_icon.html" with name="grip" %} Reordenar estágios
+                            </a>
+                        </div>
+                    </details>
+                </div>
+                <div class="kanban-column__body" data-drop-zone>
+                    {% for task in column.tasks %}
+                        {% include "activities/_task_kanban_card.html" %}
+                    {% endfor %}
+                </div>
+                <a href="{% url 'task-quick-create-standalone' %}?stage={{ column.stage.pk }}" class="kanban-column__add js-new-task">
+                    {% include "_icon.html" with name="plus" %} Adicionar tarefa
+                </a>
+            </div>
+            {% empty %}
+            <div class="card">
+                <div class="empty-state">
+                    <div class="empty-state__icon">{% include "_icon.html" with name="folder" %}</div>
+                    <h3>Nenhum estágio cadastrado</h3>
+                    <p>Configure as colunas do Kanban em Cadastros > Estágios de tarefa.</p>
+                    <a href="{% url 'cadastros' %}?tab=estagios-de-tarefa" class="btn btn--primary">Configurar estágios</a>
+                </div>
+            </div>
             {% endfor %}
+
+            <a href="{% url 'taskstage-create' %}" class="kanban-new-stage js-taskstage-modal">
+                <span>{% include "_icon.html" with name="plus" %}</span>
+                <strong>Novo estágio</strong>
+                <small>Adicione um estágio para organizar melhor suas tarefas.</small>
+            </a>
         </div>
     </div>
-    {% for column in columns %}
-    <div class="kanban-column" data-stage-id="{{ column.stage.pk }}">
-        <div class="kanban-column__head" style="--stage-color: {{ column.stage.color }};">
-            <span class="kanban-column__title">{{ column.stage.name }}</span>
-            <span class="kanban-column__count">{{ column.tasks|length }}</span>
-        </div>
-        <div class="kanban-column__body" data-drop-zone>
-            {% for task in column.tasks %}
-                {% include "activities/_task_kanban_card.html" %}
-            {% endfor %}
-        </div>
-    </div>
-    {% empty %}
-    <div class="card">
-        <div class="empty-state">
-            <div class="empty-state__icon">{% include "_icon.html" with name="folder" %}</div>
-            <h3>Nenhum estágio cadastrado</h3>
-            <p>Configure as colunas do Kanban em Cadastros › Estágios de tarefa.</p>
-            <a href="{% url 'cadastros' %}?tab=estagios-de-tarefa" class="btn btn--primary">Configurar estágios</a>
-        </div>
-    </div>
-    {% endfor %}
 </div>
 
 {% comment %}URL com pk sentinela (999999999): o JS troca esse número pelo id real da
@@ -60,6 +92,15 @@ tarefa arrastada, evitando montar a URL "na mão" fora do roteador.{% endcomment
 (function () {
     "use strict";
     document.querySelectorAll(".js-new-task").forEach(function (link) {
+        link.addEventListener("click", function (event) {
+            if (!window.LPSModal) return;
+            event.preventDefault();
+            window.LPSModal.open(link.getAttribute("href"), {
+                onSuccess: function () { window.location.reload(); }
+            });
+        });
+    });
+    document.querySelectorAll(".js-taskstage-modal").forEach(function (link) {
         link.addEventListener("click", function (event) {
             if (!window.LPSModal) return;
             event.preventDefault();

@@ -115,7 +115,7 @@ passou" etc.) continua só na ficha completa.{% endcomment %}
                 {% endif %}
                 <form class="js-drawer-message" data-url="{% url 'task-message' task.pk %}">
                     <div class="form-row">
-                        <textarea name="body" rows="2" placeholder="Escreva um comentário…"></textarea>
+                        <textarea name="body" rows="2" placeholder="Escreva um comentário… use @ para mencionar alguém" data-mention></textarea>
                     </div>
                     <div class="form-foot form-foot--split">
                         <select name="kind">

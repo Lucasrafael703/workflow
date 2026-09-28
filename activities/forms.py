@@ -285,6 +285,17 @@ class TaskQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
     "Grupo designado" (Regra 6), o setor da tarefa é herdado dele e nem
     aparece no popup — só quando não há grupo definido é que a pessoa escolhe."""
 
+    executor = forms.ModelChoiceField(
+        queryset=User.objects.none(),
+        label="Responsável / Executor",
+        required=False,
+        widget=PersonPickerWidget(
+            sector_field_id="id_sector",
+            placeholder="Buscar responsável...",
+            selection_label="Selecionar responsável...",
+        ),
+    )
+
     class Meta:
         model = Task
         fields = ["title", "sector", "requested_deadline", "tags", "description"]
@@ -308,6 +319,8 @@ class TaskQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
     def __init__(self, *args, organization=None, activity=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.scope_querysets(organization)
+        self.order_fields(["title", "sector", "executor", "requested_deadline", "tags", "description"])
+        self.fields["executor"].queryset = User.objects.none()
         self.fields["description"].required = False
         self.fields["requested_deadline"].required = False
         self.fields["tags"].required = False
@@ -318,6 +331,22 @@ class TaskQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
             self.fields["sector"].widget = forms.HiddenInput()
         else:
             self.fields["sector"].required = True
+        sector_id = self.data.get("sector") if self.is_bound else self.initial.get("sector")
+        if not sector_id and activity is not None:
+            sector_id = activity.sector_id
+        try:
+            sector_id = int(sector_id)
+        except (TypeError, ValueError):
+            sector_id = None
+        if organization is not None and sector_id:
+            self.fields["executor"].queryset = User.objects.filter(
+                profile__organization=organization,
+                is_active=True,
+                sector_memberships__sector_id=sector_id,
+                sector_memberships__sector__organization=organization,
+                sector_memberships__removed_at__isnull=True,
+            ).distinct().order_by("first_name", "username")
+        self.fields["executor"].widget.queryset = self.fields["executor"].queryset
 
     def clean_description(self):
         return sanitize_description(self.cleaned_data.get("description"))
@@ -348,7 +377,7 @@ class TaskQuickCreateStandaloneForm(TaskQuickCreateForm):
         # depois do campo `activity` ser escolhido — o campo sector permanece
         # sempre visível e obrigatório nesta variante.
         super().__init__(*args, organization=organization, activity=None, **kwargs)
-        self.order_fields(["activity", "title", "sector", "requested_deadline", "tags", "description"])
+        self.order_fields(["activity", "title", "sector", "executor", "requested_deadline", "tags", "description"])
         queryset = Activity.objects.filter(organization=organization, status__in=self.OPEN_ACTIVITY_STATUSES)
         self.fields["activity"].queryset = queryset
         self.fields["activity"].widget.queryset = queryset
@@ -370,7 +399,7 @@ class TaskReturnForm(forms.Form):
     to_sector = forms.ModelChoiceField(queryset=Sector.objects.none(), label="Devolver para")
     reason = forms.ModelChoiceField(queryset=ReturnReason.objects.none(), label="Motivo")
     observation = forms.CharField(
-        label="Observação", required=False, widget=forms.Textarea(attrs={"rows": 3})
+        label="Observação", required=False, widget=forms.Textarea(attrs={"rows": 3, "data-mention": "1"})
     )
 
     def __init__(self, *args, organization=None, task=None, **kwargs):
@@ -396,7 +425,7 @@ class AssignmentRejectForm(forms.Form):
 
     reason = forms.ModelChoiceField(queryset=ReturnReason.objects.none(), label="Motivo")
     observation = forms.CharField(
-        label="Observação", required=False, widget=forms.Textarea(attrs={"rows": 3})
+        label="Observação", required=False, widget=forms.Textarea(attrs={"rows": 3, "data-mention": "1"})
     )
 
     def __init__(self, *args, organization=None, **kwargs):
@@ -409,7 +438,7 @@ class AssignmentRejectForm(forms.Form):
 class TaskBlockForm(forms.Form):
     reason = forms.CharField(label="Motivo do bloqueio", max_length=255)
     observation = forms.CharField(
-        label="Observação", required=False, widget=forms.Textarea(attrs={"rows": 3})
+        label="Observação", required=False, widget=forms.Textarea(attrs={"rows": 3, "data-mention": "1"})
     )
 
 
@@ -447,7 +476,7 @@ class DeadlineProposalForm(forms.Form):
 
 class ConflictResolutionForm(forms.Form):
     resolution_note = forms.CharField(
-        label="Decisão", widget=forms.Textarea(attrs={"rows": 3}),
+        label="Decisão", widget=forms.Textarea(attrs={"rows": 3, "data-mention": "1"}),
         help_text="Registre o que foi decidido — o conflito precisa terminar em decisão (Regras 03 §66).",
     )
 
@@ -463,7 +492,11 @@ class MessageForm(forms.Form):
     body = forms.CharField(
         label="",
         widget=forms.Textarea(
-            attrs={"rows": 3, "placeholder": "Escreva uma mensagem… use @usuario para mencionar alguém"}
+            attrs={
+                "rows": 3,
+                "placeholder": "Escreva uma mensagem… use @ para mencionar alguém",
+                "data-mention": "1",
+            }
         ),
     )
     kind = forms.ChoiceField(
@@ -479,7 +512,7 @@ class ReorderForm(forms.Form):
 
 
 class CancelForm(forms.Form):
-    reason = forms.CharField(label="Motivo", widget=forms.Textarea(attrs={"rows": 3}))
+    reason = forms.CharField(label="Motivo", widget=forms.Textarea(attrs={"rows": 3, "data-mention": "1"}))
 
 
 class ActivityFinalizeForm(forms.Form):
@@ -494,7 +527,12 @@ class ActivityFinalizeForm(forms.Form):
     comment = forms.CharField(
         label="Comentário de finalização",
         widget=forms.Textarea(
-            attrs={"rows": 4, "maxlength": 1000, "placeholder": "Descreva o resultado, o que foi realizado, observações finais, próximos passos…"}
+            attrs={
+                "rows": 4,
+                "maxlength": 1000,
+                "placeholder": "Descreva o resultado, o que foi realizado, observações finais, próximos passos…",
+                "data-mention": "1",
+            }
         ),
     )
 
@@ -514,7 +552,12 @@ class ActivityPendingForm(forms.Form):
     comment = forms.CharField(
         label="Comentário",
         widget=forms.Textarea(
-            attrs={"rows": 4, "maxlength": 1000, "placeholder": "Descreva o motivo da pendência e o que já foi feito."}
+            attrs={
+                "rows": 4,
+                "maxlength": 1000,
+                "placeholder": "Descreva o motivo da pendência e o que já foi feito.",
+                "data-mention": "1",
+            }
         ),
     )
     decision_deadline = forms.DateTimeField(
@@ -546,5 +589,12 @@ class ActivityApprovePendencyForm(forms.Form):
     comment = forms.CharField(
         label="Comentário (opcional)",
         required=False,
-        widget=forms.Textarea(attrs={"rows": 3, "maxlength": 1000, "placeholder": "Observações da aprovação, se houver."}),
+        widget=forms.Textarea(
+            attrs={
+                "rows": 3,
+                "maxlength": 1000,
+                "placeholder": "Observações da aprovação, se houver.",
+                "data-mention": "1",
+            }
+        ),
     )

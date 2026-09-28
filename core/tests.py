@@ -3,6 +3,7 @@ import json
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from accounts.models import UserSector
 from acessos import catalog
@@ -115,9 +116,12 @@ class PersonSearchViewTests(TestCase):
         self.outsider.profile.organization = self.other_org
         self.outsider.profile.save(update_fields=["organization"])
 
-    def _search(self, term=""):
+    def _search(self, term="", sector=None):
         self.client.force_login(self.searcher)
-        response = self.client.get(reverse("person-search"), {"q": term})
+        params = {"q": term}
+        if sector is not None:
+            params["sector"] = sector
+        response = self.client.get(reverse("person-search"), params)
         return json.loads(response.content)["results"]
 
     def test_filters_by_name(self):
@@ -139,6 +143,18 @@ class PersonSearchViewTests(TestCase):
         usernames = [r["username"] for r in results]
         self.assertIn("paulo", usernames)
         self.assertIn("jennifer", usernames)
+
+    def test_sector_filter_returns_only_active_members(self):
+        sector = Sector.objects.create(organization=self.org, name="Comercial")
+        UserSector.objects.create(user=self.jennifer, sector=sector)
+        UserSector.objects.create(user=self.searcher, sector=sector, removed_at=timezone.now())
+        results = self._search(sector=str(sector.pk))
+        usernames = [result["username"] for result in results]
+        self.assertEqual(usernames, ["jennifer"])
+
+    def test_sector_filter_rejects_missing_or_invalid_sector(self):
+        self.assertEqual(self._search(sector=""), [])
+        self.assertEqual(self._search(sector="invalid"), [])
 
 
 class UserFormAjaxTests(TestCase):

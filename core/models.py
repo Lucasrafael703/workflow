@@ -108,6 +108,96 @@ class TaskStage(models.Model):
         return get_contrast_text(self.color)
 
 
+class ActivityStage(models.Model):
+    """Estagio visual configuravel para atividades.
+
+    Assim como TaskStage, organiza a visualizacao e nunca substitui
+    Activity.status, que continua sendo a verdade operacional.
+    """
+
+    organization = models.ForeignKey(
+        Organization, verbose_name="organizacao", on_delete=models.CASCADE, related_name="activity_stages"
+    )
+    name = models.CharField("nome", max_length=150)
+    order = models.PositiveIntegerField("ordem", default=1)
+    color = models.CharField(
+        "cor",
+        max_length=7,
+        default="#94A3B8",
+        help_text="So decoracao do fluxo visual; nunca afeta o status operacional da atividade.",
+    )
+    is_active = models.BooleanField("ativo", default=True)
+    created_by = models.ForeignKey(
+        "auth.User", verbose_name="criado por", null=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField("criado em", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "estagio de atividade"
+        verbose_name_plural = "estagios de atividade"
+        ordering = ["organization", "order", "name"]
+        constraints = [
+            models.UniqueConstraint(fields=["organization", "name"], name="unique_activitystage_name_per_org"),
+        ]
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def text_color(self):
+        from .colors import get_contrast_text
+
+        return get_contrast_text(self.color)
+
+
+class WorkflowStatus(models.Model):
+    """Status configuravel exibido no editor de fluxo.
+
+    Os status nativos continuam no codigo porque carregam regras internas.
+    Status criados pela organizacao informam qual comportamento nativo devem
+    seguir quando forem usados por telas futuras.
+    """
+
+    class Domain(models.TextChoices):
+        ACTIVITY = "activity", "Atividade"
+        TASK = "task", "Tarefa"
+
+    organization = models.ForeignKey(
+        Organization, verbose_name="organizacao", on_delete=models.CASCADE, related_name="workflow_statuses"
+    )
+    domain = models.CharField("tipo", max_length=12, choices=Domain.choices)
+    name = models.CharField("nome", max_length=150)
+    description = models.CharField("descricao", max_length=255, blank=True)
+    behavior = models.CharField(
+        "comportamento base",
+        max_length=32,
+        help_text="Codigo operacional que este status visual segue.",
+    )
+    color = models.CharField("cor", max_length=7, default="#94A3B8")
+    is_active = models.BooleanField("ativo", default=True)
+    created_by = models.ForeignKey(
+        "auth.User", verbose_name="criado por", null=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField("criado em", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "status configuravel"
+        verbose_name_plural = "status configuraveis"
+        ordering = ["organization", "domain", "name"]
+        constraints = [
+            models.UniqueConstraint(fields=["organization", "domain", "name"], name="unique_workflowstatus_name_per_org_domain"),
+        ]
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def text_color(self):
+        from .colors import get_contrast_text
+
+        return get_contrast_text(self.color)
+
+
 class Tag(models.Model):
     """Marcador livre, configurável por organização — cópia do
     `project.tags` do Odoo: nome único à organização, sem vínculo fixo a

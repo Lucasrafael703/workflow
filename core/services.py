@@ -1,7 +1,7 @@
 from django.db import models, transaction
 
 from .colors import DEFAULTS, is_valid_palette_color, valid_codes_for
-from .models import Client, Company, CostCenter, EnumColor, Sector, Site, Tag, TaskStage
+from .models import ActivityStage, Client, Company, CostCenter, EnumColor, Sector, Site, Tag, TaskStage, WorkflowStatus
 
 
 class CadastroError(Exception):
@@ -169,6 +169,90 @@ class TaskStageService(SimpleCadastroService):
             if stage and stage.order != position:
                 stage.order = position
                 stage.save(update_fields=["order"])
+
+
+class ActivityStageService(SimpleCadastroService):
+    model = ActivityStage
+
+    @classmethod
+    @transaction.atomic
+    def create(cls, organization, name, created_by=None, **extra):
+        last_order = cls.model.objects.filter(organization=organization).aggregate(models.Max("order"))[
+            "order__max"
+        ] or 0
+        extra.setdefault("order", last_order + 1)
+        extra.setdefault("created_by", created_by)
+        return super().create(organization, name, **extra)
+
+    @classmethod
+    @transaction.atomic
+    def reorder(cls, organization, ordered_ids):
+        stages = {s.pk: s for s in cls.model.objects.filter(organization=organization, pk__in=ordered_ids)}
+        for position, stage_id in enumerate(ordered_ids, start=1):
+            stage = stages.get(stage_id)
+            if stage and stage.order != position:
+                stage.order = position
+                stage.save(update_fields=["order"])
+
+
+class WorkflowStatusService(SimpleCadastroService):
+    model = WorkflowStatus
+
+    @classmethod
+    @transaction.atomic
+    def create(cls, organization, name, domain, behavior, created_by=None, description="", color="#94A3B8"):
+        name = (name or "").strip()
+        if not name:
+            raise CadastroError("Informe o nome.")
+        color_domain = "activity_status" if domain == WorkflowStatus.Domain.ACTIVITY else "task_status"
+        if behavior not in valid_codes_for(color_domain):
+            raise CadastroError("Escolha um comportamento base valido.")
+        if not is_valid_palette_color(color):
+            raise CadastroError("Escolha uma cor da paleta oficial.")
+        if cls.model.objects.filter(organization=organization, domain=domain, name__iexact=name).exists():
+            raise CadastroError(f"Ja existe um status com o nome \"{name}\" nesta organizacao.")
+        return cls.model.objects.create(
+            organization=organization,
+            domain=domain,
+            name=name,
+            description=description,
+            behavior=behavior,
+            color=color,
+            created_by=created_by,
+        )
+
+    @classmethod
+    @transaction.atomic
+    def update(cls, instance, name=None, description=None, behavior=None, color=None, **extra):
+        fields = []
+        if name is not None:
+            name = name.strip()
+            if not name:
+                raise CadastroError("Informe o nome.")
+            queryset = cls.model.objects.filter(
+                organization=instance.organization, domain=instance.domain, name__iexact=name
+            ).exclude(pk=instance.pk)
+            if queryset.exists():
+                raise CadastroError(f"Ja existe um status com o nome \"{name}\" nesta organizacao.")
+            instance.name = name
+            fields.append("name")
+        if description is not None:
+            instance.description = description
+            fields.append("description")
+        if behavior is not None:
+            color_domain = "activity_status" if instance.domain == WorkflowStatus.Domain.ACTIVITY else "task_status"
+            if behavior not in valid_codes_for(color_domain):
+                raise CadastroError("Escolha um comportamento base valido.")
+            instance.behavior = behavior
+            fields.append("behavior")
+        if color is not None:
+            if not is_valid_palette_color(color):
+                raise CadastroError("Escolha uma cor da paleta oficial.")
+            instance.color = color
+            fields.append("color")
+        if fields:
+            instance.save(update_fields=fields)
+        return instance
 
 
 class EnumColorService:

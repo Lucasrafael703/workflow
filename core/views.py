@@ -16,6 +16,7 @@ from acessos.services import AccessService, AuthorizationService
 
 from .forms import (
     AccessProfileForm,
+    ActivityStageForm,
     AssignProfileForm,
     ClientForm,
     CompanyForm,
@@ -28,11 +29,13 @@ from .forms import (
     TagForm,
     TaskStageForm,
     UserForm,
+    WorkflowStatusForm,
 )
 from .colors import is_valid_palette_color
 from .mixins import ActionRequiredMixin, OrganizationRequiredMixin
-from .models import Client, Company, CostCenter, Sector, Site, Tag, TaskStage
+from .models import ActivityStage, Client, Company, CostCenter, Sector, Site, Tag, TaskStage, WorkflowStatus
 from .services import (
+    ActivityStageService,
     CadastroError,
     ClientService,
     CompanyService,
@@ -44,6 +47,7 @@ from .services import (
     SiteService,
     TagService,
     TaskStageService,
+    WorkflowStatusService,
 )
 
 User = get_user_model()
@@ -117,6 +121,17 @@ class PersonSearchView(OrganizationRequiredMixin, View):
         queryset = User.objects.filter(
             profile__organization=self.organization, is_active=True
         ).order_by("first_name", "username")
+        if "sector" in request.GET:
+            sector_id = request.GET.get("sector", "").strip()
+            try:
+                sector_id = int(sector_id)
+            except (TypeError, ValueError):
+                return JsonResponse({"results": []})
+            queryset = queryset.filter(
+                sector_memberships__sector_id=sector_id,
+                sector_memberships__sector__organization=self.organization,
+                sector_memberships__removed_at__isnull=True,
+            ).distinct()
         if term:
             queryset = queryset.filter(
                 Q(first_name__icontains=term)
@@ -216,6 +231,7 @@ class CadastroFormView(OrganizationRequiredMixin, ActionRequiredMixin, FormView)
         context["title"] = self.title
         context["instance"] = self.get_instance()
         context["tab"] = self.tab
+        context["return_url"] = self.success_url_for_tab()
         return context
 
     def success_url_for_tab(self):
@@ -377,6 +393,28 @@ class ReturnReasonFormView(CadastroFormView):
         return ReturnReasonService.update(instance, name=data["name"])
 
 
+class ActivityStageFormView(CadastroFormView):
+    form_class = ActivityStageForm
+    model = ActivityStage
+    tab = "estagios-atividade"
+    title = "Estagio de atividade"
+    required_action = catalog.ESTAGIO_TAREFA_GERIR
+
+    def initial_from(self, instance):
+        return {"name": instance.name, "color": instance.color}
+
+    def success_url_for_tab(self):
+        return f"{reverse('config-etapas-status')}?tab=estagios-atividade"
+
+    def create(self, data):
+        return ActivityStageService.create(
+            self.organization, data["name"], created_by=self.request.user, color=data.get("color", "#94A3B8")
+        )
+
+    def update(self, instance, data):
+        return ActivityStageService.update(instance, name=data["name"], color=data.get("color", "#94A3B8"))
+
+
 class TaskStageFormView(CadastroFormView):
     form_class = TaskStageForm
     model = TaskStage
@@ -385,13 +423,102 @@ class TaskStageFormView(CadastroFormView):
     required_action = catalog.ESTAGIO_TAREFA_GERIR
 
     def initial_from(self, instance):
-        return {"name": instance.name}
+        return {"name": instance.name, "color": instance.color}
+
+    def success_url_for_tab(self):
+        referer = self.request.META.get("HTTP_REFERER", "")
+        if "etapas-e-status" in referer:
+            return f"{reverse('config-etapas-status')}?tab=estagios-tarefa"
+        return f"{reverse('cadastros')}?tab={self.tab}"
 
     def create(self, data):
-        return TaskStageService.create(self.organization, data["name"], created_by=self.request.user)
+        return TaskStageService.create(
+            self.organization, data["name"], created_by=self.request.user, color=data.get("color", "#94A3B8")
+        )
 
     def update(self, instance, data):
-        return TaskStageService.update(instance, name=data["name"])
+        return TaskStageService.update(instance, name=data["name"], color=data.get("color", "#94A3B8"))
+
+
+class WorkflowStatusFormView(OrganizationRequiredMixin, ActionRequiredMixin, FormView):
+    template_name = "core/cadastro_form.html"
+    form_class = WorkflowStatusForm
+    required_action = catalog.COR_STATUS_GERIR
+
+    def dispatch(self, request, *args, **kwargs):
+        if kwargs.get("domain") not in ("activity", "task"):
+            raise Http404("Tipo de status desconhecido.")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_instance(self):
+        pk = self.kwargs.get("pk")
+        if pk is None:
+            return None
+        return get_object_or_404(
+            WorkflowStatus,
+            pk=pk,
+            organization=self.organization,
+            domain=self.kwargs["domain"],
+        )
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["domain"] = self.kwargs["domain"]
+        instance = self.get_instance()
+        if instance is not None and not self.request.POST:
+            kwargs["initial"] = {
+                "name": instance.name,
+                "description": instance.description,
+                "behavior": instance.behavior,
+                "color": instance.color,
+            }
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        domain = self.kwargs["domain"]
+        context["title"] = "Status de atividade" if domain == "activity" else "Status de tarefa"
+        context["instance"] = self.get_instance()
+        context["tab"] = "status-atividade" if domain == "activity" else "status-tarefa"
+        context["return_url"] = f"{reverse('config-etapas-status')}?tab={context['tab']}"
+        return context
+
+    def form_valid(self, form):
+        domain = self.kwargs["domain"]
+        instance = self.get_instance()
+        try:
+            if instance is None:
+                instance = WorkflowStatusService.create(
+                    self.organization,
+                    form.cleaned_data["name"],
+                    domain=domain,
+                    behavior=form.cleaned_data["behavior"],
+                    created_by=self.request.user,
+                    description=form.cleaned_data.get("description", ""),
+                    color=form.cleaned_data["color"],
+                )
+                messages.success(self.request, "Status criado.")
+            else:
+                instance = WorkflowStatusService.update(
+                    instance,
+                    name=form.cleaned_data["name"],
+                    description=form.cleaned_data.get("description", ""),
+                    behavior=form.cleaned_data["behavior"],
+                    color=form.cleaned_data["color"],
+                )
+                messages.success(self.request, "Status atualizado.")
+        except CadastroError as exc:
+            form.add_error(None, str(exc))
+            return self.form_invalid(form)
+        if _is_ajax(self.request):
+            return JsonResponse({"id": instance.pk, "name": instance.name})
+        tab = "status-atividade" if domain == "activity" else "status-tarefa"
+        return redirect(f"{reverse('config-etapas-status')}?tab={tab}")
+
+    def form_invalid(self, form):
+        if _is_ajax(self.request):
+            return JsonResponse({"errors": form.errors}, status=400)
+        return super().form_invalid(form)
 
 
 class TaskStageReorderView(OrganizationRequiredMixin, ActionRequiredMixin, View):
@@ -434,6 +561,7 @@ class SwatchColorSaveView(OrganizationRequiredMixin, ActionRequiredMixin, View):
 
     swatch_models = {
         "tags": (Tag, TagService, catalog.TAG_GERIR),
+        "estagios-de-atividade": (ActivityStage, ActivityStageService, catalog.ESTAGIO_TAREFA_GERIR),
         "estagios-de-tarefa": (TaskStage, TaskStageService, catalog.ESTAGIO_TAREFA_GERIR),
     }
 
@@ -468,7 +596,9 @@ class CadastroToggleActiveView(OrganizationRequiredMixin, View):
         "obras": (Site, catalog.OBRA_GERIR),
         "centros-de-custo": (CostCenter, catalog.CENTRO_CUSTO_GERIR),
         "clientes": (Client, catalog.CLIENTE_GERIR),
+        "estagios-de-atividade": (ActivityStage, catalog.ESTAGIO_TAREFA_GERIR),
         "estagios-de-tarefa": (TaskStage, catalog.ESTAGIO_TAREFA_GERIR),
+        "status-configuravel": (WorkflowStatus, catalog.COR_STATUS_GERIR),
         "tags": (Tag, catalog.TAG_GERIR),
     }
 
@@ -494,6 +624,34 @@ class CadastroToggleActiveView(OrganizationRequiredMixin, View):
         return redirect(f"{reverse('cadastros')}?tab={tab}")
 
 
+class FlowConfigDeleteView(OrganizationRequiredMixin, ActionRequiredMixin, View):
+    models_by_kind = {
+        "activity-stage": (ActivityStage, catalog.ESTAGIO_TAREFA_GERIR),
+        "task-stage": (TaskStage, catalog.ESTAGIO_TAREFA_GERIR),
+        "workflow-status": (WorkflowStatus, catalog.COR_STATUS_GERIR),
+    }
+
+    def dispatch(self, request, *args, **kwargs):
+        _model, action = self.models_by_kind.get(kwargs.get("kind"), (None, None))
+        if action is None:
+            raise Http404("Item desconhecido.")
+        self.required_action = action
+        return super().dispatch(request, *args, **kwargs)
+
+    def post(self, request, kind, pk):
+        model, _action = self.models_by_kind[kind]
+        instance = get_object_or_404(model, pk=pk, organization=self.organization)
+        if isinstance(instance, WorkflowStatus):
+            tab = "status-atividade" if instance.domain == WorkflowStatus.Domain.ACTIVITY else "status-tarefa"
+        elif isinstance(instance, ActivityStage):
+            tab = "estagios-atividade"
+        else:
+            tab = "estagios-tarefa"
+        instance.delete()
+        messages.success(request, "Item excluido.")
+        return redirect(f"{reverse('config-etapas-status')}?tab={tab}")
+
+
 class EtapasEStatusView(OrganizationRequiredMixin, ActionRequiredMixin, TemplateView):
     """Configurações → Etapas e status: uma tela com 3 sub-seções (abas
     internas ?tab=), reaproveitando o mesmo idioma de templates/core/cadastros.html."""
@@ -501,33 +659,118 @@ class EtapasEStatusView(OrganizationRequiredMixin, ActionRequiredMixin, Template
     template_name = "core/etapas_e_status.html"
 
     def dispatch(self, request, *args, **kwargs):
-        tab = request.GET.get("tab", "atividade")
-        self.required_action = (
-            catalog.ESTAGIO_TAREFA_GERIR if tab == "etapas" else catalog.COR_STATUS_GERIR
-        )
+        tab = request.GET.get("tab", "estagios-atividade")
+        self.required_action = catalog.ESTAGIO_TAREFA_GERIR if tab.startswith("estagios") or tab == "etapas" else catalog.COR_STATUS_GERIR
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         from activities.models import Activity, Task
 
         context = super().get_context_data(**kwargs)
-        tab = self.request.GET.get("tab", "atividade")
+        tab = self.request.GET.get("tab", "estagios-atividade")
+        tab = {"atividade": "status-atividade", "tarefa": "status-tarefa", "etapas": "estagios-tarefa"}.get(tab, tab)
         context["tab"] = tab
+        activity_status_meta = {
+            Activity.Status.ABERTA: {
+                "description": "Item aberto e pronto para entrar no fluxo.",
+                "behavior": "Mantem a atividade aberta",
+            },
+            Activity.Status.EM_ANDAMENTO: {
+                "description": "Trabalho iniciado, com tarefas em andamento.",
+                "behavior": "Conta como trabalho ativo",
+            },
+            Activity.Status.BLOQUEADA: {
+                "description": "Existe impedimento travando o andamento.",
+                "behavior": "Exige desbloqueio",
+            },
+            Activity.Status.PENDENTE: {
+                "description": "Aguardando retorno, ajuste ou decisao.",
+                "behavior": "Mantem aberta com pendencia",
+            },
+            Activity.Status.CONCLUIDA: {
+                "description": "Atividade encerrada com entrega concluida.",
+                "behavior": "Encerra a atividade",
+            },
+            Activity.Status.CANCELADA: {
+                "description": "Atividade encerrada sem continuidade.",
+                "behavior": "Encerra sem entrega",
+            },
+        }
+        task_status_meta = {
+            Task.Status.NAO_INICIADA: {
+                "description": "Ainda nao liberada para execucao.",
+                "behavior": "Fora da fila ativa",
+            },
+            Task.Status.DISPONIVEL: {
+                "description": "Pode ser puxada por quem executa.",
+                "behavior": "Disponivel para iniciar",
+            },
+            Task.Status.EM_FILA: {
+                "description": "Esta aguardando sua vez no setor.",
+                "behavior": "Conta na fila",
+            },
+            Task.Status.EM_EXECUCAO: {
+                "description": "Alguem esta trabalhando nela agora.",
+                "behavior": "Conta como execucao",
+            },
+            Task.Status.BLOQUEADA: {
+                "description": "Existe bloqueio impedindo progresso.",
+                "behavior": "Exige resolucao de bloqueio",
+            },
+            Task.Status.DEVOLVIDA: {
+                "description": "Voltou por ajuste ou retrabalho.",
+                "behavior": "Registra devolucao",
+            },
+            Task.Status.CONCLUIDA: {
+                "description": "Tarefa finalizada.",
+                "behavior": "Encerra a tarefa",
+            },
+            Task.Status.CANCELADA: {
+                "description": "Tarefa cancelada sem continuidade.",
+                "behavior": "Encerra sem execucao",
+            },
+        }
 
-        if tab == "atividade":
+        if tab == "status-atividade":
             colors = EnumColorService.list_for_domain(self.organization, "activity_status")
             context["rows"] = [
-                {"code": code, "label": label, "color": colors[code]} for code, label in Activity.Status.choices
+                {"code": code, "label": label, "color": colors[code], "is_system": True, **activity_status_meta.get(code, {})}
+                for code, label in Activity.Status.choices
             ]
-        elif tab == "tarefa":
+            context["custom_rows"] = WorkflowStatus.objects.filter(
+                organization=self.organization, domain=WorkflowStatus.Domain.ACTIVITY
+            ).order_by("name")
+            context["status_domain"] = "activity"
+            context["section_title"] = "Status de atividades"
+            context["section_description"] = "Configure a aparencia dos estados reais das atividades."
+        elif tab == "status-tarefa":
             colors = EnumColorService.list_for_domain(self.organization, "task_status")
             context["rows"] = [
-                {"code": code, "label": label, "color": colors[code]} for code, label in Task.Status.choices
+                {"code": code, "label": label, "color": colors[code], "is_system": True, **task_status_meta.get(code, {})}
+                for code, label in Task.Status.choices
             ]
-        elif tab == "etapas":
+            context["custom_rows"] = WorkflowStatus.objects.filter(
+                organization=self.organization, domain=WorkflowStatus.Domain.TASK
+            ).order_by("name")
+            context["status_domain"] = "task"
+            context["section_title"] = "Status de tarefas"
+            context["section_description"] = "A cor ajuda a leitura; o comportamento continua protegido pelas regras da LPS."
+        elif tab == "estagios-atividade":
+            context["stages"] = ActivityStage.objects.filter(organization=self.organization).order_by("order")
+            context["stage_kind"] = "activity-stage"
+            context["stage_color_tab"] = "estagios-de-atividade"
+            context["stage_create_url"] = reverse("activitystage-create")
+            context["section_title"] = "Estagios de atividades"
+            context["section_description"] = "Organize o fluxo visual das atividades em Lista, Kanban e Calendario."
+        elif tab == "estagios-tarefa":
             context["stages"] = TaskStage.objects.filter(organization=self.organization).order_by("order")
+            context["stage_kind"] = "task-stage"
+            context["stage_color_tab"] = "estagios-de-tarefa"
+            context["stage_create_url"] = reverse("taskstage-create")
+            context["section_title"] = "Estagios de tarefas"
+            context["section_description"] = "Organize as colunas visuais usadas em Lista, Kanban e Calendario."
 
-        context["domain"] = {"atividade": "activity_status", "tarefa": "task_status"}.get(tab)
+        context["domain"] = {"status-atividade": "activity_status", "status-tarefa": "task_status"}.get(tab)
         return context
 
 

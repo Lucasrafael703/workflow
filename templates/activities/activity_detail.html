@@ -11,13 +11,17 @@
     <header class="ad-header">
         <div class="ad-header__top">
             <div class="ad-header__title-block">
-                <h1 class="ad-header__title">{{ activity.title }} {% if activity.code %}<span class="id-badge">{{ activity.code }}</span>{% endif %}</h1>
+                <h1 class="ad-header__title">
+                    {{ activity.title }}
+                    {% if activity.code %}<span class="id-badge">{{ activity.code }}</span>{% endif %}
+                    <a href="#feed-panel" class="ad-title-link" title="Ir para conversa">{% include "_icon.html" with name="at" %}</a>
+                </h1>
                 {% if activity.client or activity.site or activity.cost_center %}
-                <p class="ad-header__context">
-                    {% if activity.client %}{{ activity.client.name }}{% endif %}
-                    {% if activity.site %}{% if activity.client %} · {% endif %}{{ activity.site.name }}{% endif %}
-                    {% if activity.cost_center %}{% if activity.client or activity.site %} · {% endif %}{{ activity.cost_center.name }}{% endif %}
-                </p>
+                <div class="ad-header__context">
+                    {% if activity.client %}<span>{% include "_icon.html" with name="users" %} Cliente: <strong>{{ activity.client.name }}</strong></span>{% endif %}
+                    {% if activity.site %}<span>{% include "_icon.html" with name="activity" %} Obra: <strong>{{ activity.site.name }}</strong></span>{% endif %}
+                    {% if activity.cost_center %}<span>{% include "_icon.html" with name="folder" %} Centro de custo: <strong>{{ activity.cost_center.name }}</strong></span>{% endif %}
+                </div>
                 {% endif %}
                 <div class="ad-header__badges">
                     <span class="tag" style="--tag-bg: {{ activity.status_color }}1A; --tag-fg: {{ activity.status_color }};">{{ activity.get_status_display }}</span>
@@ -29,11 +33,14 @@
             <div class="ad-header__side">
                 <div class="ad-owner-deadline">
                     <div class="ad-owner-deadline__item">
-                        <span class="k">Responsável</span>
-                        <span class="v">{{ activity.owner.get_full_name|default:activity.owner.get_username }}</span>
+                        <span class="k">{% include "_icon.html" with name="users" %} Responsável</span>
+                        <span class="v">
+                            <span class="avatar avatar--{{ activity.owner|avatar_color }}">{{ activity.owner.get_full_name|default:activity.owner.get_username|slice:":1"|upper }}</span>
+                            {{ activity.owner.get_full_name|default:activity.owner.get_username }}
+                        </span>
                     </div>
                     <div class="ad-owner-deadline__item">
-                        <span class="k">Prazo</span>
+                        <span class="k">{% include "_icon.html" with name="clock" %} Prazo</span>
                         {% if is_overdue %}
                         <span class="v ad-overdue-flag">{% include "_icon.html" with name="alert" %} Atrasada há {{ overdue_days }} dia{{ overdue_days|pluralize }}</span>
                         <span class="ad-owner-deadline__original">{{ activity.requested_deadline|date:"d/m/Y H:i" }}</span>
@@ -110,55 +117,60 @@
     <div class="split split--history">
         <div>
             {# Situação atual: progresso por contagem + para onde olhar agora — nunca porcentagem (doc 09 §62) #}
-            <div class="card ad-situation">
-                <div class="ad-situation__progress">
-                    <div class="ad-situation__count-label">{{ tasks_done }} de {{ tasks_total }} tarefas concluídas</div>
-                    {% if tasks_total %}<div class="progress"><div class="progress__bar" style="width:{% widthratio tasks_done tasks_total 100 %}%"></div></div>{% endif %}
+            <div class="card card--flush ad-situation">
+                <div class="card__head">
+                    <h2><span class="ad-section-icon">{% include "_icon.html" with name="activity" %}</span> Situação atual</h2>
                 </div>
-
-                <div class="situation-counts">
-                    <div class="situation-count situation-count--in_progress"><span class="n">{{ status_counts.in_progress }}</span><span class="k">Em execução</span></div>
-                    <div class="situation-count"><span class="n">{{ status_counts.waiting }}</span><span class="k">Na fila</span></div>
-                    <div class="situation-count situation-count--blocked"><span class="n">{{ status_counts.blocked }}</span><span class="k">Bloqueadas</span></div>
-                    <div class="situation-count"><span class="n">{{ status_counts.done }}</span><span class="k">Concluídas</span></div>
-                </div>
-
-                {% if next_attention %}
-                <div class="situation-attention{% if next_attention.attention_reason == 'blocked' or next_attention.attention_reason == 'overdue' %} situation-attention--danger{% endif %}">
-                    <span class="situation-attention__icon">{% include "_icon.html" with name="alert" %}</span>
-                    <div>
-                        <div class="situation-attention__title">Próxima atenção: <a href="{% url 'task-detail' next_attention.pk %}">{{ next_attention.title }}</a></div>
-                        <div class="situation-attention__body">
-                            {% if next_attention.attention_reason == "blocked" %}Esta tarefa está bloqueada e trava o andamento da atividade.
-                            {% elif next_attention.attention_reason == "overdue" %}Atrasada desde {{ next_attention.committed_deadline|date:"d/m/Y H:i" }}.
-                            {% elif next_attention.attention_reason == "negotiating" %}Prazo em negociação, aguardando decisão.
-                            {% else %}Prazo mais próximo entre as tarefas em aberto: {{ next_attention.committed_deadline|default:next_attention.requested_deadline|date:"d/m/Y H:i" }}.{% endif %}
+                <div class="card__body">
+                    <div class="ad-situation__layout">
+                        <div class="ad-situation__progress">
+                            <div class="ad-progress-ring" style="--ad-progress:{% if tasks_total %}{% widthratio tasks_done tasks_total 100 %}{% else %}0{% endif %}%">
+                                <strong>{% if tasks_total %}{% widthratio tasks_done tasks_total 100 %}{% else %}0{% endif %}%</strong>
+                            </div>
+                            <div>
+                                <div class="ad-situation__count-label">{{ tasks_done }} de {{ tasks_total }} concluídas</div>
+                                <div class="ad-situation__count-sub">{{ status_counts.waiting }} em fila · {{ status_counts.blocked }} bloqueada{{ status_counts.blocked|pluralize }}</div>
+                            </div>
                         </div>
-                        <div class="situation-attention__action">
-                            {% if next_attention.attention_reason == "blocked" %}
-                            <a href="{% url 'task-detail' next_attention.pk %}" class="btn btn--sm">Resolver bloqueio</a>
-                            {% else %}
-                            <a href="{% url 'task-detail' next_attention.pk %}" class="btn btn--sm btn--ghost">Ver tarefa</a>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-                {% elif is_ready_to_complete %}
-                <div class="situation-attention" style="background:var(--success-soft)">
-                    <span class="situation-attention__icon" style="color:var(--success)">{% include "_icon.html" with name="check" %}</span>
-                    <div>
-                        <div class="situation-attention__title">Pronta para concluir</div>
-                        <div class="situation-attention__body">Todas as tarefas foram finalizadas.</div>
-                    </div>
-                </div>
-                {% endif %}
 
-                {% if sectors_involved %}
-                <div class="ad-sectors">
-                    <span class="k">Setores envolvidos</span>
-                    {% for name in sectors_involved %}<span class="tag">{{ name }}</span>{% endfor %}
+                        {% if next_attention %}
+                        <div class="situation-attention{% if next_attention.attention_reason == 'blocked' or next_attention.attention_reason == 'overdue' %} situation-attention--danger{% endif %}">
+                            <span class="situation-attention__icon">{% include "_icon.html" with name="alert" %}</span>
+                            <div class="situation-attention__copy">
+                                <div class="situation-attention__title"><a href="{% url 'task-detail' next_attention.pk %}">{{ next_attention.title }}</a></div>
+                                <div class="situation-attention__body">
+                                    {% if next_attention.attention_reason == "blocked" %}Bloqueada — esta tarefa trava o andamento da atividade.
+                                    {% elif next_attention.attention_reason == "overdue" %}Atrasada desde {{ next_attention.committed_deadline|date:"d/m/Y H:i" }}.
+                                    {% elif next_attention.attention_reason == "negotiating" %}Prazo em negociação, aguardando decisão.
+                                    {% else %}Prazo mais próximo entre as tarefas em aberto: {{ next_attention.committed_deadline|default:next_attention.requested_deadline|date:"d/m/Y H:i" }}.{% endif %}
+                                </div>
+                            </div>
+                            <div class="situation-attention__action">
+                                {% if next_attention.attention_reason == "blocked" %}
+                                <a href="{% url 'task-detail' next_attention.pk %}" class="btn btn--sm">Resolver bloqueio</a>
+                                {% else %}
+                                <a href="{% url 'task-detail' next_attention.pk %}" class="btn btn--sm btn--ghost">Ver tarefa</a>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% elif is_ready_to_complete %}
+                        <div class="situation-attention situation-attention--success">
+                            <span class="situation-attention__icon">{% include "_icon.html" with name="check" %}</span>
+                            <div>
+                                <div class="situation-attention__title">Pronta para concluir</div>
+                                <div class="situation-attention__body">Todas as tarefas foram finalizadas.</div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    {% if sectors_involved %}
+                    <div class="ad-sectors">
+                        <span class="k">{% include "_icon.html" with name="users" %} Setores envolvidos</span>
+                        {% for name in sectors_involved %}<span class="tag">{{ name }}</span>{% endfor %}
+                    </div>
+                    {% endif %}
                 </div>
-                {% endif %}
             </div>
 
             {% include "activities/_tasks_block.html" %}
@@ -173,13 +185,16 @@
             </div>
             {% endif %}
 
-            <div class="card card--flush">
-                <div class="card__head"><h2>Detalhes</h2></div>
+            <div class="card card--flush ad-details-card">
+                <div class="card__head"><h2><span class="ad-section-icon">{% include "_icon.html" with name="info" %}</span> Detalhes da atividade</h2></div>
                 <div class="card__body">
                     <div class="info-grid">
                         {% if activity.client %}<div><div class="k">Cliente</div><div class="v">{{ activity.client.name }}</div></div>{% endif %}
+                        {% if activity.site %}<div><div class="k">Obra</div><div class="v">{{ activity.site.name }}</div></div>{% endif %}
                         {% if activity.cost_center %}<div><div class="k">Centro de custo</div><div class="v">{{ activity.cost_center.name }}</div></div>{% endif %}
                         {% if activity.company %}<div><div class="k">Empresa</div><div class="v">{{ activity.company.name }}</div></div>{% endif %}
+                        {% if activity.process_version_id %}<div><div class="k">Processo</div><div class="v">{{ activity.process_version.process.name }}</div></div>{% endif %}
+                        <div><div class="k">Criador</div><div class="v">{{ activity.created_by.get_username }} <span class="muted small">em {{ activity.created_at|date:"d/m/Y H:i" }}</span></div></div>
                         {% if activity.address %}<div class="full"><div class="k">Endereço</div><div class="v">{{ activity.address }}</div></div>{% endif %}
                         {% if activity.tags.all %}
                         <div class="full">
@@ -196,7 +211,7 @@
                             <div class="info-grid">
                                 <div><div class="k">Urgência</div><div class="v"><span class="tag" style="--tag-bg: {{ activity.urgency_color }}1A; --tag-fg: {{ activity.urgency_color }};">{{ activity.get_urgency_display }}</span></div></div>
                                 <div><div class="k">Grupo designado</div><div class="v{% if not activity.sector %} muted{% endif %}">{{ activity.sector.name|default:"Sem grupo" }}</div></div>
-                                <div><div class="k">Obra</div><div class="v{% if not activity.site %} muted{% endif %}">{{ activity.site.name|default:"Sem obra" }}</div></div>
+                                <div><div class="k">Prazo solicitado</div><div class="v{% if not activity.requested_deadline %} muted{% endif %}">{{ activity.requested_deadline|date:"d/m/Y H:i"|default:"Sem prazo" }}</div></div>
                             </div>
                             <p class="muted small" style="margin:10px 0 0">
                                 Criada por {{ activity.created_by.get_username }} em {{ activity.created_at|date:"d/m/Y H:i" }}
@@ -211,15 +226,15 @@
         <aside class="side-scroll" id="feed-panel">
             <div class="card card--flush">
                 <div class="side-tabs js-side-tabs">
-                    <button type="button" class="side-tabs__tab is-active" data-tab="conversa">Conversa</button>
-                    <button type="button" class="side-tabs__tab" data-tab="historico">Histórico</button>
+                    <button type="button" class="side-tabs__tab is-active" data-tab="conversa">{% include "_icon.html" with name="at" %} Conversa</button>
+                    <button type="button" class="side-tabs__tab" data-tab="historico">{% include "_icon.html" with name="clock" %} Histórico</button>
                 </div>
 
                 <div class="card__body side-tabs__panel is-active" data-tab-panel="conversa">
                     {% if can_message or can_manage_attachments %}
                     <form method="post" action="{% url 'activity-continue' activity.pk %}" enctype="multipart/form-data" class="continue-form">
                         {% csrf_token %}
-                        <textarea name="body" rows="3" placeholder="Escreva uma atualização… use @usuario para mencionar alguém"></textarea>
+                        <textarea name="body" rows="3" placeholder="Escreva uma atualização… use @ para mencionar alguém" data-mention></textarea>
                         <div class="continue-form__foot">
                             <select name="kind" style="margin-right:auto">
                                 {% for value, label in message_kind_choices %}

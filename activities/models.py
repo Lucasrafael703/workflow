@@ -82,6 +82,22 @@ class Activity(models.Model):
         help_text="Setor para quem a atividade é endereçada — distinto do setor de cada tarefa.",
     )
 
+    stage = models.ForeignKey(
+        "core.ActivityStage",
+        verbose_name="estagio",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="activities",
+        help_text="Camada visual configuravel; nao altera o status operacional da atividade.",
+    )
+    stage_changed_at = models.DateTimeField(
+        "estagio alterado em",
+        null=True,
+        blank=True,
+        help_text="Quando o estagio visual mudou pela ultima vez.",
+    )
+
     code = models.CharField(
         "código",
         max_length=20,
@@ -527,9 +543,15 @@ class Task(models.Model):
         mesma regra já usada por _next_attention() em activities/views.py, só
         disponível por tarefa individual em vez de só na mais urgente. Só
         decorativa, nunca regra de negócio."""
+        if hasattr(self, "_is_overdue"):
+            return self._is_overdue
         if self.status in (self.Status.CONCLUIDA, self.Status.CANCELADA):
             return False
         return bool(self.committed_deadline and self.committed_deadline < timezone.now())
+
+    @is_overdue.setter
+    def is_overdue(self, value):
+        self._is_overdue = bool(value)
 
     @property
     def status_color(self):

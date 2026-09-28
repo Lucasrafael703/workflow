@@ -11,6 +11,9 @@
         var trigger = root.querySelector(".person-picker__trigger");
         var label = root.querySelector(".person-picker__label");
         var searchUrl = root.getAttribute("data-search-url");
+        var sectorFieldId = root.getAttribute("data-sector-field");
+        var placeholder = root.getAttribute("data-placeholder") || "Buscar pessoa...";
+        var emptyLabel = root.getAttribute("data-empty-label") || "Selecionar pessoa";
         var createUrl = root.getAttribute("data-create-url");
         var createLabel = root.getAttribute("data-create-label") || "Criar novo usuário";
 
@@ -18,6 +21,18 @@
         var results = [];
         var activeIndex = -1;
         var debounceTimer = null;
+
+        if (sectorFieldId) {
+            var sectorField = document.getElementById(sectorFieldId);
+            if (sectorField) {
+                sectorField.addEventListener("change", function () {
+                    hidden.value = "";
+                    label.textContent = emptyLabel;
+                    label.classList.add("muted");
+                    hidden.dispatchEvent(new Event("change", { bubbles: true }));
+                });
+            }
+        }
 
         function closePopup() {
             if (!popup) return;
@@ -76,7 +91,12 @@
         }
 
         function search(term) {
-            fetch(searchUrl + "?q=" + encodeURIComponent(term), {
+            var params = new URLSearchParams({ q: term });
+            if (sectorFieldId) {
+                var sectorField = document.getElementById(sectorFieldId);
+                params.set("sector", sectorField ? sectorField.value : "");
+            }
+            fetch(searchUrl + "?" + params.toString(), {
                 headers: { "X-Requested-With": "XMLHttpRequest" },
             })
                 .then(function (response) { return response.json(); })
@@ -98,8 +118,9 @@
             popup = document.createElement("div");
             popup.className = "person-picker__popup";
             popup.innerHTML =
-                '<input type="text" class="person-picker__search" placeholder="Buscar pessoa...">' +
+                '<input type="text" class="person-picker__search">' +
                 '<div class="person-picker__results"></div>';
+            popup.querySelector(".person-picker__search").placeholder = placeholder;
 
             if (createUrl) {
                 var createButton = document.createElement("button");

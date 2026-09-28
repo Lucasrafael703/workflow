@@ -19,8 +19,13 @@ urlpatterns = [
     path("cadastros/clientes/<int:pk>/", views.ClientFormView.as_view(), name="client-edit"),
     path("cadastros/motivos/novo/", views.ReturnReasonFormView.as_view(), name="returnreason-create"),
     path("cadastros/motivos/<int:pk>/", views.ReturnReasonFormView.as_view(), name="returnreason-edit"),
+    path("configuracoes/estagios-de-atividade/novo/", views.ActivityStageFormView.as_view(), name="activitystage-create"),
+    path("configuracoes/estagios-de-atividade/<int:pk>/", views.ActivityStageFormView.as_view(), name="activitystage-edit"),
     path("cadastros/estagios-de-tarefa/novo/", views.TaskStageFormView.as_view(), name="taskstage-create"),
     path("cadastros/estagios-de-tarefa/<int:pk>/", views.TaskStageFormView.as_view(), name="taskstage-edit"),
+    path("configuracoes/status/<str:domain>/novo/", views.WorkflowStatusFormView.as_view(), name="workflowstatus-create"),
+    path("configuracoes/status/<str:domain>/<int:pk>/", views.WorkflowStatusFormView.as_view(), name="workflowstatus-edit"),
+    path("configuracoes/fluxo/<str:kind>/<int:pk>/excluir/", views.FlowConfigDeleteView.as_view(), name="flow-config-delete"),
     path(
         "cadastros/estagios-de-tarefa/reordenar/",
         views.TaskStageReorderView.as_view(),

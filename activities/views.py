@@ -1620,8 +1620,9 @@ class TaskQuickCreateView(OrganizationRequiredMixin, FormView):
                 requested_deadline=data.get("requested_deadline"),
                 tags=merged_tags,
             )
-            if parsed["assignee"] is not None:
-                TaskService.add_executor(task, parsed["assignee"], added_by=self.request.user)
+            assignee = data.get("executor") or parsed["assignee"]
+            if assignee is not None:
+                TaskService.add_executor(task, assignee, added_by=self.request.user)
         except ActivityError as exc:
             form.add_error(None, str(exc))
             return self.form_invalid(form)
@@ -1669,8 +1670,9 @@ class TaskQuickCreateStandaloneView(OrganizationRequiredMixin, FormView):
                 requested_deadline=data.get("requested_deadline"),
                 tags=merged_tags,
             )
-            if parsed["assignee"] is not None:
-                TaskService.add_executor(task, parsed["assignee"], added_by=self.request.user)
+            assignee = data.get("executor") or parsed["assignee"]
+            if assignee is not None:
+                TaskService.add_executor(task, assignee, added_by=self.request.user)
         except ActivityError as exc:
             form.add_error(None, str(exc))
             return self.form_invalid(form)

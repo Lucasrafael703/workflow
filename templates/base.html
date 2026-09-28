@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20260926e">
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20260927j">
     <script>
     // Aplica o estado recolhido antes do primeiro paint — sem isto, a
     // sidebar apareceria expandida por um instante e "pularia" pro estado
@@ -18,7 +18,7 @@
     }
     </script>
 </head>
-<body>
+<body data-mention-search-url="{% url 'person-search' %}">
 {% include "_icons.html" %}
 
 {% if user.is_authenticated %}
@@ -285,9 +285,10 @@
 {% if user.is_authenticated %}
 <script src="{% static 'js/shell.js' %}?v=20260926d"></script>
 <script src="{% static 'js/modal.js' %}?v=20260919c"></script>
-<script src="{% static 'js/person-picker.js' %}?v=20260919c"></script>
+<script src="{% static 'js/person-picker.js' %}?v=20260927a"></script>
 <script src="{% static 'js/tag-picker.js' %}?v=20260926a"></script>
 <script src="{% static 'js/rich-text.js' %}?v=20260919c"></script>
+<script src="{% static 'js/mention.js' %}?v=20260927a"></script>
 <script src="{% static 'js/timer.js' %}?v=20260919c"></script>
 <script src="{% static 'js/checklist.js' %}?v=20260919c"></script>
 <script src="{% static 'js/task-drawer.js' %}?v=20260919c"></script>

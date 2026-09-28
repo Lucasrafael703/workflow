@@ -4,10 +4,10 @@ navegar; href continua indo para task-detail como fallback (Ctrl+clique,
 nova aba, JS desabilitado).{% endcomment %}
 <div class="card card--flush">
     <div class="card__head">
-        <h2>Tarefas</h2>
+        <h2><span class="ad-section-icon">{% include "_icon.html" with name="task" %}</span> Tarefas</h2>
         {% if activity.status != "CONCLUIDA" and activity.status != "CANCELADA" %}
         <a href="{% url 'task-quick-create' activity.pk %}" class="btn btn--sm btn--ghost js-task-quick-add">
-            {% include "_icon.html" with name="plus" %} Adicionar
+            {% include "_icon.html" with name="plus" %} Adicionar tarefa
         </a>
         {% endif %}
     </div>

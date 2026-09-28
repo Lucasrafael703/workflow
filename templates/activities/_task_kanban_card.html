@@ -1,22 +1,49 @@
-{% comment %}Card de tarefa no Kanban — usado tanto pela coluna implícita "Sem
-estágio" quanto pelas colunas de TaskStage, para as duas nunca divergirem
-na estrutura do card. Espera `task` no contexto.{% endcomment %}
+{% load lps %}
+{% comment %}Card de tarefa no Kanban. Espera `task` no contexto.{% endcomment %}
 <div class="kanban-card{% if task.days_in_stage >= 5 %} kanban-card--stale{% endif %}" draggable="true" data-task-id="{{ task.pk }}">
-    <a href="{% url 'task-detail' task.pk %}" class="kanban-card__title">{{ task.title }}</a>
-    <div class="kanban-card__meta muted small">{{ task.activity.title }}</div>
-    {% if task.tags.all %}
-    <div class="kanban-card__tags">
-        {% for tag in task.tags.all %}<span class="tag-chip" style="--tag-bg: {{ tag.color }}1A; --tag-fg: {{ tag.color }};">{{ tag.name }}</span>{% endfor %}
+    <div class="kanban-card__top">
+        <a href="{% url 'task-detail' task.pk %}" class="kanban-card__title">{{ task.title }}</a>
+        <a href="{% url 'task-detail' task.pk %}" class="kanban-card__menu" aria-label="Abrir tarefa {{ task.title }}">
+            {% include "_icon.html" with name="more" %}
+        </a>
     </div>
-    {% endif %}
-    <div class="kanban-card__foot">
+
+    <div class="kanban-card__meta">
+        <div class="kanban-card__meta-row">
+            {% include "_icon.html" with name="activity" %}
+            <span><strong>Atividade:</strong> {{ task.activity.title }}</span>
+        </div>
+        <div class="kanban-card__meta-row">
+            {% include "_icon.html" with name="users" %}
+            <span><strong>Cliente:</strong> {{ task.activity.client.name|default:"-" }}</span>
+        </div>
+    </div>
+
+    <div class="kanban-card__status-row">
         <span class="tag" style="--tag-bg: {{ task.status_color }}1A; --tag-fg: {{ task.status_color }};">{{ task.get_status_display }}</span>
-        {% if task.committed_deadline %}<span class="muted small">{{ task.committed_deadline|date:"d/m" }}</span>
-        {% elif task.requested_deadline %}<span class="muted small">{{ task.requested_deadline|date:"d/m" }}</span>{% endif %}
+        {% if task.days_in_stage >= 1 %}
+        <span class="kanban-card__age" title="Nesta coluna há {{ task.days_in_stage }} dia{{ task.days_in_stage|pluralize }}">
+            {{ task.days_in_stage }}d aqui
+        </span>
+        {% endif %}
     </div>
-    {% if task.days_in_stage >= 1 %}
-    <div class="kanban-card__stale-badge muted small" title="Nesta coluna há {{ task.days_in_stage }} dia{{ task.days_in_stage|pluralize }}">
-        {{ task.days_in_stage }}d aqui
+
+    <div class="kanban-card__foot">
+        <span class="kanban-card__deadline{% if task.is_overdue %} is-late{% endif %}">
+            {% include "_icon.html" with name="clock" %}
+            <strong>Prazo:</strong>
+            {% if task.committed_deadline %}{{ task.committed_deadline|date:"d/m H:i" }}
+            {% elif task.requested_deadline %}{{ task.requested_deadline|date:"d/m H:i" }}
+            {% else %}-{% endif %}
+        </span>
+        {% if task.active_executors %}
+            {% with first_executor=task.active_executors.0 %}
+            <span class="avatar avatar--{{ first_executor.user|avatar_color }}" title="{{ first_executor.user.get_full_name|default:first_executor.user.get_username }}">
+                {{ first_executor.user.get_full_name|default:first_executor.user.get_username|slice:":2"|upper }}
+            </span>
+            {% endwith %}
+        {% else %}
+            <span class="kanban-card__no-owner">-</span>
+        {% endif %}
     </div>
-    {% endif %}
 </div>

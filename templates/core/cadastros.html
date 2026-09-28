@@ -233,11 +233,18 @@
 </div>
 
 {% elif tab == "estagios-de-tarefa" %}
-<div class="card card--flush">
+<div class="flow-config-panel cadastro-stage-panel">
+    <header class="flow-config-panel__head">
+        <div>
+            <h2>Estagios de tarefa</h2>
+            <p>Arraste para definir a ordem padrao das colunas do Kanban. Isso nao altera o status operacional da tarefa.</p>
+        </div>
+        <span class="flow-config-panel__note">Configuracao visual</span>
+    </header>
     <div class="table-wrap">
-        <ul class="queue-list" id="taskstage-list">
+        <ul class="flow-stage-list flow-stage-list--draggable" id="taskstage-list">
         {% for item in task_stages %}
-            <li data-stage-id="{{ item.pk }}" draggable="true">
+            <li class="flow-stage-row" data-stage-id="{{ item.pk }}" draggable="true">
                 <span class="queue-item__main">
                     <button type="button" class="color-swatch" data-color-swatch
                             data-save-url="{% url 'cadastro-color-save' tab='estagios-de-tarefa' pk=item.pk %}"
@@ -251,7 +258,7 @@
                 {% include "core/_toggle_form.html" with tab="estagios-de-tarefa" item=item %}
             </li>
         {% empty %}
-            <li>
+            <li class="flow-empty-row">
                 <div class="empty-state">
                     <div class="empty-state__icon">{% include "_icon.html" with name="folder" %}</div>
                     <h3>Nenhum estágio cadastrado</h3>

@@ -9,7 +9,7 @@
                 <h2>{% if instance %}Editar {{ title|lower }}{% else %}Novo: {{ title|lower }}{% endif %}</h2>
                 <div class="sub">Cadastros › {{ title }}</div>
             </div>
-            <a href="{% url 'cadastros' %}?tab={{ tab }}" class="modal__close" title="Fechar">&times;</a>
+            <a href="{{ return_url|default:'' }}{% if not return_url %}{% url 'cadastros' %}?tab={{ tab }}{% endif %}" class="modal__close" title="Fechar">&times;</a>
         </div>
 
         <form method="post">
@@ -18,7 +18,7 @@
                 {% include "activities/_form_fields.html" %}
             </div>
             <div class="modal__foot">
-                <a href="{% url 'cadastros' %}?tab={{ tab }}" class="btn">Cancelar</a>
+                <a href="{{ return_url|default:'' }}{% if not return_url %}{% url 'cadastros' %}?tab={{ tab }}{% endif %}" class="btn">Cancelar</a>
                 <button type="submit" class="btn btn--primary">Salvar {{ title|lower }}</button>
             </div>
         </form>

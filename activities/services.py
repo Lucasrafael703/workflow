@@ -74,6 +74,79 @@ def _pick_sector_manager(sector):
     return managers[0] if managers else None
 
 
+MENTION_PATTERN = re.compile(r"@([\w.]+)")
+
+
+def _truncate_mention_text(text, limit=200):
+    text = " ".join(text.split())
+    return text if len(text) <= limit else f"{text[: limit - 1]}…"
+
+
+def find_mentioned_users(text, author, resource):
+    """Extrai @usuário de qualquer texto livre do sistema (Regras 06 §28-32).
+
+    Só individual no D0 — nunca @setor. Mencionar não concede acesso: a
+    pessoa só é notificada se já for autorizada a participar daquele
+    contexto (§29). Uma menção inválida ou sem acesso é ignorada em
+    silêncio, sem quebrar a ação que está sendo executada.
+
+    `resource` deve ser sempre a Activity ou a Task do contexto — nunca um
+    objeto satélite como ActivityPendency/TaskReturn/TaskBlock/
+    TaskAssignment/DeadlineConflict/DeadlineProposal, que o motor de
+    autorização não sabe resolver e cairia num contexto sem organização
+    (nega tudo).
+    """
+    raw_tokens = set(MENTION_PATTERN.findall(text or ""))
+    if not raw_tokens:
+        return set()
+
+    # O username aceita ponto (é o e-mail completo em algumas organizações,
+    # ex. "@paulo@biasiengenharia.com.br"), então o regex captura de forma
+    # gulosa e inclui pontuação de frase colada ao final ("@fulano." vira
+    # "fulano."). Tenta o token inteiro primeiro; se não existir ninguém com
+    # esse username exato, tenta de novo sem um caractere de pontuação final.
+    usernames = set()
+    for token in raw_tokens:
+        usernames.add(token)
+        stripped = token.rstrip(".,;:!?")
+        if stripped and stripped != token:
+            usernames.add(stripped)
+
+    candidates = User.objects.filter(username__in=usernames, is_active=True).exclude(id=author.id)
+    return {
+        user
+        for user in candidates
+        if AuthorizationService.can(user, catalog.COMUNICACAO_PARTICIPAR, resource)
+    }
+
+
+def notify_mentions(text, author, resource, activity=None, task=None):
+    """Extrai @menções de `text` e notifica quem for autorizado.
+
+    `resource` é o objeto usado para checar a permissão (ver
+    `find_mentioned_users`); `activity`/`task` são os campos de contexto
+    passados para `NotificationService.notify` (normalmente o mesmo objeto
+    de `resource`, mas mantidos separados porque `Notification` só aceita
+    uma Activity e/ou uma Task, nunca outro tipo).
+
+    Retorna o conjunto de usuários notificados, para quem chama poder
+    excluí-los de uma notificação "normal" paralela (evita notificar a
+    mesma pessoa duas vezes pelo mesmo evento).
+    """
+    mentioned = find_mentioned_users(text, author, resource)
+    if mentioned:
+        NotificationService.notify(
+            users=mentioned,
+            event_type=Notification.EventType.MENTIONED,
+            title="Você foi mencionado",
+            message=_truncate_mention_text(text),
+            activity=activity,
+            task=task,
+            actor=author,
+        )
+    return mentioned
+
+
 class ActivityService:
     # ------------------------------------------------------------------
     # Criação e responsabilidade
@@ -136,6 +209,7 @@ class ActivityService:
             activity=activity,
             actor=created_by,
         )
+        notify_mentions(description, created_by, activity, activity=activity)
         return activity
 
     @staticmethod
@@ -263,6 +337,9 @@ class ActivityService:
         if "tags" in fields:
             activity.tags.set(fields["tags"])
 
+        if "description" in changed:
+            notify_mentions(activity.description, user, activity, activity=activity)
+
         return activity
 
     @staticmethod
@@ -334,6 +411,7 @@ class ActivityService:
             activity=activity,
             actor=user,
         )
+        notify_mentions(reason, user, activity, activity=activity)
         return activity
 
     @staticmethod
@@ -449,6 +527,7 @@ class ActivityService:
             activity=activity,
             actor=user,
         )
+        notify_mentions(comment, user, activity, activity=activity)
         return activity
 
     @staticmethod
@@ -562,6 +641,7 @@ class ActivityService:
             if pendency.notify_client:
                 EmailService.send_client_information_request(activity, pendency)
 
+        notify_mentions(comment, user, activity, activity=activity)
         return pendency
 
     @staticmethod
@@ -623,6 +703,7 @@ class ActivityService:
             activity=activity,
             actor=user,
         )
+        notify_mentions(comment, user, activity, activity=activity)
         return pendency
 
 
@@ -785,6 +866,7 @@ class TaskService:
             task=task,
             actor=created_by,
         )
+        notify_mentions(description, created_by, task, activity=activity, task=task)
         return task
 
     @staticmethod
@@ -828,6 +910,9 @@ class TaskService:
 
         if "tags" in fields:
             task.tags.set(fields["tags"])
+
+        if "description" in changed:
+            notify_mentions(task.description, user, task, activity=task.activity, task=task)
 
         return task
 
@@ -970,6 +1055,7 @@ class TaskService:
             task=task,
             actor=user,
         )
+        notify_mentions(observation, user, task, activity=task.activity, task=task)
         return assignment
 
     @staticmethod
@@ -1149,6 +1235,7 @@ class TaskService:
             task=task,
             actor=user,
         )
+        notify_mentions(observation, user, task, activity=task.activity, task=task)
         return task
 
     @staticmethod
@@ -1267,6 +1354,7 @@ class TaskService:
             task=task,
             actor=user,
         )
+        notify_mentions(observation, user, task, activity=task.activity, task=task)
         return task
 
 
@@ -1523,6 +1611,7 @@ class DeadlineService:
             task=task,
             actor=user,
         )
+        notify_mentions(note, user, task, activity=task.activity, task=task)
         return conflict
 
     @staticmethod
@@ -1541,10 +1630,8 @@ class DeadlineService:
         AuditService.log(
             user=user, action=AuditLog.Action.CONFLICT_RESOLVED, activity=conflict.task.activity, task=conflict.task, reason=resolution_note
         )
+        notify_mentions(resolution_note, user, conflict.task, activity=conflict.task.activity, task=conflict.task)
         return conflict
-
-
-MENTION_PATTERN = re.compile(r"@([\w.]+)")
 
 
 class MessageService:
@@ -1556,8 +1643,7 @@ class MessageService:
 
     @staticmethod
     def _truncate(text, limit=200):
-        text = " ".join(text.split())
-        return text if len(text) <= limit else f"{text[: limit - 1]}…"
+        return _truncate_mention_text(text, limit)
 
     @staticmethod
     def _executors_of(task_queryset_filter):
@@ -1567,22 +1653,7 @@ class MessageService:
 
     @staticmethod
     def _mentioned_users(body, author, resource):
-        """Extrai @usuário do texto (Regras 06 §28-32).
-
-        Só individual no D0 — nunca @setor. Mencionar não concede acesso: a
-        pessoa só é notificada se já for autorizada a participar daquele
-        contexto (§29). Uma menção inválida ou sem acesso é ignorada em
-        silêncio, sem quebrar o envio da mensagem.
-        """
-        usernames = set(MENTION_PATTERN.findall(body))
-        if not usernames:
-            return set()
-        candidates = User.objects.filter(username__in=usernames, is_active=True).exclude(id=author.id)
-        return {
-            user
-            for user in candidates
-            if AuthorizationService.can(user, catalog.COMUNICACAO_PARTICIPAR, resource)
-        }
+        return find_mentioned_users(body, author, resource)
 
     @staticmethod
     @transaction.atomic
@@ -1594,7 +1665,7 @@ class MessageService:
 
         message = ActivityMessage.objects.create(activity=activity, author=author, body=body, kind=kind)
 
-        mentioned = MessageService._mentioned_users(body, author, activity)
+        mentioned = find_mentioned_users(body, author, activity)
 
         recipients = {activity.owner, activity.created_by}
         recipients.update(MessageService._executors_of({"tasks_executed__task__activity": activity}))
@@ -1609,15 +1680,7 @@ class MessageService:
                 activity=activity,
                 actor=author,
             )
-        if mentioned:
-            NotificationService.notify(
-                users=mentioned,
-                event_type=Notification.EventType.MENTIONED,
-                title="Você foi mencionado",
-                message=MessageService._truncate(body),
-                activity=activity,
-                actor=author,
-            )
+        notify_mentions(body, author, activity, activity=activity)
         return message
 
     @staticmethod
@@ -1630,22 +1693,13 @@ class MessageService:
 
         message = TaskMessage.objects.create(task=task, author=author, body=body, kind=kind)
 
-        mentioned = MessageService._mentioned_users(body, author, task)
+        mentioned = find_mentioned_users(body, author, task)
 
         recipients = {task.activity.owner}
         recipients.update(MessageService._executors_of({"tasks_executed__task": task}))
         recipients = {u for u in recipients if u is not None and u.id != author.id} - mentioned
 
-        if mentioned:
-            NotificationService.notify(
-                users=mentioned,
-                event_type=Notification.EventType.MENTIONED,
-                title="Você foi mencionado",
-                message=MessageService._truncate(body),
-                activity=task.activity,
-                task=task,
-                actor=author,
-            )
+        notify_mentions(body, author, task, activity=task.activity, task=task)
         if recipients:
             NotificationService.notify(
                 users=recipients,
