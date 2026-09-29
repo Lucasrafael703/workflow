@@ -3,7 +3,7 @@
 {% block title %}Atividades - LPS{% endblock %}
 
 {% block content %}
-<section class="activities-page" aria-labelledby="activities-title">
+<section class="activities-page activities-page--list" aria-labelledby="activities-title">
     {% include "activities/_activity_page_head.html" %}
     {% include "activities/_activity_view_tabs.html" %}
     {% include "activities/_activity_scope_tabs.html" %}
@@ -12,33 +12,48 @@
     {% if activities %}
     <div class="activities-table-card" aria-label="Lista de atividades">
         <table class="activities-table">
+            <colgroup>
+                <col class="activities-col-title">
+                <col class="activities-col-context">
+                <col class="activities-col-sector">
+                <col class="activities-col-owner">
+                <col class="activities-col-progress">
+                <col class="activities-col-deadline">
+                <col class="activities-col-stage">
+                <col class="activities-col-status">
+                <col class="activities-col-actions">
+            </colgroup>
             <thead>
                 <tr>
-                    <th>Atividade</th>
-                    <th>Cliente</th>
-                    <th>Obra</th>
-                    <th>Centro de custo</th>
+                    <th class="is-sortable{% if ordem == 'titulo' %} is-sorted{% endif %}">
+                        <a href="?{{ filter_querystring }}&ordem=titulo">Atividade {% include "_icon.html" with name="chevron-down" %}</a>
+                    </th>
+                    <th>Cliente / Obra</th>
                     <th>Setor</th>
-                    <th>Dono</th>
+                    <th>Responsável</th>
                     <th>Tarefas</th>
-                    <th>Prazo</th>
-                    <th>Estagio</th>
+                    <th class="is-sortable{% if ordem == 'prazo' or not ordem %} is-sorted{% endif %}">
+                        <a href="?{{ filter_querystring }}&ordem=prazo">Prazo {% include "_icon.html" with name="chevron-down" %}</a>
+                    </th>
+                    <th>Estágio</th>
                     <th>Status</th>
                     <th aria-label="Acoes"></th>
                 </tr>
             </thead>
             <tbody>
                 {% for activity in activities %}
-                <tr>
+                <tr class="js-activity-row" data-drawer-url="{% url 'activity-drawer' activity.pk %}">
                     <td class="activities-table__activity">
                         <a href="{% url 'activity-detail' activity.pk %}">
                             {% include "_icon.html" with name="activity" %}
                             <strong>{{ activity.title }}</strong>
                         </a>
                     </td>
-                    <td>{{ activity.client.name|default:"-" }}</td>
-                    <td>{{ activity.site.name|default:"-" }}</td>
-                    <td>{{ activity.cost_center.name|default:"-" }}</td>
+                    <td class="activities-table__context">
+                        <span class="activity-context-client">{{ activity.client.name|default:"Sem cliente" }}</span>
+                        {% if activity.site %}<span class="activity-context-detail">{{ activity.site.name }}</span>{% endif %}
+                        {% if activity.cost_center %}<span class="activity-context-detail">Centro de custo: {{ activity.cost_center.name }}</span>{% endif %}
+                    </td>
                     <td>
                         {% if activity.sector %}
                         <span class="activity-sector-pill">{{ activity.sector.name }}</span>
@@ -126,6 +141,16 @@
     document.addEventListener("click", function (event) {
         document.querySelectorAll(".activity-menu[open]").forEach(function (menu) {
             if (!menu.contains(event.target)) menu.removeAttribute("open");
+        });
+    });
+
+    // Clique na linha (fora de checkbox/link/menu) abre o painel lateral,
+    // mesmo padrão de `.js-task-row` em `task_list.html`.
+    document.querySelectorAll("tr.js-activity-row").forEach(function (row) {
+        row.addEventListener("click", function (event) {
+            if (event.target.closest("a, button, details, summary")) return;
+            if (!window.LPSDrawer) return;
+            window.LPSDrawer.open(row.dataset.drawerUrl);
         });
     });
 })();

@@ -17,6 +17,14 @@
             {% include "_icon.html" with name="users" %}
             <span><strong>Cliente:</strong> {{ task.activity.client.name|default:"-" }}</span>
         </div>
+        <div class="kanban-card__meta-row">
+            {% include "_icon.html" with name="folder" %}
+            <span><strong>Obra:</strong> {{ task.activity.site.name|default:"-" }}</span>
+        </div>
+        <div class="kanban-card__meta-row">
+            {% include "_icon.html" with name="folder" %}
+            <span><strong>Centro de custo:</strong> {{ task.activity.cost_center.name|default:"-" }}</span>
+        </div>
     </div>
 
     <div class="kanban-card__status-row">

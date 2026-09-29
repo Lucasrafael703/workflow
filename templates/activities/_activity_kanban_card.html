@@ -1,5 +1,5 @@
 {% load lps %}
-<article class="activities-kanban-card" draggable="true" data-activity-id="{{ activity.pk }}">
+<article class="activities-kanban-card{% if activity.days_in_stage >= 5 %} activities-kanban-card--stale{% endif %}" draggable="true" data-activity-id="{{ activity.pk }}">
     <div class="activities-kanban-card__top">
         <a href="{% url 'activity-detail' activity.pk %}">{{ activity.title }}</a>
         <a href="{% url 'activity-detail' activity.pk %}" aria-label="Abrir atividade {{ activity.title }}">
@@ -33,6 +33,11 @@
             <strong>Sem prazo</strong>
             {% endif %}
         </span>
+        {% if activity.days_in_stage >= 1 %}
+        <span class="activities-kanban-card__age" title="Nesta coluna há {{ activity.days_in_stage }} dia{{ activity.days_in_stage|pluralize }}">
+            {{ activity.days_in_stage }}d aqui
+        </span>
+        {% endif %}
         <span class="activity-status-pill" style="--status-color: {{ activity.status_color }};">{{ activity.status_label }}</span>
     </div>
 </article>

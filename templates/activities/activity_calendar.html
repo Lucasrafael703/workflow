@@ -6,10 +6,10 @@
     {% include "activities/_activity_page_head.html" %}
     {% include "activities/_activity_view_tabs.html" %}
     {% include "activities/_activity_scope_tabs.html" %}
+    {% include "activities/_activity_toolbar.html" %}
 
     <div class="activities-calendar-card">
-        <form method="get" class="activities-calendar-toolbar" data-activity-filters>
-            <input type="hidden" name="tab" value="{{ tab }}">
+        <div class="activities-calendar-month-nav">
             <a class="btn btn--sm" href="?ano={{ today_year }}&mes={{ today_month }}&{{ filter_querystring }}">
                 {% include "_icon.html" with name="clock" %} Hoje
             </a>
@@ -20,28 +20,7 @@
             <a class="activities-calendar-nav-btn" href="?ano={{ next_year }}&mes={{ next_month }}&{{ filter_querystring }}" aria-label="Proximo mes">
                 {% include "_icon.html" with name="arrow-right" %}
             </a>
-            <label class="activities-select">
-                <span class="sr-only">Filtrar por status</span>
-                <select name="status" data-auto-submit>
-                    <option value="">Status</option>
-                    {% for value, label in status_choices %}<option value="{{ value }}" {% if f_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
-                </select>
-            </label>
-            <label class="activities-select">
-                <span class="sr-only">Filtrar por estagio</span>
-                <select name="estagio" data-auto-submit>
-                    <option value="">Estagio</option>
-                    {% for stage in stage_choices %}<option value="{{ stage.pk }}" {% if f_stage == stage.pk|stringformat:"s" %}selected{% endif %}>{{ stage.name }}</option>{% endfor %}
-                </select>
-            </label>
-            <label class="activities-select">
-                <span class="sr-only">Filtrar por setor</span>
-                <select name="grupo" data-auto-submit>
-                    <option value="">Setor</option>
-                    {% for sector in sectors %}<option value="{{ sector.pk }}" {% if f_group == sector.pk|stringformat:"s" %}selected{% endif %}>{{ sector.name }}</option>{% endfor %}
-                </select>
-            </label>
-        </form>
+        </div>
 
         <div class="activities-calendar-grid">
             <div class="activities-calendar-weekday">Dom</div>

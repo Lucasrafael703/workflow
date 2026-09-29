@@ -1,0 +1,91 @@
+{% load lps %}
+{% comment %}Fragmento do painel lateral de uma atividade — versão estreita de
+activity_detail.html, sem navegar para fora da lista. Só o essencial cabe
+aqui: situação, prazo, dono, progresso das tarefas. O resto (conversa,
+histórico, anexos, ações de gestão) continua só na ficha completa.{% endcomment %}
+<div class="drawer-backdrop js-drawer-backdrop">
+    <div class="drawer">
+        <div class="drawer__head">
+            <div>
+                <div class="muted small">{{ activity.code }}</div>
+                <h2>{{ activity.title }}</h2>
+                <span class="tag" style="--tag-bg: {{ activity.status_color }}1A; --tag-fg: {{ activity.status_color }};">{{ activity.status_label }}</span>
+                {% if activity.sector %}<span class="tag">{{ activity.sector.name }}</span>{% endif %}
+            </div>
+            <div class="drawer__head-actions">
+                <a href="{% url 'activity-detail' activity.pk %}" class="btn btn--sm">Abrir ficha completa</a>
+                <button type="button" class="modal__close js-drawer-close" title="Fechar">&times;</button>
+            </div>
+        </div>
+
+        <div class="drawer__body">
+            {% if open_pendency %}
+            <div class="message message--warning">
+                <strong>Pendente — {{ open_pendency.get_reason_display }}</strong>
+                <div>{{ open_pendency.comment|linebreaksbr }}</div>
+            </div>
+            {% elif activity.status == "CANCELADA" %}
+            <p class="message message--warning" style="margin:0">Cancelada em {{ activity.cancelled_at|date:"d/m/Y H:i" }}. Motivo: {{ activity.cancelled_reason }}</p>
+            {% elif activity.status == "CONCLUIDA" %}
+            <p class="message message--success" style="margin:0">Concluída em {{ activity.completed_at|date:"d/m/Y H:i" }}{% if activity.completed_by %} por {{ activity.completed_by.get_username }}{% endif %}.</p>
+            {% elif can_assumir %}
+            <form method="post" action="{% url 'activity-claim' activity.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn--primary btn--block">Assumir</button>
+            </form>
+            {% endif %}
+
+            <div class="drawer__section">
+                <div class="summary-item">
+                    <div>
+                        <div class="k">Responsável</div>
+                        <div class="v">
+                            <span class="avatar avatar--{{ activity.owner|avatar_color }}">{{ activity.owner.get_full_name|default:activity.owner.get_username|slice:":1"|upper }}</span>
+                            {{ activity.owner.get_full_name|default:activity.owner.get_username }}
+                        </div>
+                    </div>
+                </div>
+                <div class="summary-item">
+                    <div>
+                        <div class="k">Prazo</div>
+                        <div class="v">
+                            {% if is_overdue %}
+                            <span class="ad-overdue-flag">{% include "_icon.html" with name="alert" %} Atrasada há {{ overdue_days }} dia{{ overdue_days|pluralize }}</span>
+                            {% elif activity.requested_deadline %}{{ activity.requested_deadline|date:"d/m/Y H:i" }}
+                            {% else %}<span class="muted">Sem prazo</span>{% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% if activity.client or activity.site or activity.cost_center %}
+                <div class="summary-item">
+                    <div>
+                        <div class="k">Cliente / Obra / Centro de custo</div>
+                        <div class="v">
+                            {{ activity.client.name|default:"—" }} · {{ activity.site.name|default:"—" }} · {{ activity.cost_center.name|default:"—" }}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="drawer__section">
+                <div class="drawer__section-head">
+                    <h3>Tarefas</h3>
+                    <span class="muted small">{{ tasks_done }}/{{ tasks_total }} concluídas</span>
+                </div>
+                {% if tasks %}
+                <ul class="checklist">
+                    {% for task in tasks %}
+                    <li class="checklist__item{% if task.status == 'CONCLUIDA' %} checklist__item--done{% endif %}">
+                        <a href="{% url 'task-detail' task.pk %}">{{ task.title }}</a>
+                        <span class="tag" style="--tag-bg: {{ task.status_color }}1A; --tag-fg: {{ task.status_color }};">{{ task.status_label }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="muted small" style="margin:0">Ainda sem tarefas.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>

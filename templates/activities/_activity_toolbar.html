@@ -1,5 +1,9 @@
 <form method="get" class="activities-filters" data-activity-filters>
     <input type="hidden" name="tab" value="{{ tab }}">
+    {% if view_mode == 'calendario' %}
+    <input type="hidden" name="ano" value="{{ year }}">
+    <input type="hidden" name="mes" value="{{ month }}">
+    {% endif %}
     <div class="activities-toolbar">
         <label class="activities-search">
             <span class="sr-only">Buscar atividade</span>

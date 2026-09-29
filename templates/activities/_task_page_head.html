@@ -1,0 +1,12 @@
+<div class="page-head tasks-page-head">
+    <div class="page-head__text">
+        <h1>Tarefas</h1>
+        <p class="sub">Organize o trabalho do jeito que fizer mais sentido para o seu time.</p>
+    </div>
+    <div class="page-head__actions">
+        <a href="{% url 'task-quick-create-standalone' %}" class="btn btn--primary js-new-task">
+            {% include "_icon.html" with name="plus" %} Nova tarefa
+        </a>
+        <a href="{% url 'queue' %}" class="btn">{% include "_icon.html" with name="queue" %} Ver fila do setor</a>
+    </div>
+</div>
