@@ -66,6 +66,7 @@ DOMAIN_ACTIVITY_URGENCY = "activity_urgency"
 # sempre que a organização não customizou o code correspondente.
 DEFAULTS = {
     DOMAIN_ACTIVITY_STATUS: {
+        "RASCUNHO": "#CBD5E1",
         "ABERTA": "#94A3B8",
         "EM_ANDAMENTO": "#3B82F6",
         "BLOQUEADA": "#EF4444",

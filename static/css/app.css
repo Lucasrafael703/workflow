@@ -57,7 +57,7 @@
     --sidebar-w: 236px;
     --sidebar-w-collapsed: 64px;
     --topbar-h: 60px;
-    --content-max-w: 1600px;
+    --content-max-w: 100%;
 }
 
 /* Recolhido: aplicado no <html> (não no .sidebar) para --sidebar-w valer
@@ -390,7 +390,8 @@ html.sidebar--collapsed .nav-group .nav-subitem { margin: 0; }
     padding-top: var(--topbar-h);
     min-height: 100vh;
 }
-.container { max-width: var(--content-max-w); margin: 0 auto; padding: 22px 24px 60px; }
+.container { width: 100%; min-width: 0; max-width: var(--content-max-w); margin: 0; padding: 22px clamp(16px, 2vw, 32px) 60px; }
+.container > *, .form-grid > *, .form-layout > *, .split > *, .info-grid > * { min-width: 0; }
 
 /* Cabeçalho da página */
 .page-head {
@@ -790,6 +791,7 @@ td .title:hover { color: var(--primary); }
     display: flex;
     gap: 8px;
 }
+.split-datetime-input > input { min-width: 0; }
 .split-datetime-input input[type="date"] { flex: 1 1 60%; }
 .split-datetime-input input[type="time"] { flex: 1 1 40%; }
 /* O padrão do navegador é claro demais para ser lido (contraste < 3:1) */
@@ -798,7 +800,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .form-row .errorlist { color: var(--danger); font-size: 12px; list-style: none; padding: 0; margin: 5px 0 0; }
 .form-row--check > label { font-weight: 500; display: flex; align-items: center; gap: 8px; }
 .form-row--check input { width: auto; }
-.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
 
 /* Blocos numerados do formulário avançado (Zoonor §11: seções numeradas) */
 .form-section {
@@ -865,6 +867,24 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .modal--xl .modal__body { overflow-y: auto; flex: 1 1 auto; }
 @media (max-width: 720px) {
     .modal--xl { width: 100%; max-height: 100vh; border-radius: 0; }
+}
+
+/* A form opened as a route is a full-width page. JS overlays are mounted
+   on body and retain the dialog layout above. */
+.container > .modal-backdrop {
+    position: static;
+    display: block;
+    padding: 0;
+    background: transparent;
+    overflow: visible;
+}
+.container > .modal-backdrop > .modal {
+    width: 100%;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
 }
 
 /* Seções grandes dentro do editor de processo (Regras 11 §25-26): expandir
@@ -1036,7 +1056,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 }
 
 /* Resumo ao lado do formulário */
-.form-layout { display: grid; grid-template-columns: 1fr 290px; gap: 20px; align-items: start; }
+.form-layout { display: grid; grid-template-columns: minmax(0, 3fr) minmax(260px, 1fr); gap: 20px; align-items: start; }
 .summary-panel {
     background: var(--surface-alt);
     border: 1px solid var(--border);
@@ -1313,8 +1333,8 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .notif-row__menu svg { width: 14px; height: 14px; color: var(--muted); }
 
 /* Layout auxiliar */
-.split { display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 380px); gap: 20px; align-items: start; }
-.split--even { grid-template-columns: 1fr 1fr; }
+.split { display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); gap: 20px; align-items: start; }
+.split--even { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .deadline-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .deadline-compare > div { background: var(--surface-alt); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 11px 14px; }
 .deadline-compare .k { color: var(--muted); font-size: 11.5px; font-weight: 600; }
@@ -1338,7 +1358,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .sidebar__toggle { display: none; }
 
 @media (max-width: 1000px) {
-    :root { --sidebar-w: 0px; }
+    :root, html.sidebar--collapsed { --sidebar-w: 0px; }
     .sidebar {
         transform: translateX(-100%);
         transition: transform .18s ease;
@@ -1489,10 +1509,10 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 @media (max-width: 860px) { .form-grid--wide { grid-template-columns: 1fr; } }
 
 /* ==========================================================================
-   Wizard de nova atividade — Essencial / Contexto / Detalhes: coluna única,
+   Wizard de nova atividade — Essencial / Contexto / Detalhes: grade fluida,
    stepper no topo, resumo somente-leitura na última etapa.
    ========================================================================== */
-.wizard-page { width: min(720px, 100%); margin: 0 auto; }
+.wizard-page { width: 100%; min-width: 0; margin: 0; }
 .wizard-head { margin-bottom: 22px; }
 .wizard-head h1 { margin: 4px 0 6px; }
 
@@ -1500,7 +1520,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     margin: 0 auto 24px;
-    max-width: 520px;
+    width: 100%;
 }
 .wizard-step { position: relative; text-align: center; }
 .wizard-step:not(:last-child)::after {
@@ -1520,8 +1540,9 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .wizard-step__label { color: var(--muted); font-size: 12px; font-weight: 600; }
 .wizard-step.is-active .wizard-step__label, .wizard-step.is-done .wizard-step__label { color: var(--primary); }
 
-.wizard-form-grid { display: grid; grid-template-columns: 1fr; gap: 18px; }
-.wizard-form-grid .form-row { margin-bottom: 0; }
+.wizard-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 20px 24px; }
+.wizard-form-grid .form-row { min-width: 0; margin-bottom: 0; }
+.wizard-form-grid .form-row--full { grid-column: 1 / -1; }
 
 .wizard-upload {
     min-height: 110px; padding: 20px; border: 1px dashed var(--border-strong); border-radius: var(--radius-sm);
@@ -1544,6 +1565,8 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .wizard-summary__value { color: var(--text); font-weight: 600; }
 
 @media (max-width: 600px) {
+    .wizard-form-grid { grid-template-columns: minmax(0, 1fr); }
+    .card--form { padding: 20px 16px; }
     .wizard-stepper { max-width: 100%; }
     .wizard-step__label { font-size: 11px; }
     .wizard-summary__grid { grid-template-columns: 1fr; }
@@ -1665,7 +1688,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .activity-detail {
     --ad-navy: #0f2747;
     --ad-card-shadow: 0 10px 28px rgba(15, 39, 71, .06);
-    max-width: 1600px;
+    width: 100%;
     margin: 0 auto;
 }
 .activity-detail svg {
@@ -1992,7 +2015,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 
 @media (max-width: 760px) {
     .ad-header__side,
-    .ad-header__actions { width: 100%; }
+    .ad-header__actions { width: 100%; min-width: 0; }
     .ad-owner-deadline,
     .ad-header__actions { display: grid; grid-template-columns: 1fr; }
     .ad-owner-deadline__item + .ad-owner-deadline__item {
@@ -2100,7 +2123,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 /* ==========================================================================
    Atividades — uma lista de resultados, sem alterar o shell/menu do produto.
    ========================================================================== */
-.activities-page { max-width: 1380px; margin: 0 auto; }
+.activities-page { width: 100%; min-width: 0; margin: 0; }
 .activities-page .sr-only {
     position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
     overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
@@ -2302,7 +2325,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 }
 .calendar-nav__title { font-weight: 700; font-size: 15px; min-width: 160px; text-align: center; }
 .calendar-grid {
-    display: grid; grid-template-columns: repeat(7, 1fr);
+    display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
     border: 1px solid var(--border); border-radius: var(--radius);
     overflow: hidden; background: var(--border);
     gap: 1px;
@@ -2546,14 +2569,15 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     display: flex;
     align-items: stretch;
     gap: 10px;
-    width: max-content;
+    width: 100%;
     min-width: 100%;
     padding-top: 2px;
 }
 .tasks-kanban-page .kanban-column {
-    width: 246px;
+    flex: 1 0 246px;
+    width: auto;
     min-width: 246px;
-    max-width: 246px;
+    max-width: none;
     min-height: 540px;
     max-height: calc(100vh - 300px);
     background: #f8fafc;
@@ -2907,9 +2931,10 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
         width: 100%;
     }
     .tasks-kanban-page .kanban-column {
-        width: 280px;
+        flex-basis: 280px;
+        width: auto;
         min-width: 280px;
-        max-width: 280px;
+        max-width: none;
     }
 }
 
@@ -3055,12 +3080,14 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     box-shadow: 0 4px 12px rgba(37, 99, 235, .08);
 }
 .task-toolbar {
-    display: grid;
-    grid-template-columns: minmax(280px, 1fr) auto auto auto auto auto;
+    display: flex;
+    flex-wrap: wrap;
     gap: 10px;
     align-items: center;
     margin-bottom: 16px;
 }
+.task-toolbar > * { min-width: 0; max-width: 100%; }
+.task-toolbar .toolbar__search { flex: 1 1 280px; min-width: 0; }
 .task-toolbar .toolbar__search input,
 .task-toolbar select,
 .task-toolbar .btn,
@@ -3103,7 +3130,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
    Fluxo e status
    ========================================================================== */
 .flow-config-page {
-    max-width: 1480px;
+    width: 100%;
     margin: 0 auto;
 }
 
@@ -3527,8 +3554,8 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
    Atividades - Lista, Kanban e Calendario alinhados
    ========================================================================== */
 .activities-page {
-    max-width: 1600px;
-    margin: 0 auto;
+    width: 100%;
+    margin: 0;
 }
 
 .activities-page svg {
@@ -3870,13 +3897,14 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     display: flex;
     align-items: stretch;
     gap: 12px;
-    width: max-content;
+    width: 100%;
     min-width: 100%;
 }
 
 .activities-kanban-column {
-    width: 388px;
-    min-width: 388px;
+    flex: 1 0 320px;
+    width: auto;
+    min-width: 320px;
     min-height: 540px;
     background: #f8fafc;
     border: 1px solid var(--border);
@@ -4190,7 +4218,8 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     }
 
     .activities-kanban-column {
-        width: 320px;
-        min-width: 320px;
+        flex-basis: 280px;
+        width: auto;
+        min-width: 280px;
     }
 }
