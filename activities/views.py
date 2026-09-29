@@ -139,7 +139,9 @@ def filtered_tasks_queryset(request, organization):
         queryset = queryset.filter(sector_id=sector)
 
     return (
-        queryset.select_related("activity", "activity__client", "activity__site", "sector", "stage")
+        queryset.select_related(
+            "activity", "activity__client", "activity__site", "activity__cost_center", "sector", "stage"
+        )
         .prefetch_related(
             Prefetch(
                 "executors",
@@ -970,7 +972,7 @@ class ActivityWizardStep3View(OrganizationRequiredMixin, FormView):
 
         if acao == "publicar_e_tarefas":
             messages.success(self.request, "Atividade criada. Agora defina a primeira tarefa.")
-            return redirect("task-create", activity_pk=activity.pk)
+            return redirect("task-quick-create", activity_pk=activity.pk)
 
         messages.success(self.request, "Atividade criada. Próximo passo: adicionar a primeira tarefa.")
         return redirect("activity-detail", pk=activity.pk)
@@ -1196,6 +1198,15 @@ class ActivityDetailView(OrganizationRequiredMixin, DetailView):
             }
         )
         return context
+
+
+class ActivityDrawerView(ActivityDetailView):
+    """Mesmo contexto de `ActivityDetailView`, num fragmento estreito o
+    suficiente para o painel lateral — sem navegar para fora da lista.
+    Reaproveita o contexto por herança em vez de duplicar as queries de
+    tarefas/prazo/autorização já montadas ali."""
+
+    template_name = "activities/_activity_drawer.html"
 
 
 class ActivityEditView(OrganizationRequiredMixin, FormView):
@@ -1880,56 +1891,10 @@ class TaskChecklistRemoveView(OrganizationRequiredMixin, View):
         return JsonResponse({"ok": True})
 
 
-class TaskCreateView(OrganizationRequiredMixin, FormView):
-    template_name = "activities/task_form.html"
-    form_class = TaskForm
-
-    def get_activity(self):
-        return get_object_or_404(
-            Activity, pk=self.kwargs["activity_pk"], organization=self.organization
-        )
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs["organization"] = self.organization
-        kwargs["activity"] = self.get_activity()
-        return kwargs
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["activity"] = self.get_activity()
-        return context
-
-    def form_valid(self, form):
-        activity = self.get_activity()
-        data = form.cleaned_data
-        next_order = (activity.tasks.count() or 0) + 1
-        try:
-            TaskService.create_task(
-                activity=activity,
-                sector=data["sector"],
-                title=data["title"],
-                created_by=self.request.user,
-                description=data.get("description") or "",
-                order=next_order,
-                depends_on=data.get("depends_on"),
-                requested_deadline=data.get("requested_deadline"),
-                tags=data.get("tags"),
-            )
-        except ActivityError as exc:
-            form.add_error(None, str(exc))
-            return self.form_invalid(form)
-
-        messages.success(self.request, "Tarefa adicionada.")
-        if "save_and_add" in self.request.POST:
-            return redirect("task-create", activity_pk=activity.pk)
-        return redirect("activity-detail", pk=activity.pk)
-
-
 class TaskQuickCreateView(OrganizationRequiredMixin, FormView):
-    """Popup ajax de "+ Adicionar tarefa" na tela da atividade (Regra 12):
-    mesma criação de `TaskCreateView`, só que sem sair da página, no mesmo
-    padrão ajax de `UserFormView`."""
+    """Popup ajax de "+ Adicionar tarefa" na tela da atividade (Regra 12),
+    único ponto de criação de tarefa dentro de uma atividade já aberta —
+    mesmo padrão ajax de `UserFormView`."""
 
     template_name = "activities/task_quick_form.html"
     form_class = TaskQuickCreateForm

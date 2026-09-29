@@ -57,11 +57,6 @@
                         <button type="submit" class="btn btn--primary">{% include "_icon.html" with name="check" %} Assumir</button>
                     </form>
                     {% endif %}
-                    {% if activity.status != "CONCLUIDA" and activity.status != "CANCELADA" and can_add_task %}
-                    <a href="{% url 'task-create' activity.pk %}" class="btn btn--primary">
-                        {% include "_icon.html" with name="plus" %} Adicionar tarefa
-                    </a>
-                    {% endif %}
                     {% if is_menu_active %}
                     <div class="menu-dots js-menu-dots">
                         <button type="button" class="menu-dots__trigger" title="Mais ações">{% include "_icon.html" with name="more" %}</button>

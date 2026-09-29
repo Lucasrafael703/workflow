@@ -5,7 +5,7 @@ nova aba, JS desabilitado).{% endcomment %}
 <div class="card card--flush">
     <div class="card__head">
         <h2><span class="ad-section-icon">{% include "_icon.html" with name="task" %}</span> Tarefas</h2>
-        {% if activity.status != "CONCLUIDA" and activity.status != "CANCELADA" %}
+        {% if activity.status != "CONCLUIDA" and activity.status != "CANCELADA" and can_add_task %}
         <a href="{% url 'task-quick-create' activity.pk %}" class="btn btn--sm btn--ghost js-task-quick-add">
             {% include "_icon.html" with name="plus" %} Adicionar tarefa
         </a>
@@ -60,7 +60,7 @@ nova aba, JS desabilitado).{% endcomment %}
         <div class="empty-state__icon">{% include "_icon.html" with name="task" %}</div>
         <h3>Ainda sem tarefas</h3>
         <p>As tarefas são os passos até o resultado. Cada uma tem um setor responsável e pode ter executores diferentes.</p>
-        {% if activity.status != "CONCLUIDA" and activity.status != "CANCELADA" %}
+        {% if activity.status != "CONCLUIDA" and activity.status != "CANCELADA" and can_add_task %}
         <a href="{% url 'task-quick-create' activity.pk %}" class="btn btn--primary js-task-quick-add">Adicionar primeira tarefa</a>
         {% endif %}
     </div>

@@ -415,7 +415,10 @@ class ActivityDeadlineChangeForm(forms.Form):
 
 
 class TaskForm(OrganizationScopedFormMixin, forms.ModelForm):
-    """Adicionar tarefa: o mínimo para a atividade avançar (doc 09 §81-84)."""
+    """Editar tarefa (doc 09 §81-84). O setor aparece só para contexto — sua
+    edição de fato tem serviço próprio (movimentação com histórico), então
+    `TaskEditView.form_valid` descarta esse campo antes de chamar
+    `TaskService.update_task`."""
 
     class Meta:
         model = Task
@@ -430,6 +433,7 @@ class TaskForm(OrganizationScopedFormMixin, forms.ModelForm):
         }
         widgets = {
             "title": forms.TextInput(attrs={"autofocus": True, "placeholder": "Ex.: Realizar cotação"}),
+            "sector": SectorPickerWidget(),
             "description": RichTextWidget(),
             "requested_deadline": DateTimeLocalInput(),
             "tags": TagPickerWidget(),
@@ -455,16 +459,17 @@ class TaskForm(OrganizationScopedFormMixin, forms.ModelForm):
 
 class TaskQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
     """Popup "+ Adicionar tarefa" (Regra 12): título e prazo à vista, descrição
-    opcional escondida até a pessoa abrir. Quando a atividade já tem um
-    "Grupo designado" (Regra 6), o setor da tarefa é herdado dele e nem
-    aparece no popup — só quando não há grupo definido é que a pessoa escolhe."""
+    opcional escondida até a pessoa abrir. O setor vem pré-preenchido com o
+    "Grupo designado" da atividade quando houver, mas continua visível e
+    editável — e a busca de responsável nunca se restringe a um setor, para
+    ter o mesmo comportamento em qualquer ponto de entrada (Regra: um único
+    padrão de tela de "Nova tarefa")."""
 
     executor = forms.ModelChoiceField(
         queryset=User.objects.none(),
         label="Responsável / Executor",
         required=False,
         widget=PersonPickerWidget(
-            sector_field_id="id_sector",
             placeholder="Buscar responsável...",
             selection_label="Selecionar responsável...",
         ),
@@ -485,6 +490,7 @@ class TaskQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
         }
         widgets = {
             "title": forms.TextInput(attrs={"autofocus": True, "placeholder": "Ex.: Realizar cotação"}),
+            "sector": SectorPickerWidget(),
             "description": RichTextWidget(),
             "requested_deadline": DateTimeLocalInput(),
             "tags": TagPickerWidget(),
@@ -494,32 +500,16 @@ class TaskQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.scope_querysets(organization)
         self.order_fields(["title", "sector", "executor", "requested_deadline", "tags", "description"])
-        self.fields["executor"].queryset = User.objects.none()
         self.fields["description"].required = False
         self.fields["requested_deadline"].required = False
         self.fields["tags"].required = False
-        if activity is not None and activity.sector_id:
-            # Herda o "Grupo designado" da atividade: o campo some do popup,
-            # mas o hidden ainda submete o valor inicial normalmente.
+        self.fields["sector"].required = True
+        if activity is not None and activity.sector_id and not self.is_bound:
             self.fields["sector"].initial = activity.sector_id
-            self.fields["sector"].widget = forms.HiddenInput()
-        else:
-            self.fields["sector"].required = True
-        sector_id = self.data.get("sector") if self.is_bound else self.initial.get("sector")
-        if not sector_id and activity is not None:
-            sector_id = activity.sector_id
-        try:
-            sector_id = int(sector_id)
-        except (TypeError, ValueError):
-            sector_id = None
-        if organization is not None and sector_id:
+        if organization is not None:
             self.fields["executor"].queryset = User.objects.filter(
-                profile__organization=organization,
-                is_active=True,
-                sector_memberships__sector_id=sector_id,
-                sector_memberships__sector__organization=organization,
-                sector_memberships__removed_at__isnull=True,
-            ).distinct().order_by("first_name", "username")
+                profile__organization=organization, is_active=True
+            ).order_by("first_name", "username")
         self.fields["executor"].widget.queryset = self.fields["executor"].queryset
 
     def clean_description(self):
@@ -546,10 +536,8 @@ class TaskQuickCreateStandaloneForm(TaskQuickCreateForm):
     )
 
     def __init__(self, *args, organization=None, can_create_activity=False, **kwargs):
-        # `activity=None` para o TaskQuickCreateForm.__init__: aqui o setor
-        # nunca é herdado automaticamente, porque a atividade só é conhecida
-        # depois do campo `activity` ser escolhido — o campo sector permanece
-        # sempre visível e obrigatório nesta variante.
+        # A atividade só é conhecida depois de escolhida no próprio popup,
+        # então nunca há um `activity` fixo para herdar o setor dele.
         super().__init__(*args, organization=organization, activity=None, **kwargs)
         self.order_fields(["activity", "title", "sector", "executor", "requested_deadline", "tags", "description"])
         queryset = Activity.objects.filter(organization=organization, status__in=self.OPEN_ACTIVITY_STATUSES)
@@ -557,7 +545,6 @@ class TaskQuickCreateStandaloneForm(TaskQuickCreateForm):
         self.fields["activity"].widget.queryset = queryset
         if can_create_activity:
             self.fields["activity"].widget.create_url = reverse("activity-mini-create")
-        self.fields["sector"].required = True
 
 
 class ActivityAttachmentForm(forms.Form):

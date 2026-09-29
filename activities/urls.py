@@ -14,6 +14,7 @@ urlpatterns = [
     path("atividades/calendario/", views.ActivityCalendarView.as_view(), name="activity-calendar"),
     path("atividades/<int:pk>/mover-estagio/", views.ActivityMoveStageView.as_view(), name="activity-move-stage"),
     path("atividades/<int:pk>/", views.ActivityDetailView.as_view(), name="activity-detail"),
+    path("atividades/<int:pk>/painel/", views.ActivityDrawerView.as_view(), name="activity-drawer"),
     path("atividades/<int:pk>/editar/", views.ActivityEditView.as_view(), name="activity-edit"),
     path("atividades/<int:pk>/concluir/", views.ActivityCompleteView.as_view(), name="activity-complete"),
     path("atividades/<int:pk>/cancelar/", views.ActivityCancelView.as_view(), name="activity-cancel"),
@@ -34,7 +35,6 @@ urlpatterns = [
     ),
     path("atividades/<int:pk>/mensagem/", views.ActivityMessageCreateView.as_view(), name="activity-message"),
     path("atividades/<int:pk>/continuar/", views.ActivityContinueView.as_view(), name="activity-continue"),
-    path("atividades/<int:activity_pk>/tarefas/nova/", views.TaskCreateView.as_view(), name="task-create"),
     path(
         "atividades/<int:activity_pk>/tarefas/rapida/",
         views.TaskQuickCreateView.as_view(),
