@@ -6,7 +6,7 @@ from acessos.models import Profile as AccessProfile
 from acessos.models import Scope
 
 from .colors import DEFAULTS
-from .models import Client, Company, CostCenter, Sector, Site
+from .models import Client, Company, CostCenter, Organization, Sector, Site
 from .widgets import ClientPickerWidget, ColorPaletteWidget, SitePickerWidget
 
 User = get_user_model()
@@ -116,6 +116,9 @@ class UserForm(forms.Form):
     first_name = forms.CharField(label="Nome", max_length=150)
     email = forms.EmailField(label="E-mail")
     username = forms.CharField(label="Usuário", max_length=150)
+    organization = forms.ModelChoiceField(
+        label="Organização", queryset=Organization.objects.none(), required=True, empty_label=None
+    )
     password1 = forms.CharField(
         label="Senha",
         required=False,
@@ -147,6 +150,8 @@ class UserForm(forms.Form):
         sectors = Sector.objects.filter(organization=organization, is_active=True)
         self.fields["sectors"].queryset = sectors
         self.fields["managed_sectors"].queryset = sectors
+        self.fields["organization"].queryset = Organization.objects.filter(pk=organization.pk)
+        self.fields["organization"].initial = organization
 
         if instance is None:
             # Cadastrar exige senha na hora — não existe fluxo de convite por

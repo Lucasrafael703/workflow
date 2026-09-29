@@ -1200,8 +1200,9 @@ class UserFormView(OrganizationRequiredMixin, ActionRequiredMixin, FormView):
             messages.success(self.request, "Usuário atualizado.")
 
         profile = instance.profile
-        if profile.organization_id != self.organization.id:
-            profile.organization = self.organization
+        organization = data["organization"]
+        if profile.organization_id != organization.id:
+            profile.organization = organization
             profile.save(update_fields=["organization"])
 
         AccessService.sync_user_sectors(
