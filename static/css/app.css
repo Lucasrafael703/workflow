@@ -1053,7 +1053,16 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 }
 .checklist__item:last-child { border-bottom: none; }
 .checklist__item label { display: flex; align-items: center; gap: 9px; min-width: 0; }
-.checklist__item label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.checklist__item label span { overflow-wrap: anywhere; white-space: normal; }
+.checklist__item label input { flex: 0 0 auto; }
+.checklist__item > button { flex: 0 0 auto; }
+.checklist__head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.checklist__head h3 { margin: 0; font-size: 14px; }
+.task-checklist [hidden] { display: none; }
+.checklist__add { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.checklist__add > label { flex: 1 1 200px; min-width: 0; font-size: 13px; font-weight: 600; }
+.checklist__add > label input { display: block; margin-top: 6px; font-weight: 400; }
+.task-checklist [aria-busy="true"] { opacity: .7; }
 .checklist__item--done label span { color: var(--muted); text-decoration: line-through; }
 .checklist__add input {
     width: 100%; border: 1px dashed var(--border-strong); border-radius: var(--radius-sm);

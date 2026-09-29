@@ -1,0 +1,30 @@
+<section class="task-checklist js-task-checklist" aria-label="Checklist da tarefa" data-can-manage="{{ can_edit_task|yesno:'1,0' }}" data-can-toggle="{{ can_toggle_checklist|yesno:'1,0' }}">
+    {% csrf_token %}
+    <div class="checklist__head">
+        <h3>Checklist</h3>
+        <span class="muted small js-checklist-count" aria-live="polite">{{ checklist_done }} de {{ checklist_items|length }} concluídos</span>
+    </div>
+    <p class="message message--error js-checklist-error" role="alert" hidden></p>
+    <ul class="checklist js-checklist">
+        {% for item in checklist_items %}
+        <li class="checklist__item{% if item.is_done %} checklist__item--done{% endif %}" data-item-id="{{ item.pk }}" data-toggle-url="{% url 'task-checklist-toggle' item.pk %}" data-remove-url="{% url 'task-checklist-remove' item.pk %}">
+            <label>
+                <input type="checkbox" class="js-checklist-toggle" {% if item.is_done %}checked{% endif %} {% if not can_toggle_checklist %}disabled{% endif %}>
+                <span>{{ item.text }}</span>
+            </label>
+            {% if can_edit_task %}<button type="button" class="link-button js-checklist-remove" aria-label="Remover item: {{ item.text }}">Remover</button>{% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+    <p class="muted small js-checklist-empty" {% if checklist_items %}hidden{% endif %}>Nenhum item ainda.{% if can_edit_task %} Adicione o primeiro passo abaixo.{% endif %}</p>
+    {% if can_edit_task %}
+    <form class="checklist__add js-checklist-add" method="post" action="{% url 'task-checklist-add' task.pk %}">
+        <label>Novo item
+            <input type="text" name="text" placeholder="Descreva o próximo passo" maxlength="255" required autocomplete="off">
+        </label>
+        <button class="btn btn--primary" type="submit">Adicionar</button>
+    </form>
+    {% elif not can_toggle_checklist %}
+    <p class="muted small">Checklist disponível apenas para leitura.</p>
+    {% endif %}
+</section>

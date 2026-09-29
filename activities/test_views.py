@@ -697,3 +697,146 @@ class ActivityWizardViewTests(ViewTestCase):
         from activities.models import Activity
 
         self.assertFalse(Activity.objects.filter(pk=draft.pk).exists())
+
+class TaskChecklistViewTests(ViewTestCase):
+    def setUp(self):
+        super().setUp()
+        from .models import TaskExecutor
+        grant_action(self.requester, catalog.TAREFA_EDITAR, organization=self.org)
+        self.executor_link = TaskExecutor.objects.create(
+            task=self.task, user=self.member, added_by=self.requester
+        )
+        self.item = TaskService.add_checklist_item(self.task, self.requester, "Conferir valores")
+
+    def post_as(self, user, route, pk, data=None):
+        self.client.force_login(user)
+        return self.client.post(reverse(route, args=[pk]), data or {})
+
+    def test_editor_can_add_with_action_urls_and_persist_trimmed_text(self):
+        response = self.post_as(self.requester, "task-checklist-add", self.task.pk, {"text": "  Segundo passo  "})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        item = self.task.checklist_items.get(pk=data["id"])
+        self.assertEqual(item.text, "Segundo passo")
+        self.assertEqual(item.created_by, self.requester)
+        self.assertFalse(item.is_done)
+        self.assertEqual(data["toggle_url"], reverse("task-checklist-toggle", args=[item.pk]))
+        self.assertEqual(data["remove_url"], reverse("task-checklist-remove", args=[item.pk]))
+
+    def test_active_executor_can_toggle_but_not_add_or_remove(self):
+        response = self.post_as(self.member, "task-checklist-toggle", self.item.pk, {"is_done": "1"})
+        self.assertEqual(response.status_code, 200)
+        self.item.refresh_from_db()
+        self.assertTrue(self.item.is_done)
+        self.assertEqual(self.item.done_by, self.member)
+        self.assertIsNotNone(self.item.done_at)
+        self.assertEqual(self.post_as(self.member, "task-checklist-add", self.task.pk, {"text": "Novo"}).status_code, 400)
+        self.assertEqual(self.post_as(self.member, "task-checklist-remove", self.item.pk).status_code, 400)
+        self.assertEqual(self.task.checklist_items.count(), 1)
+        response = self.post_as(self.member, "task-checklist-toggle", self.item.pk, {"is_done": "0"})
+        self.assertEqual(response.status_code, 200)
+        self.item.refresh_from_db()
+        self.assertFalse(self.item.is_done)
+        self.assertIsNone(self.item.done_at)
+        self.assertIsNone(self.item.done_by)
+
+    def test_editor_can_toggle_and_remove_without_being_executor(self):
+        self.assertEqual(self.post_as(self.requester, "task-checklist-toggle", self.item.pk, {"is_done": "1"}).status_code, 200)
+        self.assertEqual(self.post_as(self.requester, "task-checklist-remove", self.item.pk).json(), {"ok": True})
+        self.assertFalse(self.task.checklist_items.exists())
+
+    def test_removed_executor_cannot_toggle(self):
+        from django.utils import timezone
+        self.executor_link.removed_at = timezone.now()
+        self.executor_link.save()
+        self.assertEqual(self.post_as(self.member, "task-checklist-toggle", self.item.pk, {"is_done": "1"}).status_code, 400)
+        self.item.refresh_from_db()
+        self.assertFalse(self.item.is_done)
+
+    def test_unauthorized_user_cannot_mutate(self):
+        reader = self._user("leitor", self.org)
+        for route, pk, data in [
+            ("task-checklist-add", self.task.pk, {"text": "Novo"}),
+            ("task-checklist-toggle", self.item.pk, {"is_done": "1"}),
+            ("task-checklist-remove", self.item.pk, {}),
+        ]:
+            with self.subTest(route=route):
+                self.assertEqual(self.post_as(reader, route, pk, data).status_code, 400)
+        self.item.refresh_from_db()
+        self.assertFalse(self.item.is_done)
+        self.assertEqual(self.task.checklist_items.count(), 1)
+
+    def test_other_organization_cannot_mutate_even_with_edit_grant(self):
+        grant_action(self.outsider, catalog.TAREFA_EDITAR, organization=self.other_org)
+        for route, pk, data in [
+            ("task-checklist-add", self.task.pk, {"text": "Novo"}),
+            ("task-checklist-toggle", self.item.pk, {"is_done": "1"}),
+            ("task-checklist-remove", self.item.pk, {}),
+        ]:
+            with self.subTest(route=route):
+                self.assertEqual(self.post_as(self.outsider, route, pk, data).status_code, 404)
+
+    def test_text_is_validated_on_server(self):
+        for value in ("", "   ", "a" * 256):
+            with self.subTest(value=value):
+                response = self.post_as(self.requester, "task-checklist-add", self.task.pk, {"text": value})
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.json())
+        self.assertEqual(self.task.checklist_items.count(), 1)
+        self.assertEqual(self.post_as(self.requester, "task-checklist-add", self.task.pk, {"text": "a" * 255}).status_code, 200)
+
+    def test_invalid_toggle_values_do_not_change_saved_state(self):
+        TaskService.toggle_checklist_item(self.item, self.member, True)
+        for value in (None, "", "false", "2"):
+            with self.subTest(value=value):
+                data = {} if value is None else {"is_done": value}
+                self.assertEqual(self.post_as(self.member, "task-checklist-toggle", self.item.pk, data).status_code, 400)
+                self.item.refresh_from_db()
+                self.assertTrue(self.item.is_done)
+
+    def test_repeated_toggle_preserves_original_completion_author(self):
+        TaskService.toggle_checklist_item(self.item, self.member, True)
+        original_time = self.item.done_at
+        self.post_as(self.requester, "task-checklist-toggle", self.item.pk, {"is_done": "1"})
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.done_at, original_time)
+        self.assertEqual(self.item.done_by, self.member)
+
+    def test_inclusion_after_middle_deletion_uses_next_order(self):
+        middle = TaskService.add_checklist_item(self.task, self.requester, "Segundo")
+        last = TaskService.add_checklist_item(self.task, self.requester, "Terceiro")
+        TaskService.remove_checklist_item(middle, self.requester)
+        new = TaskService.add_checklist_item(self.task, self.requester, "Quarto")
+        self.assertGreater(new.order, last.order)
+        self.assertEqual(list(self.task.checklist_items.values_list("text", flat=True)), ["Conferir valores", "Terceiro", "Quarto"])
+
+    def test_page_and_drawer_render_persisted_checklist_and_correct_controls(self):
+        reader = self._user("somente-leitura", self.org)
+        TaskService.toggle_checklist_item(self.item, self.member, True)
+        for user, manages, toggles in [(self.requester, True, True), (self.member, False, True), (reader, False, False)]:
+            self.client.force_login(user)
+            for route in ("task-detail", "task-drawer"):
+                with self.subTest(user=user.username, route=route):
+                    response = self.client.get(reverse(route, args=[self.task.pk]))
+                    self.assertEqual(response.status_code, 200)
+                    self.assertTemplateUsed(response, "activities/_task_checklist.html")
+                    self.assertContains(response, "1 de 1 concluídos")
+                    self.assertContains(response, "Conferir valores")
+                    self.assertEqual(response.context["can_toggle_checklist"], toggles)
+                    self.assertContains(response, 'data-can-toggle="' + ("1" if toggles else "0") + '"')
+                    if manages:
+                        self.assertContains(response, 'class="checklist__add js-checklist-add"')
+                        self.assertContains(response, "Adicionar")
+                    else:
+                        self.assertNotContains(response, 'class="checklist__add js-checklist-add"')
+                        self.assertNotContains(response, 'class="link-button js-checklist-remove"')
+
+    def test_csrf_is_required_and_rendered_token_is_accepted(self):
+        from django.test import Client
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.requester)
+        url = reverse("task-checklist-add", args=[self.task.pk])
+        self.assertEqual(client.post(url, {"text": "Sem token"}).status_code, 403)
+        client.get(reverse("task-detail", args=[self.task.pk]))
+        token = client.cookies["csrftoken"].value
+        self.assertEqual(client.post(url, {"text": "Com token"}, HTTP_X_CSRFTOKEN=token).status_code, 200)
