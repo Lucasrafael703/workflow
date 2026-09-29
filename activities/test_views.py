@@ -43,7 +43,8 @@ class ViewTestCase(TestCase):
             created_by=self.requester,
         )
         self.task = TaskService.create_task(
-            self.activity, self.sector, "Realizar cotação", created_by=self.requester
+            self.activity, self.sector, "Realizar cotação", created_by=self.requester,
+            responsavel=self.requester,
         )
 
     def _user(self, username, organization, actions=BASE_ACTIONS):
@@ -92,7 +93,8 @@ class QueuePrivacyViewTests(ViewTestCase):
             created_by=self.member,
         )
         self.secret_task = TaskService.create_task(
-            secret_activity, self.sector, "TAREFA SIGILOSA", created_by=self.member
+            secret_activity, self.sector, "TAREFA SIGILOSA", created_by=self.member,
+            responsavel=self.member,
         )
 
     def test_full_queue_requires_the_action(self):
@@ -133,7 +135,8 @@ class QueuePrivacyViewTests(ViewTestCase):
         """Autorização em um setor não vale no outro (doc 05 §19)."""
         other_sector = Sector.objects.create(organization=self.org, name="Engenharia")
         TaskService.create_task(
-            self.activity, other_sector, "Tarefa de Engenharia", created_by=self.requester
+            self.activity, other_sector, "Tarefa de Engenharia", created_by=self.requester,
+            responsavel=self.requester,
         )
         grant_action(self.member, catalog.FILA_VISUALIZAR_COMPLETA, sector=self.sector)
 
@@ -153,7 +156,8 @@ class QueueReorderViewTests(ViewTestCase):
 
     def test_reorder_with_the_action_succeeds(self):
         other = TaskService.create_task(
-            self.activity, self.sector, "Segunda tarefa", created_by=self.requester
+            self.activity, self.sector, "Segunda tarefa", created_by=self.requester,
+            responsavel=self.requester,
         )
         entry = QueueEntry.objects.get(task=other)
         grant_action(self.member, catalog.FILA_REORDENAR, sector=self.sector)
@@ -167,7 +171,8 @@ class QueueReorderViewTests(ViewTestCase):
     def test_reorder_granted_in_one_sector_does_not_apply_to_another(self):
         other_sector = Sector.objects.create(organization=self.org, name="Engenharia")
         other_task = TaskService.create_task(
-            self.activity, other_sector, "Tarefa de Engenharia", created_by=self.requester
+            self.activity, other_sector, "Tarefa de Engenharia", created_by=self.requester,
+            responsavel=self.requester,
         )
         entry = QueueEntry.objects.get(task=other_task)
         grant_action(self.member, catalog.FILA_REORDENAR, sector=self.sector)
@@ -218,7 +223,7 @@ class TaskActionViewTests(ViewTestCase):
         grant_action(self.member, catalog.TAREFA_INICIAR, sector=self.sector)
         self.client.force_login(self.member)
         response = self.client.post(reverse("task-start", args=[self.task.pk]), follow=True)
-        self.assertContains(response, "executores atribuídos")
+        self.assertContains(response, "participantes atribuídos")
 
 
 class TaskAssignmentViewTests(ViewTestCase):
@@ -336,7 +341,8 @@ class TaskAuthorizationTests(ViewTestCase):
             organization=self.org, title="De outra pessoa", owner=self.member, created_by=self.member
         )
         other_task = TaskService.create_task(
-            other_activity, self.sector, "Tarefa alheia", created_by=self.member
+            other_activity, self.sector, "Tarefa alheia", created_by=self.member,
+            responsavel=self.member,
         )
         grant_action(
             self.requester,
@@ -356,7 +362,7 @@ class TaskAuthorizationTests(ViewTestCase):
             reverse("task-manual-time", args=[self.task.pk]),
             {"started_at": "2026-09-01T08:00", "ended_at": "2026-09-01T09:00"},
         )
-        self.assertContains(response, "executor da tarefa")
+        self.assertContains(response, "participante da tarefa")
         self.assertEqual(self.task.work_sessions.count(), 0)
 
 

@@ -46,12 +46,12 @@ passou" etc.) continua só na ficha completa.{% endcomment %}
                 <p class="muted" style="margin:0">Tarefa cancelada em {{ task.cancelled_at|date:"d/m/Y H:i" }}.</p>
                 {% elif open_block %}
                 <a href="{% url 'task-unblock' task.pk %}" class="btn btn--primary btn--block">Resolver bloqueio</a>
-                {% elif is_executor %}
+                {% elif is_participant or is_responsavel %}
                 <button type="button" class="btn btn--primary btn--block js-task-ajax" data-url="{% url 'task-start-ajax' task.pk %}">Iniciar tarefa</button>
                 {% elif can_assume %}
                 <a href="{% url 'task-assume' task.pk %}" class="btn btn--primary btn--block">Assumir tarefa</a>
                 {% else %}
-                <p class="muted small" style="margin:0">Sem executor definido.</p>
+                <p class="muted small" style="margin:0">Sem permissão para iniciar esta tarefa.</p>
                 {% endif %}
             </div>
 

@@ -335,6 +335,69 @@ class RichTextWidget(forms.Textarea):
         )
 
 
+class PersonMultiPickerWidget(forms.SelectMultiple):
+    """Seletor de múltiplas pessoas (M2M) com busca e chips removíveis —
+    mesmo padrão estrutural de `TagPickerWidget`, mas para pessoas: reaproveita
+    o endpoint `person-search` (mesmo do `PersonPickerWidget`, sem view nova)
+    e mostra avatar+nome no lugar de cor+nome. O `<select multiple>` real
+    fica escondido mas funcional; `static/js/person-multi-picker.js` o
+    substitui visualmente por chips + popup de busca.
+    """
+
+    search_url_name = "person-search"
+
+    def __init__(self, attrs=None, queryset=None, create_url=None):
+        attrs = {**(attrs or {}), "hidden": True}
+        super().__init__(attrs)
+        self.queryset = queryset
+        self.create_url = create_url
+
+    def _selected_options(self, value):
+        if not value or self.queryset is None:
+            return []
+        ids = [v for v in value if v not in (None, "")]
+        if not ids:
+            return []
+        return list(self.queryset.filter(pk__in=ids))
+
+    def render(self, name, value, attrs=None, renderer=None):
+        select_html = super().render(name, value, attrs, renderer)
+        search_url = reverse_lazy(self.search_url_name)
+        selected = self._selected_options(value)
+        create_attr = format_html(' data-create-url="{}"', self.create_url) if self.create_url else ""
+        chips = format_html_join(
+            "",
+            '<span class="person-multi-picker__chip" data-person-id="{}">'
+            '<span class="avatar avatar--{}">{}</span>{}'
+            '<button type="button" class="person-multi-picker__remove" aria-label="Remover">&times;</button></span>',
+            (
+                (
+                    person.pk,
+                    person.pk % 6,
+                    (person.get_full_name() or person.get_username())[:2].upper(),
+                    person.get_full_name() or person.get_username(),
+                )
+                for person in selected
+            ),
+        )
+
+        return format_html(
+            '<div class="person-multi-picker" data-person-multi-picker data-search-url="{search_url}"{create_attr}>'
+            '{select_html}'
+            '<div class="person-multi-picker__chips">{chips}'
+            '<button type="button" class="person-multi-picker__add">'
+            '<span class="person-multi-picker__add-icon">{icon}</span> Adicionar participante'
+            "</button>"
+            "</div>"
+            "</div>",
+            search_url=search_url,
+            create_attr=create_attr,
+            select_html=select_html,
+            chips=chips,
+            icon=_SEARCH_ICON,
+        )
+
+
 class TagPickerWidget(forms.SelectMultiple):
     """Seletor de marcadores (M2M) com busca e chips removíveis — variante de
     múltipla escolha dos pickers de valor único acima (PersonPickerWidget

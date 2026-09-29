@@ -1,6 +1,11 @@
+from urllib.parse import urlencode, urlsplit
+
+from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect
+from django.http import HttpResponseBadRequest
+from django.urls import resolve, reverse, Resolver404
 from django.utils import timezone
 from django.views.generic import ListView, View
 
@@ -35,6 +40,7 @@ CATEGORY_PRESENTATION = {
 
 EVENT_CATEGORY = {
     Notification.EventType.TASK_ASSIGNED: DELEGACAO,
+    Notification.EventType.TASK_RESPONSAVEL_CHANGED: DELEGACAO,
     Notification.EventType.TASK_ASSIGNMENT_PENDING: DELEGACAO,
     Notification.EventType.TASK_ASSIGNMENT_REJECTED: ALERTA,
     Notification.EventType.TASK_RETURNED: ALERTA,
@@ -86,6 +92,7 @@ EVENTS_WITH_EXTRA_MESSAGE = {
     Notification.EventType.DEADLINE_REJECTED,
     Notification.EventType.TASK_ASSIGNMENT_REJECTED,
     Notification.EventType.OWNER_CHANGED,
+    Notification.EventType.TASK_RESPONSAVEL_CHANGED,
     Notification.EventType.MESSAGE_POSTED,
     Notification.EventType.MENTIONED,
     Notification.EventType.ACTIVITY_PENDING,
@@ -460,19 +467,71 @@ class NotificationListView(LoginRequiredMixin, ListView):
         return context
 
 
+def _notification_list_return(post):
+    params = {key: post[key] for key in ("filter", "q", "ordem", "page") if post.get(key)}
+    return reverse("notification-list") + ("?" + urlencode(params) if params else "")
+
+
+def _notification_destination(notification, target="default"):
+    task = notification.task
+    activity = notification.activity or (task.activity if task else None)
+    event = notification.event_type
+    if target == "default" and notification.url:
+        # Stored links must resolve to the notification's own context, never an
+        # external site, arbitrary action endpoint, or unrelated resource.
+        try:
+            url = notification.url
+            parts = urlsplit(url)
+            if url.startswith("/") and not url.startswith("//") and not parts.scheme and not parts.netloc and "\\" not in url and not any(ord(c) < 32 for c in url):
+                match = resolve(parts.path)
+                if (match.url_name == "task-detail" and task and match.kwargs.get("pk") == task.pk
+                        or match.url_name == "activity-detail" and activity and match.kwargs.get("pk") == activity.pk):
+                    return url
+        except (ValueError, Resolver404):
+            pass
+    if target == "history":
+        if task:
+            return reverse("task-detail", args=[task.pk]) + "#historico"
+        if activity:
+            return reverse("activity-detail", args=[activity.pk]) + "#feed-panel"
+    if target == "mention" or (target == "default" and event == Notification.EventType.MENTIONED):
+        if task:
+            return reverse("task-detail", args=[task.pk]) + "#conversa"
+        if activity:
+            return reverse("activity-detail", args=[activity.pk]) + "#feed-panel"
+    if target == "conflict" or (target == "default" and event == Notification.EventType.DEADLINE_CONFLICT):
+        conflict_id = _open_conflict_id(task)
+        if conflict_id:
+            return reverse("conflict-resolve", args=[conflict_id])
+        target = "deadline"
+    if task and (target == "deadline" or (target == "default" and event in (
+            Notification.EventType.DEADLINE_PROPOSED, Notification.EventType.DEADLINE_ACCEPTED,
+            Notification.EventType.DEADLINE_REJECTED))):
+        return reverse("task-detail", args=[task.pk]) + "#prazo"
+    if activity and (target == "pendency" or (target == "default" and event == Notification.EventType.ACTIVITY_APPROVAL_NEEDED)):
+        return reverse("activity-detail", args=[activity.pk]) + "#pendencia"
+    if task:
+        return reverse("task-detail", args=[task.pk])
+    if activity:
+        return reverse("activity-detail", args=[activity.pk])
+    return None
+
+
 class NotificationMarkReadView(LoginRequiredMixin, View):
     def post(self, request, pk):
         notification = get_object_or_404(Notification, pk=pk, recipient=request.user)
+        mode = request.POST.get("mode", "open")
+        target = request.POST.get("target", "default")
+        if mode not in ("open", "read") or target not in ("default", "history", "mention", "deadline", "pendency", "conflict"):
+            return HttpResponseBadRequest("Ação de notificação inválida.")
         NotificationService.mark_read(notification)
-
-        # Leva direto ao ponto que originou o aviso (doc 09 §147).
-        if notification.url:
-            return redirect(notification.url)
-        if notification.task_id:
-            return redirect("task-detail", pk=notification.task_id)
-        if notification.activity_id:
-            return redirect("activity-detail", pk=notification.activity_id)
-        return redirect("notification-list")
+        if mode == "read":
+            return redirect(_notification_list_return(request.POST))
+        destination = _notification_destination(notification, target)
+        if destination:
+            return redirect(destination)
+        messages.info(request, "Notificação marcada como lida. O conteúdo relacionado não está disponível.")
+        return redirect(_notification_list_return(request.POST))
 
 
 class NotificationMarkAllReadView(LoginRequiredMixin, View):

@@ -167,7 +167,8 @@ class RelationalScopeTests(AuthorizationTestCase):
             organization=self.org, title="Minha atividade", owner=self.paulo, created_by=self.paulo
         )
         self.task = TaskService.create_task(
-            self.activity, self.comercial, "Tarefa", created_by=self.paulo
+            self.activity, self.comercial, "Tarefa", created_by=self.paulo,
+            responsavel=self.paulo,
         )
 
     def test_my_activities_scope(self):
@@ -269,7 +270,7 @@ class FailClosedTests(AuthorizationTestCase):
         activity = ActivityService.create_activity(
             organization=self.org, title="A", owner=self.paulo, created_by=self.paulo
         )
-        task = TaskService.create_task(activity, self.comercial, "T", created_by=self.paulo)
+        task = TaskService.create_task(activity, self.comercial, "T", created_by=self.paulo, responsavel=self.paulo)
         proposal = DeadlineService.propose(
             task, timezone.now() + timezone.timedelta(days=1), self.paulo
         )
@@ -325,11 +326,11 @@ class CreationScopeTests(AuthorizationTestCase):
             organization=self.org, title="A", owner=self.paulo, created_by=self.paulo
         )
 
-        task = TaskService.create_task(activity, self.comercial, "No Comercial", created_by=self.paulo)
+        task = TaskService.create_task(activity, self.comercial, "No Comercial", created_by=self.paulo, responsavel=self.paulo)
         self.assertIsNotNone(task.pk)
 
         with self.assertRaises(ActivityError):
-            TaskService.create_task(activity, self.compras, "Em Compras", created_by=self.paulo)
+            TaskService.create_task(activity, self.compras, "Em Compras", created_by=self.paulo, responsavel=self.paulo)
 
     def test_company_scoped_grant_authorizes_creating_an_activity_there(self):
         from activities.services import ActivityError, ActivityService
@@ -366,7 +367,7 @@ class SelfServiceTests(AuthorizationTestCase):
         activity = ActivityService.create_activity(
             organization=self.org, title="A", owner=self.paulo, created_by=self.paulo
         )
-        task = TaskService.create_task(activity, self.comercial, "T", created_by=self.paulo)
+        task = TaskService.create_task(activity, self.comercial, "T", created_by=self.paulo, responsavel=self.ryan)
 
         TaskService.add_executor(task, self.paulo, added_by=self.paulo)
         TaskService.remove_executor(task, self.paulo, removed_by=self.paulo)

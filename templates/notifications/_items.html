@@ -12,6 +12,7 @@
             {% endcomment %}
             <form method="post" action="{% url 'notification-mark-read' n.pk %}" class="notif-row__link-form">
                 {% csrf_token %}
+                {% include "notifications/_return_fields.html" %}
                 <button type="submit" class="notif-row__link" aria-label="Abrir {{ n.headline }}"></button>
             </form>
 
@@ -56,27 +57,28 @@
             <div class="notif-row__side">
                 <div class="notif-row__actions">
                     {% if n.event_type == "DEADLINE_PROPOSED" and n.pending_proposal_id %}
-                        {# Prazo: no máximo duas ações — aceitar (primário) e recusar (negativo suave, não vermelho forte) #}
                         <form method="post" action="{% url 'deadline-accept' n.pending_proposal_id %}">
-                            {% csrf_token %}<button type="submit" class="btn btn--primary">Aceitar</button>
+                            {% csrf_token %}
+                            <input type="hidden" name="notification_id" value="{{ n.pk }}">
+                            <button type="submit" class="btn btn--primary">Aceitar</button>
                         </form>
-                        <a href="{% url 'task-detail' n.task_id %}#prazo" class="btn btn--soft-danger">Recusar</a>
-                    {% elif n.event_type == "DEADLINE_CONFLICT" and n.open_conflict_id %}
-                        <a href="{% url 'conflict-resolve' n.open_conflict_id %}" class="btn btn--primary">Analisar</a>
-                    {% elif n.event_type == "ACTIVITY_APPROVAL_NEEDED" and n.activity_id %}
-                        <a href="{% url 'activity-detail' n.activity_id %}#pendencia" class="btn btn--primary">Analisar pendência</a>
+                        {% include "notifications/_open_button.html" with target="deadline" label="Recusar" button_class="btn btn--soft-danger" %}
+                    {% elif n.event_type == "DEADLINE_CONFLICT" %}
+                        {% include "notifications/_open_button.html" with target="conflict" label="Analisar" button_class="btn btn--primary" %}
+                    {% elif n.event_type == "ACTIVITY_APPROVAL_NEEDED" %}
+                        {% include "notifications/_open_button.html" with target="pendency" label="Analisar pendência" button_class="btn btn--primary" %}
                     {% elif n.category == "mencao" %}
-                        {% if n.task_id %}
-                        <a href="{% url 'task-detail' n.task_id %}#conversa" class="btn">Ver menção</a>
-                        {% else %}
-                        <a href="{% url 'activity-detail' n.activity_id %}#feed-panel" class="btn">Ver menção</a>
-                        {% endif %}
+                        {% include "notifications/_open_button.html" with target="mention" label="Ver menção" %}
                     {% elif n.category == "delegacao" %}
-                        <a href="{% if n.task_id %}{% url 'task-detail' n.task_id %}{% else %}{% url 'activity-detail' n.activity_id %}{% endif %}" class="btn btn--primary">Abrir atividade</a>
+                        {% if n.task_id %}
+                            {% include "notifications/_open_button.html" with label="Abrir tarefa" button_class="btn btn--primary" %}
+                        {% else %}
+                            {% include "notifications/_open_button.html" with label="Abrir atividade" button_class="btn btn--primary" %}
+                        {% endif %}
                     {% elif n.needs_action %}
-                        <a href="{% if n.task_id %}{% url 'task-detail' n.task_id %}{% else %}{% url 'activity-detail' n.activity_id %}{% endif %}" class="btn btn--primary">Analisar</a>
+                        {% include "notifications/_open_button.html" with label="Analisar" button_class="btn btn--primary" %}
                     {% elif n.category == "conclusao" %}
-                        <a href="{% if n.task_id %}{% url 'task-detail' n.task_id %}{% else %}{% url 'activity-detail' n.activity_id %}{% endif %}" class="btn">Ver detalhes</a>
+                        {% include "notifications/_open_button.html" with label="Ver detalhes" %}
                     {% endif %}
                 </div>
 
@@ -88,17 +90,13 @@
                         {% if not n.is_read %}
                         <form method="post" action="{% url 'notification-mark-read' n.pk %}">
                             {% csrf_token %}
+                            <input type="hidden" name="mode" value="read">
+                            {% include "notifications/_return_fields.html" %}
                             <button type="submit">{% include "_icon.html" with name="check" %} Marcar como lida</button>
                         </form>
                         {% endif %}
-                        {% if n.task_id %}
-                        <a href="{% url 'task-detail' n.task_id %}">
-                            {% include "_icon.html" with name="clock" %} Ver histórico
-                        </a>
-                        {% elif n.activity_id %}
-                        <a href="{% url 'activity-detail' n.activity_id %}#feed-panel">
-                            {% include "_icon.html" with name="clock" %} Ver histórico
-                        </a>
+                        {% if n.task_id or n.activity_id %}
+                        {% include "notifications/_open_button.html" with target="history" label="Ver histórico" button_class="notif-row__history" %}
                         {% endif %}
                     </div>
                 </div>

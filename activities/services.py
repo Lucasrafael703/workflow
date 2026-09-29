@@ -32,6 +32,7 @@ from .models import (
     TaskChecklistItem,
     TaskExecutor,
     TaskMessage,
+    TaskResponsavelChangeLog,
     TaskReturn,
     WorkSession,
 )
@@ -910,8 +911,8 @@ class TaskService:
     @staticmethod
     @transaction.atomic
     def create_task(
-        activity, sector, title, created_by, description="", order=1, depends_on=None,
-        requested_deadline=None, tags=None,
+        activity, sector, title, created_by, responsavel, description="", order=1, depends_on=None,
+        requested_deadline=None, tags=None, participantes=None,
     ):
         # A tarefa nasce no setor informado: é esse o escopo que autoriza.
         require_action(
@@ -930,6 +931,10 @@ class TaskService:
             raise ActivityError("O setor informado pertence a outra organização.")
         if not title:
             raise ActivityError("Informe o título da tarefa.")
+        if responsavel is None:
+            raise ActivityError("Informe o responsável pela tarefa.")
+        if getattr(getattr(responsavel, "profile", None), "organization_id", None) != activity.organization_id:
+            raise ActivityError("O responsável informado pertence a outra organização.")
 
         task = Task.objects.create(
             activity=activity,
@@ -941,9 +946,14 @@ class TaskService:
             requested_deadline=requested_deadline,
             status=Task.Status.DISPONIVEL,
             created_by=created_by,
+            responsavel=responsavel,
         )
         if tags:
             task.tags.set(tags)
+        for participante in participantes or []:
+            if participante.id == responsavel.id:
+                continue
+            TaskService.add_executor(task, participante, added_by=created_by)
         AuditService.log(user=created_by, action=AuditLog.Action.TASK_CREATED, activity=activity, task=task, new_value=title)
 
         QueueService.enqueue(task, sector, user=created_by)
@@ -1025,8 +1035,8 @@ class TaskService:
             raise ActivityError("Não é possível lançar tempo no futuro.")
         # Tempo só pode ser apropriado a quem de fato executa a tarefa — do
         # contrário as horas-homem deixam de refletir o trabalho real.
-        if not TaskService._is_active_executor(task, user):
-            raise ActivityError("Só é possível lançar tempo para um executor da tarefa.")
+        if not TaskService._is_responsavel_or_participant(task, user):
+            raise ActivityError("Só é possível lançar tempo para o responsável ou um participante da tarefa.")
 
         session = WorkSession.objects.create(
             task=task, user=user, started_at=started_at, ended_at=ended_at, is_manual=True
@@ -1047,6 +1057,8 @@ class TaskService:
     @staticmethod
     @transaction.atomic
     def add_executor(task, user, added_by):
+        if task.responsavel_id == user.id:
+            raise ActivityError("Esta pessoa já é responsável pela tarefa — não pode também ser participante.")
         # Assumir a si mesmo é imediato — a própria pessoa decidiu. Atribuir
         # outra pessoa passa por um pedido de aceite: ela pode recusar (ex.:
         # "isso não é comigo"), então ainda não vira executora aqui.
@@ -1094,6 +1106,8 @@ class TaskService:
         task = assignment.task
         if TaskExecutor.objects.filter(task=task, user=user, removed_at__isnull=True).exists():
             raise ActivityError("Este usuário já é executor desta tarefa.")
+        if task.responsavel_id == user.id:
+            raise ActivityError("Esta pessoa já é responsável pela tarefa — não pode também ser participante.")
 
         assignment.status = TaskAssignment.Status.ACEITA
         assignment.decided_at = timezone.now()
@@ -1151,6 +1165,20 @@ class TaskService:
         return assignment
 
     @staticmethod
+    def _deactivate_executor_link(task, user):
+        """Soft-delete da linha de TaskExecutor, sem checagem de autorização —
+        uso interno de remove_executor (que autoriza publicamente) e de
+        change_responsavel (que já autorizou via TAREFA_ALTERAR_RESPONSAVEL e
+        não deveria precisar também de TAREFA_ATRIBUIR/TAREFA_ASSUMIR só para
+        tirar o novo responsável de Participantes)."""
+        link = TaskExecutor.objects.filter(task=task, user=user, removed_at__isnull=True).first()
+        if link is None:
+            return None
+        link.removed_at = timezone.now()
+        link.save(update_fields=["removed_at"])
+        return link
+
+    @staticmethod
     @transaction.atomic
     def remove_executor(task, user, removed_by):
         # Sair de uma tarefa que assumi é o oposto de assumir; tirar outra
@@ -1159,27 +1187,69 @@ class TaskService:
             require_action(removed_by, catalog.TAREFA_ASSUMIR, task)
         else:
             require_action(removed_by, catalog.TAREFA_ATRIBUIR, task)
-        link = TaskExecutor.objects.filter(task=task, user=user, removed_at__isnull=True).first()
+        link = TaskService._deactivate_executor_link(task, user)
         if link is None:
             raise ActivityError("Este usuário não é executor ativo desta tarefa.")
 
-        link.removed_at = timezone.now()
-        link.save(update_fields=["removed_at"])
         AuditService.log(
             user=removed_by, action=AuditLog.Action.EXECUTOR_REMOVED, activity=task.activity, task=task, new_value=user.get_username()
         )
         return task
 
     @staticmethod
-    def _is_active_executor(task, user):
+    @transaction.atomic
+    def change_responsavel(task, new_responsavel, changed_by):
+        require_action(changed_by, catalog.TAREFA_ALTERAR_RESPONSAVEL, task)
+        if task.status in (Task.Status.CONCLUIDA, Task.Status.CANCELADA):
+            raise ActivityError("Não é possível alterar o responsável de uma tarefa concluída ou cancelada.")
+        if new_responsavel.id == task.responsavel_id:
+            raise ActivityError("Este usuário já é o responsável desta tarefa.")
+        if TaskService._is_active_participant(task, new_responsavel):
+            # Novo responsável sai de Participantes automaticamente —
+            # conjuntos continuam disjuntos, sem exigir que quem troca
+            # remova a pessoa manualmente antes.
+            TaskService._deactivate_executor_link(task, new_responsavel)
+
+        previous = task.responsavel
+        task.responsavel = new_responsavel
+        task.save(update_fields=["responsavel"])
+
+        TaskResponsavelChangeLog.objects.create(
+            task=task, previous_responsavel=previous, new_responsavel=new_responsavel, changed_by=changed_by
+        )
+        AuditService.log(
+            user=changed_by,
+            action=AuditLog.Action.RESPONSAVEL_CHANGED,
+            activity=task.activity,
+            task=task,
+            old_value=previous.get_username(),
+            new_value=new_responsavel.get_username(),
+        )
+        NotificationService.notify(
+            users={previous, new_responsavel},
+            event_type=Notification.EventType.TASK_RESPONSAVEL_CHANGED,
+            title="Responsável da tarefa alterado",
+            message=f"O responsável de '{task.title}' passou de {previous} para {new_responsavel}.",
+            activity=task.activity,
+            task=task,
+            actor=changed_by,
+        )
+        return task
+
+    @staticmethod
+    def _is_active_participant(task, user):
         return TaskExecutor.objects.filter(task=task, user=user, removed_at__isnull=True).exists()
+
+    @staticmethod
+    def _is_responsavel_or_participant(task, user):
+        return task.responsavel_id == user.id or TaskService._is_active_participant(task, user)
 
     @staticmethod
     @transaction.atomic
     def start(task, user):
         require_action(user, catalog.TAREFA_INICIAR, task)
-        if not TaskService._is_active_executor(task, user):
-            raise ActivityError("Somente executores atribuídos podem iniciar a tarefa.")
+        if not TaskService._is_responsavel_or_participant(task, user):
+            raise ActivityError("Somente o responsável ou participantes atribuídos podem iniciar a tarefa.")
         if task.status not in (
             Task.Status.DISPONIVEL,
             Task.Status.EM_FILA,
@@ -1228,8 +1298,8 @@ class TaskService:
     @transaction.atomic
     def resume(task, user):
         require_action(user, catalog.TAREFA_RETOMAR, task)
-        if not TaskService._is_active_executor(task, user):
-            raise ActivityError("Somente executores atribuídos podem retomar a tarefa.")
+        if not TaskService._is_responsavel_or_participant(task, user):
+            raise ActivityError("Somente o responsável ou participantes atribuídos podem retomar a tarefa.")
         return TaskService.start(task, user)
 
     @staticmethod
@@ -1260,8 +1330,11 @@ class TaskService:
         AuditService.log(
             user=user, action=AuditLog.Action.COMPLETE, activity=task.activity, task=task, old_value=old_status, new_value=task.status
         )
+        recipients = {task.activity.owner}
+        if task.responsavel_id:
+            recipients.add(task.responsavel)
         NotificationService.notify(
-            users={task.activity.owner},
+            users=recipients,
             event_type=Notification.EventType.TASK_COMPLETED,
             title="Tarefa concluída",
             message=f"A tarefa '{task.title}' foi concluída.",
@@ -1456,7 +1529,7 @@ class TaskService:
         return (
             user.is_active
             and getattr(getattr(user, "profile", None), "organization_id", None) == task.activity.organization_id
-            and TaskService._is_active_executor(task, user)
+            and TaskService._is_responsavel_or_participant(task, user)
         )
 
     @staticmethod
@@ -1507,6 +1580,8 @@ class TaskService:
         count = 0
         for task in overdue_tasks:
             recipients = resolve_sector_and_admins(task.sector) | {task.activity.owner}
+            if task.responsavel_id:
+                recipients.add(task.responsavel)
             NotificationService.notify(
                 users=recipients,
                 event_type=Notification.EventType.TASK_OVERDUE,
@@ -1774,6 +1849,7 @@ class MessageService:
 
         recipients = {activity.owner, activity.created_by}
         recipients.update(MessageService._executors_of({"tasks_executed__task__activity": activity}))
+        recipients.update(User.objects.filter(tasks_responsavel__activity=activity).distinct())
         recipients = {u for u in recipients if u is not None and u.id != author.id} - mentioned
 
         if recipients:
@@ -1801,6 +1877,8 @@ class MessageService:
         mentioned = find_mentioned_users(body, author, task)
 
         recipients = {task.activity.owner}
+        if task.responsavel_id:
+            recipients.add(task.responsavel)
         recipients.update(MessageService._executors_of({"tasks_executed__task": task}))
         recipients = {u for u in recipients if u is not None and u.id != author.id} - mentioned
 

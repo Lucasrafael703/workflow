@@ -15,7 +15,7 @@ nova aba, JS desabilitado).{% endcomment %}
     {% if tasks %}
     <div class="card__body task-table">
         <div class="task-table__head">
-            <span>Tarefa</span><span>Setor</span><span>Executor</span><span>Prazo</span><span>Status</span><span>Fila</span>
+            <span>Tarefa</span><span>Setor</span><span>Responsável</span><span>Prazo</span><span>Status</span><span>Fila</span>
         </div>
         {% for task in tasks %}
         <a href="{% url 'task-detail' task.pk %}" class="task-table__row js-open-drawer" data-drawer-url="{% url 'task-drawer' task.pk %}">
@@ -35,15 +35,26 @@ nova aba, JS desabilitado).{% endcomment %}
             <span class="muted small">{{ task.sector.name }}</span>
 
             <span class="executor-cell">
-                {% if task.active_executors %}
-                    {% with first_executor=task.active_executors.0 %}
-                    <span class="avatar avatar--{{ first_executor.user|avatar_color }}" title="{{ first_executor.user.get_full_name|default:first_executor.user.get_username }}">
-                        {{ first_executor.user.get_full_name|default:first_executor.user.get_username|slice:":2"|upper }}
+                {% if task.responsavel %}
+                    <span class="avatar avatar--{{ task.responsavel|avatar_color }}" title="{{ task.responsavel.get_full_name|default:task.responsavel.get_username }}">
+                        {{ task.responsavel.get_full_name|default:task.responsavel.get_username|slice:":2"|upper }}
                     </span>
                     <span class="executor-cell__name">
-                        {{ first_executor.user.get_full_name|default:first_executor.user.get_username }}{% if task.active_executors|length > 1 %} +{{ task.active_executors|length|add:"-1" }}{% endif %}
+                        {{ task.responsavel.get_full_name|default:task.responsavel.get_username }}
                     </span>
-                    {% endwith %}
+                    {% if task.active_executors %}
+                    <span class="participants-popover">
+                        <button type="button" class="participants-popover__trigger">+{{ task.active_executors|length }}</button>
+                        <div class="participants-popover__menu" hidden>
+                            {% for executor in task.active_executors %}
+                            <div class="participants-popover__row">
+                                <span class="avatar avatar--{{ executor.user|avatar_color }}">{{ executor.user.get_username|slice:":2"|upper }}</span>
+                                {{ executor.user.get_full_name|default:executor.user.get_username }}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </span>
+                    {% endif %}
                 {% else %}
                     <span class="muted small">—</span>
                 {% endif %}

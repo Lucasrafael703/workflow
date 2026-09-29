@@ -26,6 +26,7 @@ TAREFA_VISUALIZAR = "tarefa.visualizar"
 TAREFA_CRIAR = "tarefa.criar"
 TAREFA_EDITAR = "tarefa.editar"
 TAREFA_ATRIBUIR = "tarefa.atribuir"
+TAREFA_ALTERAR_RESPONSAVEL = "tarefa.alterar_responsavel"
 TAREFA_ASSUMIR = "tarefa.assumir"
 TAREFA_ACEITAR = "tarefa.aceitar"
 TAREFA_RECUSAR = "tarefa.recusar"
@@ -115,9 +116,10 @@ GROUPS = [
             (TAREFA_VISUALIZAR, "Visualizar tarefas", "Permite abrir tarefas dentro do escopo autorizado.", False),
             (TAREFA_CRIAR, "Criar tarefa", "Permite adicionar tarefas a uma atividade.", False),
             (TAREFA_EDITAR, "Editar tarefa", "Permite alterar título, descrição, ordem e dependência.", False),
-            (TAREFA_ATRIBUIR, "Atribuir executor", "Permite incluir ou remover executores de uma tarefa.", False),
-            (TAREFA_ASSUMIR, "Assumir tarefa", "Permite que a pessoa se torne executora de uma tarefa disponível.", False),
-            (TAREFA_ACEITAR, "Aceitar atribuição", "Permite aceitar uma tarefa que outra pessoa atribuiu, tornando-se executor.", False),
+            (TAREFA_ATRIBUIR, "Atribuir participante", "Permite incluir ou remover participantes de uma tarefa.", False),
+            (TAREFA_ALTERAR_RESPONSAVEL, "Alterar responsável da tarefa", "Permite transferir a responsabilidade pela conclusão da tarefa para outra pessoa.", True),
+            (TAREFA_ASSUMIR, "Assumir tarefa", "Permite que a pessoa se torne participante de uma tarefa disponível.", False),
+            (TAREFA_ACEITAR, "Aceitar atribuição", "Permite aceitar uma tarefa que outra pessoa atribuiu, tornando-se participante.", False),
             (TAREFA_RECUSAR, "Recusar atribuição", "Permite recusar uma tarefa atribuída por outra pessoa, com motivo obrigatório.", False),
             (TAREFA_INICIAR, "Iniciar tarefa", "Permite iniciar a execução e o registro de tempo.", False),
             (TAREFA_PAUSAR, "Pausar tarefa", "Permite pausar a própria sessão de trabalho.", False),

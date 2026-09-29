@@ -87,7 +87,7 @@
                             </form>
                         </div>
                     </div>
-                {% elif is_executor %}
+                {% elif is_participant or is_responsavel %}
                     <form method="post" action="{% url 'task-start' task.pk %}">
                         {% csrf_token %}<button type="submit" class="btn btn--primary btn--lg">Iniciar tarefa</button>
                     </form>
@@ -96,7 +96,7 @@
                         {% csrf_token %}<button type="submit" class="btn btn--primary btn--lg">Assumir tarefa</button>
                     </form>
                 {% else %}
-                    <p class="muted" style="margin:0">Sem executor definido. Você não possui permissão para assumir esta tarefa.</p>
+                    <p class="muted" style="margin:0">Sem permissão para iniciar esta tarefa.</p>
                 {% endif %}
 
                 {% if task.status != "CONCLUIDA" and task.status != "CANCELADA" %}
@@ -248,7 +248,7 @@
             </div>
         </div>
 
-        <div class="card card--flush">
+        <div class="card card--flush" id="historico">
             <div class="card__head"><h2>Linha do tempo</h2></div>
             <div class="card__body">{% include "activities/_timeline.html" with entries=history %}</div>
         </div>
@@ -256,7 +256,22 @@
 
     <div>
         <div class="card card--flush">
-            <div class="card__head"><h2>Executores</h2></div>
+            <div class="card__head"><h2>Responsável</h2></div>
+            <div class="card__body">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+                    <span class="responsible-cell">
+                        <span class="avatar avatar--{{ responsavel|avatar_color }}">{{ responsavel.get_username|slice:":2"|upper }}</span>
+                        {{ responsavel.get_username }}
+                    </span>
+                    {% if can_change_responsavel %}
+                    <a href="{% url 'task-change-responsavel' task.pk %}" class="btn btn--sm btn--ghost">Trocar</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="card card--flush">
+            <div class="card__head"><h2>Participantes</h2></div>
             <div class="card__body">
                 {% if executors %}
                 <ul class="list-rows">
@@ -273,14 +288,14 @@
                 </ul>
                 <p class="muted small" style="margin:10px 0 0">Horas-homem totais: <strong>{{ man_hours|duration_hm }}</strong></p>
                 {% else %}
-                <p class="muted" style="margin:0">Sem executor.</p>
+                <p class="muted" style="margin:0">Sem participantes.</p>
                 {% endif %}
 
                 {% if can_assign %}
                 <form method="post" action="{% url 'task-executor-add' task.pk %}" style="margin-top:14px">
                     {% csrf_token %}
                     <div class="form-row">{{ executor_form.user }}</div>
-                    <button type="submit" class="btn btn--block">Atribuir executor</button>
+                    <button type="submit" class="btn btn--block">Adicionar participante</button>
                 </form>
                 {% endif %}
             </div>

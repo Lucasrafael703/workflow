@@ -119,14 +119,25 @@
                     <td data-label="Obra">{% if task.activity.site %}{{ task.activity.site.name }}{% else %}<span class="muted">—</span>{% endif %}</td>
                     <td data-label="Setor"><span class="tag">{{ task.sector.name }}</span></td>
                     <td data-label="Responsável">
-                        {% with executor=task.active_executors.0 %}
-                        {% if executor %}
+                        {% if task.responsavel %}
                         <span class="responsible-cell">
-                            <span class="avatar avatar--{{ executor.user|avatar_color }}">{{ executor.user.get_username|slice:":2"|upper }}</span>
-                            <span class="small">{{ executor.user.get_username }}</span>
+                            <span class="avatar avatar--{{ task.responsavel|avatar_color }}">{{ task.responsavel.get_username|slice:":2"|upper }}</span>
+                            <span class="small">{{ task.responsavel.get_username }}</span>
                         </span>
+                        {% if task.active_executors %}
+                        <span class="participants-popover">
+                            <button type="button" class="participants-popover__trigger">+{{ task.active_executors|length }}</button>
+                            <div class="participants-popover__menu" hidden>
+                                {% for executor in task.active_executors %}
+                                <div class="participants-popover__row">
+                                    <span class="avatar avatar--{{ executor.user|avatar_color }}">{{ executor.user.get_username|slice:":2"|upper }}</span>
+                                    {{ executor.user.get_username }}
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </span>
+                        {% endif %}
                         {% else %}<span class="muted">—</span>{% endif %}
-                        {% endwith %}
                     </td>
                     <td data-label="Prazo">
                         {% if task.effective_deadline %}

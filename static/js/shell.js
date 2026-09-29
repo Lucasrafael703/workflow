@@ -234,4 +234,30 @@
             });
         });
     }
+
+    // Popover "+N participantes" nas listas/cards de tarefa: um por linha,
+    // só um aberto por vez, mesmo padrão do menu de notificações acima.
+    var participantsToggles = document.querySelectorAll(".participants-popover__trigger");
+    if (participantsToggles.length) {
+        function fecharTodosParticipantes(exceto) {
+            document.querySelectorAll(".participants-popover__menu").forEach(function (menu) {
+                if (menu !== exceto) menu.hidden = true;
+            });
+        }
+
+        participantsToggles.forEach(function (btn) {
+            var menu = btn.nextElementSibling;
+            btn.addEventListener("click", function (event) {
+                event.stopPropagation();
+                var abrindo = menu.hidden;
+                fecharTodosParticipantes(abrindo ? menu : null);
+                menu.hidden = !abrindo;
+            });
+        });
+
+        document.addEventListener("click", function () { fecharTodosParticipantes(null); });
+        document.addEventListener("keydown", function (event) {
+            if (event.key === "Escape") fecharTodosParticipantes(null);
+        });
+    }
 })();

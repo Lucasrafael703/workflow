@@ -540,6 +540,13 @@ class Task(models.Model):
     requested_deadline = models.DateTimeField("prazo solicitado", null=True, blank=True)
     committed_deadline = models.DateTimeField("prazo comprometido", null=True, blank=True)
 
+    responsavel = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="responsável",
+        on_delete=models.PROTECT,
+        related_name="tasks_responsavel",
+        help_text="Quem responde pela conclusão da tarefa.",
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, verbose_name="criada por", on_delete=models.PROTECT, related_name="+"
     )
@@ -690,6 +697,31 @@ class TaskExecutor(models.Model):
         verbose_name = "executor da tarefa"
         verbose_name_plural = "executores da tarefa"
         ordering = ["added_at"]
+
+
+class TaskResponsavelChangeLog(models.Model):
+    """Histórico de troca de responsável da tarefa. Nunca sobrescrito — mesmo
+    padrão de OwnerChangeLog, para a atividade."""
+
+    task = models.ForeignKey(Task, verbose_name="tarefa", on_delete=models.CASCADE, related_name="responsavel_changes")
+    previous_responsavel = models.ForeignKey(
+        settings.AUTH_USER_MODEL, verbose_name="responsável anterior", on_delete=models.PROTECT, related_name="+"
+    )
+    new_responsavel = models.ForeignKey(
+        settings.AUTH_USER_MODEL, verbose_name="novo responsável", on_delete=models.PROTECT, related_name="+"
+    )
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, verbose_name="alterado por", on_delete=models.PROTECT, related_name="+"
+    )
+    changed_at = models.DateTimeField("alterado em", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "alteração de responsável"
+        verbose_name_plural = "alterações de responsável"
+        ordering = ["-changed_at"]
+
+    def __str__(self):
+        return f"{self.task}: {self.previous_responsavel} → {self.new_responsavel}"
 
     def __str__(self):
         return f"{self.user} em {self.task}"

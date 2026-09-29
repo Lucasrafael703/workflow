@@ -5,6 +5,7 @@ from django.db import models
 class Notification(models.Model):
     class EventType(models.TextChoices):
         TASK_ASSIGNED = "TASK_ASSIGNED", "Tarefa atribuída"
+        TASK_RESPONSAVEL_CHANGED = "TASK_RESPONSAVEL_CHANGED", "Responsável da tarefa alterado"
         TASK_ASSIGNMENT_PENDING = "TASK_ASSIGNMENT_PENDING", "Atribuição aguardando seu aceite"
         TASK_ASSIGNMENT_REJECTED = "TASK_ASSIGNMENT_REJECTED", "Atribuição recusada"
         TASK_RETURNED = "TASK_RETURNED", "Tarefa devolvida"

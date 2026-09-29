@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Notificações — LPS{% endblock %}
 
 {% block content %}
@@ -101,4 +102,8 @@ próprio mantém o recorte só nos cantos, via border-radius no primeiro/
     </div>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/notifications.js' %}?v=20260929a"></script>
 {% endblock %}

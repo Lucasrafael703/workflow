@@ -3,8 +3,9 @@ from datetime import timedelta
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.db.models import Avg, Count, Exists, F, OuterRef, Prefetch, Q
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils import timezone
@@ -16,6 +17,8 @@ from acessos import catalog
 from acessos.services import AuthorizationService
 from core.mixins import ActionRequiredMixin, OrganizationRequiredMixin, user_sectors
 from core.models import ActivityStage, Client, CostCenter, Sector, TaskStage
+from notifications.models import Notification
+from notifications.services import NotificationService
 
 from .forms import (
     ActivityApprovePendencyForm,
@@ -39,6 +42,7 @@ from .forms import (
     MoveSectorForm,
     ReorderForm,
     TaskBlockForm,
+    TaskChangeResponsavelForm,
     TaskForm,
     TaskQuickCreateForm,
     TaskQuickCreateStandaloneForm,
@@ -96,7 +100,9 @@ def filtered_tasks_queryset(request, organization):
     if tab == "setor":
         queryset = queryset.filter(sector__in=user_sectors(user))
     else:
-        queryset = queryset.filter(executors__user=user, executors__removed_at__isnull=True)
+        queryset = queryset.filter(
+            Q(responsavel=user) | Q(executors__user=user, executors__removed_at__isnull=True)
+        )
 
     if request.GET.get("status") == "concluidas":
         queryset = queryset.filter(status=Task.Status.CONCLUIDA)
@@ -139,7 +145,7 @@ def filtered_tasks_queryset(request, organization):
 
     return (
         queryset.select_related(
-            "activity", "activity__client", "activity__site", "activity__cost_center", "sector", "stage"
+            "activity", "activity__client", "activity__site", "activity__cost_center", "sector", "stage", "responsavel"
         )
         .prefetch_related(
             Prefetch(
@@ -163,7 +169,9 @@ def _task_stats(request, organization):
     if tab == "setor":
         queryset = queryset.filter(sector__in=user_sectors(user))
     else:
-        queryset = queryset.filter(executors__user=user, executors__removed_at__isnull=True)
+        queryset = queryset.filter(
+            Q(responsavel=user) | Q(executors__user=user, executors__removed_at__isnull=True)
+        )
     queryset = queryset.filter(status__in=OPEN_TASK_STATUSES).distinct()
 
     return {
@@ -346,7 +354,11 @@ class HomeView(OrganizationRequiredMixin, TemplateView):
                 activity__organization=org,
                 status__in=[Task.Status.DISPONIVEL, Task.Status.EM_FILA],
             )
-            .filter(Q(executors__user=user, executors__removed_at__isnull=True) | Q(sector__in=my_sectors))
+            .filter(
+                Q(responsavel=user)
+                | Q(executors__user=user, executors__removed_at__isnull=True)
+                | Q(sector__in=my_sectors)
+            )
             .select_related("activity", "sector")
             .distinct()
             .order_by("requested_deadline", "created_at")[:8]
@@ -366,9 +378,8 @@ class HomeView(OrganizationRequiredMixin, TemplateView):
 
         # Cartões do topo: só número que leva a uma ação (Benchmark §8.3).
         my_open = Task.objects.filter(
+            Q(responsavel=user) | Q(executors__user=user, executors__removed_at__isnull=True),
             activity__organization=org,
-            executors__user=user,
-            executors__removed_at__isnull=True,
         ).exclude(status__in=[Task.Status.CONCLUIDA, Task.Status.CANCELADA]).distinct()
 
         summary = {
@@ -433,11 +444,14 @@ def filtered_activities_queryset(request, organization, *, order=True):
         queryset = queryset.filter(sector__in=user_sectors(user))
     elif tab == "participando":
         queryset = queryset.filter(
-            tasks__executors__user=user, tasks__executors__removed_at__isnull=True
+            Q(tasks__responsavel=user)
+            | Q(tasks__executors__user=user, tasks__executors__removed_at__isnull=True)
         ).exclude(owner=user)
     elif tab == "concluidas":
         queryset = queryset.filter(
-            Q(owner=user) | Q(tasks__executors__user=user, tasks__executors__removed_at__isnull=True),
+            Q(owner=user)
+            | Q(tasks__responsavel=user)
+            | Q(tasks__executors__user=user, tasks__executors__removed_at__isnull=True),
             status__in=[Activity.Status.CONCLUIDA, Activity.Status.CANCELADA],
         )
     elif tab == "todas":
@@ -1722,7 +1736,7 @@ class TaskDetailView(OrganizationRequiredMixin, DetailView):
 
     def get_queryset(self):
         return Task.objects.filter(activity__organization=self.organization).select_related(
-            "activity", "sector", "depends_on", "created_by", "completed_by"
+            "activity", "sector", "depends_on", "created_by", "completed_by", "responsavel"
         )
 
     def get_context_data(self, **kwargs):
@@ -1736,7 +1750,8 @@ class TaskDetailView(OrganizationRequiredMixin, DetailView):
         man_hours = sum((s.duration for s in closed), timedelta())
 
         my_open_session = task.work_sessions.filter(user=user, ended_at__isnull=True).first()
-        is_executor = executors.filter(user=user).exists()
+        is_participant = executors.filter(user=user).exists()
+        is_responsavel = task.responsavel_id == user.id
         open_block = task.blocks.filter(ended_at__isnull=True).order_by("-started_at").first()
         pending_proposal = task.deadline_proposals.filter(
             status=DeadlineProposal.Status.PENDENTE
@@ -1748,8 +1763,11 @@ class TaskDetailView(OrganizationRequiredMixin, DetailView):
         context.update(
             {
                 "activity": task.activity,
+                "responsavel": task.responsavel,
                 "executors": executors,
-                "is_executor": is_executor,
+                "is_participant": is_participant,
+                "is_responsavel": is_responsavel,
+                "can_change_responsavel": can(user, catalog.TAREFA_ALTERAR_RESPONSAVEL, task),
                 "my_open_session": my_open_session,
                 "sessions": sessions,
                 "man_hours": man_hours,
@@ -1918,20 +1936,20 @@ class TaskQuickCreateView(OrganizationRequiredMixin, FormView):
         next_order = (activity.tasks.count() or 0) + 1
         parsed = TaskService.parse_quick_title(data["title"], self.organization)
         merged_tags = list({t.pk: t for t in [*(data.get("tags") or []), *parsed["tags"]]}.values())
+        responsavel = data.get("responsavel") or parsed["assignee"]
         try:
             task = TaskService.create_task(
                 activity=activity,
                 sector=data["sector"],
                 title=parsed["title"] or data["title"],
                 created_by=self.request.user,
+                responsavel=responsavel,
                 description=data.get("description") or "",
                 order=next_order,
                 requested_deadline=data.get("requested_deadline"),
                 tags=merged_tags,
+                participantes=data.get("participantes"),
             )
-            assignee = data.get("executor") or parsed["assignee"]
-            if assignee is not None:
-                TaskService.add_executor(task, assignee, added_by=self.request.user)
         except ActivityError as exc:
             form.add_error(None, str(exc))
             return self.form_invalid(form)
@@ -1968,20 +1986,20 @@ class TaskQuickCreateStandaloneView(OrganizationRequiredMixin, FormView):
         next_order = (activity.tasks.count() or 0) + 1
         parsed = TaskService.parse_quick_title(data["title"], self.organization)
         merged_tags = list({t.pk: t for t in [*(data.get("tags") or []), *parsed["tags"]]}.values())
+        responsavel = data.get("responsavel") or parsed["assignee"]
         try:
             task = TaskService.create_task(
                 activity=activity,
                 sector=data["sector"],
                 title=parsed["title"] or data["title"],
                 created_by=self.request.user,
+                responsavel=responsavel,
                 description=data.get("description") or "",
                 order=next_order,
                 requested_deadline=data.get("requested_deadline"),
                 tags=merged_tags,
+                participantes=data.get("participantes"),
             )
-            assignee = data.get("executor") or parsed["assignee"]
-            if assignee is not None:
-                TaskService.add_executor(task, assignee, added_by=self.request.user)
         except ActivityError as exc:
             form.add_error(None, str(exc))
             return self.form_invalid(form)
@@ -2226,13 +2244,13 @@ class TaskExecutorAddView(ServiceActionView):
         task = get_object_or_404(Task, pk=pk, activity__organization=self.organization)
         form = ExecutorForm(request.POST, organization=self.organization)
         if not form.is_valid():
-            raise ActivityError("Selecione um executor válido.")
+            raise ActivityError("Selecione um participante válido.")
         user = form.cleaned_data["user"]
         result = TaskService.add_executor(task, user, added_by=request.user)
         if isinstance(result, TaskAssignment):
             messages.success(request, "Atribuição enviada, aguardando aceite.")
         else:
-            messages.success(request, "Executor incluído.")
+            messages.success(request, "Participante incluído.")
 
     def redirect_to(self):
         return reverse("task-detail", args=[self.kwargs["pk"]])
@@ -2245,10 +2263,39 @@ class TaskExecutorRemoveView(ServiceActionView):
             TaskExecutor, task=task, user_id=user_pk, removed_at__isnull=True
         )
         TaskService.remove_executor(task, executor.user, removed_by=request.user)
-        messages.success(request, "Executor removido.")
+        messages.success(request, "Participante removido.")
 
     def redirect_to(self):
         return reverse("task-detail", args=[self.kwargs["pk"]])
+
+
+class TaskChangeResponsavelView(OrganizationRequiredMixin, FormView):
+    template_name = "activities/task_change_responsavel.html"
+    form_class = TaskChangeResponsavelForm
+
+    def get_task(self):
+        return get_object_or_404(Task, pk=self.kwargs["pk"], activity__organization=self.organization)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["organization"] = self.organization
+        kwargs["can_create_person"] = can(self.request.user, catalog.USUARIO_CRIAR)
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["task"] = self.get_task()
+        return context
+
+    def form_valid(self, form):
+        task = self.get_task()
+        try:
+            TaskService.change_responsavel(task, form.cleaned_data["new_responsavel"], self.request.user)
+        except ActivityError as exc:
+            form.add_error(None, str(exc))
+            return self.form_invalid(form)
+        messages.success(self.request, "Responsável da tarefa alterado.")
+        return redirect("task-detail", pk=task.pk)
 
 
 class TaskAssignmentAcceptView(ServiceActionView):
@@ -2362,10 +2409,23 @@ class DeadlineDecisionView(OrganizationRequiredMixin, View):
         proposal = get_object_or_404(
             DeadlineProposal, pk=pk, task__activity__organization=self.organization
         )
+        notification = None
+        notification_id = request.POST.get("notification_id")
+        if notification_id:
+            if self.decision != "accept" or not notification_id.isdecimal():
+                raise Http404
+            notification = get_object_or_404(
+                Notification, pk=notification_id, recipient=request.user,
+                event_type=Notification.EventType.DEADLINE_PROPOSED,
+                task_id=proposal.task_id, created_at__gte=proposal.proposed_at,
+            )
         note = request.POST.get("note", "")
         try:
             if self.decision == "accept":
-                DeadlineService.accept(proposal, request.user)
+                with transaction.atomic():
+                    DeadlineService.accept(proposal, request.user)
+                    if notification is not None:
+                        NotificationService.mark_read(notification)
                 messages.success(request, "Prazo aceito.")
             else:
                 DeadlineService.reject(proposal, request.user, note)
@@ -2470,6 +2530,7 @@ class QueueView(OrganizationRequiredMixin, TemplateView):
             my_entries = list(
                 entries.filter(
                     Q(task__activity__owner=user)
+                    | Q(task__responsavel=user)
                     | Q(task__executors__user=user, task__executors__removed_at__isnull=True)
                 ).distinct()
             )

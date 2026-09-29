@@ -73,6 +73,11 @@ urlpatterns = [
         name="task-executor-remove",
     ),
     path(
+        "tarefas/<int:pk>/alterar-responsavel/",
+        views.TaskChangeResponsavelView.as_view(),
+        name="task-change-responsavel",
+    ),
+    path(
         "tarefas/<int:pk>/atribuicoes/<int:assignment_pk>/aceitar/",
         views.TaskAssignmentAcceptView.as_view(),
         name="task-assignment-accept",

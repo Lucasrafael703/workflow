@@ -7,6 +7,7 @@ class AuditLog(models.Model):
         CREATE = "CREATE", "Criação"
         UPDATE = "UPDATE", "Atualização"
         OWNER_CHANGED = "OWNER_CHANGED", "Dono alterado"
+        RESPONSAVEL_CHANGED = "RESPONSAVEL_CHANGED", "Responsável alterado"
         TASK_CREATED = "TASK_CREATED", "Tarefa criada"
         EXECUTOR_ADDED = "EXECUTOR_ADDED", "Executor incluído"
         EXECUTOR_REMOVED = "EXECUTOR_REMOVED", "Executor removido"

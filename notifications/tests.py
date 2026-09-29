@@ -54,7 +54,8 @@ class NotificationsTestCase(TestCase):
             organization=self.org, title="Material disponível na obra", owner=self.owner, created_by=self.owner
         )
         self.task = TaskService.create_task(
-            self.activity, self.sector, "Cotação de cabos", created_by=self.owner
+            self.activity, self.sector, "Cotação de cabos", created_by=self.owner,
+            responsavel=self.owner,
         )
         assignment = TaskService.add_executor(self.task, self.executor, added_by=self.owner)
         TaskService.accept_assignment(assignment, self.executor)

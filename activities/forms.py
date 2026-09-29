@@ -13,6 +13,7 @@ from core.widgets import (
     ClientPickerWidget,
     CompanyPickerWidget,
     CostCenterPickerWidget,
+    PersonMultiPickerWidget,
     PersonPickerWidget,
     RichTextWidget,
     SectorPickerWidget,
@@ -465,14 +466,20 @@ class TaskQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
     ter o mesmo comportamento em qualquer ponto de entrada (Regra: um único
     padrão de tela de "Nova tarefa")."""
 
-    executor = forms.ModelChoiceField(
+    responsavel = forms.ModelChoiceField(
         queryset=User.objects.none(),
-        label="Responsável / Executor",
-        required=False,
+        label="Responsável pela tarefa",
+        required=True,
         widget=PersonPickerWidget(
             placeholder="Buscar responsável...",
             selection_label="Selecionar responsável...",
         ),
+    )
+    participantes = forms.ModelMultipleChoiceField(
+        queryset=User.objects.none(),
+        label="Participantes",
+        required=False,
+        widget=PersonMultiPickerWidget(),
     )
 
     class Meta:
@@ -499,7 +506,7 @@ class TaskQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
     def __init__(self, *args, organization=None, activity=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.scope_querysets(organization)
-        self.order_fields(["title", "sector", "executor", "requested_deadline", "tags", "description"])
+        self.order_fields(["title", "sector", "responsavel", "participantes", "requested_deadline", "tags", "description"])
         self.fields["description"].required = False
         self.fields["requested_deadline"].required = False
         self.fields["tags"].required = False
@@ -507,13 +514,24 @@ class TaskQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
         if activity is not None and activity.sector_id and not self.is_bound:
             self.fields["sector"].initial = activity.sector_id
         if organization is not None:
-            self.fields["executor"].queryset = User.objects.filter(
+            people = User.objects.filter(
                 profile__organization=organization, is_active=True
             ).order_by("first_name", "username")
-        self.fields["executor"].widget.queryset = self.fields["executor"].queryset
+            self.fields["responsavel"].queryset = people
+            self.fields["participantes"].queryset = people
+        self.fields["responsavel"].widget.queryset = self.fields["responsavel"].queryset
+        self.fields["participantes"].widget.queryset = self.fields["participantes"].queryset
 
     def clean_description(self):
         return sanitize_description(self.cleaned_data.get("description"))
+
+    def clean(self):
+        cleaned_data = super().clean()
+        responsavel = cleaned_data.get("responsavel")
+        participantes = cleaned_data.get("participantes")
+        if responsavel is not None and participantes:
+            cleaned_data["participantes"] = participantes.exclude(pk=responsavel.pk)
+        return cleaned_data
 
 
 class TaskQuickCreateStandaloneForm(TaskQuickCreateForm):
@@ -539,7 +557,7 @@ class TaskQuickCreateStandaloneForm(TaskQuickCreateForm):
         # A atividade só é conhecida depois de escolhida no próprio popup,
         # então nunca há um `activity` fixo para herdar o setor dele.
         super().__init__(*args, organization=organization, activity=None, **kwargs)
-        self.order_fields(["activity", "title", "sector", "executor", "requested_deadline", "tags", "description"])
+        self.order_fields(["activity", "title", "sector", "responsavel", "participantes", "requested_deadline", "tags", "description"])
         queryset = Activity.objects.filter(organization=organization, status__in=self.OPEN_ACTIVITY_STATUSES)
         self.fields["activity"].queryset = queryset
         self.fields["activity"].widget.queryset = queryset
@@ -617,7 +635,7 @@ class MoveSectorForm(forms.Form):
 
 class ExecutorForm(forms.Form):
     user = forms.ModelChoiceField(
-        queryset=User.objects.none(), label="Executor", widget=PersonPickerWidget()
+        queryset=User.objects.none(), label="Participante", widget=PersonPickerWidget()
     )
 
     def __init__(self, *args, organization=None, can_create_person=False, **kwargs):
@@ -629,6 +647,22 @@ class ExecutorForm(forms.Form):
         self.fields["user"].widget.queryset = queryset
         if can_create_person:
             self.fields["user"].widget.create_url = reverse("user-create")
+
+
+class TaskChangeResponsavelForm(forms.Form):
+    new_responsavel = forms.ModelChoiceField(
+        queryset=User.objects.none(), label="Novo responsável", widget=PersonPickerWidget()
+    )
+
+    def __init__(self, *args, organization=None, can_create_person=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        queryset = User.objects.filter(
+            profile__organization=organization, is_active=True
+        ).order_by("first_name", "username")
+        self.fields["new_responsavel"].queryset = queryset
+        self.fields["new_responsavel"].widget.queryset = queryset
+        if can_create_person:
+            self.fields["new_responsavel"].widget.create_url = reverse("user-create")
 
 
 class DeadlineProposalForm(forms.Form):

@@ -114,7 +114,7 @@ class TaskExecutionTests(ActivitiesTestCase):
         activity = ActivityService.create_activity(
             organization=self.org, title="Orçamento", owner=self.owner, created_by=self.creator
         )
-        return TaskService.create_task(activity, self.sector, "Levantar quantitativos", created_by=self.creator)
+        return TaskService.create_task(activity, self.sector, "Levantar quantitativos", created_by=self.creator, responsavel=self.creator)
 
     def _assign_and_accept(self, task, user, assigned_by):
         assignment = TaskService.add_executor(task, user, added_by=assigned_by)
@@ -149,8 +149,8 @@ class TaskExecutionTests(ActivitiesTestCase):
         activity = ActivityService.create_activity(
             organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
         )
-        task1 = TaskService.create_task(activity, self.sector, "Tarefa 1", created_by=self.creator)
-        task2 = TaskService.create_task(activity, self.sector, "Tarefa 2", created_by=self.creator)
+        task1 = TaskService.create_task(activity, self.sector, "Tarefa 1", created_by=self.creator, responsavel=self.creator)
+        task2 = TaskService.create_task(activity, self.sector, "Tarefa 2", created_by=self.creator, responsavel=self.creator)
         self._assign_and_accept(task1, self.executor, assigned_by=self.creator)
         self._assign_and_accept(task2, self.executor, assigned_by=self.creator)
 
@@ -187,7 +187,7 @@ class TaskAssignmentTests(ActivitiesTestCase):
         activity = ActivityService.create_activity(
             organization=self.org, title="Orçamento", owner=self.owner, created_by=self.creator
         )
-        return TaskService.create_task(activity, self.sector, "Buscar bomba", created_by=self.creator)
+        return TaskService.create_task(activity, self.sector, "Buscar bomba", created_by=self.creator, responsavel=self.creator)
 
     def test_assigning_another_person_creates_pending_assignment_not_executor(self):
         task = self._make_task()
@@ -252,12 +252,133 @@ class TaskAssignmentTests(ActivitiesTestCase):
             TaskService.accept_assignment(assignment, self.executor)
 
 
+class TaskResponsavelTests(ActivitiesTestCase):
+    """Responsável é único e obrigatório; Participantes continuam via TaskExecutor (doc — novo)."""
+
+    def _make_task(self, **kwargs):
+        activity = ActivityService.create_activity(
+            organization=self.org, title="Orçamento", owner=self.owner, created_by=self.creator
+        )
+        params = {"responsavel": self.creator}
+        params.update(kwargs)
+        return TaskService.create_task(activity, self.sector, "Levantar quantitativos", created_by=self.creator, **params)
+
+    def test_create_task_requires_responsavel(self):
+        activity = ActivityService.create_activity(
+            organization=self.org, title="Orçamento", owner=self.owner, created_by=self.creator
+        )
+        with self.assertRaises(ActivityError):
+            TaskService.create_task(activity, self.sector, "Sem responsável", created_by=self.creator, responsavel=None)
+
+    def test_create_task_populates_participantes_excluding_responsavel(self):
+        # Participantes que não são quem cria a tarefa passam por pedido de
+        # aceite (mesma regra de add_executor) — viram pendência, não
+        # executor imediato. O responsável nunca aparece nessa lista.
+        task = self._make_task(participantes=[self.executor, self.executor2, self.creator])
+
+        self.assertEqual(task.responsavel, self.creator)
+        pending_ids = set(
+            TaskAssignment.objects.filter(
+                task=task, status=TaskAssignment.Status.PENDENTE
+            ).values_list("user_id", flat=True)
+        )
+        self.assertEqual(pending_ids, {self.executor.id, self.executor2.id})
+        self.assertFalse(TaskAssignment.objects.filter(task=task, user=self.creator).exists())
+        self.assertFalse(TaskExecutor.objects.filter(task=task, user=self.creator).exists())
+
+    def test_add_executor_rejects_the_responsavel_as_participant(self):
+        task = self._make_task()
+        with self.assertRaises(ActivityError):
+            TaskService.add_executor(task, self.creator, added_by=self.creator)
+
+    def test_accept_assignment_rejects_the_responsavel_as_participant(self):
+        task = self._make_task()
+        assignment = TaskService.add_executor(task, self.executor, added_by=self.creator)
+        grant_action(self.creator, catalog.TAREFA_ALTERAR_RESPONSAVEL, organization=self.org)
+        TaskService.change_responsavel(task, self.executor, changed_by=self.creator)
+        with self.assertRaises(ActivityError):
+            TaskService.accept_assignment(assignment, self.executor)
+
+    def test_responsavel_alone_can_start_pause_and_log_time(self):
+        task = self._make_task()
+        TaskService.start(task, self.creator)
+        self.assertTrue(WorkSession.objects.filter(task=task, user=self.creator, ended_at__isnull=True).exists())
+        TaskService.pause(task, self.creator)
+        self.assertFalse(WorkSession.objects.filter(task=task, user=self.creator, ended_at__isnull=True).exists())
+
+    def test_participant_without_being_responsavel_can_start_task(self):
+        task = self._make_task()
+        assignment = TaskService.add_executor(task, self.executor, added_by=self.creator)
+        TaskService.accept_assignment(assignment, self.executor)
+        TaskService.start(task, self.executor)
+        self.assertTrue(WorkSession.objects.filter(task=task, user=self.executor, ended_at__isnull=True).exists())
+
+    def test_change_responsavel_requires_permission(self):
+        task = self._make_task()
+        with self.assertRaises(ActivityError):
+            TaskService.change_responsavel(task, self.executor, changed_by=self.executor)
+
+    def test_change_responsavel_creates_log_audits_and_notifies(self):
+        task = self._make_task()
+        grant_action(self.gestor, catalog.TAREFA_ALTERAR_RESPONSAVEL, organization=self.org)
+
+        TaskService.change_responsavel(task, self.executor, changed_by=self.gestor)
+        task.refresh_from_db()
+
+        self.assertEqual(task.responsavel, self.executor)
+        self.assertEqual(task.responsavel_changes.count(), 1)
+        change = task.responsavel_changes.first()
+        self.assertEqual(change.previous_responsavel, self.creator)
+        self.assertEqual(change.new_responsavel, self.executor)
+        self.assertEqual(change.changed_by, self.gestor)
+
+        self.assertTrue(
+            AuditLog.objects.filter(task=task, action=AuditLog.Action.RESPONSAVEL_CHANGED).exists()
+        )
+        self.assertTrue(
+            Notification.objects.filter(
+                task=task, event_type=Notification.EventType.TASK_RESPONSAVEL_CHANGED, recipient=self.creator
+            ).exists()
+        )
+        self.assertTrue(
+            Notification.objects.filter(
+                task=task, event_type=Notification.EventType.TASK_RESPONSAVEL_CHANGED, recipient=self.executor
+            ).exists()
+        )
+
+    def test_change_responsavel_removes_new_responsavel_from_participantes(self):
+        task = self._make_task()
+        assignment = TaskService.add_executor(task, self.executor, added_by=self.creator)
+        TaskService.accept_assignment(assignment, self.executor)
+        grant_action(self.gestor, catalog.TAREFA_ALTERAR_RESPONSAVEL, organization=self.org)
+
+        TaskService.change_responsavel(task, self.executor, changed_by=self.gestor)
+
+        self.assertFalse(
+            TaskExecutor.objects.filter(task=task, user=self.executor, removed_at__isnull=True).exists()
+        )
+
+    def test_change_responsavel_rejects_same_person(self):
+        task = self._make_task()
+        grant_action(self.gestor, catalog.TAREFA_ALTERAR_RESPONSAVEL, organization=self.org)
+        with self.assertRaises(ActivityError):
+            TaskService.change_responsavel(task, self.creator, changed_by=self.gestor)
+
+    def test_change_responsavel_rejects_completed_or_cancelled_task(self):
+        task = self._make_task()
+        grant_action(self.gestor, catalog.TAREFA_ALTERAR_RESPONSAVEL, organization=self.org)
+        TaskService.start(task, self.creator)
+        TaskService.complete(task, self.creator)
+        with self.assertRaises(ActivityError):
+            TaskService.change_responsavel(task, self.executor, changed_by=self.gestor)
+
+
 class TaskReturnTests(ActivitiesTestCase):
     def test_return_requires_reason(self):
         activity = ActivityService.create_activity(
             organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
         )
-        task = TaskService.create_task(activity, self.sector, "Cotação", created_by=self.creator)
+        task = TaskService.create_task(activity, self.sector, "Cotação", created_by=self.creator, responsavel=self.creator)
         target_sector = Sector.objects.create(organization=self.org, name="Engenharia")
 
         with self.assertRaises(ActivityError):
@@ -267,7 +388,7 @@ class TaskReturnTests(ActivitiesTestCase):
         activity = ActivityService.create_activity(
             organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
         )
-        task = TaskService.create_task(activity, self.sector, "Cotação", created_by=self.creator)
+        task = TaskService.create_task(activity, self.sector, "Cotação", created_by=self.creator, responsavel=self.creator)
         engenharia = Sector.objects.create(organization=self.org, name="Engenharia")
 
         TaskService.return_task(task, engenharia, reason=self.reason, user=self.creator, observation="Faltou item X")
@@ -288,9 +409,9 @@ class QueueTests(ActivitiesTestCase):
         activity = ActivityService.create_activity(
             organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
         )
-        task1 = TaskService.create_task(activity, self.sector, "Tarefa 1", created_by=self.creator)
-        task2 = TaskService.create_task(activity, self.sector, "Tarefa 2", created_by=self.creator)
-        task3 = TaskService.create_task(activity, self.sector, "Tarefa 3", created_by=self.creator)
+        task1 = TaskService.create_task(activity, self.sector, "Tarefa 1", created_by=self.creator, responsavel=self.creator)
+        task2 = TaskService.create_task(activity, self.sector, "Tarefa 2", created_by=self.creator, responsavel=self.creator)
+        task3 = TaskService.create_task(activity, self.sector, "Tarefa 3", created_by=self.creator, responsavel=self.creator)
 
         entry1 = QueueEntry.objects.get(task=task1)
         entry2 = QueueEntry.objects.get(task=task2)
@@ -304,8 +425,8 @@ class QueueTests(ActivitiesTestCase):
         activity = ActivityService.create_activity(
             organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
         )
-        task1 = TaskService.create_task(activity, self.sector, "Tarefa 1", created_by=self.creator)
-        TaskService.create_task(activity, self.sector, "Tarefa 2", created_by=self.creator)
+        task1 = TaskService.create_task(activity, self.sector, "Tarefa 1", created_by=self.creator, responsavel=self.creator)
+        TaskService.create_task(activity, self.sector, "Tarefa 2", created_by=self.creator, responsavel=self.creator)
         entry1 = QueueEntry.objects.get(task=task1)
 
         with self.assertRaises(ActivityError):
@@ -329,7 +450,8 @@ class DeadlineNegotiationTests(ActivitiesTestCase):
             requested_deadline=timezone.now(),
         )
         return TaskService.create_task(
-            activity, self.sector, "Tarefa", created_by=self.creator, requested_deadline=timezone.now()
+            activity, self.sector, "Tarefa", created_by=self.creator, responsavel=self.creator,
+            requested_deadline=timezone.now()
         )
 
     def test_requested_and_committed_deadline_are_distinct(self):
@@ -378,13 +500,13 @@ class OrganizationIsolationTests(ActivitiesTestCase):
             organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
         )
         with self.assertRaises(ActivityError):
-            TaskService.create_task(activity, self.other_sector, "Tarefa cruzada", created_by=self.creator)
+            TaskService.create_task(activity, self.other_sector, "Tarefa cruzada", created_by=self.creator, responsavel=self.creator)
 
     def test_task_cannot_move_to_sector_from_another_organization(self):
         activity = ActivityService.create_activity(
             organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
         )
-        task = TaskService.create_task(activity, self.sector, "Tarefa", created_by=self.creator)
+        task = TaskService.create_task(activity, self.sector, "Tarefa", created_by=self.creator, responsavel=self.creator)
         with self.assertRaises(ActivityError):
             TaskService.move_to_sector(task, self.other_sector, user=self.creator)
 
@@ -394,7 +516,7 @@ class ActivityCompletionTests(ActivitiesTestCase):
         activity = ActivityService.create_activity(
             organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
         )
-        TaskService.create_task(activity, self.sector, "Tarefa", created_by=self.creator)
+        TaskService.create_task(activity, self.sector, "Tarefa", created_by=self.creator, responsavel=self.creator)
         with self.assertRaises(ActivityError):
             ActivityService.complete_activity(activity, user=self.owner)
 
@@ -437,7 +559,7 @@ class UpdateAuditTests(ActivitiesTestCase):
         activity = ActivityService.create_activity(
             organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
         )
-        task = TaskService.create_task(activity, self.sector, "Tarefa", created_by=self.creator)
+        task = TaskService.create_task(activity, self.sector, "Tarefa", created_by=self.creator, responsavel=self.creator)
         with self.assertRaises(ActivityError):
             TaskService.update_task(task, self.creator, depends_on=task)
 
@@ -447,7 +569,7 @@ class ManualTimeTests(ActivitiesTestCase):
         activity = ActivityService.create_activity(
             organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
         )
-        task = TaskService.create_task(activity, self.sector, "Tarefa", created_by=self.creator)
+        task = TaskService.create_task(activity, self.sector, "Tarefa", created_by=self.creator, responsavel=self.creator)
         assignment = TaskService.add_executor(task, self.executor, added_by=self.creator)
         TaskService.accept_assignment(assignment, self.executor)
         return task
@@ -507,9 +629,9 @@ class QueueRenumberTests(ActivitiesTestCase):
         activity = ActivityService.create_activity(
             organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
         )
-        first = TaskService.create_task(activity, self.sector, "Tarefa 1", created_by=self.creator)
-        second = TaskService.create_task(activity, self.sector, "Tarefa 2", created_by=self.creator)
-        third = TaskService.create_task(activity, self.sector, "Tarefa 3", created_by=self.creator)
+        first = TaskService.create_task(activity, self.sector, "Tarefa 1", created_by=self.creator, responsavel=self.creator)
+        second = TaskService.create_task(activity, self.sector, "Tarefa 2", created_by=self.creator, responsavel=self.creator)
+        third = TaskService.create_task(activity, self.sector, "Tarefa 3", created_by=self.creator, responsavel=self.creator)
 
         TaskService.complete(first, self.creator)
 
@@ -521,8 +643,8 @@ class QueueRenumberTests(ActivitiesTestCase):
         activity = ActivityService.create_activity(
             organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
         )
-        first = TaskService.create_task(activity, self.sector, "Tarefa 1", created_by=self.creator)
-        second = TaskService.create_task(activity, self.sector, "Tarefa 2", created_by=self.creator)
+        first = TaskService.create_task(activity, self.sector, "Tarefa 1", created_by=self.creator, responsavel=self.creator)
+        second = TaskService.create_task(activity, self.sector, "Tarefa 2", created_by=self.creator, responsavel=self.creator)
 
         TaskService.complete(first, self.creator)
 
@@ -536,9 +658,9 @@ class QueueRenumberTests(ActivitiesTestCase):
         activity = ActivityService.create_activity(
             organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
         )
-        first = TaskService.create_task(activity, self.sector, "Tarefa 1", created_by=self.creator)
-        TaskService.create_task(activity, self.sector, "Tarefa 2", created_by=self.creator)
-        TaskService.create_task(activity, self.sector, "Tarefa 3", created_by=self.creator)
+        first = TaskService.create_task(activity, self.sector, "Tarefa 1", created_by=self.creator, responsavel=self.creator)
+        TaskService.create_task(activity, self.sector, "Tarefa 2", created_by=self.creator, responsavel=self.creator)
+        TaskService.create_task(activity, self.sector, "Tarefa 3", created_by=self.creator, responsavel=self.creator)
 
         TaskService.complete(first, self.creator)
 
@@ -573,7 +695,7 @@ class MessageTests(ActivitiesTestCase):
         activity = ActivityService.create_activity(
             organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
         )
-        task = TaskService.create_task(activity, self.sector, "Tarefa", created_by=self.creator)
+        task = TaskService.create_task(activity, self.sector, "Tarefa", created_by=self.creator, responsavel=self.creator)
         assignment = TaskService.add_executor(task, self.executor, added_by=self.creator)
         TaskService.accept_assignment(assignment, self.executor)
 
@@ -650,7 +772,7 @@ class MentionTests(ActivitiesTestCase):
         activity = ActivityService.create_activity(
             organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
         )
-        task = TaskService.create_task(activity, self.sector, "Tarefa", created_by=self.creator)
+        task = TaskService.create_task(activity, self.sector, "Tarefa", created_by=self.creator, responsavel=self.creator)
 
         TaskService.update_task(task, self.creator, description=f"Falar com @{self.executor.username}.")
 
@@ -682,7 +804,8 @@ class MentionTests(ActivitiesTestCase):
             requested_deadline=timezone.now(),
         )
         task = TaskService.create_task(
-            activity, self.sector, "Tarefa", created_by=self.creator, requested_deadline=timezone.now()
+            activity, self.sector, "Tarefa", created_by=self.creator, responsavel=self.creator,
+            requested_deadline=timezone.now()
         )
         proposal = DeadlineService.propose(task, timezone.now() + timezone.timedelta(days=2), user=self.creator)
         DeadlineService.reject(proposal, user=self.owner, note="Sem capacidade.")
@@ -729,7 +852,7 @@ class StatusLabelOverrideTests(ActivitiesTestCase):
         from core.services import EnumColorService
 
         activity = self._make_activity()
-        task = TaskService.create_task(activity, self.sector, "Levantar quantitativos", created_by=self.creator)
+        task = TaskService.create_task(activity, self.sector, "Levantar quantitativos", created_by=self.creator, responsavel=self.creator)
         original_status = task.status
         EnumColorService.set_overrides(self.org, "task_status", task.status, label="Aguardando fila")
         self.assertEqual(task.status_label, "Aguardando fila")

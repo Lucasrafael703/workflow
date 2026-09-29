@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Alterar responsável — LPS{% endblock %}
+
+{% block content %}
+<div class="modal-backdrop">
+    <div class="modal">
+        <div class="modal__head">
+            <div>
+                <h2>Alterar responsável da tarefa</h2>
+                <div class="sub">{{ task.title }}</div>
+            </div>
+            <a href="{% url 'task-detail' task.pk %}" class="modal__close" title="Fechar">&times;</a>
+        </div>
+
+        <form method="post">
+            {% csrf_token %}
+            <div class="modal__body">
+                <p class="muted">
+                    Responsável atual: <strong>{{ task.responsavel.get_username }}</strong>.
+                    A tarefa continua com um único responsável; a troca fica registrada no histórico.
+                </p>
+                {% include "activities/_form_fields.html" %}
+            </div>
+            <div class="modal__foot">
+                <a href="{% url 'task-detail' task.pk %}" class="btn">Voltar</a>
+                <button type="submit" class="btn btn--primary">Transferir tarefa</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

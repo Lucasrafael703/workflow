@@ -44,12 +44,13 @@
             {% elif task.requested_deadline %}{{ task.requested_deadline|date:"d/m H:i" }}
             {% else %}-{% endif %}
         </span>
-        {% if task.active_executors %}
-            {% with first_executor=task.active_executors.0 %}
-            <span class="avatar avatar--{{ first_executor.user|avatar_color }}" title="{{ first_executor.user.get_full_name|default:first_executor.user.get_username }}">
-                {{ first_executor.user.get_full_name|default:first_executor.user.get_username|slice:":2"|upper }}
+        {% if task.responsavel %}
+            <span class="avatar avatar--{{ task.responsavel|avatar_color }}" title="{{ task.responsavel.get_full_name|default:task.responsavel.get_username }}">
+                {{ task.responsavel.get_full_name|default:task.responsavel.get_username|slice:":2"|upper }}
             </span>
-            {% endwith %}
+            {% if task.active_executors %}
+            <span class="kanban-card__participants-badge" title="{{ task.active_executors|length }} participante{{ task.active_executors|length|pluralize }}">+{{ task.active_executors|length }}</span>
+            {% endif %}
         {% else %}
             <span class="kanban-card__no-owner">-</span>
         {% endif %}

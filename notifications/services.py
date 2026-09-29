@@ -39,10 +39,10 @@ class NotificationService:
 
     @staticmethod
     def mark_read(notification):
-        if not notification.is_read:
-            notification.is_read = True
-            notification.read_at = timezone.now()
-            notification.save(update_fields=["is_read", "read_at"])
+        Notification.objects.filter(pk=notification.pk, is_read=False).update(
+            is_read=True, read_at=timezone.now()
+        )
+        notification.refresh_from_db(fields=["is_read", "read_at"])
         return notification
 
 
