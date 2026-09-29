@@ -77,7 +77,7 @@ class CadastroHomeView(OrganizationRequiredMixin, TemplateView):
             )
         )
         companies = Company.objects.filter(organization=org)
-        sites = Site.objects.filter(organization=org).select_related("company")
+        sites = Site.objects.filter(organization=org).select_related("client")
         cost_centers = CostCenter.objects.filter(organization=org).select_related("site")
         clients = Client.objects.filter(organization=org)
         reasons = ReturnReason.objects.filter(organization=org)
@@ -343,13 +343,13 @@ class SiteFormView(CadastroFormView):
     required_action = catalog.OBRA_GERIR
 
     def initial_from(self, instance):
-        return {"name": instance.name, "company": instance.company_id}
+        return {"name": instance.name, "client": instance.client_id}
 
     def create(self, data):
-        return SiteService.create(self.organization, data["name"], company=data.get("company"))
+        return SiteService.create(self.organization, data["name"], client=data.get("client"))
 
     def update(self, instance, data):
-        return SiteService.update(instance, name=data["name"], company=data.get("company"))
+        return SiteService.update(instance, name=data["name"], client=data.get("client"))
 
 
 class CostCenterFormView(CadastroFormView):

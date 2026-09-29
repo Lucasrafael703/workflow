@@ -7,7 +7,7 @@ from acessos.models import Scope
 
 from .colors import DEFAULTS
 from .models import Client, Company, CostCenter, Sector, Site
-from .widgets import ColorPaletteWidget
+from .widgets import ClientPickerWidget, ColorPaletteWidget, SitePickerWidget
 
 User = get_user_model()
 
@@ -24,26 +24,30 @@ class CompanyForm(forms.Form):
 
 class SiteForm(forms.Form):
     name = forms.CharField(label="Nome", max_length=150)
-    company = forms.ModelChoiceField(
-        label="Empresa", queryset=Company.objects.none(), required=False
+    client = forms.ModelChoiceField(
+        label="Cliente", queryset=Client.objects.none(), required=False, widget=ClientPickerWidget()
     )
 
     def __init__(self, *args, organization=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["company"].queryset = Company.objects.filter(
+        self.fields["client"].queryset = Client.objects.filter(
             organization=organization, is_active=True
         )
+        self.fields["client"].widget.queryset = self.fields["client"].queryset
 
 
 class CostCenterForm(forms.Form):
     name = forms.CharField(label="Nome", max_length=150)
-    site = forms.ModelChoiceField(label="Obra", queryset=Site.objects.none(), required=False)
+    site = forms.ModelChoiceField(
+        label="Obra", queryset=Site.objects.none(), required=False, widget=SitePickerWidget()
+    )
 
     def __init__(self, *args, organization=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["site"].queryset = Site.objects.filter(
             organization=organization, is_active=True
         )
+        self.fields["site"].widget.queryset = self.fields["site"].queryset
 
 
 class ClientForm(forms.Form):

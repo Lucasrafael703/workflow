@@ -26,7 +26,7 @@ class SectorAdmin(admin.ModelAdmin):
 
 @admin.register(Site)
 class SiteAdmin(admin.ModelAdmin):
-    list_display = ("name", "organization", "company", "is_active")
+    list_display = ("name", "organization", "client", "is_active")
     list_filter = ("organization", "is_active")
     search_fields = ("name",)
 

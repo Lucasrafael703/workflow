@@ -241,8 +241,8 @@ class Site(models.Model):
     organization = models.ForeignKey(
         Organization, verbose_name="organização", on_delete=models.CASCADE, related_name="sites"
     )
-    company = models.ForeignKey(
-        Company, verbose_name="empresa", null=True, blank=True, on_delete=models.SET_NULL, related_name="sites"
+    client = models.ForeignKey(
+        "Client", verbose_name="cliente", null=True, blank=True, on_delete=models.SET_NULL, related_name="sites"
     )
     name = models.CharField("nome", max_length=150)
     is_active = models.BooleanField("ativa", default=True)
