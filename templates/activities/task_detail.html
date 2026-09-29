@@ -91,7 +91,6 @@
                     <form method="post" action="{% url 'task-start' task.pk %}">
                         {% csrf_token %}<button type="submit" class="btn btn--primary btn--lg">Iniciar tarefa</button>
                     </form>
-                    <p class="muted small" style="margin:10px 0 0">Iniciar esta tarefa pausa automaticamente qualquer outra que você esteja executando.</p>
                 {% elif can_assume %}
                     <form method="post" action="{% url 'task-assume' task.pk %}">
                         {% csrf_token %}<button type="submit" class="btn btn--primary btn--lg">Assumir tarefa</button>
@@ -136,30 +135,8 @@
         {% endif %}
 
         <div class="card card--flush">
-            <div class="card__head">
-                <h2>Checklist</h2>
-                {% if checklist_items %}<span class="muted small">{{ checklist_items|length }} itens</span>{% endif %}
-            </div>
             <div class="card__body">
-                <ul class="checklist js-checklist">
-                    {% for item in checklist_items %}
-                    <li class="checklist__item{% if item.is_done %} checklist__item--done{% endif %}"
-                        data-item-id="{{ item.pk }}"
-                        data-toggle-url="{% url 'task-checklist-toggle' item.pk %}"
-                        data-remove-url="{% url 'task-checklist-remove' item.pk %}">
-                        <label>
-                            <input type="checkbox" class="js-checklist-toggle" {% if item.is_done %}checked{% endif %}>
-                            <span>{{ item.text }}</span>
-                        </label>
-                        <button type="button" class="link-button js-checklist-remove" title="Remover">&times;</button>
-                    </li>
-                    {% empty %}
-                    <li class="muted small js-checklist-empty">Nenhum item ainda.</li>
-                    {% endfor %}
-                </ul>
-                <form class="checklist__add js-checklist-add" data-url="{% url 'task-checklist-add' task.pk %}">
-                    <input type="text" name="text" placeholder="+ item" maxlength="255">
-                </form>
+                {% include "activities/_task_checklist.html" %}
             </div>
         </div>
 

@@ -2177,15 +2177,13 @@ Registrar:
 
 ---
 
-# 115. Sessões sobrepostas da mesma pessoa
+# 115. Sessões sobrepostas da mesma pessoa (revista)
 
-A LPS deve evitar que a mesma pessoa registre trabalho ativo simultaneamente em duas tarefas, salvo decisão explícita futura.
+Decisão explícita tomada: a mesma pessoa pode ter sessões de trabalho ativas simultaneamente em tarefas diferentes.
 
-A regra conceitual discutida anteriormente é:
+Cada sessão é independente — iniciar uma nova tarefa não pausa as demais que a pessoa já tinha em execução; cada uma é pausada ou concluída separadamente, pela própria pessoa.
 
-> iniciar uma nova atividade/tarefa de trabalho pausa a anterior.
-
-Isso evita dupla contagem de tempo.
+A regra anterior (iniciar uma tarefa pausava automaticamente qualquer outra sessão ativa da mesma pessoa, para evitar dupla contagem de tempo) foi substituída por esta. Não há hoje nenhum cálculo que some tempo entre tarefas diferentes da mesma pessoa (o "horas-homem" de uma tarefa continua sendo só a soma das sessões daquela tarefa), então a sobreposição de sessões em tarefas distintas não produz dupla contagem.
 
 ---
 

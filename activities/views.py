@@ -57,7 +57,6 @@ from .models import (
     TaskChecklistItem,
     TaskExecutor,
     TaskReturn,
-    WorkSession,
 )
 from .services import (
     ActivityAttachmentService,
@@ -263,14 +262,6 @@ def _next_attention(tasks):
     return None
 
 
-def active_session(user):
-    return (
-        WorkSession.objects.filter(user=user, ended_at__isnull=True)
-        .select_related("task", "task__activity")
-        .first()
-    )
-
-
 def can(user, action_key, resource=None):
     """Atalho de leitura para os templates decidirem o que exibir.
 
@@ -348,7 +339,6 @@ class HomeView(OrganizationRequiredMixin, TemplateView):
         user = self.request.user
         org = self.organization
 
-        session = active_session(user)
         my_sectors = user_sectors(user)
 
         next_tasks = (
@@ -392,8 +382,6 @@ class HomeView(OrganizationRequiredMixin, TemplateView):
 
         context.update(
             {
-                "active_session": session,
-                "active_task": session.task if session else None,
                 "next_tasks": next_tasks,
                 "pending": pending,
                 "summary": summary,
@@ -1768,6 +1756,8 @@ class TaskDetailView(OrganizationRequiredMixin, DetailView):
                 "queue_info": queue_position(task),
                 "open_block": open_block,
                 "checklist_items": task.checklist_items.select_related("created_by", "done_by"),
+                "checklist_done": task.checklist_items.filter(is_done=True).count(),
+                "can_toggle_checklist": TaskService.can_toggle_checklist(task, user),
                 "pending_proposal": pending_proposal,
                 "my_pending_assignment": my_pending_assignment,
                 "can_accept_assignment": can(user, catalog.TAREFA_ACEITAR, task),
@@ -1863,7 +1853,11 @@ class TaskChecklistAddView(OrganizationRequiredMixin, View):
             item = TaskService.add_checklist_item(task, request.user, request.POST.get("text"))
         except ActivityError as exc:
             return JsonResponse({"error": str(exc)}, status=400)
-        return JsonResponse({"id": item.pk, "text": item.text, "is_done": item.is_done})
+        return JsonResponse({
+            "id": item.pk, "text": item.text, "is_done": item.is_done,
+            "toggle_url": reverse("task-checklist-toggle", args=[item.pk]),
+            "remove_url": reverse("task-checklist-remove", args=[item.pk]),
+        })
 
 
 class TaskChecklistToggleView(OrganizationRequiredMixin, View):
@@ -1871,7 +1865,10 @@ class TaskChecklistToggleView(OrganizationRequiredMixin, View):
         item = get_object_or_404(
             TaskChecklistItem, pk=pk, task__activity__organization=self.organization
         )
-        is_done = request.POST.get("is_done") == "1"
+        raw_is_done = request.POST.get("is_done")
+        if raw_is_done not in ("0", "1"):
+            return JsonResponse({"error": "Informe se o item está concluído."}, status=400)
+        is_done = raw_is_done == "1"
         try:
             TaskService.toggle_checklist_item(item, request.user, is_done)
         except ActivityError as exc:

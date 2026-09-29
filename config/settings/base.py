@@ -64,6 +64,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "notifications.context_processors.unread_notifications_count",
                 "acessos.context_processors.navigation",
+                "activities.context_processors.my_active_sessions",
             ],
         },
     },

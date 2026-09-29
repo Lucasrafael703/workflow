@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20260929b">
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20260929c">
     <script>
     // Aplica o estado recolhido antes do primeiro paint — sem isto, a
     // sidebar apareceria expandida por um instante e "pularia" pro estado
@@ -235,6 +235,28 @@
 
         <div class="topbar__spacer"></div>
 
+        {% if my_active_sessions_count %}
+        <div class="timer-topbar">
+            <button type="button" class="topbar__icon" data-timer-menu-toggle
+                    title="Tarefas em execução" aria-label="Tarefas em execução" aria-expanded="false">
+                {% include "_icon.html" with name="clock" %}
+                <span class="dot">{{ my_active_sessions_count }}</span>
+            </button>
+            <div class="timer-topbar__menu" hidden data-timer-menu>
+                {% for session in my_active_sessions %}
+                <div class="timer-topbar__row">
+                    <span class="timer-topbar__clock" data-started-at="{{ session.started_at.isoformat }}">--:--:--</span>
+                    <a href="{% url 'task-detail' session.task.pk %}" class="timer-topbar__title">{{ session.task.title }}</a>
+                    <div class="timer-topbar__actions">
+                        <button type="button" class="btn btn--sm js-timer-ajax" data-url="{% url 'task-pause-ajax' session.task.pk %}">Pausar</button>
+                        <button type="button" class="btn btn--sm btn--primary js-timer-ajax" data-url="{% url 'task-complete-ajax' session.task.pk %}">Concluir</button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
         <a href="{% url 'notification-list' %}" class="topbar__icon" title="Notificações">
             {% include "_icon.html" with name="bell" %}
             {% if unread_notifications_count %}<span class="dot">{{ unread_notifications_count }}</span>{% endif %}
@@ -290,7 +312,7 @@
 <script src="{% static 'js/rich-text.js' %}?v=20260919c"></script>
 <script src="{% static 'js/mention.js' %}?v=20260927a"></script>
 <script src="{% static 'js/timer.js' %}?v=20260919c"></script>
-<script src="{% static 'js/checklist.js' %}?v=20260919c"></script>
+<script src="{% static 'js/checklist.js' %}?v=20260929c"></script>
 <script src="{% static 'js/task-drawer.js' %}?v=20260919c"></script>
 <script src="{% static 'js/color-utils.js' %}?v=20260926a"></script>
 <script src="{% static 'js/color-palette-picker.js' %}?v=20260926a"></script>

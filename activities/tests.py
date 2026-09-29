@@ -145,7 +145,7 @@ class TaskExecutionTests(ActivitiesTestCase):
         total_man_hours = sum((s.duration for s in task.work_sessions.all()), timezone.timedelta())
         self.assertEqual(total_man_hours, timezone.timedelta(hours=3))
 
-    def test_starting_new_task_pauses_previous_session_of_same_user(self):
+    def test_starting_new_task_keeps_previous_session_open(self):
         activity = ActivityService.create_activity(
             organization=self.org, title="Atividade", owner=self.owner, created_by=self.creator
         )
@@ -158,7 +158,7 @@ class TaskExecutionTests(ActivitiesTestCase):
         self.assertTrue(WorkSession.objects.filter(task=task1, user=self.executor, ended_at__isnull=True).exists())
 
         TaskService.start(task2, self.executor)
-        self.assertFalse(WorkSession.objects.filter(task=task1, user=self.executor, ended_at__isnull=True).exists())
+        self.assertTrue(WorkSession.objects.filter(task=task1, user=self.executor, ended_at__isnull=True).exists())
         self.assertTrue(WorkSession.objects.filter(task=task2, user=self.executor, ended_at__isnull=True).exists())
 
     def test_only_assigned_executor_can_start_task(self):

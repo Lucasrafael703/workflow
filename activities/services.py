@@ -2,6 +2,7 @@ import re
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.db.models import Max
 from django.utils import timezone
 
 from acessos import catalog
@@ -1187,15 +1188,10 @@ class TaskService:
         ):
             raise ActivityError("Esta tarefa não pode ser iniciada no status atual.")
 
-        # Regra 04 §115: iniciar uma nova sessão pausa qualquer sessão ativa
-        # da mesma pessoa em outra tarefa (evita dupla contagem de tempo).
+        # Regra 04 §115 (revista): a pessoa pode ter sessões de trabalho
+        # simultâneas em tarefas diferentes — cada uma é independente e
+        # gerenciada separadamente, sem pausar as demais automaticamente.
         now = timezone.now()
-        other_open_sessions = WorkSession.objects.filter(user=user, ended_at__isnull=True).exclude(task=task)
-        for session in other_open_sessions:
-            session.ended_at = now
-            session.save(update_fields=["ended_at"])
-            AuditService.log(user=user, action=AuditLog.Action.SESSION_PAUSED, activity=session.task.activity, task=session.task)
-
         if not WorkSession.objects.filter(task=task, user=user, ended_at__isnull=True).exists():
             WorkSession.objects.create(task=task, user=user, started_at=now)
 
@@ -1454,19 +1450,37 @@ class TaskService:
     # ------------------------------------------------------------------
 
     @staticmethod
+    def can_toggle_checklist(task, user):
+        if AuthorizationService.can(user, catalog.TAREFA_EDITAR, task):
+            return True
+        return (
+            user.is_active
+            and getattr(getattr(user, "profile", None), "organization_id", None) == task.activity.organization_id
+            and TaskService._is_active_executor(task, user)
+        )
+
+    @staticmethod
     @transaction.atomic
     def add_checklist_item(task, user, text):
         require_action(user, catalog.TAREFA_EDITAR, task)
         text = (text or "").strip()
         if not text:
             raise ActivityError("Escreva o texto do item.")
-        next_order = (task.checklist_items.count() or 0) + 1
+        if len(text) > TaskChecklistItem._meta.get_field("text").max_length:
+            raise ActivityError("O item deve ter no máximo 255 caracteres.")
+        Task.objects.select_for_update().get(pk=task.pk)
+        next_order = (task.checklist_items.aggregate(last=Max("order"))["last"] or 0) + 1
         return TaskChecklistItem.objects.create(task=task, text=text, order=next_order, created_by=user)
 
     @staticmethod
     @transaction.atomic
     def toggle_checklist_item(item, user, is_done):
-        require_action(user, catalog.TAREFA_EDITAR, item.task)
+        if not TaskService.can_toggle_checklist(item.task, user):
+            raise ActivityError("Somente executores ativos ou quem pode editar a tarefa podem marcar os itens.")
+        if not isinstance(is_done, bool):
+            raise ActivityError("Informe se o item está concluído.")
+        if item.is_done == is_done:
+            return item
         item.is_done = is_done
         item.done_by = user if is_done else None
         item.done_at = timezone.now() if is_done else None

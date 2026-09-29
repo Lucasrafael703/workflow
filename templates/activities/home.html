@@ -2,22 +2,6 @@
 {% load static %}
 {% block title %}Home — LPS{% endblock %}
 
-{% block timerbar %}
-{% if active_session %}
-<div class="timerbar">
-    <span class="timerbar__clock" data-started-at="{{ active_session.started_at.isoformat }}">--:--:--</span>
-    <span>em <a href="{% url 'task-detail' active_session.task.pk %}">{{ active_session.task.title }}</a></span>
-    <span class="timerbar__spacer"></span>
-    <form method="post" action="{% url 'task-pause' active_session.task.pk %}">
-        {% csrf_token %}<button type="submit" class="btn btn--sm">Pausar</button>
-    </form>
-    <form method="post" action="{% url 'task-complete' active_session.task.pk %}">
-        {% csrf_token %}<button type="submit" class="btn btn--sm">Concluir</button>
-    </form>
-</div>
-{% endif %}
-{% endblock %}
-
 {% block content %}
 <div class="page-head">
     <div class="page-head__text">
@@ -63,24 +47,26 @@
 <div class="card card--flush">
     <div class="card__head">
         <h2>Em execução agora</h2>
-        {% if active_task %}<a href="{% url 'task-detail' active_task.pk %}">Abrir tarefa</a>{% endif %}
+        {% if my_active_sessions %}<a href="{% url 'task-list' %}?filtro=em-execucao">Ver todas</a>{% endif %}
     </div>
-    {% if active_session %}
-    <div class="timer-hero">
-        <div class="timer-hero__clock" data-started-at="{{ active_session.started_at.isoformat }}">--:--:--</div>
+    {% if my_active_sessions %}
+    {% for session in my_active_sessions %}
+    <div class="timer-hero"{% if not forloop.first %} style="border-top: 1px solid var(--border)"{% endif %}>
+        <div class="timer-hero__clock" data-started-at="{{ session.started_at.isoformat }}">--:--:--</div>
         <div class="timer-hero__task">
-            <a href="{% url 'task-detail' active_task.pk %}">{{ active_task.title }}</a>
-            <div class="muted small">{{ active_task.activity.title }} · {{ active_task.sector.name }}</div>
+            <a href="{% url 'task-detail' session.task.pk %}">{{ session.task.title }}</a>
+            <div class="muted small">{{ session.task.activity.title }} · {{ session.task.sector.name }}</div>
         </div>
         <div class="actions-row" style="justify-content:center">
-            <form method="post" action="{% url 'task-pause' active_task.pk %}">
+            <form method="post" action="{% url 'task-pause' session.task.pk %}">
                 {% csrf_token %}<button type="submit" class="btn btn--lg">Pausar</button>
             </form>
-            <form method="post" action="{% url 'task-complete' active_task.pk %}">
+            <form method="post" action="{% url 'task-complete' session.task.pk %}">
                 {% csrf_token %}<button type="submit" class="btn btn--lg btn--primary">Concluir tarefa</button>
             </form>
         </div>
     </div>
+    {% endfor %}
     {% else %}
     <div class="empty-state">
         <div class="empty-state__icon">{% include "_icon.html" with name="clock" %}</div>

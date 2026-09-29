@@ -177,4 +177,61 @@
             if (event.key === "Escape") fecharTodos(null);
         });
     }
+
+    // Popup de tarefas em execução na topbar: mesmo padrão do menu de
+    // notificações acima (toggle, fecha ao clicar fora ou Esc). Pausar/
+    // Concluir reaproveitam os endpoints ajax já usados pelo menu "⋮" das
+    // listas de tarefa — sucesso recarrega a página, que já traz o popup
+    // atualizado via o context processor global.
+    var timerToggle = document.querySelector("[data-timer-menu-toggle]");
+    if (timerToggle) {
+        var timerMenu = document.querySelector("[data-timer-menu]");
+
+        function closeTimerMenu() {
+            timerMenu.hidden = true;
+            timerToggle.setAttribute("aria-expanded", "false");
+        }
+
+        timerToggle.addEventListener("click", function (event) {
+            event.stopPropagation();
+            var abrindo = timerMenu.hidden;
+            timerMenu.hidden = !abrindo;
+            timerToggle.setAttribute("aria-expanded", String(abrindo));
+        });
+        document.addEventListener("click", function (event) {
+            if (!timerToggle.contains(event.target) && !timerMenu.contains(event.target)) closeTimerMenu();
+        });
+        document.addEventListener("keydown", function (event) {
+            if (event.key === "Escape") closeTimerMenu();
+        });
+
+        function csrfToken() {
+            var match = document.cookie.match(/csrftoken=([^;]+)/);
+            return match ? match[1] : "";
+        }
+
+        timerMenu.querySelectorAll(".js-timer-ajax").forEach(function (button) {
+            button.addEventListener("click", function (event) {
+                event.stopPropagation();
+                button.disabled = true;
+                fetch(button.dataset.url, {
+                    method: "POST",
+                    headers: {
+                        "X-Requested-With": "XMLHttpRequest",
+                        "X-CSRFToken": csrfToken(),
+                    },
+                })
+                    .then(function (response) { return response.json().then(function (data) { return { ok: response.ok, data: data }; }); })
+                    .then(function (result) {
+                        if (!result.ok) {
+                            alert(result.data.error || "Não foi possível concluir a ação.");
+                            button.disabled = false;
+                            return;
+                        }
+                        window.location.reload();
+                    })
+                    .catch(function () { button.disabled = false; });
+            });
+        });
+    }
 })();
