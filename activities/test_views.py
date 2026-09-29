@@ -425,4 +425,275 @@ class ActivityCreateViewTests(ViewTestCase):
         response = self.client.get(reverse("activity-create"))
         owners = response.context["form"].fields["owner"].queryset
         self.assertIn(self.member, owners)
-        self.assertNotIn(self.outsider, owners)
+
+    def test_deadline_with_date_only_defaults_to_end_of_day(self):
+        self.client.force_login(self.requester)
+        response = self.client.post(
+            reverse("activity-create"),
+            {
+                "title": "Prazo sem hora",
+                "owner": self.requester.pk,
+                "requested_deadline_0": "2026-12-25",
+                "requested_deadline_1": "",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        activity = self.org.activities.get(title="Prazo sem hora")
+        from django.utils import timezone
+
+        local = timezone.localtime(activity.requested_deadline)
+        self.assertEqual((local.hour, local.minute), (23, 59))
+
+    def test_deadline_with_date_and_time_keeps_exact_time(self):
+        self.client.force_login(self.requester)
+        response = self.client.post(
+            reverse("activity-create"),
+            {
+                "title": "Prazo com hora",
+                "owner": self.requester.pk,
+                "requested_deadline_0": "2026-12-25",
+                "requested_deadline_1": "14:30",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        activity = self.org.activities.get(title="Prazo com hora")
+        from django.utils import timezone
+
+        local = timezone.localtime(activity.requested_deadline)
+        self.assertEqual((local.hour, local.minute), (14, 30))
+
+    def test_deadline_left_blank_stays_none(self):
+        self.client.force_login(self.requester)
+        response = self.client.post(
+            reverse("activity-create"),
+            {
+                "title": "Sem prazo",
+                "owner": self.requester.pk,
+                "requested_deadline_0": "",
+                "requested_deadline_1": "",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        activity = self.org.activities.get(title="Sem prazo")
+        self.assertIsNone(activity.requested_deadline)
+
+    def test_sector_label_is_setor_responsavel(self):
+        self.client.force_login(self.requester)
+        response = self.client.get(reverse("activity-create"))
+        self.assertEqual(response.context["form"].fields["sector"].label, "Setor Responsável")
+
+
+class SearchViewTests(ViewTestCase):
+    """Endpoints de busca por nome usados pelos pickers de Setor/Empresa/
+    Obra/Centro de custo no formulário de atividade — mesmo contrato JSON
+    de `ClientSearchView`, escopado por organização."""
+
+    def test_sector_search_filters_by_name_and_organization(self):
+        from core.models import Sector
+
+        Sector.objects.create(organization=self.other_org, name="Compras")
+        self.client.force_login(self.requester)
+        response = self.client.get(reverse("sector-search"), {"q": "Comp"})
+        self.assertEqual(response.status_code, 200)
+        names = [r["name"] for r in response.json()["results"]]
+        self.assertIn(self.sector.name, names)
+        self.assertEqual(len(names), 1)
+
+    def test_company_search_returns_results(self):
+        from core.models import Company
+
+        Company.objects.create(organization=self.org, name="Biasi Engenharia")
+        self.client.force_login(self.requester)
+        response = self.client.get(reverse("company-search"), {"q": "Biasi"})
+        self.assertEqual(response.status_code, 200)
+        names = [r["name"] for r in response.json()["results"]]
+        self.assertIn("Biasi Engenharia", names)
+
+    def test_site_search_returns_results(self):
+        from core.models import Site
+
+        Site.objects.create(organization=self.org, name="Capão Redondo")
+        self.client.force_login(self.requester)
+        response = self.client.get(reverse("site-search"), {"q": "Capão"})
+        self.assertEqual(response.status_code, 200)
+        names = [r["name"] for r in response.json()["results"]]
+        self.assertIn("Capão Redondo", names)
+
+    def test_cost_center_search_returns_results(self):
+        from core.models import CostCenter
+
+        CostCenter.objects.create(organization=self.org, name="Obra 123")
+        self.client.force_login(self.requester)
+        response = self.client.get(reverse("costcenter-search"), {"q": "Obra"})
+        self.assertEqual(response.status_code, 200)
+        names = [r["name"] for r in response.json()["results"]]
+        self.assertIn("Obra 123", names)
+
+
+class ActivityKanbanAndCalendarViewTests(ViewTestCase):
+    """Kanban e Calendário de atividades espelham a Lista: mesmo filtro,
+    mesma organização, e o drag-and-drop do Kanban nunca toca
+    Activity.status (só Activity.stage), igual ao já garantido para Task."""
+
+    def setUp(self):
+        super().setUp()
+        from core.models import ActivityStage
+
+        self.stage = ActivityStage.objects.create(
+            organization=self.org, name="Em análise", order=1, color="#3B82F6", created_by=self.requester
+        )
+
+    def test_kanban_shows_stage_columns_and_unassigned_activities(self):
+        self.client.force_login(self.requester)
+        response = self.client.get(reverse("activity-kanban"))
+        self.assertEqual(response.status_code, 200)
+        stages = [column["stage"] for column in response.context["columns"]]
+        self.assertIn(self.stage, stages)
+        unassigned_ids = [a.pk for a in response.context["unassigned_column"]["activities"]]
+        self.assertIn(self.activity.pk, unassigned_ids)
+
+    def test_calendar_returns_ok_with_week_grid(self):
+        self.client.force_login(self.requester)
+        response = self.client.get(reverse("activity-calendar"))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("weeks", response.context)
+        self.assertTrue(len(response.context["weeks"]) > 0)
+
+    def test_move_stage_updates_stage_only_never_status(self):
+        self.client.force_login(self.requester)
+        original_status = self.activity.status
+        response = self.client.post(
+            reverse("activity-move-stage", args=[self.activity.pk]),
+            {"stage_id": self.stage.pk},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.activity.refresh_from_db()
+        self.assertEqual(self.activity.stage_id, self.stage.pk)
+        self.assertIsNotNone(self.activity.stage_changed_at)
+        self.assertEqual(self.activity.status, original_status)
+
+    def test_move_stage_to_unassigned_clears_stage(self):
+        self.activity.stage = self.stage
+        self.activity.save(update_fields=["stage"])
+        self.client.force_login(self.requester)
+        response = self.client.post(
+            reverse("activity-move-stage", args=[self.activity.pk]),
+            {"stage_id": ""},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.activity.refresh_from_db()
+        self.assertIsNone(self.activity.stage_id)
+
+    def test_move_stage_rejects_stage_from_another_organization(self):
+        from core.models import ActivityStage
+
+        other_stage = ActivityStage.objects.create(
+            organization=self.other_org, name="Externo", order=1, created_by=self.outsider
+        )
+        self.client.force_login(self.requester)
+        response = self.client.post(
+            reverse("activity-move-stage", args=[self.activity.pk]),
+            {"stage_id": other_stage.pk},
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_cannot_move_activity_from_another_organization(self):
+        from activities.services import ActivityService
+
+        foreign_activity = ActivityService.create_activity(
+            organization=self.other_org, title="Fora", owner=self.outsider, created_by=self.outsider
+        )
+        self.client.force_login(self.requester)
+        response = self.client.post(
+            reverse("activity-move-stage", args=[foreign_activity.pk]),
+            {"stage_id": self.stage.pk},
+        )
+        self.assertEqual(response.status_code, 404)
+
+
+class ActivityWizardViewTests(ViewTestCase):
+    """Wizard de 3 etapas: cada etapa só aceita o próprio rascunho
+    (status=RASCUNHO, created_by=quem está logado), e um rascunho nunca
+    aparece nas telas normais (Lista/Kanban/Calendário/Home/Detalhe)."""
+
+    def _create_draft(self, user=None):
+        from activities.services import ActivityService
+
+        return ActivityService.save_draft(
+            organization=self.org, created_by=user or self.requester, activity=None
+        )
+
+    def test_step1_post_creates_a_real_draft_row(self):
+        self.client.force_login(self.requester)
+        response = self.client.post(reverse("activity-create"), {"acao": "continuar", "urgency": "MEDIA"})
+        self.assertEqual(response.status_code, 302)
+        from activities.models import Activity
+
+        draft = Activity.objects.filter(organization=self.org, status=Activity.Status.RASCUNHO).first()
+        self.assertIsNotNone(draft)
+        self.assertEqual(draft.title, Activity.DRAFT_TITLE_PLACEHOLDER)
+
+    def test_step2_rejects_draft_from_another_user(self):
+        draft = self._create_draft(user=self.member)
+        self.client.force_login(self.requester)
+        response = self.client.get(reverse("activity-wizard-contexto", args=[draft.pk]))
+        self.assertEqual(response.status_code, 404)
+
+    def test_step3_rejects_a_non_draft_activity(self):
+        self.client.force_login(self.requester)
+        response = self.client.get(reverse("activity-wizard-detalhes", args=[self.activity.pk]))
+        self.assertEqual(response.status_code, 404)
+
+    def test_step3_publish_requires_title_and_owner(self):
+        draft = self._create_draft()
+        self.client.force_login(self.requester)
+        response = self.client.post(
+            reverse("activity-wizard-detalhes", args=[draft.pk]),
+            {"acao": "publicar", "description": "", "internal_notes": ""},
+        )
+        self.assertEqual(response.status_code, 200)
+        draft.refresh_from_db()
+        self.assertEqual(draft.status, "RASCUNHO")
+
+    def test_step3_publish_succeeds_with_title_and_owner(self):
+        from activities.services import ActivityService
+
+        draft = self._create_draft()
+        draft = ActivityService.save_draft(
+            organization=self.org, created_by=self.requester, activity=draft,
+            title="Visita técnica", owner=self.requester,
+        )
+        self.client.force_login(self.requester)
+        response = self.client.post(
+            reverse("activity-wizard-detalhes", args=[draft.pk]),
+            {"acao": "publicar", "description": "", "internal_notes": ""},
+        )
+        self.assertEqual(response.status_code, 302)
+        draft.refresh_from_db()
+        self.assertEqual(draft.status, "ABERTA")
+
+    def test_draft_never_appears_in_activity_list(self):
+        draft = self._create_draft()
+        draft.title = "Rascunho invisivel"
+        draft.save(update_fields=["title"])
+        self.client.force_login(self.requester)
+        response = self.client.get(reverse("activity-list"))
+        self.assertNotContains(response, "Rascunho invisivel")
+
+    def test_draft_detail_redirects_to_wizard(self):
+        draft = self._create_draft()
+        self.client.force_login(self.requester)
+        response = self.client.get(reverse("activity-detail", args=[draft.pk]))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("activity-create"), response.url)
+
+    def test_discard_view_removes_draft(self):
+        draft = self._create_draft()
+        self.client.force_login(self.requester)
+        response = self.client.post(reverse("activity-wizard-discard", args=[draft.pk]))
+        self.assertEqual(response.status_code, 302)
+        from activities.models import Activity
+
+        self.assertFalse(Activity.objects.filter(pk=draft.pk).exists())

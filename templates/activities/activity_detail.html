@@ -24,7 +24,7 @@
                 </div>
                 {% endif %}
                 <div class="ad-header__badges">
-                    <span class="tag" style="--tag-bg: {{ activity.status_color }}1A; --tag-fg: {{ activity.status_color }};">{{ activity.get_status_display }}</span>
+                    <span class="tag" style="--tag-bg: {{ activity.status_color }}1A; --tag-fg: {{ activity.status_color }};">{{ activity.status_label }}</span>
                     <span class="tag" style="--tag-bg: {{ activity.urgency_color }}1A; --tag-fg: {{ activity.urgency_color }};">{{ activity.get_urgency_display }}</span>
                     {% if activity.sector %}<span class="tag">{{ activity.sector.name }}</span>{% endif %}
                 </div>
@@ -193,6 +193,7 @@
                         {% if activity.site %}<div><div class="k">Obra</div><div class="v">{{ activity.site.name }}</div></div>{% endif %}
                         {% if activity.cost_center %}<div><div class="k">Centro de custo</div><div class="v">{{ activity.cost_center.name }}</div></div>{% endif %}
                         {% if activity.company %}<div><div class="k">Empresa</div><div class="v">{{ activity.company.name }}</div></div>{% endif %}
+                        {% if activity.requested_by %}<div><div class="k">Solicitante</div><div class="v">{{ activity.requested_by.get_full_name|default:activity.requested_by.get_username }}</div></div>{% endif %}
                         {% if activity.process_version_id %}<div><div class="k">Processo</div><div class="v">{{ activity.process_version.process.name }}</div></div>{% endif %}
                         <div><div class="k">Criador</div><div class="v">{{ activity.created_by.get_username }} <span class="muted small">em {{ activity.created_at|date:"d/m/Y H:i" }}</span></div></div>
                         {% if activity.address %}<div class="full"><div class="k">Endereço</div><div class="v">{{ activity.address }}</div></div>{% endif %}
@@ -203,6 +204,7 @@
                         </div>
                         {% endif %}
                         {% if activity.description %}<div class="full"><div class="k">Descrição</div><div class="v rich-text-content">{{ activity.description|safe }}</div></div>{% endif %}
+                        {% if activity.internal_notes %}<div class="full"><div class="k">Observações internas</div><div class="v">{{ activity.internal_notes|linebreaksbr }}</div></div>{% endif %}
                     </div>
 
                     <details class="disclosure disclosure--mini" style="margin-top:14px">
@@ -210,7 +212,7 @@
                         <div class="disclosure__body">
                             <div class="info-grid">
                                 <div><div class="k">Urgência</div><div class="v"><span class="tag" style="--tag-bg: {{ activity.urgency_color }}1A; --tag-fg: {{ activity.urgency_color }};">{{ activity.get_urgency_display }}</span></div></div>
-                                <div><div class="k">Grupo designado</div><div class="v{% if not activity.sector %} muted{% endif %}">{{ activity.sector.name|default:"Sem grupo" }}</div></div>
+                                <div><div class="k">Setor Responsável</div><div class="v{% if not activity.sector %} muted{% endif %}">{{ activity.sector.name|default:"Sem setor" }}</div></div>
                                 <div><div class="k">Prazo solicitado</div><div class="v{% if not activity.requested_deadline %} muted{% endif %}">{{ activity.requested_deadline|date:"d/m/Y H:i"|default:"Sem prazo" }}</div></div>
                             </div>
                             <p class="muted small" style="margin:10px 0 0">

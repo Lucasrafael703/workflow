@@ -696,3 +696,138 @@ class MentionTests(ActivitiesTestCase):
         self.assertTrue(
             self.executor.notifications.filter(task=task, event_type=Notification.EventType.MENTIONED).exists()
         )
+
+
+class StatusLabelOverrideTests(ActivitiesTestCase):
+    """status_label/status_description resolvem o override da organização
+    sem nunca tocar o code real gravado em `status` nem a regra de negócio
+    que compara contra ele (Regras: cor/label é só aparência)."""
+
+    def _make_activity(self):
+        return ActivityService.create_activity(
+            organization=self.org, title="Orçamento", owner=self.owner, created_by=self.creator
+        )
+
+    def test_activity_status_label_falls_back_to_native_display(self):
+        activity = self._make_activity()
+        self.assertEqual(activity.status_label, activity.get_status_display())
+
+    def test_activity_status_label_uses_organization_override(self):
+        from core.services import EnumColorService
+
+        activity = self._make_activity()
+        EnumColorService.set_overrides(self.org, "activity_status", activity.status, label="Recem-criada")
+        self.assertEqual(activity.status_label, "Recem-criada")
+        self.assertEqual(activity.status, Activity.Status.ABERTA)
+        self.assertEqual(activity.get_status_display(), "Aberta")
+
+    def test_activity_status_description_falls_back_to_empty(self):
+        activity = self._make_activity()
+        self.assertEqual(activity.status_description, "")
+
+    def test_task_status_label_uses_organization_override(self):
+        from core.services import EnumColorService
+
+        activity = self._make_activity()
+        task = TaskService.create_task(activity, self.sector, "Levantar quantitativos", created_by=self.creator)
+        original_status = task.status
+        EnumColorService.set_overrides(self.org, "task_status", task.status, label="Aguardando fila")
+        self.assertEqual(task.status_label, "Aguardando fila")
+        self.assertEqual(task.status, original_status)
+
+    def test_override_in_another_organization_does_not_leak(self):
+        from core.models import Organization
+        from core.services import EnumColorService
+
+        activity = self._make_activity()
+        other_org = Organization.objects.create(name="Outra Instaladora")
+        EnumColorService.set_overrides(other_org, "activity_status", activity.status, label="Nao deveria aparecer")
+        self.assertEqual(activity.status_label, activity.get_status_display())
+
+
+class ActivityDraftServiceTests(ActivitiesTestCase):
+    """Rascunho real (wizard de 3 etapas): pode salvar incompleto (sem
+    título/dono) e só é cobrado de verdade ao publicar. `owner=None` nunca
+    deve dar acesso indevido em nenhum escopo relacional."""
+
+    def test_save_draft_creates_row_without_title_or_owner(self):
+        activity = ActivityService.save_draft(
+            organization=self.org, created_by=self.creator, activity=None
+        )
+        self.assertEqual(activity.status, Activity.Status.RASCUNHO)
+        self.assertEqual(activity.title, Activity.DRAFT_TITLE_PLACEHOLDER)
+        self.assertIsNone(activity.owner_id)
+        self.assertEqual(activity.created_by, self.creator)
+
+    def test_save_draft_updates_existing_row_in_place(self):
+        activity = ActivityService.save_draft(organization=self.org, created_by=self.creator, activity=None)
+        pk = activity.pk
+        updated = ActivityService.save_draft(
+            organization=self.org, created_by=self.creator, activity=activity, title="Visita técnica"
+        )
+        self.assertEqual(updated.pk, pk)
+        self.assertEqual(updated.title, "Visita técnica")
+        self.assertEqual(Activity.objects.filter(status=Activity.Status.RASCUNHO).count(), 1)
+
+    def test_save_draft_rejects_editing_someone_elses_draft(self):
+        activity = ActivityService.save_draft(organization=self.org, created_by=self.creator, activity=None)
+        with self.assertRaises(ActivityError):
+            ActivityService.save_draft(
+                organization=self.org, created_by=self.owner, activity=activity, title="Sequestrado"
+            )
+
+    def test_publish_draft_requires_title_and_owner(self):
+        activity = ActivityService.save_draft(organization=self.org, created_by=self.creator, activity=None)
+        with self.assertRaises(ActivityError):
+            ActivityService.publish_draft(activity, self.creator)
+
+        activity = ActivityService.save_draft(
+            organization=self.org, created_by=self.creator, activity=activity, title="Visita técnica"
+        )
+        with self.assertRaises(ActivityError):
+            ActivityService.publish_draft(activity, self.creator)
+
+    def test_publish_draft_succeeds_and_becomes_a_real_activity(self):
+        activity = ActivityService.save_draft(
+            organization=self.org,
+            created_by=self.creator,
+            activity=None,
+            title="Visita técnica",
+            owner=self.owner,
+        )
+        published = ActivityService.publish_draft(activity, self.creator)
+        self.assertEqual(published.status, Activity.Status.ABERTA)
+
+    def test_publish_draft_twice_fails(self):
+        activity = ActivityService.save_draft(
+            organization=self.org, created_by=self.creator, activity=None, title="Visita técnica", owner=self.owner
+        )
+        ActivityService.publish_draft(activity, self.creator)
+        with self.assertRaises(ActivityError):
+            ActivityService.publish_draft(activity, self.creator)
+
+    def test_discard_draft_deletes_row_and_attachments(self):
+        activity = ActivityService.save_draft(organization=self.org, created_by=self.creator, activity=None)
+        pk = activity.pk
+        ActivityService.discard_draft(activity, self.creator)
+        self.assertFalse(Activity.objects.filter(pk=pk).exists())
+
+    def test_discard_draft_rejects_publishing_or_other_users(self):
+        activity = ActivityService.save_draft(
+            organization=self.org, created_by=self.creator, activity=None, title="X", owner=self.owner
+        )
+        ActivityService.publish_draft(activity, self.creator)
+        with self.assertRaises(ActivityError):
+            ActivityService.discard_draft(activity, self.creator)
+
+    def test_owner_none_never_matches_relational_scope(self):
+        """Uma linha com owner=None nunca deve satisfazer o escopo "minhas
+        atividades" para nenhum usuário — a checagem de autorização falha
+        fechado, nunca abre uma brecha."""
+        from acessos.services import ResourceContext
+
+        activity = ActivityService.save_draft(organization=self.org, created_by=self.creator, activity=None)
+        context = ResourceContext.of(activity)
+        self.assertIsNone(context.owner_id)
+        self.assertNotEqual(context.owner_id, self.creator.id)
+        self.assertFalse(context.owner_id == self.creator.id)

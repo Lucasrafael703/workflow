@@ -9,8 +9,8 @@ from accounts.models import UserSector
 from acessos import catalog
 from acessos.testing import grant_action
 
-from .models import Organization, Sector
-from .services import CadastroError, SectorService, UserSectorService
+from .models import EnumColor, Organization, Sector
+from .services import CadastroError, EnumColorService, SectorService, UserSectorService
 
 User = get_user_model()
 
@@ -203,4 +203,90 @@ class UserFormAjaxTests(TestCase):
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.content)
         self.assertIn("username", data["errors"])
+
+
+class EnumColorServiceOverrideTests(TestCase):
+    """Label/descricao/oculto de status nativos nunca tocam o code real
+    gravado em Activity.status/Task.status — so a aparencia resolvida."""
+
+    def setUp(self):
+        self.org = Organization.objects.create(name="Biasi")
+        self.admin = User.objects.create_user("admin", password="x")
+
+    def test_no_override_returns_empty_defaults(self):
+        label, description, is_hidden = EnumColorService.get_overrides(self.org, "activity_status", "BLOQUEADA")
+        self.assertEqual(label, "")
+        self.assertEqual(description, "")
+        self.assertFalse(is_hidden)
+
+    def test_set_overrides_persists_label_description_and_hidden(self):
+        EnumColorService.set_overrides(
+            self.org,
+            "activity_status",
+            "BLOQUEADA",
+            label="Travada",
+            description="Impedimento externo",
+            is_hidden=True,
+            updated_by=self.admin,
+        )
+        label, description, is_hidden = EnumColorService.get_overrides(self.org, "activity_status", "BLOQUEADA")
+        self.assertEqual(label, "Travada")
+        self.assertEqual(description, "Impedimento externo")
+        self.assertTrue(is_hidden)
+
+    def test_set_overrides_preserves_existing_color(self):
+        EnumColorService.set_color(self.org, "activity_status", "BLOQUEADA", "#EF4444", updated_by=self.admin)
+        EnumColorService.set_overrides(self.org, "activity_status", "BLOQUEADA", label="Travada")
+        row = EnumColor.objects.get(organization=self.org, domain="activity_status", code="BLOQUEADA")
+        self.assertEqual(row.color, "#EF4444")
+        self.assertEqual(row.label, "Travada")
+
+    def test_set_overrides_rejects_unknown_code(self):
+        with self.assertRaises(CadastroError):
+            EnumColorService.set_overrides(self.org, "activity_status", "NAO_EXISTE", label="X")
+
+    def test_reset_to_defaults_clears_label_description_and_hidden(self):
+        EnumColorService.set_overrides(
+            self.org, "activity_status", "BLOQUEADA", label="Travada", description="X", is_hidden=True
+        )
+        EnumColorService.reset_to_defaults(self.org, domain="activity_status")
+        label, description, is_hidden = EnumColorService.get_overrides(self.org, "activity_status", "BLOQUEADA")
+        self.assertEqual(label, "")
+        self.assertEqual(description, "")
+        self.assertFalse(is_hidden)
+
+    def test_list_overrides_for_domain_only_returns_customized_codes(self):
+        EnumColorService.set_overrides(self.org, "activity_status", "BLOQUEADA", label="Travada")
+        overrides = EnumColorService.list_overrides_for_domain(self.org, "activity_status")
+        self.assertEqual(set(overrides), {"BLOQUEADA"})
+        self.assertEqual(overrides["BLOQUEADA"]["label"], "Travada")
+
+
+class EnumColorLabelFormViewTests(TestCase):
+    def setUp(self):
+        self.org = Organization.objects.create(name="Biasi")
+        self.admin = User.objects.create_user("admin", password="x")
+        self.admin.profile.organization = self.org
+        self.admin.profile.save(update_fields=["organization"])
+        grant_action(self.admin, catalog.COR_STATUS_GERIR, organization=self.org)
+        self.client.force_login(self.admin)
+
+    def test_post_saves_override_and_redirects_to_settings_tab(self):
+        url = reverse("enumcolor-label-edit", kwargs={"domain": "activity_status", "code": "BLOQUEADA"})
+        response = self.client.post(url, {"label": "Travada", "description": "Impedimento", "is_hidden": "on"})
+        self.assertRedirects(response, f"{reverse('config-etapas-status')}?tab=status-atividade")
+        label, description, is_hidden = EnumColorService.get_overrides(self.org, "activity_status", "BLOQUEADA")
+        self.assertEqual(label, "Travada")
+        self.assertEqual(description, "Impedimento")
+        self.assertTrue(is_hidden)
+
+    def test_unknown_code_is_404(self):
+        url = reverse("enumcolor-label-edit", kwargs={"domain": "activity_status", "code": "NAO_EXISTE"})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 404)
+
+    def test_settings_page_reflects_custom_label(self):
+        EnumColorService.set_overrides(self.org, "activity_status", "BLOQUEADA", label="Travada")
+        response = self.client.get(f"{reverse('config-etapas-status')}?tab=status-atividade")
+        self.assertContains(response, "Travada")
         self.assertFalse(User.objects.filter(email="nova@example.com").exists())

@@ -1,0 +1,29 @@
+{% comment %}Stepper das 3 etapas do wizard de nova atividade. Espera `current`
+("essencial"/"contexto"/"detalhes") e `draft` (a atividade rascunho, pode ser
+None só na etapa 1 antes do primeiro salvamento) no contexto.{% endcomment %}
+<div class="wizard-head">
+    <div class="breadcrumb">
+        <a href="{% url 'activity-list' %}">Atividades</a><span>›</span> Nova atividade
+    </div>
+    <h1>Nova atividade</h1>
+    <p class="sub">
+        {% if current == "essencial" %}Preencha o essencial. O restante pode ser feito depois.
+        {% elif current == "contexto" %}Vincule a atividade ao contexto correto. Os detalhes não obrigatórios podem ser preenchidos agora ou depois.
+        {% else %}Adicione informações complementares antes de concluir.{% endif %}
+    </p>
+</div>
+
+<nav class="wizard-stepper" aria-label="Etapas da nova atividade">
+    <div class="wizard-step {% if current == 'essencial' %}is-active{% else %}is-done{% endif %}">
+        <span class="wizard-step__circle">{% if current != 'essencial' %}{% include "_icon.html" with name="check" %}{% else %}1{% endif %}</span>
+        <span class="wizard-step__label">1. Essencial</span>
+    </div>
+    <div class="wizard-step {% if current == 'contexto' %}is-active{% elif current == 'detalhes' %}is-done{% endif %}">
+        <span class="wizard-step__circle">{% if current == 'detalhes' %}{% include "_icon.html" with name="check" %}{% else %}2{% endif %}</span>
+        <span class="wizard-step__label">2. Contexto</span>
+    </div>
+    <div class="wizard-step {% if current == 'detalhes' %}is-active{% endif %}">
+        <span class="wizard-step__circle">3</span>
+        <span class="wizard-step__label">3. Detalhes</span>
+    </div>
+</nav>

@@ -87,6 +87,16 @@ class WorkflowStatusForm(forms.Form):
         ]
 
 
+class EnumColorLabelForm(forms.Form):
+    """Edita o nome/descricao exibidos e o estado oculto de um status
+    nativo (Activity.Status/Task.Status) — nunca o comportamento interno,
+    que continua fixo no code."""
+
+    label = forms.CharField(label="Nome exibido", max_length=100, required=False)
+    description = forms.CharField(label="Descricao", max_length=255, required=False)
+    is_hidden = forms.BooleanField(label="Ocultar este status das opcoes", required=False)
+
+
 class TagForm(forms.Form):
     name = forms.CharField(label="Nome", max_length=80)
     color = forms.CharField(label="Cor", widget=ColorPaletteWidget, initial="#94A3B8")

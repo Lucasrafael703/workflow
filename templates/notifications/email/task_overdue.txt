@@ -4,6 +4,6 @@ Atividade: {{ activity.title }}
 Tarefa: {{ task.title }}
 Setor responsável: {{ task.sector.name }}
 Prazo comprometido: {{ task.committed_deadline|date:"d/m/Y H:i" }}
-Status atual: {{ task.get_status_display }}
+Status atual: {{ task.status_label }}
 
 Acesse o sistema para regularizar esta tarefa.

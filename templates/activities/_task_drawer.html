@@ -8,7 +8,7 @@ passou" etc.) continua só na ficha completa.{% endcomment %}
             <div>
                 <div class="muted small">{{ task.sector.name }}</div>
                 <h2>{{ task.title }}</h2>
-                <span class="tag tag--{{ task.status }}">{{ task.get_status_display }}</span>
+                <span class="tag tag--{{ task.status }}">{{ task.status_label }}</span>
                 {% if queue_info %}<span class="position-pill">Posição {{ queue_info.position }} de {{ queue_info.total }}</span>{% endif %}
             </div>
             <div class="drawer__head-actions">

@@ -20,7 +20,7 @@
     </div>
 
     <div class="kanban-card__status-row">
-        <span class="tag" style="--tag-bg: {{ task.status_color }}1A; --tag-fg: {{ task.status_color }};">{{ task.get_status_display }}</span>
+        <span class="tag" style="--tag-bg: {{ task.status_color }}1A; --tag-fg: {{ task.status_color }};">{{ task.status_label }}</span>
         {% if task.days_in_stage >= 1 %}
         <span class="kanban-card__age" title="Nesta coluna há {{ task.days_in_stage }} dia{{ task.days_in_stage|pluralize }}">
             {{ task.days_in_stage }}d aqui

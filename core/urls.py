@@ -5,6 +5,10 @@ from . import views
 urlpatterns = [
     path("api/pessoas/", views.PersonSearchView.as_view(), name="person-search"),
     path("api/clientes/", views.ClientSearchView.as_view(), name="client-search"),
+    path("api/setores/", views.SectorSearchView.as_view(), name="sector-search"),
+    path("api/empresas/", views.CompanySearchView.as_view(), name="company-search"),
+    path("api/obras/", views.SiteSearchView.as_view(), name="site-search"),
+    path("api/centros-de-custo/", views.CostCenterSearchView.as_view(), name="costcenter-search"),
     path("api/tags/", views.TagSearchView.as_view(), name="tag-search"),
     path("cadastros/", views.CadastroHomeView.as_view(), name="cadastros"),
     path("cadastros/setores/novo/", views.SectorFormView.as_view(), name="sector-create"),
@@ -53,6 +57,11 @@ urlpatterns = [
         "configuracoes/cores/<str:domain>/restaurar/",
         views.EnumColorResetView.as_view(),
         name="enumcolor-reset",
+    ),
+    path(
+        "configuracoes/status/<str:domain>/<str:code>/editar/",
+        views.EnumColorLabelFormView.as_view(),
+        name="enumcolor-label-edit",
     ),
     path("permissoes/", views.PermissionMatrixView.as_view(), name="permissions"),
     path("permissoes/<int:pk>/salvar/", views.PermissionUpdateView.as_view(), name="permissions-update"),

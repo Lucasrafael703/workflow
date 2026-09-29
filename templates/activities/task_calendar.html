@@ -57,7 +57,7 @@
                 <td data-label="Tarefa"><a href="{% url 'task-detail' task.pk %}" class="title">{{ task.title }}</a></td>
                 <td data-label="Atividade"><a href="{% url 'activity-detail' task.activity.pk %}">{{ task.activity.title }}</a></td>
                 <td data-label="Setor">{{ task.sector.name }}</td>
-                <td data-label="Situação"><span class="tag" style="--tag-bg: {{ task.status_color }}1A; --tag-fg: {{ task.status_color }};">{{ task.get_status_display }}</span></td>
+                <td data-label="Situação"><span class="tag" style="--tag-bg: {{ task.status_color }}1A; --tag-fg: {{ task.status_color }};">{{ task.status_label }}</span></td>
             </tr>
             {% endfor %}
             </tbody>

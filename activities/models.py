@@ -17,7 +17,10 @@ class Activity(models.Model):
     Possui sempre um único dono (Regras 01 §6.1, 02 §6).
     """
 
+    DRAFT_TITLE_PLACEHOLDER = "Rascunho sem título"
+
     class Status(models.TextChoices):
+        RASCUNHO = "RASCUNHO", "Rascunho"
         ABERTA = "ABERTA", "Aberta"
         EM_ANDAMENTO = "EM_ANDAMENTO", "Em andamento"
         BLOQUEADA = "BLOQUEADA", "Bloqueada"
@@ -110,6 +113,9 @@ class Activity(models.Model):
 
     title = models.CharField("resultado esperado", max_length=200)
     description = models.TextField("descrição", blank=True)
+    internal_notes = models.TextField(
+        "observações internas", blank=True, help_text="Nunca aparece para o cliente; só para uso interno da equipe."
+    )
     urgency = models.CharField("urgência", max_length=6, choices=Urgency.choices, default=Urgency.MEDIA)
     address = models.CharField(
         "endereço", max_length=255, blank=True, help_text="Endereço adicional, além do cadastro do cliente."
@@ -121,9 +127,20 @@ class Activity(models.Model):
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         verbose_name="dono",
+        null=True,
+        blank=True,
         on_delete=models.PROTECT,
         related_name="activities_owned",
-        help_text="Responsável único pelo acompanhamento até a resolução (Regras 01 §6.1).",
+        help_text="Responsável único pelo acompanhamento até a resolução (Regras 01 §6.1). Só pode ficar em branco enquanto a atividade é um rascunho.",
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="solicitante",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="activities_requested",
+        help_text="Quem pediu informalmente, dentro da própria organização — nunca o cliente.",
     )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -154,6 +171,9 @@ class Activity(models.Model):
     )
 
     created_at = models.DateTimeField("criada em", auto_now_add=True)
+    updated_at = models.DateTimeField(
+        "atualizada em", auto_now=True, help_text="Último toque — usado para saber há quanto tempo um rascunho está parado."
+    )
     first_action_at = models.DateTimeField(
         "primeira ação em",
         null=True,
@@ -204,6 +224,25 @@ class Activity(models.Model):
         from core.colors import get_contrast_text
 
         return get_contrast_text(self.status_color)
+
+    @property
+    def status_label(self):
+        """Nome exibido efetivo do status (customizado pela organização, ou
+        o label nativo do TextChoices) — nunca altera o código gravado em
+        `status` nem a lógica de negócio, que continua comparando o code."""
+        if getattr(self, "_status_label", None):
+            return self._status_label
+        from core.colors import EnumColorResolver
+
+        return EnumColorResolver(self.organization, "activity_status").label_for(self.status, self.get_status_display())
+
+    @property
+    def status_description(self):
+        if getattr(self, "_status_description", None):
+            return self._status_description
+        from core.colors import EnumColorResolver
+
+        return EnumColorResolver(self.organization, "activity_status").description_for(self.status)
 
     @property
     def urgency_color(self):
@@ -569,6 +608,25 @@ class Task(models.Model):
         from core.colors import get_contrast_text
 
         return get_contrast_text(self.status_color)
+
+    @property
+    def status_label(self):
+        """Nome exibido efetivo do status (customizado pela organização, ou
+        o label nativo do TextChoices) — nunca altera o código gravado em
+        `status` nem a lógica de negócio, que continua comparando o code."""
+        if getattr(self, "_status_label", None):
+            return self._status_label
+        from core.colors import EnumColorResolver
+
+        return EnumColorResolver(self.activity.organization, "task_status").label_for(self.status, self.get_status_display())
+
+    @property
+    def status_description(self):
+        if getattr(self, "_status_description", None):
+            return self._status_description
+        from core.colors import EnumColorResolver
+
+        return EnumColorResolver(self.activity.organization, "task_status").description_for(self.status)
 
 
 class TaskAssignment(models.Model):

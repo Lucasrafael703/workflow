@@ -786,6 +786,12 @@ td .title:hover { color: var(--primary); }
     box-shadow: 0 0 0 3px rgba(27, 98, 196, .13);
 }
 .form-row textarea { min-height: 84px; resize: vertical; }
+.split-datetime-input {
+    display: flex;
+    gap: 8px;
+}
+.split-datetime-input input[type="date"] { flex: 1 1 60%; }
+.split-datetime-input input[type="time"] { flex: 1 1 40%; }
 /* O padrão do navegador é claro demais para ser lido (contraste < 3:1) */
 input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .form-row .helptext { color: var(--muted); font-size: 12px; margin-top: 4px; }
@@ -1481,6 +1487,67 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 }
 .form-grid--wide .form-row textarea { min-height: 130px; }
 @media (max-width: 860px) { .form-grid--wide { grid-template-columns: 1fr; } }
+
+/* ==========================================================================
+   Wizard de nova atividade — Essencial / Contexto / Detalhes: coluna única,
+   stepper no topo, resumo somente-leitura na última etapa.
+   ========================================================================== */
+.wizard-page { width: min(720px, 100%); margin: 0 auto; }
+.wizard-head { margin-bottom: 22px; }
+.wizard-head h1 { margin: 4px 0 6px; }
+
+.wizard-stepper {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    margin: 0 auto 24px;
+    max-width: 520px;
+}
+.wizard-step { position: relative; text-align: center; }
+.wizard-step:not(:last-child)::after {
+    content: ""; position: absolute; top: 16px; left: calc(50% + 22px); right: calc(-50% + 22px);
+    height: 2px; background: var(--border); z-index: 0;
+}
+.wizard-step.is-done:not(:last-child)::after { background: var(--primary); }
+.wizard-step__circle {
+    position: relative; z-index: 1; width: 32px; height: 32px; margin: 0 auto 6px;
+    border-radius: 50%; display: grid; place-items: center;
+    background: var(--surface-alt); color: var(--muted); font-size: 12px; font-weight: 700;
+}
+.wizard-step__circle svg { width: 15px; height: 15px; }
+.wizard-step.is-active .wizard-step__circle, .wizard-step.is-done .wizard-step__circle {
+    background: var(--primary); color: #fff;
+}
+.wizard-step__label { color: var(--muted); font-size: 12px; font-weight: 600; }
+.wizard-step.is-active .wizard-step__label, .wizard-step.is-done .wizard-step__label { color: var(--primary); }
+
+.wizard-form-grid { display: grid; grid-template-columns: 1fr; gap: 18px; }
+.wizard-form-grid .form-row { margin-bottom: 0; }
+
+.wizard-upload {
+    min-height: 110px; padding: 20px; border: 1px dashed var(--border-strong); border-radius: var(--radius-sm);
+    display: grid; place-items: center; text-align: center; background: var(--surface-alt); color: var(--muted);
+    cursor: pointer;
+}
+.wizard-upload:hover { background: var(--brand-blue-soft, var(--surface-alt)); border-color: var(--primary); }
+.wizard-upload strong { color: var(--primary); font-weight: 600; }
+
+.wizard-attachment-list { display: grid; gap: 8px; margin-top: 12px; }
+.wizard-attachment-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface);
+}
+
+.wizard-summary { padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-alt); margin-top: 8px; }
+.wizard-summary__title { margin: 0 0 10px; font-size: 13px; font-weight: 700; }
+.wizard-summary__grid { display: grid; grid-template-columns: 140px 1fr; gap: 7px 12px; font-size: 13px; }
+.wizard-summary__label { color: var(--muted); }
+.wizard-summary__value { color: var(--text); font-weight: 600; }
+
+@media (max-width: 600px) {
+    .wizard-stepper { max-width: 100%; }
+    .wizard-step__label { font-size: 11px; }
+    .wizard-summary__grid { grid-template-columns: 1fr; }
+}
 
 /* ==========================================================================
    Fila de atividades — filtros amplos (cliente, status, urgência, grupo,
@@ -3358,6 +3425,23 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     gap: 8px;
 }
 
+.flow-row-hidden {
+    opacity: 0.55;
+}
+
+.flow-hidden-badge {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    margin-top: 2px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    background: #f1f5f9;
+    color: #64748b;
+}
+
 .flow-table-actions form,
 .flow-stage-row form {
     display: inline-flex;
@@ -3474,5 +3558,608 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     .cadastro-stage-panel .flow-stage-row > a {
         grid-column: 2 / 3;
         justify-self: start;
+    }
+}
+
+/* ==========================================================================
+   Atividades - Lista, Kanban e Calendario alinhados
+   ========================================================================== */
+.activities-page {
+    max-width: 1600px;
+    margin: 0 auto;
+}
+
+.activities-page svg {
+    width: 17px;
+    height: 17px;
+    flex: 0 0 auto;
+}
+
+.activities-head {
+    margin-bottom: 22px;
+}
+
+.activities-head h1 {
+    margin: 0 0 4px;
+    font-size: 34px;
+    line-height: 1.1;
+    letter-spacing: 0;
+}
+
+.activities-head p {
+    font-size: 15px;
+}
+
+.activities-create {
+    min-height: 44px;
+    border-radius: 8px;
+    padding-inline: 20px;
+}
+
+.activities-page .task-view-tabs {
+    gap: 28px;
+    min-height: 52px;
+    margin: 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.activities-page .task-view-tabs a {
+    min-height: 52px;
+    padding: 0 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.activities-page .activities-tabs {
+    min-height: 58px;
+    margin: 0;
+    gap: 24px;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+}
+
+.activities-page .activities-tabs a {
+    min-height: 58px;
+    padding: 0 8px;
+    display: inline-flex;
+    align-items: center;
+}
+
+.activities-filters {
+    margin: 16px 0 18px;
+}
+
+.activities-toolbar {
+    display: grid;
+    grid-template-columns: minmax(320px, 1fr) auto auto auto auto auto auto;
+    gap: 12px;
+}
+
+.activities-search {
+    max-width: none;
+}
+
+.activities-search input,
+.activities-select select,
+.activities-filter-chip {
+    height: 46px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(15, 39, 71, .035);
+}
+
+.activities-filter-chip {
+    border: 1px solid var(--border-strong);
+    background: #fff;
+    color: var(--text);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 16px;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.activities-filter-chip--danger {
+    color: var(--danger);
+    background: var(--danger-soft);
+    border-color: #f3bec5;
+}
+
+.activities-filter-chip--active {
+    color: var(--primary);
+    background: var(--primary-soft);
+    border-color: #bfdbfe;
+}
+
+.activities-select select {
+    min-width: 136px;
+    font-weight: 600;
+}
+
+.activities-order select {
+    min-width: 150px;
+}
+
+.activities-table-card {
+    overflow-x: auto;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+}
+
+.activities-table {
+    width: 100%;
+    min-width: 1420px;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.activities-table th {
+    height: 58px;
+    padding: 0 14px;
+    background: #f8fafc;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-2);
+    text-align: left;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.activities-table td {
+    height: 78px;
+    padding: 13px 14px;
+    border-bottom: 1px solid #eef2f7;
+    color: #40536b;
+    font-size: 13px;
+    vertical-align: middle;
+}
+
+.activities-table tr:last-child td {
+    border-bottom: 0;
+}
+
+.activities-table__activity a {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    color: var(--text);
+}
+
+.activities-table__activity strong {
+    font-size: 13.5px;
+    line-height: 1.3;
+}
+
+.activity-sector-pill,
+.activity-stage-pill,
+.activity-status-pill {
+    min-height: 28px;
+    padding: 5px 11px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.activity-sector-pill {
+    color: #1d4ed8;
+    background: #dbeafe;
+}
+
+.activity-stage-pill {
+    color: var(--stage-color, var(--primary));
+    background: color-mix(in srgb, var(--stage-color, var(--primary)) 14%, white);
+}
+
+.activity-status-pill {
+    color: var(--status-color, var(--primary));
+    background: color-mix(in srgb, var(--status-color, var(--primary)) 14%, white);
+}
+
+.activity-status-pill::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: currentColor;
+}
+
+.activity-owner {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.activity-deadline-inline {
+    display: grid;
+    grid-template-columns: 17px minmax(0, 1fr);
+    gap: 7px;
+    align-items: center;
+    color: var(--text-2);
+}
+
+.activity-deadline-inline small {
+    grid-column: 2;
+    color: var(--muted);
+}
+
+.activity-deadline-inline.is-late,
+.activity-deadline-inline.is-late strong {
+    color: var(--danger);
+}
+
+.activities-table__actions {
+    position: relative;
+    width: 48px;
+}
+
+.activities-table-footer {
+    min-height: 62px;
+    padding: 0 22px;
+    border-top: 1px solid #eef2f7;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--muted);
+}
+
+.activities-pagination {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.activities-pagination a,
+.activities-pagination span {
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    background: #fff;
+    color: var(--primary);
+    font-weight: 800;
+}
+
+.activities-pagination span {
+    background: var(--primary-soft);
+}
+
+.activities-kanban-scroll {
+    overflow-x: auto;
+    padding-bottom: 12px;
+}
+
+.activities-kanban-board {
+    display: flex;
+    align-items: stretch;
+    gap: 12px;
+    width: max-content;
+    min-width: 100%;
+}
+
+.activities-kanban-column {
+    width: 388px;
+    min-width: 388px;
+    min-height: 540px;
+    background: #f8fafc;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.activities-kanban-column__head {
+    min-height: 58px;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid var(--border);
+}
+
+.activities-kanban-column__dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+    background: var(--stage-color, #94a3b8);
+}
+
+.activities-kanban-column__head h2 {
+    flex: 1;
+    margin: 0;
+    font-size: 16px;
+}
+
+.activities-kanban-column__head > span:last-child {
+    min-width: 30px;
+    height: 28px;
+    padding: 0 9px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: #eef2f7;
+    font-weight: 800;
+}
+
+.activities-kanban-column__body {
+    min-height: 480px;
+    padding: 10px;
+    display: grid;
+    gap: 10px;
+    align-content: start;
+}
+
+.activities-kanban-card {
+    padding: 14px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 1px 2px rgba(15, 39, 71, .04);
+    cursor: grab;
+}
+
+.activities-kanban-card.is-dragging {
+    opacity: .72;
+}
+
+.activities-kanban-card__top,
+.activities-kanban-card__bottom,
+.activities-kanban-card__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.activities-kanban-card__top {
+    align-items: flex-start;
+    margin-bottom: 10px;
+}
+
+.activities-kanban-card__top a:first-child {
+    color: var(--text);
+    font-weight: 800;
+    line-height: 1.35;
+}
+
+.activities-kanban-card__top a:last-child {
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    color: var(--text-2);
+}
+
+.activities-kanban-card__meta {
+    display: grid;
+    gap: 4px;
+    margin: 0 0 10px;
+    color: var(--text-2);
+}
+
+.activities-kanban-card__meta div {
+    display: grid;
+    grid-template-columns: 102px minmax(0, 1fr);
+    gap: 6px;
+}
+
+.activities-kanban-card__meta dt,
+.activities-kanban-card__meta dd {
+    margin: 0;
+}
+
+.activities-kanban-card__meta dd {
+    color: var(--text);
+}
+
+.activities-kanban-card__footer {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #eef2f7;
+}
+
+.activities-kanban-card__bottom {
+    margin-top: 10px;
+}
+
+.activities-kanban-empty {
+    min-height: 160px;
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+    text-align: center;
+}
+
+.activities-calendar-card {
+    overflow: hidden;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+}
+
+.activities-calendar-toolbar {
+    min-height: 64px;
+    padding: 0 22px;
+    display: grid;
+    grid-template-columns: auto auto 1fr auto auto auto auto;
+    gap: 10px;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+}
+
+.activities-calendar-toolbar h2 {
+    margin: 0;
+    text-align: center;
+    font-size: 20px;
+}
+
+.activities-calendar-nav-btn {
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    color: var(--text);
+}
+
+.activities-calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(130px, 1fr));
+    min-width: 980px;
+}
+
+.activities-calendar-weekday {
+    height: 40px;
+    display: grid;
+    place-items: center;
+    background: #f8fafc;
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    color: var(--text-2);
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.activities-calendar-day {
+    min-height: 106px;
+    padding: 10px;
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    background: #fff;
+}
+
+.activities-calendar-weekday:nth-child(7n),
+.activities-calendar-day:nth-child(7n) {
+    border-right: 0;
+}
+
+.activities-calendar-day.is-outside-month {
+    background: #fbfdff;
+}
+
+.activities-calendar-day.is-today {
+    box-shadow: inset 0 0 0 2px var(--primary);
+}
+
+.activities-calendar-day__number {
+    margin-bottom: 8px;
+    color: var(--brand-navy-deep);
+    font-weight: 800;
+}
+
+.activities-calendar-day.is-outside-month .activities-calendar-day__number {
+    color: #94a3b8;
+}
+
+.activities-calendar-event {
+    margin-top: 6px;
+    padding: 8px 9px;
+    display: grid;
+    gap: 4px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--event-color, var(--primary)) 14%, white);
+    color: var(--text);
+}
+
+.activities-calendar-event.is-danger {
+    --event-color: var(--danger);
+}
+
+.activities-calendar-event span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.activities-calendar-event strong {
+    width: fit-content;
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--event-color, var(--primary)) 18%, white);
+    color: var(--event-color, var(--primary));
+    font-size: 11px;
+}
+
+.activities-calendar-more {
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.activities-undated {
+    margin-top: 16px;
+    padding: 18px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+
+.activities-undated a {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border-top: 1px solid #eef2f7;
+    color: var(--text);
+}
+
+.activities-undated a span {
+    color: var(--muted);
+}
+
+@media (max-width: 1180px) {
+    .activities-toolbar {
+        grid-template-columns: minmax(280px, 1fr) repeat(3, auto);
+    }
+
+    .activities-filter-chip {
+        display: none;
+    }
+
+    .activities-calendar-toolbar {
+        grid-template-columns: auto auto 1fr auto;
+    }
+
+    .activities-calendar-toolbar .activities-select {
+        display: none;
+    }
+}
+
+@media (max-width: 760px) {
+    .activities-head {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .activities-toolbar {
+        grid-template-columns: 1fr;
+    }
+
+    .activities-kanban-column {
+        width: 320px;
+        min-width: 320px;
     }
 }

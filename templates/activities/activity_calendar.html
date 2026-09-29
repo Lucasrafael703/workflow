@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Atividades - Calendario - LPS{% endblock %}
+
+{% block content %}
+<section class="activities-page" aria-labelledby="activities-title">
+    {% include "activities/_activity_page_head.html" %}
+    {% include "activities/_activity_view_tabs.html" %}
+    {% include "activities/_activity_scope_tabs.html" %}
+
+    <div class="activities-calendar-card">
+        <form method="get" class="activities-calendar-toolbar" data-activity-filters>
+            <input type="hidden" name="tab" value="{{ tab }}">
+            <a class="btn btn--sm" href="?ano={{ today_year }}&mes={{ today_month }}&{{ filter_querystring }}">
+                {% include "_icon.html" with name="clock" %} Hoje
+            </a>
+            <a class="activities-calendar-nav-btn" href="?ano={{ prev_year }}&mes={{ prev_month }}&{{ filter_querystring }}" aria-label="Mes anterior">
+                {% include "_icon.html" with name="chevron-left" %}
+            </a>
+            <h2>{{ month_date|date:"F Y"|capfirst }}</h2>
+            <a class="activities-calendar-nav-btn" href="?ano={{ next_year }}&mes={{ next_month }}&{{ filter_querystring }}" aria-label="Proximo mes">
+                {% include "_icon.html" with name="arrow-right" %}
+            </a>
+            <label class="activities-select">
+                <span class="sr-only">Filtrar por status</span>
+                <select name="status" data-auto-submit>
+                    <option value="">Status</option>
+                    {% for value, label in status_choices %}<option value="{{ value }}" {% if f_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                </select>
+            </label>
+            <label class="activities-select">
+                <span class="sr-only">Filtrar por estagio</span>
+                <select name="estagio" data-auto-submit>
+                    <option value="">Estagio</option>
+                    {% for stage in stage_choices %}<option value="{{ stage.pk }}" {% if f_stage == stage.pk|stringformat:"s" %}selected{% endif %}>{{ stage.name }}</option>{% endfor %}
+                </select>
+            </label>
+            <label class="activities-select">
+                <span class="sr-only">Filtrar por setor</span>
+                <select name="grupo" data-auto-submit>
+                    <option value="">Setor</option>
+                    {% for sector in sectors %}<option value="{{ sector.pk }}" {% if f_group == sector.pk|stringformat:"s" %}selected{% endif %}>{{ sector.name }}</option>{% endfor %}
+                </select>
+            </label>
+        </form>
+
+        <div class="activities-calendar-grid">
+            <div class="activities-calendar-weekday">Dom</div>
+            <div class="activities-calendar-weekday">Seg</div>
+            <div class="activities-calendar-weekday">Ter</div>
+            <div class="activities-calendar-weekday">Qua</div>
+            <div class="activities-calendar-weekday">Qui</div>
+            <div class="activities-calendar-weekday">Sex</div>
+            <div class="activities-calendar-weekday">Sab</div>
+
+            {% for week in weeks %}
+                {% for day in week %}
+                <div class="activities-calendar-day {% if not day.in_month %}is-outside-month{% endif %} {% if day.is_today %}is-today{% endif %}">
+                    <div class="activities-calendar-day__number">{{ day.date|date:"j" }}</div>
+                    {% for activity in day.activities|slice:":3" %}
+                    <a href="{% url 'activity-detail' activity.pk %}" class="activities-calendar-event{% if activity.is_overdue or activity.status == 'BLOQUEADA' %} is-danger{% endif %}" style="--event-color: {{ activity.status_color }};">
+                        <span>{% include "_icon.html" with name="activity" %} {{ activity.title }}</span>
+                        <strong>{% if activity.is_overdue %}Atrasada{% else %}{{ activity.status_label }}{% endif %}</strong>
+                    </a>
+                    {% endfor %}
+                    {% if day.activities|length > 3 %}
+                    <div class="activities-calendar-more">+{{ day.activities|length|add:"-3" }} mais</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            {% endfor %}
+        </div>
+    </div>
+
+    {% if undated_activities %}
+    <div class="activities-undated">
+        <h2>Sem prazo definido</h2>
+        {% for activity in undated_activities %}
+        <a href="{% url 'activity-detail' activity.pk %}">
+            <strong>{{ activity.title }}</strong>
+            <span>{{ activity.client.name|default:"Sem cliente" }} · {{ activity.status_label }}</span>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    "use strict";
+    var form = document.querySelector("[data-activity-filters]");
+    if (!form) return;
+    form.querySelectorAll("[data-auto-submit]").forEach(function (field) {
+        field.addEventListener("change", function () { form.submit(); });
+    });
+})();
+</script>
+{% endblock %}
+

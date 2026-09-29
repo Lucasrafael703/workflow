@@ -1,0 +1,15 @@
+{% comment %}Seletor de visão (Lista/Kanban/Calendário), compartilhado entre
+activity_list.html, activity_kanban.html e activity_calendar.html. Preserva
+a querystring de filtros (tab/status/.../q) ao trocar de visão, via
+`filter_querystring` (montada em activity_filter_context).{% endcomment %}
+<nav class="tabs task-view-tabs">
+    <a href="{% url 'activity-list' %}?{{ filter_querystring }}" class="{% if view_mode == 'lista' %}is-active{% endif %}">
+        {% include "_icon.html" with name="menu" %} Lista
+    </a>
+    <a href="{% url 'activity-kanban' %}?{{ filter_querystring }}" class="{% if view_mode == 'kanban' %}is-active{% endif %}">
+        {% include "_icon.html" with name="queue" %} Kanban
+    </a>
+    <a href="{% url 'activity-calendar' %}?{{ filter_querystring }}" class="{% if view_mode == 'calendario' %}is-active{% endif %}">
+        {% include "_icon.html" with name="clock" %} Calendário
+    </a>
+</nav>

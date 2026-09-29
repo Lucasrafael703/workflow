@@ -50,7 +50,7 @@ nova aba, JS desabilitado).{% endcomment %}
             </span>
 
             <span class="muted small">{% if task.requested_deadline %}{{ task.requested_deadline|date:"d/m/Y H:i" }}{% else %}—{% endif %}</span>
-            <span class="tag" style="--tag-bg: {{ task.status_color }}1A; --tag-fg: {{ task.status_color }};">{{ task.get_status_display }}</span>
+            <span class="tag" style="--tag-bg: {{ task.status_color }}1A; --tag-fg: {{ task.status_color }};">{{ task.status_label }}</span>
             <span class="muted small">{% if task.queue_info %}{{ task.queue_info.position }}/{{ task.queue_info.total }}{% else %}—{% endif %}</span>
         </a>
         {% endfor %}

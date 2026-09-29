@@ -5,6 +5,7 @@
     "use strict";
 
     var DEBOUNCE_MS = 250;
+    var MIN_CHARS = 3;
 
     function init(root) {
         var hidden = root.querySelector("input[type=hidden]");
@@ -55,6 +56,17 @@
             trigger.focus();
         }
 
+        function renderMessage(text) {
+            results = [];
+            activeIndex = -1;
+            var resultsEl = popup.querySelector(".person-picker__results");
+            resultsEl.innerHTML = "";
+            var empty = document.createElement("div");
+            empty.className = "person-picker__empty";
+            empty.textContent = text;
+            resultsEl.appendChild(empty);
+        }
+
         function renderResults(list) {
             results = list;
             activeIndex = -1;
@@ -62,10 +74,7 @@
             resultsEl.innerHTML = "";
 
             if (list.length === 0) {
-                var empty = document.createElement("div");
-                empty.className = "person-picker__empty";
-                empty.textContent = "Ninguém encontrado.";
-                resultsEl.appendChild(empty);
+                renderMessage("Nada encontrado.");
                 return;
             }
 
@@ -91,6 +100,10 @@
         }
 
         function search(term) {
+            if (term.trim().length < MIN_CHARS) {
+                renderMessage("Digite ao menos " + MIN_CHARS + " letras para buscar.");
+                return;
+            }
             var params = new URLSearchParams({ q: term });
             if (sectorFieldId) {
                 var sectorField = document.getElementById(sectorFieldId);
@@ -161,7 +174,7 @@
             });
 
             searchInput.focus();
-            search("");
+            renderMessage("Digite ao menos " + MIN_CHARS + " letras para buscar.");
             document.addEventListener("click", onDocumentClick, true);
         }
 

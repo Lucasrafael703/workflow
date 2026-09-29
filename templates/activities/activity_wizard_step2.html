@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Nova atividade — Contexto — LPS{% endblock %}
+
+{% block content %}
+<div class="wizard-page">
+    {% include "activities/_activity_wizard_stepper.html" with current="contexto" %}
+
+    <form method="post">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+        <ul class="messages">
+            {% for error in form.non_field_errors %}<li class="message message--error">{{ error }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+
+        <div class="card card--form">
+            <div class="wizard-form-grid">
+                {% for field in form %}
+                <div class="form-row">
+                    <label for="{{ field.id_for_label }}">
+                        {{ field.label }}{% if field.field.required %} <span class="req">*</span>{% endif %}
+                    </label>
+                    {{ field }}
+                    {% if field.help_text %}<div class="helptext">{{ field.help_text }}</div>{% endif %}
+                    {% if field.errors %}<ul class="errorlist">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="form-foot form-foot--split">
+            <button type="submit" name="acao" value="voltar" class="btn btn--ghost">Voltar</button>
+            <div class="actions-row">
+                <button type="submit" name="acao" value="sair" class="btn">Salvar rascunho</button>
+                <button type="submit" name="acao" value="continuar" class="btn btn--primary">Continuar</button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}

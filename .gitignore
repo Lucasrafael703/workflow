@@ -7,5 +7,6 @@ db.sqlite3.bak-*
 .env
 media/
 staticfiles/
+atividade_arquivos/
 .vscode/
 .idea/

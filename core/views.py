@@ -21,6 +21,7 @@ from .forms import (
     ClientForm,
     CompanyForm,
     CostCenterForm,
+    EnumColorLabelForm,
     GrantActionForm,
     NotificationPreferencesForm,
     ReturnReasonForm,
@@ -31,7 +32,7 @@ from .forms import (
     UserForm,
     WorkflowStatusForm,
 )
-from .colors import is_valid_palette_color
+from .colors import is_valid_palette_color, valid_codes_for
 from .mixins import ActionRequiredMixin, OrganizationRequiredMixin
 from .models import ActivityStage, Client, Company, CostCenter, Sector, Site, Tag, TaskStage, WorkflowStatus
 from .services import (
@@ -167,6 +168,39 @@ class ClientSearchView(OrganizationRequiredMixin, View):
             for client in queryset[: self.MAX_RESULTS]
         ]
         return JsonResponse({"results": results})
+
+
+class _SimpleSearchView(OrganizationRequiredMixin, View):
+    """Base para buscas "por nome" simples (Setor/Empresa/Obra/Centro de
+    custo) — mesmo padrão de `ClientSearchView`, só troca o model. Subclasses
+    só declaram `model`."""
+
+    MAX_RESULTS = 20
+    model = None
+
+    def get(self, request):
+        term = request.GET.get("q", "").strip()
+        queryset = self.model.objects.filter(organization=self.organization, is_active=True).order_by("name")
+        if term:
+            queryset = queryset.filter(name__icontains=term)
+        results = [{"id": obj.pk, "name": str(obj)} for obj in queryset[: self.MAX_RESULTS]]
+        return JsonResponse({"results": results})
+
+
+class SectorSearchView(_SimpleSearchView):
+    model = Sector
+
+
+class CompanySearchView(_SimpleSearchView):
+    model = Company
+
+
+class SiteSearchView(_SimpleSearchView):
+    model = Site
+
+
+class CostCenterSearchView(_SimpleSearchView):
+    model = CostCenter
 
 
 class TagSearchView(OrganizationRequiredMixin, View):
@@ -521,6 +555,66 @@ class WorkflowStatusFormView(OrganizationRequiredMixin, ActionRequiredMixin, For
         return super().form_invalid(form)
 
 
+class EnumColorLabelFormView(OrganizationRequiredMixin, ActionRequiredMixin, FormView):
+    """Edita nome/descricao exibidos e o estado oculto de um status nativo
+    (Activity.Status/Task.Status) — nunca o `code`, que continua sendo o
+    valor real gravado e comparado pela regra de negocio."""
+
+    template_name = "core/cadastro_form.html"
+    form_class = EnumColorLabelForm
+    required_action = catalog.COR_STATUS_GERIR
+
+    def dispatch(self, request, *args, **kwargs):
+        domain = kwargs.get("domain")
+        if domain not in ("activity_status", "task_status"):
+            raise Http404("Dominio de status desconhecido.")
+        if kwargs.get("code") not in valid_codes_for(domain):
+            raise Http404("Codigo de status desconhecido.")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        if not self.request.POST:
+            label, description, is_hidden = EnumColorService.get_overrides(
+                self.organization, self.kwargs["domain"], self.kwargs["code"]
+            )
+            kwargs["initial"] = {"label": label, "description": description, "is_hidden": is_hidden}
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        domain = self.kwargs["domain"]
+        tab = "status-atividade" if domain == "activity_status" else "status-tarefa"
+        context["title"] = f"Status: {self.kwargs['code']}"
+        context["instance"] = True
+        context["tab"] = tab
+        context["return_url"] = f"{reverse('config-etapas-status')}?tab={tab}"
+        return context
+
+    def form_valid(self, form):
+        domain = self.kwargs["domain"]
+        code = self.kwargs["code"]
+        EnumColorService.set_overrides(
+            self.organization,
+            domain,
+            code,
+            label=form.cleaned_data["label"],
+            description=form.cleaned_data["description"],
+            is_hidden=form.cleaned_data["is_hidden"],
+            updated_by=self.request.user,
+        )
+        messages.success(self.request, "Status atualizado.")
+        if _is_ajax(self.request):
+            return JsonResponse({"ok": True})
+        tab = "status-atividade" if domain == "activity_status" else "status-tarefa"
+        return redirect(f"{reverse('config-etapas-status')}?tab={tab}")
+
+    def form_invalid(self, form):
+        if _is_ajax(self.request):
+            return JsonResponse({"errors": form.errors}, status=400)
+        return super().form_invalid(form)
+
+
 class TaskStageReorderView(OrganizationRequiredMixin, ActionRequiredMixin, View):
     """Recebe a ordem final das colunas do Kanban (drag-and-drop na tela de
     cadastro) e renumera — nunca expõe `order` como campo editável à mão."""
@@ -733,8 +827,18 @@ class EtapasEStatusView(OrganizationRequiredMixin, ActionRequiredMixin, Template
 
         if tab == "status-atividade":
             colors = EnumColorService.list_for_domain(self.organization, "activity_status")
+            overrides = EnumColorService.list_overrides_for_domain(self.organization, "activity_status")
             context["rows"] = [
-                {"code": code, "label": label, "color": colors[code], "is_system": True, **activity_status_meta.get(code, {})}
+                {
+                    "code": code,
+                    "label": overrides.get(code, {}).get("label") or label,
+                    "color": colors[code],
+                    "is_system": True,
+                    "is_hidden": overrides.get(code, {}).get("is_hidden", False),
+                    "enum_domain": "activity_status",
+                    **activity_status_meta.get(code, {}),
+                    **({"description": overrides[code]["description"]} if overrides.get(code, {}).get("description") else {}),
+                }
                 for code, label in Activity.Status.choices
             ]
             context["custom_rows"] = WorkflowStatus.objects.filter(
@@ -745,8 +849,18 @@ class EtapasEStatusView(OrganizationRequiredMixin, ActionRequiredMixin, Template
             context["section_description"] = "Configure a aparencia dos estados reais das atividades."
         elif tab == "status-tarefa":
             colors = EnumColorService.list_for_domain(self.organization, "task_status")
+            overrides = EnumColorService.list_overrides_for_domain(self.organization, "task_status")
             context["rows"] = [
-                {"code": code, "label": label, "color": colors[code], "is_system": True, **task_status_meta.get(code, {})}
+                {
+                    "code": code,
+                    "label": overrides.get(code, {}).get("label") or label,
+                    "color": colors[code],
+                    "is_system": True,
+                    "is_hidden": overrides.get(code, {}).get("is_hidden", False),
+                    "enum_domain": "task_status",
+                    **task_status_meta.get(code, {}),
+                    **({"description": overrides[code]["description"]} if overrides.get(code, {}).get("description") else {}),
+                }
                 for code, label in Task.Status.choices
             ]
             context["custom_rows"] = WorkflowStatus.objects.filter(

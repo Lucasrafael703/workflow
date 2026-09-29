@@ -147,9 +147,11 @@ def get_contrast_text(background_hex):
 
 
 class EnumColorResolver:
-    """Resolve a cor efetiva (customizada pela organização, ou default LPS)
-    de todos os codes de um domínio — uma única query por instância, nunca
-    por code, para não reintroduzir N+1 ao listar muitas atividades/tarefas."""
+    """Resolve a aparência efetiva (customizada pela organização, ou default
+    LPS) de todos os codes de um domínio — uma única query por instância,
+    nunca por code, para não reintroduzir N+1 ao listar muitas
+    atividades/tarefas. Cor, nome exibido, descrição e oculto vêm todos
+    dessa mesma query."""
 
     def __init__(self, organization, domain):
         from .models import EnumColor
@@ -159,12 +161,31 @@ class EnumColorResolver:
         if organization is None:
             self._overrides = {}
         else:
-            self._overrides = dict(
-                EnumColor.objects.filter(organization=organization, domain=domain).values_list("code", "color")
-            )
+            self._overrides = {
+                code: (color, label, description, is_hidden)
+                for code, color, label, description, is_hidden in EnumColor.objects.filter(
+                    organization=organization, domain=domain
+                ).values_list("code", "color", "label", "description", "is_hidden")
+            }
 
     def color_for(self, code):
-        return self._overrides.get(code) or self._defaults.get(code, DEFAULT_COLOR)
+        override = self._overrides.get(code)
+        color = override[0] if override else None
+        return color or self._defaults.get(code, DEFAULT_COLOR)
 
     def text_for(self, code):
         return get_contrast_text(self.color_for(code))
+
+    def label_for(self, code, default_label):
+        override = self._overrides.get(code)
+        label = override[1] if override else None
+        return label or default_label
+
+    def description_for(self, code, default_description=""):
+        override = self._overrides.get(code)
+        description = override[2] if override else None
+        return description or default_description
+
+    def is_hidden(self, code):
+        override = self._overrides.get(code)
+        return bool(override[3]) if override else False

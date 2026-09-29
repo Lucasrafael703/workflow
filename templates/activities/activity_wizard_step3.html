@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Nova atividade — Detalhes — LPS{% endblock %}
+
+{% block content %}
+<div class="wizard-page">
+    {% include "activities/_activity_wizard_stepper.html" with current="detalhes" %}
+
+    <form method="post">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+        <ul class="messages">
+            {% for error in form.non_field_errors %}<li class="message message--error">{{ error }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+
+        <div class="card card--form">
+            <div class="wizard-form-grid">
+                {% for field in form %}
+                <div class="form-row">
+                    <label for="{{ field.id_for_label }}">
+                        {{ field.label }}{% if field.field.required %} <span class="req">*</span>{% endif %}
+                    </label>
+                    {{ field }}
+                    {% if field.help_text %}<div class="helptext">{{ field.help_text }}</div>{% endif %}
+                    {% if field.errors %}<ul class="errorlist">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                </div>
+                {% endfor %}
+
+                <div class="form-row">
+                    <label>Anexos</label>
+                    {% if draft.attachments.all %}
+                    <div class="wizard-attachment-list">
+                        {% for attachment in draft.attachments.all %}
+                        <div class="wizard-attachment-row">
+                            <a href="{{ attachment.file.url }}" target="_blank" rel="noopener">{{ attachment.original_name|default:attachment.file.name }}</a>
+                            <button type="submit" form="wizard-attachment-delete-{{ attachment.pk }}" class="link-button small">Remover</button>
+                        </div>
+                        <form id="wizard-attachment-delete-{{ attachment.pk }}" method="post"
+                              action="{% url 'activity-attachment-delete' draft.pk attachment.pk %}"
+                              onsubmit="return confirm('Remover este anexo?');" hidden>
+                            {% csrf_token %}
+                        </form>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    <div class="helptext">PDF, DOC, DOCX, XLS, XLSX, PNG, JPG.</div>
+                </div>
+            </div>
+        </div>
+        <div class="wizard-summary">
+            <h3 class="wizard-summary__title">Resumo da atividade</h3>
+            <div class="wizard-summary__grid">
+                <span class="wizard-summary__label">Problema:</span><span class="wizard-summary__value">{{ draft.title }}</span>
+                <span class="wizard-summary__label">Cliente:</span><span class="wizard-summary__value">{{ draft.client.name|default:"-" }}</span>
+                <span class="wizard-summary__label">Setor responsável:</span><span class="wizard-summary__value">{{ draft.sector.name|default:"-" }}</span>
+                <span class="wizard-summary__label">Responsável:</span><span class="wizard-summary__value">{% if draft.owner %}{{ draft.owner.get_full_name|default:draft.owner.get_username }}{% else %}-{% endif %}</span>
+                <span class="wizard-summary__label">Urgência:</span><span class="wizard-summary__value">{{ draft.get_urgency_display }}</span>
+                <span class="wizard-summary__label">Prazo:</span><span class="wizard-summary__value">{% if draft.requested_deadline %}{{ draft.requested_deadline|date:"d/m/Y H:i" }}{% else %}-{% endif %}</span>
+            </div>
+        </div>
+
+        <div class="form-foot form-foot--split">
+            <button type="submit" name="acao" value="voltar" class="btn btn--ghost">Voltar</button>
+            <div class="actions-row">
+                <button type="submit" name="acao" value="sair" class="btn">Salvar rascunho</button>
+                <button type="submit" name="acao" value="publicar_e_tarefas" class="btn">Criar e adicionar tarefas</button>
+                <button type="submit" name="acao" value="publicar" class="btn btn--primary">Criar atividade</button>
+            </div>
+        </div>
+    </form>
+
+    <div class="card" style="margin-top:16px;">
+        <form method="post" action="{% url 'activity-attachment-upload' draft.pk %}" enctype="multipart/form-data" class="form-row">
+            {% csrf_token %}
+            <label for="wizard-attachment-file">Anexar arquivo</label>
+            <input type="file" id="wizard-attachment-file" name="file">
+            <button type="submit" class="btn btn--ghost" style="margin-top:8px;">Enviar anexo</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

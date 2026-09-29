@@ -15,7 +15,7 @@ from audit.models import AuditLog
 from acessos import catalog
 from acessos.services import AuthorizationService
 from core.mixins import ActionRequiredMixin, OrganizationRequiredMixin, user_sectors
-from core.models import Client, CostCenter, Sector, TaskStage
+from core.models import ActivityStage, Client, CostCenter, Sector, TaskStage
 
 from .forms import (
     ActivityApprovePendencyForm,
@@ -25,7 +25,9 @@ from .forms import (
     ActivityFinalizeForm,
     ActivityMiniCreateForm,
     ActivityPendingForm,
-    ActivityQuickCreateForm,
+    ActivityWizardStep1Form,
+    ActivityWizardStep2Form,
+    ActivityWizardStep3Form,
     AssignmentRejectForm,
     CancelForm,
     ChangeOwnerForm,
@@ -360,7 +362,7 @@ class HomeView(OrganizationRequiredMixin, TemplateView):
 
         followed = (
             Activity.objects.filter(organization=org, owner=user)
-            .exclude(status__in=[Activity.Status.CONCLUIDA, Activity.Status.CANCELADA])
+            .exclude(status__in=[Activity.Status.CONCLUIDA, Activity.Status.CANCELADA, Activity.Status.RASCUNHO])
             .annotate(
                 total_tasks=Count("tasks", distinct=True),
                 done_tasks=Count("tasks", filter=Q(tasks__status=Task.Status.CONCLUIDA), distinct=True),
@@ -406,6 +408,192 @@ class HomeView(OrganizationRequiredMixin, TemplateView):
 # ---------------------------------------------------------------------------
 
 
+ACTIVITY_FILTER_KEYS = (
+    "status",
+    "estagio",
+    "prazo",
+    "urgencia",
+    "cliente",
+    "grupo",
+    "centro_custo",
+    "criado_de",
+    "criado_ate",
+    "prazo_de",
+    "prazo_ate",
+)
+
+ACTIVITY_ORDERINGS = {
+    "prazo": ("requested_deadline", "-created_at"),
+    "recentes": ("-created_at",),
+    "titulo": ("title",),
+}
+
+
+def filtered_activities_queryset(request, organization, *, order=True):
+    """Filtro de atividades compartilhado entre Lista, Kanban e Calendário —
+    mesmos parâmetros GET (tab/status/prazo/urgencia/cliente/grupo/
+    centro_custo/datas/q), para as 3 visualizações sempre mostrarem
+    exatamente o mesmo subconjunto, só reagrupado/re-renderizado de formas
+    diferentes."""
+    user = request.user
+    tab = request.GET.get("tab", "minhas")
+    queryset = Activity.objects.filter(organization=organization).exclude(status=Activity.Status.RASCUNHO)
+
+    if tab == "grupo":
+        queryset = queryset.filter(sector__in=user_sectors(user))
+    elif tab == "participando":
+        queryset = queryset.filter(
+            tasks__executors__user=user, tasks__executors__removed_at__isnull=True
+        ).exclude(owner=user)
+    elif tab == "concluidas":
+        queryset = queryset.filter(
+            Q(owner=user) | Q(tasks__executors__user=user, tasks__executors__removed_at__isnull=True),
+            status__in=[Activity.Status.CONCLUIDA, Activity.Status.CANCELADA],
+        )
+    elif tab == "todas":
+        if not can(user, catalog.ATIVIDADE_VISUALIZAR_TODAS):
+            queryset = queryset.filter(owner=user)
+    else:
+        queryset = queryset.filter(owner=user)
+
+    search = request.GET.get("q", "").strip()
+    if search:
+        queryset = queryset.filter(
+            Q(title__icontains=search)
+            | Q(code__icontains=search)
+            | Q(client__name__icontains=search)
+            | Q(site__name__icontains=search)
+        )
+
+    status = request.GET.get("status", "")
+    if status:
+        queryset = queryset.filter(status=status)
+    elif tab != "concluidas":
+        # Sem filtro explícito de status, cada visão esconde o que já
+        # terminou — quem quiser ver concluída/cancelada escolhe o status.
+        queryset = queryset.exclude(status__in=[Activity.Status.CONCLUIDA, Activity.Status.CANCELADA])
+
+    deadline = request.GET.get("prazo", "")
+    now = timezone.now()
+    if deadline == "atrasadas":
+        queryset = queryset.filter(requested_deadline__lt=now).exclude(
+            status__in=[Activity.Status.CONCLUIDA, Activity.Status.CANCELADA]
+        )
+    elif deadline == "hoje":
+        queryset = queryset.filter(requested_deadline__date=timezone.localdate())
+    elif deadline == "7_dias":
+        queryset = queryset.filter(
+            requested_deadline__gte=now,
+            requested_deadline__lte=now + timedelta(days=7),
+        )
+    elif deadline == "30_dias":
+        queryset = queryset.filter(
+            requested_deadline__gte=now,
+            requested_deadline__lte=now + timedelta(days=30),
+        )
+    elif deadline == "sem_prazo":
+        queryset = queryset.filter(requested_deadline__isnull=True)
+
+    stage_id = request.GET.get("estagio", "")
+    if stage_id:
+        queryset = queryset.filter(stage_id=stage_id)
+
+    urgency = request.GET.get("urgencia", "")
+    if urgency:
+        queryset = queryset.filter(urgency=urgency)
+
+    client_id = request.GET.get("cliente", "")
+    if client_id:
+        queryset = queryset.filter(client_id=client_id)
+
+    sector_id = request.GET.get("grupo", "")
+    if sector_id:
+        queryset = queryset.filter(sector_id=sector_id)
+
+    cost_center_id = request.GET.get("centro_custo", "")
+    if cost_center_id:
+        queryset = queryset.filter(cost_center_id=cost_center_id)
+
+    created_from = request.GET.get("criado_de", "")
+    if created_from:
+        queryset = queryset.filter(created_at__date__gte=created_from)
+    created_to = request.GET.get("criado_ate", "")
+    if created_to:
+        queryset = queryset.filter(created_at__date__lte=created_to)
+
+    deadline_from = request.GET.get("prazo_de", "")
+    if deadline_from:
+        queryset = queryset.filter(requested_deadline__date__gte=deadline_from)
+    deadline_to = request.GET.get("prazo_ate", "")
+    if deadline_to:
+        queryset = queryset.filter(requested_deadline__date__lte=deadline_to)
+
+    queryset = (
+        queryset.select_related("owner", "company", "site", "client", "sector", "cost_center")
+        .annotate(
+            total_tasks=Count("tasks", distinct=True),
+            done_tasks=Count("tasks", filter=Q(tasks__status=Task.Status.CONCLUIDA), distinct=True),
+            blocked_tasks=Count("tasks", filter=Q(tasks__status=Task.Status.BLOQUEADA), distinct=True),
+            open_deadline_conflicts=Count(
+                "tasks__deadline_conflicts",
+                filter=Q(tasks__deadline_conflicts__status=DeadlineConflict.Status.ABERTO),
+                distinct=True,
+            ),
+        )
+        .distinct()
+    )
+    if order:
+        orderings = ACTIVITY_ORDERINGS.get(request.GET.get("ordem"), ACTIVITY_ORDERINGS["prazo"])
+        queryset = queryset.order_by(*orderings)
+    return queryset
+
+
+def activity_filter_context(request, organization):
+    """Contexto mínimo compartilhado pela nav de troca de visão (Lista/
+    Kanban/Calendário) das 3 telas de atividade — `filter_querystring` some
+    com `page`/`ano`/`mes` para não duplicar paginação/navegação de mês ao
+    trocar de visão."""
+    params = request.GET.copy()
+    params.pop("page", None)
+    params.pop("ano", None)
+    params.pop("mes", None)
+    return {
+        "tab": request.GET.get("tab", "minhas"),
+        "filter_querystring": params.urlencode(),
+        "search": request.GET.get("q", ""),
+        "f_status": request.GET.get("status", ""),
+        "f_stage": request.GET.get("estagio", ""),
+        "f_group": request.GET.get("grupo", ""),
+        "ordem": request.GET.get("ordem", "prazo"),
+        "can_view_all": can(request.user, catalog.ATIVIDADE_VISUALIZAR_TODAS),
+    }
+
+
+def decorate_activity_cards(activities, organization):
+    """Prepare display-only attributes shared by list, Kanban and calendar."""
+    from core.colors import EnumColorResolver
+
+    now = timezone.now()
+    status_colors = EnumColorResolver(organization, "activity_status")
+    for activity in activities:
+        activity._status_color = status_colors.color_for(activity.status)
+        activity._status_label = status_colors.label_for(activity.status, activity.get_status_display())
+        activity.is_overdue = bool(
+            activity.requested_deadline
+            and activity.requested_deadline < now
+            and activity.status not in (Activity.Status.CONCLUIDA, Activity.Status.CANCELADA)
+        )
+        activity.overdue_days = (
+            max(1, (now.date() - activity.requested_deadline.date()).days)
+            if activity.is_overdue
+            else 0
+        )
+        activity.progress_percent = int((activity.done_tasks / activity.total_tasks) * 100) if activity.total_tasks else 0
+        activity.stage_name = activity.stage.name if activity.stage else "Sem estagio"
+        activity.stage_color = activity.stage.color if activity.stage else "#94A3B8"
+    return activities
+
+
 class ActivityListView(OrganizationRequiredMixin, ListView):
     """Fila de atividades (doc 09, ampliado pelo pedido de filtros §1): busca
     por cliente/título/ID, filtros por status, urgência, cliente, grupo,
@@ -415,131 +603,10 @@ class ActivityListView(OrganizationRequiredMixin, ListView):
     context_object_name = "activities"
     paginate_by = 20
 
-    FILTER_KEYS = (
-        "status",
-        "prazo",
-        "urgencia",
-        "cliente",
-        "grupo",
-        "centro_custo",
-        "criado_de",
-        "criado_ate",
-        "prazo_de",
-        "prazo_ate",
-    )
+    FILTER_KEYS = ACTIVITY_FILTER_KEYS
 
     def get_queryset(self):
-        user = self.request.user
-        tab = self.request.GET.get("tab", "minhas")
-        queryset = Activity.objects.filter(organization=self.organization)
-
-        if tab == "grupo":
-            queryset = queryset.filter(sector__in=user_sectors(user))
-        elif tab == "participando":
-            queryset = queryset.filter(
-                tasks__executors__user=user, tasks__executors__removed_at__isnull=True
-            ).exclude(owner=user)
-        elif tab == "concluidas":
-            queryset = queryset.filter(
-                Q(owner=user) | Q(tasks__executors__user=user, tasks__executors__removed_at__isnull=True),
-                status__in=[Activity.Status.CONCLUIDA, Activity.Status.CANCELADA],
-            )
-        elif tab == "todas":
-            if not can(user, catalog.ATIVIDADE_VISUALIZAR_TODAS):
-                queryset = queryset.filter(owner=user)
-        else:
-            queryset = queryset.filter(owner=user)
-
-        search = self.request.GET.get("q", "").strip()
-        if search:
-            queryset = queryset.filter(
-                Q(title__icontains=search)
-                | Q(code__icontains=search)
-                | Q(client__name__icontains=search)
-                | Q(site__name__icontains=search)
-            )
-
-        status = self.request.GET.get("status", "")
-        if status:
-            queryset = queryset.filter(status=status)
-        elif tab != "concluidas":
-            # Sem filtro explícito de status, cada visão esconde o que já
-            # terminou — quem quiser ver concluída/cancelada escolhe o status.
-            queryset = queryset.exclude(status__in=[Activity.Status.CONCLUIDA, Activity.Status.CANCELADA])
-
-        deadline = self.request.GET.get("prazo", "")
-        now = timezone.now()
-        if deadline == "atrasadas":
-            queryset = queryset.filter(requested_deadline__lt=now).exclude(
-                status__in=[Activity.Status.CONCLUIDA, Activity.Status.CANCELADA]
-            )
-        elif deadline == "7_dias":
-            queryset = queryset.filter(
-                requested_deadline__gte=now,
-                requested_deadline__lte=now + timedelta(days=7),
-            )
-        elif deadline == "30_dias":
-            queryset = queryset.filter(
-                requested_deadline__gte=now,
-                requested_deadline__lte=now + timedelta(days=30),
-            )
-        elif deadline == "sem_prazo":
-            queryset = queryset.filter(requested_deadline__isnull=True)
-
-        urgency = self.request.GET.get("urgencia", "")
-        if urgency:
-            queryset = queryset.filter(urgency=urgency)
-
-        client_id = self.request.GET.get("cliente", "")
-        if client_id:
-            queryset = queryset.filter(client_id=client_id)
-
-        sector_id = self.request.GET.get("grupo", "")
-        if sector_id:
-            queryset = queryset.filter(sector_id=sector_id)
-
-        cost_center_id = self.request.GET.get("centro_custo", "")
-        if cost_center_id:
-            queryset = queryset.filter(cost_center_id=cost_center_id)
-
-        created_from = self.request.GET.get("criado_de", "")
-        if created_from:
-            queryset = queryset.filter(created_at__date__gte=created_from)
-        created_to = self.request.GET.get("criado_ate", "")
-        if created_to:
-            queryset = queryset.filter(created_at__date__lte=created_to)
-
-        deadline_from = self.request.GET.get("prazo_de", "")
-        if deadline_from:
-            queryset = queryset.filter(requested_deadline__date__gte=deadline_from)
-        deadline_to = self.request.GET.get("prazo_ate", "")
-        if deadline_to:
-            queryset = queryset.filter(requested_deadline__date__lte=deadline_to)
-
-        return (
-            queryset.select_related("owner", "company", "site", "client", "sector", "cost_center")
-            .annotate(
-                total_tasks=Count("tasks", distinct=True),
-                done_tasks=Count("tasks", filter=Q(tasks__status=Task.Status.CONCLUIDA), distinct=True),
-                blocked_tasks=Count("tasks", filter=Q(tasks__status=Task.Status.BLOQUEADA), distinct=True),
-                open_deadline_conflicts=Count(
-                    "tasks__deadline_conflicts",
-                    filter=Q(tasks__deadline_conflicts__status=DeadlineConflict.Status.ABERTO),
-                    distinct=True,
-                ),
-            )
-            .distinct()
-            .order_by(*self._ordering())
-        )
-
-    ORDERINGS = {
-        "prazo": ("requested_deadline", "-created_at"),
-        "recentes": ("-created_at",),
-        "titulo": ("title",),
-    }
-
-    def _ordering(self):
-        return self.ORDERINGS.get(self.request.GET.get("ordem"), self.ORDERINGS["prazo"])
+        return filtered_activities_queryset(self.request, self.organization)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -547,7 +614,7 @@ class ActivityListView(OrganizationRequiredMixin, ListView):
         tab = self.request.GET.get("tab", "minhas")
         my_sector_ids = set(user_sectors(user).values_list("id", flat=True))
 
-        context["tab"] = tab
+        context["view_mode"] = "lista"
         context["search"] = self.request.GET.get("q", "")
         context["ordem"] = self.request.GET.get("ordem", "prazo")
         context["can_view_all"] = can(user, catalog.ATIVIDADE_VISUALIZAR_TODAS)
@@ -556,11 +623,22 @@ class ActivityListView(OrganizationRequiredMixin, ListView):
         params = self.request.GET.copy()
         params.pop("page", None)
         context["querystring"] = params.urlencode()
+        context.update(activity_filter_context(self.request, self.organization))
 
-        context["status_choices"] = Activity.Status.choices
+        from core.colors import EnumColorResolver
+
+        status_colors = EnumColorResolver(self.organization, "activity_status")
+        urgency_colors = EnumColorResolver(self.organization, "activity_urgency")
+
+        context["status_choices"] = [
+            (code, status_colors.label_for(code, label))
+            for code, label in Activity.Status.choices
+            if not status_colors.is_hidden(code)
+        ]
         context["urgency_choices"] = Activity.Urgency.choices
         context["clients"] = Client.objects.filter(organization=self.organization, is_active=True)
         context["sectors"] = Sector.objects.filter(organization=self.organization, is_active=True)
+        context["stage_choices"] = ActivityStage.objects.filter(organization=self.organization, is_active=True).order_by("order")
         context["cost_centers"] = CostCenter.objects.filter(organization=self.organization, is_active=True)
         for key in self.FILTER_KEYS:
             context[f"f_{key}"] = self.request.GET.get(key, "")
@@ -568,24 +646,9 @@ class ActivityListView(OrganizationRequiredMixin, ListView):
             self.request.GET.get(key) for key in self.FILTER_KEYS
         )
 
-        from core.colors import EnumColorResolver
-
-        status_colors = EnumColorResolver(self.organization, "activity_status")
-        urgency_colors = EnumColorResolver(self.organization, "activity_urgency")
-
+        decorate_activity_cards(context["activities"], self.organization)
         for activity in context["activities"]:
-            activity._status_color = status_colors.color_for(activity.status)
             activity._urgency_color = urgency_colors.color_for(activity.urgency)
-            activity.is_overdue = bool(
-                activity.requested_deadline
-                and activity.requested_deadline < timezone.now()
-                and activity.status not in (Activity.Status.CONCLUIDA, Activity.Status.CANCELADA)
-            )
-            activity.overdue_days = (
-                max(1, (timezone.now().date() - activity.requested_deadline.date()).days)
-                if activity.is_overdue
-                else 0
-            )
             activity.can_assumir = (
                 activity.sector_id in my_sector_ids
                 and activity.owner_id != user.id
@@ -608,9 +671,177 @@ class ActivityListView(OrganizationRequiredMixin, ListView):
         return context
 
 
-class ActivityCreateView(OrganizationRequiredMixin, FormView):
-    template_name = "activities/activity_form.html"
-    form_class = ActivityQuickCreateForm
+class ActivityKanbanView(OrganizationRequiredMixin, TemplateView):
+    """Kanban de atividades: colunas são `ActivityStage` (camada visual
+    configurável por organização) — nunca `Activity.status`, que continua
+    orientando o fluxo operacional exatamente como antes."""
+
+    template_name = "activities/activity_kanban.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        activities = filtered_activities_queryset(self.request, self.organization, order=False).order_by(
+            "stage__order", "requested_deadline"
+        )
+        stages = list(
+            ActivityStage.objects.filter(organization=self.organization, is_active=True).order_by("order")
+        )
+        columns = [{"stage": stage, "activities": []} for stage in stages]
+        unassigned_activities = []
+        by_stage = {stage.pk: column["activities"] for stage, column in zip(stages, columns)}
+        now = timezone.now()
+
+        from core.colors import EnumColorResolver
+
+        for activity in activities:
+            # Indicador de "parado": tempo desde a última troca de estágio,
+            # ou desde a criação se nunca mudou — nunca persiste, só exibe.
+            reference = activity.stage_changed_at or activity.created_at
+            activity.days_in_stage = (now - reference).days
+            bucket = by_stage.get(activity.stage_id) if activity.stage_id else None
+            (bucket if bucket is not None else unassigned_activities).append(activity)
+
+        decorate_activity_cards(activities, self.organization)
+        status_colors = EnumColorResolver(self.organization, "activity_status")
+        context.update(activity_filter_context(self.request, self.organization))
+        context["status_choices"] = [
+            (code, status_colors.label_for(code, label))
+            for code, label in Activity.Status.choices
+            if not status_colors.is_hidden(code)
+        ]
+        context["sectors"] = Sector.objects.filter(organization=self.organization, is_active=True)
+        context["stage_choices"] = stages
+        context["columns"] = columns
+        context["unassigned_column"] = {"stage": None, "activities": unassigned_activities}
+        context["view_mode"] = "kanban"
+        return context
+
+
+class ActivityMoveStageView(OrganizationRequiredMixin, View):
+    """Move uma atividade entre colunas do Kanban. Toca somente
+    `Activity.stage` — nunca `Activity.status`, nunca passa pelo
+    `ActivityService`. É uma camada visual, não uma ação de negócio."""
+
+    def post(self, request, pk):
+        activity = get_object_or_404(Activity, pk=pk, organization=self.organization)
+        stage_id = request.POST.get("stage_id") or None
+        stage = None
+        if stage_id:
+            stage = get_object_or_404(ActivityStage, pk=stage_id, organization=self.organization)
+        activity.stage = stage
+        activity.stage_changed_at = timezone.now()
+        activity.save(update_fields=["stage", "stage_changed_at"])
+        if _is_ajax(request):
+            return JsonResponse({"ok": True, "activity_id": activity.pk, "stage_id": stage.pk if stage else None})
+        return redirect("activity-kanban")
+
+
+class ActivityCalendarView(OrganizationRequiredMixin, TemplateView):
+    """Calendário mensal de atividades, por `requested_deadline` — sem prazo
+    fica só na lista lateral "Sem prazo definido" (Activity não tem
+    `committed_deadline`, diferente de Task)."""
+
+    template_name = "activities/activity_calendar.html"
+
+    def get_context_data(self, **kwargs):
+        import calendar as calendar_module
+        from datetime import date as date_cls
+
+        context = super().get_context_data(**kwargs)
+        today = timezone.localdate()
+        try:
+            year = int(self.request.GET.get("ano", today.year))
+            month = int(self.request.GET.get("mes", today.month))
+        except (TypeError, ValueError):
+            year, month = today.year, today.month
+        if month < 1 or month > 12:
+            month = today.month
+
+        from core.colors import EnumColorResolver
+
+        status_colors = EnumColorResolver(self.organization, "activity_status")
+
+        activities = filtered_activities_queryset(self.request, self.organization, order=False)
+        decorate_activity_cards(activities, self.organization)
+        by_day = {}
+        undated = []
+        for activity in activities:
+            deadline = activity.requested_deadline
+            if deadline is None:
+                undated.append(activity)
+                continue
+            by_day.setdefault(timezone.localtime(deadline).date(), []).append(activity)
+
+        cal = calendar_module.Calendar(firstweekday=6)  # domingo primeiro
+        weeks = [
+            [
+                {
+                    "date": day,
+                    "in_month": day.month == month,
+                    "is_today": day == today,
+                    "activities": by_day.get(day, []),
+                }
+                for day in week
+            ]
+            for week in cal.monthdatescalendar(year, month)
+        ]
+
+        if month == 1:
+            prev_year, prev_month = year - 1, 12
+        else:
+            prev_year, prev_month = year, month - 1
+        if month == 12:
+            next_year, next_month = year + 1, 1
+        else:
+            next_year, next_month = year, month + 1
+
+        context.update(activity_filter_context(self.request, self.organization))
+        context.update(
+            {
+                "weeks": weeks,
+                "year": year,
+                "month": month,
+                "month_date": date_cls(year, month, 1),
+                "today_year": today.year,
+                "today_month": today.month,
+                "undated_activities": undated,
+                "prev_year": prev_year,
+                "prev_month": prev_month,
+                "next_year": next_year,
+                "next_month": next_month,
+                "view_mode": "calendario",
+                "status_choices": [
+                    (code, status_colors.label_for(code, label))
+                    for code, label in Activity.Status.choices
+                    if not status_colors.is_hidden(code)
+                ],
+                "sectors": Sector.objects.filter(organization=self.organization, is_active=True),
+                "stage_choices": ActivityStage.objects.filter(organization=self.organization, is_active=True).order_by("order"),
+            }
+        )
+        return context
+
+
+class ActivityWizardStep1View(OrganizationRequiredMixin, FormView):
+    """Etapa 1 (Essencial) do wizard de nova atividade. Sem `?pk=` cria um
+    rascunho novo a cada POST válido; com `?pk=` retoma um rascunho já
+    existente (ver `get_draft`). Título/dono continuam podendo ficar vazios
+    aqui — só `publish_draft` (etapa 3) exige os dois preenchidos."""
+
+    template_name = "activities/activity_wizard_step1.html"
+    form_class = ActivityWizardStep1Form
+
+    def get_draft(self):
+        pk = self.request.GET.get("pk") or self.request.POST.get("pk")
+        if not pk:
+            return None
+        return get_object_or_404(
+            Activity,
+            pk=pk,
+            organization=self.organization,
+            status=Activity.Status.RASCUNHO,
+            created_by=self.request.user,
+        )
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -618,42 +849,147 @@ class ActivityCreateView(OrganizationRequiredMixin, FormView):
         kwargs["user"] = self.request.user
         kwargs["can_create_person"] = can(self.request.user, catalog.USUARIO_CRIAR)
         kwargs["can_create_client"] = can(self.request.user, catalog.CLIENTE_GERIR)
+        kwargs["can_create_sector"] = can(self.request.user, catalog.SETOR_EDITAR)
+        kwargs["can_create_site"] = can(self.request.user, catalog.OBRA_GERIR)
+        draft = self.get_draft()
+        if draft is not None:
+            kwargs["instance"] = draft
         return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["draft"] = self.get_draft()
+        return context
 
     def form_valid(self, form):
         data = form.cleaned_data
         try:
-            activity = ActivityService.create_activity(
+            activity = ActivityService.save_draft(
                 organization=self.organization,
-                title=data["title"],
-                owner=data["owner"],
                 created_by=self.request.user,
-                description=data.get("description") or "",
-                company=data.get("company"),
-                site=data.get("site"),
-                cost_center=data.get("cost_center"),
-                requested_deadline=data.get("requested_deadline"),
+                activity=self.get_draft(),
+                title=data.get("title"),
                 client=data.get("client"),
-                urgency=data.get("urgency"),
+                site=data.get("site"),
                 sector=data.get("sector"),
-                address=data.get("address") or "",
-                tags=data.get("tags"),
+                owner=data.get("owner"),
+                requested_deadline=data.get("requested_deadline"),
+                urgency=data.get("urgency") or Activity.Urgency.MEDIA,
             )
         except ActivityError as exc:
             form.add_error(None, str(exc))
             return self.form_invalid(form)
 
-        # Ação encadeada: criar e já abrir a primeira tarefa (Benchmark §6).
-        if "salvar_e_tarefas" in self.request.POST:
+        if self.request.POST.get("acao") == "sair":
+            messages.success(self.request, "Rascunho salvo. Você pode retomar quando quiser.")
+            return redirect("activity-list")
+        return redirect("activity-wizard-contexto", pk=activity.pk)
+
+
+class ActivityWizardStep2View(OrganizationRequiredMixin, FormView):
+    """Etapa 2 (Contexto) do wizard — Organização/Empresa, Centro de custo,
+    Solicitante, Endereço complementar, Marcadores. Tudo opcional."""
+
+    template_name = "activities/activity_wizard_step2.html"
+    form_class = ActivityWizardStep2Form
+
+    def get_draft(self):
+        return get_object_or_404(
+            Activity,
+            pk=self.kwargs["pk"],
+            organization=self.organization,
+            status=Activity.Status.RASCUNHO,
+            created_by=self.request.user,
+        )
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["organization"] = self.organization
+        kwargs["instance"] = self.get_draft()
+        kwargs["can_create_company"] = can(self.request.user, catalog.EMPRESA_GERIR)
+        kwargs["can_create_cost_center"] = can(self.request.user, catalog.CENTRO_CUSTO_GERIR)
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["draft"] = self.get_draft()
+        return context
+
+    def form_valid(self, form):
+        activity = form.save()
+        if self.request.POST.get("acao") == "sair":
+            messages.success(self.request, "Rascunho salvo. Você pode retomar quando quiser.")
+            return redirect("activity-list")
+        if self.request.POST.get("acao") == "voltar":
+            return redirect(f"{reverse('activity-create')}?pk={activity.pk}")
+        return redirect("activity-wizard-detalhes", pk=activity.pk)
+
+
+class ActivityWizardStep3View(OrganizationRequiredMixin, FormView):
+    """Etapa 3 (Detalhes) do wizard — descrição, observações internas,
+    anexos (via `ActivityAttachmentUploadView`, já apontando pro rascunho) e
+    o resumo final. O botão "Criar atividade" publica de verdade."""
+
+    template_name = "activities/activity_wizard_step3.html"
+    form_class = ActivityWizardStep3Form
+
+    def get_draft(self):
+        return get_object_or_404(
+            Activity,
+            pk=self.kwargs["pk"],
+            organization=self.organization,
+            status=Activity.Status.RASCUNHO,
+            created_by=self.request.user,
+        )
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["instance"] = self.get_draft()
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["draft"] = self.get_draft()
+        return context
+
+    def form_valid(self, form):
+        activity = form.save()
+        acao = self.request.POST.get("acao")
+
+        if acao == "sair":
+            messages.success(self.request, "Rascunho salvo. Você pode retomar quando quiser.")
+            return redirect("activity-list")
+        if acao == "voltar":
+            return redirect("activity-wizard-contexto", pk=activity.pk)
+
+        try:
+            activity = ActivityService.publish_draft(activity, self.request.user)
+        except ActivityError as exc:
+            form.add_error(None, str(exc))
+            return self.form_invalid(form)
+
+        if acao == "publicar_e_tarefas":
             messages.success(self.request, "Atividade criada. Agora defina a primeira tarefa.")
             return redirect("task-create", activity_pk=activity.pk)
 
         messages.success(self.request, "Atividade criada. Próximo passo: adicionar a primeira tarefa.")
         return redirect("activity-detail", pk=activity.pk)
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        return context
+
+class ActivityWizardDiscardView(OrganizationRequiredMixin, View):
+    """Descarta um rascunho nunca publicado — ação explícita, sem volta."""
+
+    def post(self, request, pk):
+        activity = get_object_or_404(
+            Activity, pk=pk, organization=self.organization, status=Activity.Status.RASCUNHO
+        )
+        try:
+            ActivityService.discard_draft(activity, request.user)
+        except ActivityError as exc:
+            messages.error(request, str(exc))
+            return redirect("activity-list")
+        messages.success(request, "Rascunho descartado.")
+        return redirect("activity-list")
 
 
 class ActivitySearchView(OrganizationRequiredMixin, View):
@@ -681,9 +1017,10 @@ class ActivitySearchView(OrganizationRequiredMixin, View):
 
 class ActivityMiniCreateView(OrganizationRequiredMixin, FormView):
     """Criação mínima de atividade, usada só dentro do popup aninhado do
-    "+ Nova tarefa": título e pronto, dono = quem está criando. Quem quiser
-    os demais campos (cliente, urgência, prazo…) edita a atividade depois —
-    ver `ActivityCreateView` para o formulário completo."""
+    "+ Nova tarefa": título e pronto, dono = quem está criando. Sempre cria
+    uma atividade completa (nunca um rascunho) — quem quiser os demais campos
+    (cliente, urgência, prazo…) edita a atividade depois, ou usa o wizard de
+    3 etapas (`ActivityWizardStep1View`) para o formulário completo."""
 
     template_name = "activities/activity_mini_form.html"
     form_class = ActivityMiniCreateForm
@@ -714,6 +1051,12 @@ class ActivityDetailView(OrganizationRequiredMixin, DetailView):
 
     template_name = "activities/activity_detail.html"
     context_object_name = "activity"
+
+    def get(self, request, *args, **kwargs):
+        activity = get_object_or_404(Activity, pk=kwargs["pk"], organization=self.organization)
+        if activity.status == Activity.Status.RASCUNHO:
+            return redirect(f"{reverse('activity-create')}?pk={activity.pk}")
+        return super().get(request, *args, **kwargs)
 
     def get_queryset(self):
         return Activity.objects.filter(organization=self.organization).select_related(
@@ -866,13 +1209,17 @@ class ActivityEditView(OrganizationRequiredMixin, FormView):
         kwargs = super().get_form_kwargs()
         kwargs["organization"] = self.organization
         kwargs["instance"] = self.get_activity()
+        kwargs["can_create_person"] = can(self.request.user, catalog.USUARIO_CRIAR)
         kwargs["can_create_client"] = can(self.request.user, catalog.CLIENTE_GERIR)
+        kwargs["can_create_sector"] = can(self.request.user, catalog.SETOR_EDITAR)
+        kwargs["can_create_company"] = can(self.request.user, catalog.EMPRESA_GERIR)
+        kwargs["can_create_site"] = can(self.request.user, catalog.OBRA_GERIR)
+        kwargs["can_create_cost_center"] = can(self.request.user, catalog.CENTRO_CUSTO_GERIR)
         return kwargs
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["activity"] = self.get_activity()
-        context["is_edit"] = True
         return context
 
     def form_valid(self, form):
@@ -1690,7 +2037,8 @@ class TaskQuickCreateStandaloneView(OrganizationRequiredMixin, FormView):
 
 class ActivityAttachmentUploadView(ServiceActionView):
     """Upload de anexo (Regra 13): guardado em uma pasta própria da atividade
-    dentro de `MEDIA_ROOT`, nomeada pelo código gerado automaticamente."""
+    dentro de `MEDIA_ROOT`, nomeada pelo código gerado automaticamente.
+    Também usado pela Etapa 3 do wizard, apontando pro rascunho."""
 
     def perform(self, request, pk):
         activity = get_object_or_404(Activity, pk=pk, organization=self.organization)
@@ -1701,6 +2049,9 @@ class ActivityAttachmentUploadView(ServiceActionView):
         messages.success(request, "Anexo enviado.")
 
     def redirect_to(self):
+        activity = get_object_or_404(Activity, pk=self.kwargs["pk"], organization=self.organization)
+        if activity.status == Activity.Status.RASCUNHO:
+            return reverse("activity-wizard-detalhes", args=[activity.pk])
         return f"{reverse('activity-detail', args=[self.kwargs['pk']])}#feed-panel"
 
 
@@ -1712,6 +2063,9 @@ class ActivityAttachmentDeleteView(ServiceActionView):
         messages.success(request, "Anexo removido.")
 
     def redirect_to(self):
+        activity = get_object_or_404(Activity, pk=self.kwargs["pk"], organization=self.organization)
+        if activity.status == Activity.Status.RASCUNHO:
+            return reverse("activity-wizard-detalhes", args=[activity.pk])
         return f"{reverse('activity-detail', args=[self.kwargs['pk']])}#feed-panel"
 
 
@@ -2363,6 +2717,15 @@ class ManagementView(OrganizationRequiredMixin, TemplateView):
             .order_by("-total")[:10]
         )
 
+        from core.colors import EnumColorResolver
+
+        dash_status_colors = EnumColorResolver(org, "activity_status")
+        dash_status_choices = [
+            (code, dash_status_colors.label_for(code, label))
+            for code, label in Activity.Status.choices
+            if not dash_status_colors.is_hidden(code)
+        ]
+
         context.update(
             {
                 "dash_clients": Client.objects.filter(organization=org, is_active=True),
@@ -2371,7 +2734,7 @@ class ManagementView(OrganizationRequiredMixin, TemplateView):
                 ).order_by("first_name", "username"),
                 "dash_cost_centers": CostCenter.objects.filter(organization=org, is_active=True),
                 "dash_sectors": Sector.objects.filter(organization=org, is_active=True),
-                "dash_status_choices": Activity.Status.choices,
+                "dash_status_choices": dash_status_choices,
                 "f_periodo_de": d_period_from,
                 "f_periodo_ate": d_period_to,
                 "f_dash_cliente": d_client,

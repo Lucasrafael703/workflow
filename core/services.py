@@ -306,6 +306,54 @@ class EnumColorService:
         )
         return {code: overrides.get(code, default_hex) for code, default_hex in DEFAULTS.get(domain, {}).items()}
 
+    @staticmethod
+    def get_overrides(organization, domain, code):
+        """(label, description, is_hidden) customizados pela organização
+        para este code — vazios/False quando não há override."""
+        row = EnumColor.objects.filter(organization=organization, domain=domain, code=code).first()
+        if row is None:
+            return "", "", False
+        return row.label, row.description, row.is_hidden
+
+    @staticmethod
+    @transaction.atomic
+    def set_overrides(organization, domain, code, *, label="", description="", is_hidden=False, updated_by=None):
+        """Grava nome/descrição exibidos e o estado oculto de um status
+        nativo, preservando a cor já customizada (ou o default) na mesma
+        linha. Nunca move nem remove o `code`, que continua sendo o valor
+        real gravado em Activity.status/Task.status."""
+        if code not in valid_codes_for(domain):
+            raise CadastroError(f"Código \"{code}\" não existe no domínio \"{domain}\".")
+        label = (label or "").strip()
+        description = (description or "").strip()
+        existing_color = (
+            EnumColor.objects.filter(organization=organization, domain=domain, code=code)
+            .values_list("color", flat=True)
+            .first()
+        )
+        obj, _created = EnumColor.objects.update_or_create(
+            organization=organization,
+            domain=domain,
+            code=code,
+            defaults={
+                "color": existing_color or DEFAULTS.get(domain, {}).get(code, "#94A3B8"),
+                "label": label,
+                "description": description,
+                "is_hidden": is_hidden,
+                "updated_by": updated_by,
+            },
+        )
+        return obj
+
+    @staticmethod
+    def list_overrides_for_domain(organization, domain):
+        """{code: {"label":..., "description":..., "is_hidden":...}} —
+        usado para popular a tela de configuração junto com list_for_domain."""
+        rows = EnumColor.objects.filter(organization=organization, domain=domain).values_list(
+            "code", "label", "description", "is_hidden"
+        )
+        return {code: {"label": label, "description": description, "is_hidden": is_hidden} for code, label, description, is_hidden in rows}
+
 
 class ReturnReasonService(SimpleCadastroService):
     """O model é resolvido tardiamente porque vive no app `activities`,

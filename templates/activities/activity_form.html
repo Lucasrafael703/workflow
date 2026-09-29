@@ -1,24 +1,22 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}{% if is_edit %}Editar atividade{% else %}Nova atividade{% endif %} — LPS{% endblock %}
+{% block title %}Editar atividade — LPS{% endblock %}
 
 {% block content %}
 <div class="page-head">
     <div class="page-head__text">
         <div class="breadcrumb">
             <a href="{% url 'activity-list' %}">Atividades</a><span>›</span>
-            {% if is_edit %}{{ activity.title }}{% else %}Nova atividade{% endif %}
+            {{ activity.title }}
         </div>
-        <h1>{% if is_edit %}Editar atividade{% else %}Nova atividade{% endif %}</h1>
+        <h1>Editar atividade</h1>
         <p class="sub">
             Descreva o resultado esperado. Os passos vêm depois, como tarefas.
-            {% if is_edit and activity.code %}<span class="id-badge">{{ activity.code }}</span>{% endif %}
+            {% if activity.code %}<span class="id-badge">{{ activity.code }}</span>{% endif %}
         </p>
     </div>
 </div>
 
-{% comment %}Campo único, sem etapas nem coluna de resumo: tudo visível de uma vez,
-em duas colunas largas (o mesmo espírito do cadastro de orçamentos).{% endcomment %}
 <form method="post" id="activity-form">
     {% csrf_token %}
     {% if form.non_field_errors %}
@@ -34,23 +32,11 @@ em duas colunas largas (o mesmo espírito do cadastro de orçamentos).{% endcomm
             {% for field in form %}
             <div class="form-row
                 {% if field.name == 'urgency' %} form-row--urgency{% endif %}
-                {% if field.name == 'address' or field.name == 'description' %} form-row--full{% endif %}
-                {% if field.name == 'cost_center' %} form-row--with-link{% endif %}">
+                {% if field.name == 'address' or field.name == 'description' or field.name == 'internal_notes' %} form-row--full{% endif %}">
                 <label for="{{ field.id_for_label }}">
                     {{ field.label }}{% if field.field.required %} <span class="req">*</span>{% endif %}
                 </label>
                 {{ field }}
-                {% if field.name == "client" %}
-                <div class="field-hint">
-                    {% if not is_edit %}Comece a digitar para buscar um cliente já cadastrado, ou use o botão de busca para ver todos.{% endif %}
-                </div>
-                {% endif %}
-                {% if field.name == "cost_center" %}
-                <button type="button" class="link-button field-link" data-create-trigger
-                        data-create-url="{% url 'costcenter-create' %}">
-                    <svg class="field-link__icon" width="12" height="12" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg> Criar novo centro de custo
-                </button>
-                {% endif %}
                 {% if field.help_text %}<div class="helptext">{{ field.help_text }}</div>{% endif %}
                 {% if field.errors %}<ul class="errorlist">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
             </div>
@@ -58,42 +44,11 @@ em duas colunas largas (o mesmo espírito do cadastro de orçamentos).{% endcomm
         </div>
     </div>
 
-    {# Uma ação principal e, no máximo, uma continuação lógica (Benchmark §8.7) #}
     <div class="form-foot form-foot--split">
-        <a href="{% if is_edit %}{% url 'activity-detail' activity.pk %}{% else %}{% url 'activity-list' %}{% endif %}" class="btn btn--ghost">Cancelar</a>
+        <a href="{% url 'activity-detail' activity.pk %}" class="btn btn--ghost">Cancelar</a>
         <div class="actions-row">
-            {% if not is_edit %}
-            <button type="submit" name="salvar_e_tarefas" value="1" class="btn">Criar e adicionar tarefas</button>
-            {% endif %}
-            <button type="submit" class="btn btn--primary">
-                {% if is_edit %}Salvar alterações{% else %}Criar atividade{% endif %}
-            </button>
+            <button type="submit" class="btn btn--primary">Salvar alterações</button>
         </div>
     </div>
 </form>
-{% endblock %}
-
-{% block scripts %}
-<script>
-(function () {
-    "use strict";
-    document.querySelectorAll("[data-create-trigger]").forEach(function (btn) {
-        btn.addEventListener("click", function () {
-            var row = btn.closest(".form-row");
-            var select = row ? row.querySelector("select") : null;
-            if (!select || !window.LPSModal) return;
-            window.LPSModal.open(btn.getAttribute("data-create-url"), {
-                onSuccess: function (data) {
-                    var option = document.createElement("option");
-                    option.value = data.id;
-                    option.textContent = data.name;
-                    option.selected = true;
-                    select.appendChild(option);
-                    select.dispatchEvent(new Event("change", { bubbles: true }));
-                }
-            });
-        });
-    });
-})();
-</script>
 {% endblock %}

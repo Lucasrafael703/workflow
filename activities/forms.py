@@ -1,14 +1,22 @@
+import datetime
+
 from django import forms
 from django.contrib.auth import get_user_model
+from django.forms.utils import from_current_timezone
 from django.urls import reverse
+from django.utils.html import format_html
 
 from core.models import Client, Company, CostCenter, Sector, Site, Tag
 from core.sanitize import sanitize_description
 from core.widgets import (
     ActivityPickerWidget,
     ClientPickerWidget,
+    CompanyPickerWidget,
+    CostCenterPickerWidget,
     PersonPickerWidget,
     RichTextWidget,
+    SectorPickerWidget,
+    SitePickerWidget,
     TagPickerWidget,
 )
 
@@ -28,10 +36,66 @@ class DateTimeLocalInput(forms.DateTimeInput):
         return value
 
 
+class SplitDateOptionalTimeWidget(forms.SplitDateTimeWidget):
+    """Data obrigatória + hora opcional, lado a lado. Quando a hora fica em
+    branco, `SplitDateOptionalTimeField.compress` assume 23:59 daquele dia —
+    "prazo é tal dia" sem horário específico continua fazendo sentido."""
+
+    def __init__(self, attrs=None):
+        date_widget = forms.DateInput(attrs=attrs, format="%Y-%m-%d")
+        date_widget.input_type = "date"
+        time_widget = forms.TimeInput(attrs=attrs, format="%H:%M")
+        time_widget.input_type = "time"
+        forms.MultiWidget.__init__(self, (date_widget, time_widget), attrs)
+
+    def decompress(self, value):
+        if value:
+            return [value.date(), value.time().replace(microsecond=0)]
+        return [None, None]
+
+    def render(self, name, value, attrs=None, renderer=None):
+        html = super().render(name, value, attrs, renderer)
+        return format_html('<div class="split-datetime-input">{}</div>', html)
+
+
+class SplitDateOptionalTimeField(forms.MultiValueField):
+    """Par (data, hora) que vira um único `datetime` — data obrigatória
+    (quando o campo geral é preenchido), hora opcional com default 23:59."""
+
+    widget = SplitDateOptionalTimeWidget
+
+    def __init__(self, **kwargs):
+        fields = (
+            forms.DateField(required=False),
+            forms.TimeField(required=False),
+        )
+        kwargs.setdefault("require_all_fields", False)
+        super().__init__(fields=fields, **kwargs)
+
+    def compress(self, data_list):
+        if not data_list:
+            return None
+        date_value, time_value = data_list
+        if date_value in (None, ""):
+            return None
+        if time_value in (None, ""):
+            time_value = datetime.time(23, 59)
+        return from_current_timezone(datetime.datetime.combine(date_value, time_value))
+
+
 class OrganizationScopedFormMixin:
     """Todo select só pode oferecer registros da própria organização."""
 
-    def scope_querysets(self, organization, can_create_person=False, can_create_client=False):
+    def scope_querysets(
+        self,
+        organization,
+        can_create_person=False,
+        can_create_client=False,
+        can_create_sector=False,
+        can_create_company=False,
+        can_create_site=False,
+        can_create_cost_center=False,
+    ):
         fields = self.fields
         if "owner" in fields:
             fields["owner"].queryset = User.objects.filter(
@@ -41,6 +105,12 @@ class OrganizationScopedFormMixin:
                 fields["owner"].widget.queryset = fields["owner"].queryset
                 if can_create_person:
                     fields["owner"].widget.create_url = reverse("user-create")
+        if "requested_by" in fields:
+            fields["requested_by"].queryset = User.objects.filter(
+                profile__organization=organization, is_active=True
+            ).order_by("first_name", "username")
+            if isinstance(fields["requested_by"].widget, PersonPickerWidget):
+                fields["requested_by"].widget.queryset = fields["requested_by"].queryset
         if "client" in fields:
             fields["client"].queryset = Client.objects.filter(organization=organization, is_active=True)
             if isinstance(fields["client"].widget, ClientPickerWidget):
@@ -48,19 +118,29 @@ class OrganizationScopedFormMixin:
                 if can_create_client:
                     fields["client"].widget.create_url = reverse("client-create")
         if "company" in fields:
-            fields["company"].queryset = Company.objects.filter(
-                organization=organization, is_active=True
-            )
+            fields["company"].queryset = Company.objects.filter(organization=organization, is_active=True)
+            if isinstance(fields["company"].widget, CompanyPickerWidget):
+                fields["company"].widget.queryset = fields["company"].queryset
+                if can_create_company:
+                    fields["company"].widget.create_url = reverse("company-create")
         if "site" in fields:
             fields["site"].queryset = Site.objects.filter(organization=organization, is_active=True)
+            if isinstance(fields["site"].widget, SitePickerWidget):
+                fields["site"].widget.queryset = fields["site"].queryset
+                if can_create_site:
+                    fields["site"].widget.create_url = reverse("site-create")
         if "cost_center" in fields:
-            fields["cost_center"].queryset = CostCenter.objects.filter(
-                organization=organization, is_active=True
-            )
+            fields["cost_center"].queryset = CostCenter.objects.filter(organization=organization, is_active=True)
+            if isinstance(fields["cost_center"].widget, CostCenterPickerWidget):
+                fields["cost_center"].widget.queryset = fields["cost_center"].queryset
+                if can_create_cost_center:
+                    fields["cost_center"].widget.create_url = reverse("costcenter-create")
         if "sector" in fields:
-            fields["sector"].queryset = Sector.objects.filter(
-                organization=organization, is_active=True
-            )
+            fields["sector"].queryset = Sector.objects.filter(organization=organization, is_active=True)
+            if isinstance(fields["sector"].widget, SectorPickerWidget):
+                fields["sector"].widget.queryset = fields["sector"].queryset
+                if can_create_sector:
+                    fields["sector"].widget.create_url = reverse("sector-create")
         if "tags" in fields:
             queryset = Tag.objects.filter(organization=organization, is_active=True)
             fields["tags"].queryset = queryset
@@ -68,93 +148,149 @@ class OrganizationScopedFormMixin:
                 fields["tags"].widget.queryset = queryset
 
 
-class ActivityQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
-    """Criação em segundos: o essencial à vista, o resto em "Mais opções"
-    (doc 09 §43-56, ampliado pelas Regras 1-13 da tela de nova atividade)."""
+# Labels/help_texts compartilhados entre os 3 passos do wizard de criação e
+# o formulário de edição — um único lugar para o texto de cada campo do
+# Activity, independente de em qual tela ele aparece.
+ACTIVITY_FIELD_LABELS = {
+    "title": "O que precisa ser resolvido?",
+    "client": "Cliente",
+    "owner": "Responsável",
+    "urgency": "Urgência",
+    "sector": "Setor Responsável",
+    "description": "Descrição",
+    "internal_notes": "Observações internas",
+    "company": "Empresa",
+    "site": "Obra",
+    "cost_center": "Centro de custo",
+    "requested_by": "Solicitante",
+    "address": "Endereço complementar",
+    "tags": "Marcadores",
+}
+ACTIVITY_FIELD_HELP_TEXTS = {
+    "title": "Descreva o resultado esperado, não a ação. Ex.: “Material disponível na obra”.",
+    "client": "Quem solicitou o serviço.",
+    "owner": "Quem responde pelo resultado até a resolução.",
+    "sector": "Setor responsável por esta atividade.",
+    "requested_by": "Alguém da própria organização que pediu informalmente — não é o cliente. Opcional.",
+    "internal_notes": "Nunca aparece para o cliente; só para uso interno da equipe.",
+    "address": "Endereço adicional, além do que já está no cadastro do cliente.",
+}
+
+
+class ActivityWizardStep1Form(OrganizationScopedFormMixin, forms.ModelForm):
+    """Etapa 1 (Essencial) do wizard de nova atividade: o mínimo para existir
+    como rascunho. Nada aqui é obrigatório no nível do form — a cobrança de
+    título/responsável de verdade só acontece ao publicar
+    (`ActivityService.publish_draft`), nunca ao simplesmente salvar o
+    rascunho e avançar/sair."""
+
+    requested_deadline = SplitDateOptionalTimeField(
+        label="Prazo da solicitação",
+        required=False,
+        help_text="Quando quem pediu precisa da entrega. Sem horário, vale até o fim do dia.",
+    )
 
     class Meta:
         model = Activity
-        # Ordem pensada para o layout de campo único em duas colunas (sem a
-        # coluna de resumo): cliente/título, urgência/prazo, responsável/
-        # grupo, empresa/obra, centro de custo, endereço e descrição por
-        # último, cada um ocupando a linha inteira.
-        fields = [
-            "client",
-            "title",
-            "urgency",
-            "requested_deadline",
-            "owner",
-            "sector",
-            "company",
-            "site",
-            "cost_center",
-            "address",
-            "tags",
-            "description",
-        ]
-        labels = {
-            "title": "O que precisa ser resolvido?",
-            "client": "Cliente",
-            "owner": "Atribuir para",
-            "urgency": "Urgência",
-            "requested_deadline": "Prazo da solicitação",
-            "sector": "Grupo designado",
-            "description": "Descrição",
-            "company": "Empresa",
-            "site": "Obra",
-            "cost_center": "Centro de custo",
-            "address": "Endereço",
-            "tags": "Marcadores",
-        }
-        help_texts = {
-            "title": "Descreva o resultado esperado, não a ação. Ex.: “Material disponível na obra”.",
-            "client": "Quem solicitou o serviço.",
-            "owner": "Quem responde pelo resultado até a resolução.",
-            "requested_deadline": "Quando quem pediu precisa da entrega.",
-            "sector": "Setor para quem esta atividade é endereçada.",
-            "address": "Endereço adicional, além do que já está no cadastro do cliente.",
-        }
+        fields = ["title", "client", "site", "sector", "owner", "requested_deadline", "urgency"]
+        labels = ACTIVITY_FIELD_LABELS
+        help_texts = ACTIVITY_FIELD_HELP_TEXTS
         widgets = {
             "title": forms.TextInput(attrs={"autofocus": True, "placeholder": "Ex.: Material disponível na obra"}),
             "client": ClientPickerWidget(),
+            "site": SitePickerWidget(),
+            "sector": SectorPickerWidget(),
             "owner": PersonPickerWidget(),
             "urgency": forms.RadioSelect(),
-            "description": RichTextWidget(),
-            "requested_deadline": DateTimeLocalInput(),
-            "address": forms.TextInput(attrs={"placeholder": "Ex.: Rua, número, bairro"}),
+        }
+
+    def __init__(
+        self,
+        *args,
+        organization=None,
+        user=None,
+        can_create_person=False,
+        can_create_client=False,
+        can_create_sector=False,
+        can_create_site=False,
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+        self.scope_querysets(
+            organization,
+            can_create_person=can_create_person,
+            can_create_client=can_create_client,
+            can_create_sector=can_create_sector,
+            can_create_site=can_create_site,
+        )
+        self.fields["client"].empty_label = None
+        self.fields["owner"].empty_label = None
+        if not self.is_bound and not self.initial.get("urgency"):
+            self.fields["urgency"].initial = Activity.Urgency.MEDIA
+        if user is not None and not self.is_bound and not self.instance.pk:
+            self.fields["owner"].initial = user
+        for optional in ("title", "client", "site", "sector", "owner", "requested_deadline", "urgency"):
+            self.fields[optional].required = False
+
+
+class ActivityWizardStep2Form(OrganizationScopedFormMixin, forms.ModelForm):
+    """Etapa 2 (Contexto) do wizard: tudo opcional, todos os campos já
+    salvos direto na mesma linha de rascunho criada na etapa 1."""
+
+    class Meta:
+        model = Activity
+        fields = ["company", "cost_center", "requested_by", "address", "tags"]
+        labels = ACTIVITY_FIELD_LABELS
+        help_texts = ACTIVITY_FIELD_HELP_TEXTS
+        widgets = {
+            "company": CompanyPickerWidget(),
+            "cost_center": CostCenterPickerWidget(),
+            "requested_by": PersonPickerWidget(),
+            "address": forms.TextInput(attrs={"placeholder": "Ex.: Bloco B, acesso lateral, portaria 2"}),
             "tags": TagPickerWidget(),
         }
 
     def __init__(
-        self, *args, organization=None, user=None, can_create_person=False, can_create_client=False, **kwargs
+        self,
+        *args,
+        organization=None,
+        can_create_company=False,
+        can_create_cost_center=False,
+        **kwargs,
     ):
         super().__init__(*args, **kwargs)
-        self.scope_querysets(organization, can_create_person=can_create_person, can_create_client=can_create_client)
-        self.fields["owner"].empty_label = None
-        self.fields["client"].required = False
-        self.fields["client"].empty_label = None
-        if not self.is_bound:
-            self.fields["urgency"].initial = Activity.Urgency.MEDIA
-        if user is not None and not self.is_bound:
-            self.fields["owner"].initial = user
-        for optional in (
-            "description",
-            "company",
-            "site",
-            "cost_center",
-            "sector",
-            "address",
-            "requested_deadline",
-            "tags",
-            "urgency",
-        ):
+        self.scope_querysets(
+            organization,
+            can_create_company=can_create_company,
+            can_create_cost_center=can_create_cost_center,
+        )
+        self.fields["requested_by"].empty_label = None
+        for optional in ("company", "cost_center", "requested_by", "address", "tags"):
             self.fields[optional].required = False
+
+
+class ActivityWizardStep3Form(forms.ModelForm):
+    """Etapa 3 (Detalhes) do wizard: descrição pública e observações
+    internas — anexos são tratados fora deste form, via
+    `ActivityAttachmentUploadView` já existente, apontando pro rascunho."""
+
+    class Meta:
+        model = Activity
+        fields = ["description", "internal_notes"]
+        labels = ACTIVITY_FIELD_LABELS
+        help_texts = ACTIVITY_FIELD_HELP_TEXTS
+        widgets = {
+            "description": RichTextWidget(),
+            "internal_notes": forms.Textarea(attrs={"placeholder": "Digite observações internas...", "rows": 4}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["description"].required = False
+        self.fields["internal_notes"].required = False
 
     def clean_description(self):
         return sanitize_description(self.cleaned_data.get("description"))
-
-    def clean_urgency(self):
-        return self.cleaned_data.get("urgency") or Activity.Urgency.MEDIA
 
 
 class ActivityMiniCreateForm(forms.Form):
@@ -169,6 +305,12 @@ class ActivityMiniCreateForm(forms.Form):
 
 
 class ActivityEditForm(OrganizationScopedFormMixin, forms.ModelForm):
+    requested_deadline = SplitDateOptionalTimeField(
+        label="Prazo da solicitação",
+        required=False,
+        help_text="Quando quem pediu precisa da entrega. Sem horário, vale até o fim do dia.",
+    )
+
     class Meta:
         model = Activity
         fields = [
@@ -176,6 +318,8 @@ class ActivityEditForm(OrganizationScopedFormMixin, forms.ModelForm):
             "title",
             "urgency",
             "requested_deadline",
+            "owner",
+            "requested_by",
             "sector",
             "company",
             "site",
@@ -183,27 +327,57 @@ class ActivityEditForm(OrganizationScopedFormMixin, forms.ModelForm):
             "address",
             "tags",
             "description",
+            "internal_notes",
         ]
-        labels = ActivityQuickCreateForm.Meta.labels
+        labels = ACTIVITY_FIELD_LABELS
+        help_texts = ACTIVITY_FIELD_HELP_TEXTS
         widgets = {
             "client": ClientPickerWidget(),
+            "owner": PersonPickerWidget(),
+            "requested_by": PersonPickerWidget(),
             "urgency": forms.RadioSelect(),
             "description": RichTextWidget(),
-            "requested_deadline": DateTimeLocalInput(),
+            "sector": SectorPickerWidget(),
+            "company": CompanyPickerWidget(),
+            "site": SitePickerWidget(),
+            "cost_center": CostCenterPickerWidget(),
             "tags": TagPickerWidget(),
         }
 
-    def __init__(self, *args, organization=None, can_create_client=False, **kwargs):
+    def __init__(
+        self,
+        *args,
+        organization=None,
+        can_create_person=False,
+        can_create_client=False,
+        can_create_sector=False,
+        can_create_company=False,
+        can_create_site=False,
+        can_create_cost_center=False,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
-        self.scope_querysets(organization, can_create_client=can_create_client)
+        self.scope_querysets(
+            organization,
+            can_create_person=can_create_person,
+            can_create_client=can_create_client,
+            can_create_sector=can_create_sector,
+            can_create_company=can_create_company,
+            can_create_site=can_create_site,
+            can_create_cost_center=can_create_cost_center,
+        )
         self.fields["client"].required = False
         self.fields["client"].empty_label = None
+        self.fields["owner"].empty_label = None
+        self.fields["requested_by"].empty_label = None
         for optional in (
             "description",
+            "internal_notes",
             "company",
             "site",
             "cost_center",
             "sector",
+            "requested_by",
             "address",
             "requested_deadline",
             "tags",

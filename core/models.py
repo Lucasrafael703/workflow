@@ -311,13 +311,16 @@ class CostCenter(models.Model):
 
 
 class EnumColor(models.Model):
-    """Cor visual configurável por organização para um código de enum fixo
-    (Activity.Status, Task.Status, Activity.Urgency).
+    """Aparência e rótulos configuráveis por organização para um código de
+    enum fixo (Activity.Status, Task.Status, Activity.Urgency).
 
-    O código nunca muda de significado — só a cor é customizável. O nome
-    exibido continua vindo de get_FOO_display() no Python; esta tabela nunca
-    duplica o label, e `code` não tem FK: é validado no service contra o
-    vocabulário real do TextChoices, nunca contra um cadastro editável.
+    O código nunca muda de significado nem de comportamento — `code` não tem
+    FK: é validado no service contra o vocabulário real do TextChoices,
+    nunca contra um cadastro editável. `label`/`description` vazios e
+    `is_hidden=False` significam "sem override": a tela cai no
+    get_FOO_display() nativo (ou no dict de meta hardcoded). `is_hidden`
+    apenas remove o código das opções oferecidas dali para frente — itens
+    que já têm esse status continuam exibindo o rótulo normalmente.
     """
 
     class Domain(models.TextChoices):
@@ -331,6 +334,9 @@ class EnumColor(models.Model):
     domain = models.CharField("domínio", max_length=32, choices=Domain.choices)
     code = models.CharField("código", max_length=32)
     color = models.CharField("cor", max_length=7)
+    label = models.CharField("nome exibido", max_length=100, blank=True)
+    description = models.CharField("descrição", max_length=255, blank=True)
+    is_hidden = models.BooleanField("oculto", default=False)
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         verbose_name="alterado por",

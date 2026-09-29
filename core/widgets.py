@@ -111,7 +111,8 @@ class ClientPickerWidget(forms.HiddenInput):
 
         return format_html(
             '<div class="person-picker" data-person-picker data-search-url="{search_url}"'
-            ' data-create-label="Cadastrar cliente"{create_attr}>'
+            ' data-create-label="Cadastrar cliente" data-placeholder="Buscar cliente..."'
+            ' data-empty-label="Selecionar cliente"{create_attr}>'
             '{hidden_html}'
             '<button type="button" class="person-picker__trigger">'
             '<span class="person-picker__icon">{icon}</span>'
@@ -175,6 +176,97 @@ class ActivityPickerWidget(forms.HiddenInput):
             label_class=label_class,
             label=label or "Selecionar atividade",
         )
+
+
+class _SimpleSearchPickerWidget(forms.HiddenInput):
+    """Base para pickers "busca por nome" simples (Setor/Empresa/Obra/Centro
+    de custo): mesmo padrão de `ClientPickerWidget`, só troca o endpoint de
+    busca e os textos. Subclasses só declaram `search_url_name`,
+    `create_label`, `empty_label` e `placeholder`."""
+
+    search_url_name = None
+    create_label = "Cadastrar"
+    empty_label = "Selecionar"
+    placeholder = "Buscar..."
+
+    def __init__(self, attrs=None, create_url=None, queryset=None):
+        super().__init__(attrs)
+        self.create_url = create_url
+        self.queryset = queryset
+
+    def _label_for(self, value):
+        if not value or self.queryset is None:
+            return ""
+        try:
+            obj = self.queryset.get(pk=value)
+        except (self.queryset.model.DoesNotExist, ValueError, TypeError):
+            return ""
+        return str(obj)
+
+    def render(self, name, value, attrs=None, renderer=None):
+        hidden_html = super().render(name, value, attrs, renderer)
+        label = self._label_for(value)
+        search_url = reverse_lazy(self.search_url_name)
+
+        create_attr = format_html(' data-create-url="{}"', self.create_url) if self.create_url else ""
+        label_class = "" if label else " muted"
+
+        return format_html(
+            '<div class="person-picker" data-person-picker data-search-url="{search_url}"'
+            ' data-create-label="{create_label}" data-placeholder="{placeholder}"'
+            ' data-empty-label="{empty_label}"{create_attr}>'
+            "{hidden_html}"
+            '<button type="button" class="person-picker__trigger">'
+            '<span class="person-picker__icon">{icon}</span>'
+            '<span class="person-picker__label{label_class}">{label}</span>'
+            "</button>"
+            "</div>",
+            search_url=search_url,
+            create_label=self.create_label,
+            placeholder=self.placeholder,
+            empty_label=self.empty_label,
+            create_attr=create_attr,
+            hidden_html=hidden_html,
+            icon=_SEARCH_ICON,
+            label_class=label_class,
+            label=label or self.empty_label,
+        )
+
+
+class SectorPickerWidget(_SimpleSearchPickerWidget):
+    """Seletor de setor com busca, mesmo padrão do `ClientPickerWidget`."""
+
+    search_url_name = "sector-search"
+    create_label = "Cadastrar setor"
+    empty_label = "Selecionar setor"
+    placeholder = "Buscar setor..."
+
+
+class CompanyPickerWidget(_SimpleSearchPickerWidget):
+    """Seletor de empresa com busca, mesmo padrão do `ClientPickerWidget`."""
+
+    search_url_name = "company-search"
+    create_label = "Cadastrar empresa"
+    empty_label = "Selecionar empresa"
+    placeholder = "Buscar empresa..."
+
+
+class SitePickerWidget(_SimpleSearchPickerWidget):
+    """Seletor de obra com busca, mesmo padrão do `ClientPickerWidget`."""
+
+    search_url_name = "site-search"
+    create_label = "Cadastrar obra"
+    empty_label = "Selecionar obra"
+    placeholder = "Buscar obra..."
+
+
+class CostCenterPickerWidget(_SimpleSearchPickerWidget):
+    """Seletor de centro de custo com busca, mesmo padrão do `ClientPickerWidget`."""
+
+    search_url_name = "costcenter-search"
+    create_label = "Cadastrar centro de custo"
+    empty_label = "Selecionar centro de custo"
+    placeholder = "Buscar centro de custo..."
 
 
 class ColorPaletteWidget(forms.HiddenInput):

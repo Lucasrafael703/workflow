@@ -1,0 +1,53 @@
+<form method="get" class="activities-filters" data-activity-filters>
+    <input type="hidden" name="tab" value="{{ tab }}">
+    <div class="activities-toolbar">
+        <label class="activities-search">
+            <span class="sr-only">Buscar atividade</span>
+            {% include "_icon.html" with name="search" %}
+            <input type="search" name="q" value="{{ search }}" placeholder="Buscar atividade, cliente ou obra..." autocomplete="off">
+        </label>
+
+        {% if view_mode == 'lista' %}
+        <button class="activities-filter-chip activities-filter-chip--danger" type="submit" name="prazo" value="atrasadas">
+            {% include "_icon.html" with name="clock" %} Atrasadas
+        </button>
+        <button class="activities-filter-chip activities-filter-chip--active" type="submit" name="prazo" value="hoje">
+            {% include "_icon.html" with name="clock" %} Hoje
+        </button>
+        <button class="activities-filter-chip" type="submit" name="status" value="BLOQUEADA">
+            {% include "_icon.html" with name="lock" %} Bloqueadas
+        </button>
+        {% endif %}
+
+        <label class="activities-select">
+            <span class="sr-only">Filtrar por status</span>
+            <select name="status" data-auto-submit>
+                <option value="">Status</option>
+                {% for value, label in status_choices %}<option value="{{ value }}" {% if f_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+        </label>
+        <label class="activities-select">
+            <span class="sr-only">Filtrar por estagio</span>
+            <select name="estagio" data-auto-submit>
+                <option value="">Estagio</option>
+                {% for stage in stage_choices %}<option value="{{ stage.pk }}" {% if f_stage == stage.pk|stringformat:"s" %}selected{% endif %}>{{ stage.name }}</option>{% endfor %}
+            </select>
+        </label>
+        <label class="activities-select">
+            <span class="sr-only">Filtrar por setor</span>
+            <select name="grupo" data-auto-submit>
+                <option value="">Setor</option>
+                {% for sector in sectors %}<option value="{{ sector.pk }}" {% if f_group == sector.pk|stringformat:"s" %}selected{% endif %}>{{ sector.name }}</option>{% endfor %}
+            </select>
+        </label>
+        <label class="activities-select activities-order">
+            <span class="sr-only">Ordenar atividades</span>
+            <select name="ordem" data-auto-submit>
+                <option value="prazo" {% if ordem == 'prazo' %}selected{% endif %}>Ordenar</option>
+                <option value="recentes" {% if ordem == 'recentes' %}selected{% endif %}>Mais recentes</option>
+                <option value="titulo" {% if ordem == 'titulo' %}selected{% endif %}>Nome A-Z</option>
+            </select>
+        </label>
+    </div>
+</form>
+

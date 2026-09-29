@@ -153,6 +153,23 @@ class ActivityService:
     # ------------------------------------------------------------------
 
     @staticmethod
+    def _finalize_creation(activity, created_by):
+        """Efeitos colaterais do momento em que uma atividade passa a existir
+        de verdade para o resto do sistema — reaproveitado tanto por
+        `create_activity` (criação direta, sem rascunho) quanto por
+        `publish_draft` (criação via wizard de 3 etapas)."""
+        AuditService.log(user=created_by, action=AuditLog.Action.CREATE, activity=activity, new_value=activity.title)
+        NotificationService.notify(
+            users={activity.owner, created_by},
+            event_type=Notification.EventType.ACTIVITY_CREATED,
+            title="Atividade criada",
+            message=f"A atividade '{activity.title}' foi criada.",
+            activity=activity,
+            actor=created_by,
+        )
+        notify_mentions(activity.description, created_by, activity, activity=activity)
+
+    @staticmethod
     @transaction.atomic
     def create_activity(
         organization,
@@ -200,17 +217,86 @@ class ActivityService:
         if tags:
             activity.tags.set(tags)
 
-        AuditService.log(user=created_by, action=AuditLog.Action.CREATE, activity=activity, new_value=title)
-        NotificationService.notify(
-            users={owner, created_by},
-            event_type=Notification.EventType.ACTIVITY_CREATED,
-            title="Atividade criada",
-            message=f"A atividade '{activity.title}' foi criada.",
-            activity=activity,
-            actor=created_by,
-        )
-        notify_mentions(description, created_by, activity, activity=activity)
+        ActivityService._finalize_creation(activity, created_by)
         return activity
+
+    @staticmethod
+    @transaction.atomic
+    def save_draft(organization, created_by, activity=None, **fields):
+        """Cria (se `activity` for None) ou atualiza um rascunho — nunca
+        valida `title`/`owner`, nunca dispara auditoria/notificação: um
+        rascunho ainda não existe para o resto do sistema, só para quem o
+        está preenchendo (wizard de 3 etapas). Campos vazios de M2M (`tags`)
+        são tratados à parte, o resto é salvo direto no model."""
+        tags = fields.pop("tags", None)
+        title = (fields.pop("title", None) or "").strip() or Activity.DRAFT_TITLE_PLACEHOLDER
+
+        if activity is None:
+            require_action(
+                created_by,
+                catalog.ATIVIDADE_CRIAR,
+                ResourceContext.for_new(
+                    organization,
+                    company=fields.get("company"),
+                    sector=fields.get("sector"),
+                    site=fields.get("site"),
+                    cost_center=fields.get("cost_center"),
+                    owner=fields.get("owner"),
+                ),
+            )
+            activity = Activity(
+                organization=organization,
+                created_by=created_by,
+                status=Activity.Status.RASCUNHO,
+                title=title,
+            )
+        else:
+            if activity.status != Activity.Status.RASCUNHO:
+                raise ActivityError("Esta atividade já foi criada e não é mais um rascunho.")
+            if activity.created_by_id != created_by.id:
+                raise ActivityError("Você não pode editar o rascunho de outra pessoa.")
+            activity.title = title
+
+        for field_name, value in fields.items():
+            setattr(activity, field_name, value)
+        activity.save()
+        if tags is not None:
+            activity.tags.set(tags)
+        return activity
+
+    @staticmethod
+    @transaction.atomic
+    def publish_draft(activity, user):
+        """Transforma um rascunho em atividade de verdade: revalida
+        autorização com o contexto final (pode ter mudado desde a criação do
+        rascunho), exige título e dono de verdade, e só então dispara os
+        mesmos efeitos colaterais de `create_activity`."""
+        if activity.status != Activity.Status.RASCUNHO:
+            raise ActivityError("Esta atividade já foi publicada.")
+        require_action(user, catalog.ATIVIDADE_CRIAR, ResourceContext.of(activity))
+        if not activity.title or activity.title == Activity.DRAFT_TITLE_PLACEHOLDER:
+            raise ActivityError("Informe o resultado esperado antes de concluir.")
+        if activity.owner_id is None:
+            raise ActivityError("Toda atividade precisa de um único dono antes de concluir.")
+
+        activity.status = Activity.Status.ABERTA
+        activity.save(update_fields=["status"])
+        ActivityService._finalize_creation(activity, user)
+        return activity
+
+    @staticmethod
+    @transaction.atomic
+    def discard_draft(activity, user):
+        """Descarta um rascunho nunca publicado — exclusão de verdade (sem
+        rastro de auditoria a preservar, já que nada foi anunciado ao resto
+        do sistema); os anexos do rascunho somem em cascata."""
+        if activity.status != Activity.Status.RASCUNHO:
+            raise ActivityError("Só é possível descartar um rascunho ainda não publicado.")
+        if activity.created_by_id != user.id:
+            raise ActivityError("Você não pode descartar o rascunho de outra pessoa.")
+        for attachment in activity.attachments.all():
+            attachment.file.delete(save=False)
+        activity.delete()
 
     @staticmethod
     @transaction.atomic
@@ -716,7 +802,12 @@ class ActivityAttachmentService:
     @staticmethod
     @transaction.atomic
     def add(activity, uploaded_file, uploaded_by):
-        require_action(uploaded_by, catalog.ATIVIDADE_EDITAR, activity)
+        is_own_draft = activity.status == Activity.Status.RASCUNHO and activity.created_by_id == uploaded_by.id
+        if not is_own_draft:
+            # Rascunho sem dono ainda não tem contexto para o escopo relacional
+            # "minhas atividades" resolver — mas quem criou o rascunho sempre
+            # pode mexer nele, igual a qualquer outro campo do wizard.
+            require_action(uploaded_by, catalog.ATIVIDADE_EDITAR, activity)
         if not uploaded_file:
             raise ActivityError("Selecione um arquivo para anexar.")
 

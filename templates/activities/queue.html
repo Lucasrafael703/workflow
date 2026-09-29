@@ -64,7 +64,7 @@
                 <span class="queue-position">{{ entry.position }}</span>
                 <div class="queue-item__main">
                     <a href="{% url 'task-detail' entry.task.pk %}" class="title">{{ entry.task.title }}</a>
-                    <span class="tag" style="--tag-bg: {{ entry.task.status_color }}1A; --tag-fg: {{ entry.task.status_color }};">{{ entry.task.get_status_display }}</span>
+                    <span class="tag" style="--tag-bg: {{ entry.task.status_color }}1A; --tag-fg: {{ entry.task.status_color }};">{{ entry.task.status_label }}</span>
                     <div class="muted small">
                         {{ entry.task.activity.title }} ·
                         Dono: {{ entry.task.activity.owner.get_username }} ·
@@ -118,7 +118,7 @@ título das outras tarefas (doc 09 §97-99).
                 </div>
                 <p style="margin:10px 0"><span class="position-pill">Posição: {{ entry.position }} de {{ total }}</span></p>
                 <div class="muted small">
-                    Situação: {{ entry.task.get_status_display }}
+                    Situação: {{ entry.task.status_label }}
                     {% if entry.task.committed_deadline %} · Prazo comprometido: {{ entry.task.committed_deadline|date:"d/m/Y H:i" }}{% endif %}
                 </div>
                 {% if entry.position_changes.exists %}

@@ -118,7 +118,7 @@
                                 {% elif task.requested_deadline %}<span class="muted">{{ task.requested_deadline|date:"d/m/Y H:i" }}</span>
                                 {% else %}<span class="muted">Sem prazo</span>{% endif %}
                             </td>
-                            <td data-label="Situação"><span class="tag tag--{{ task.status }}">{{ task.get_status_display }}</span></td>
+                            <td data-label="Situação"><span class="tag tag--{{ task.status }}">{{ task.status_label }}</span></td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -163,7 +163,7 @@
                                 {% if activity.requested_deadline %}{{ activity.requested_deadline|date:"d/m/Y" }}
                                 {% else %}<span class="muted">Sem prazo</span>{% endif %}
                             </td>
-                            <td data-label="Situação"><span class="tag tag--{{ activity.status }}">{{ activity.get_status_display }}</span></td>
+                            <td data-label="Situação"><span class="tag tag--{{ activity.status }}">{{ activity.status_label }}</span></td>
                         </tr>
                         {% endfor %}
                     </tbody>

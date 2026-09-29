@@ -1,0 +1,8 @@
+<nav class="activities-tabs" aria-label="Escopo de atividades">
+    <a href="?tab=minhas" class="{% if tab == 'minhas' %}is-active{% endif %}">Minhas</a>
+    <a href="?tab=grupo" class="{% if tab == 'grupo' %}is-active{% endif %}">Do meu setor</a>
+    <a href="?tab=participando" class="{% if tab == 'participando' %}is-active{% endif %}">Participando</a>
+    <a href="?tab=concluidas" class="{% if tab == 'concluidas' %}is-active{% endif %}">Concluidas</a>
+    {% if can_view_all %}<a href="?tab=todas" class="{% if tab == 'todas' %}is-active{% endif %}">Todas</a>{% endif %}
+</nav>
+
