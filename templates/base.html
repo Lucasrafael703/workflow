@@ -80,8 +80,9 @@
                 <div class="nav-group__flyout">
                     <div class="nav-group__flyout-title">Tarefas</div>
                     <a href="{% url 'task-list' %}?tab=minhas" class="nav-subitem">Minhas</a>
+                    <a href="{% url 'task-list' %}?tab=participando" class="nav-subitem">Participando</a>
                     <a href="{% url 'task-list' %}?tab=setor" class="nav-subitem">Do meu setor</a>
-                    <a href="{% url 'task-list' %}?status=concluidas" class="nav-subitem">Concluídas</a>
+                    <a href="{% url 'task-list' %}?tab=concluidas&status=concluidas" class="nav-subitem">Concluídas</a>
                 </div>
             </details>
 

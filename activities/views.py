@@ -99,10 +99,16 @@ def filtered_tasks_queryset(request, organization):
 
     if tab == "setor":
         queryset = queryset.filter(sector__in=user_sectors(user))
-    else:
+    elif tab == "participando":
+        queryset = queryset.filter(
+            executors__user=user, executors__removed_at__isnull=True
+        ).exclude(responsavel=user)
+    elif tab == "concluidas":
         queryset = queryset.filter(
             Q(responsavel=user) | Q(executors__user=user, executors__removed_at__isnull=True)
         )
+    else:
+        queryset = queryset.filter(responsavel=user)
 
     if request.GET.get("status") == "concluidas":
         queryset = queryset.filter(status=Task.Status.CONCLUIDA)
@@ -168,10 +174,16 @@ def _task_stats(request, organization):
     queryset = Task.objects.filter(activity__organization=organization)
     if tab == "setor":
         queryset = queryset.filter(sector__in=user_sectors(user))
-    else:
+    elif tab == "participando":
+        queryset = queryset.filter(
+            executors__user=user, executors__removed_at__isnull=True
+        ).exclude(responsavel=user)
+    elif tab == "concluidas":
         queryset = queryset.filter(
             Q(responsavel=user) | Q(executors__user=user, executors__removed_at__isnull=True)
         )
+    else:
+        queryset = queryset.filter(responsavel=user)
     queryset = queryset.filter(status__in=OPEN_TASK_STATUSES).distinct()
 
     return {

@@ -12,6 +12,7 @@
 
 - Tarefas
   - Minhas
+  - Participando
   - Do meu setor
   - Concluídas
 
