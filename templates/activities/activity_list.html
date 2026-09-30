@@ -94,7 +94,7 @@
                             <summary aria-label="Mais acoes">{% include "_icon.html" with name="more" %}</summary>
                             <div class="activity-menu__items">
                                 {% if activity.can_assumir %}<form method="post" action="{% url 'activity-claim' activity.pk %}">{% csrf_token %}<button type="submit">Assumir atividade</button></form>{% endif %}
-                                {% if activity.can_edit %}<a href="{% url 'activity-edit' activity.pk %}?next={{ request.get_full_path|urlencode }}">Editar</a>{% endif %}
+                                {% if activity.can_edit %}<a href="{% url 'activity-edit' activity.pk %}?next={{ request.get_full_path|urlencode }}" data-activity-action data-activity-navigate>Editar</a>{% endif %}
                                 {% if activity.can_repassar %}<a href="{% url 'activity-change-owner' activity.pk %}" data-activity-action>Transferir responsabilidade</a>{% endif %}
                                 {% if activity.can_complete %}<a href="{% url 'activity-finalize' activity.pk %}?outcome=SUCESSO" data-activity-action>Concluir</a>{% endif %}
                                 {% if activity.can_cancel %}<a href="{% url 'activity-finalize' activity.pk %}?outcome=CANCELADO" data-activity-action class="is-danger">Cancelar</a>{% endif %}

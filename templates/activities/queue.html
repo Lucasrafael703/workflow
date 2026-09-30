@@ -96,7 +96,7 @@
             <div class="empty-state__icon">{% include "_icon.html" with name="check" %}</div>
             <h3>Fila vazia</h3>
             <p>Nenhuma tarefa aguardando neste setor. Quando uma tarefa for encaminhada para cá, ela aparece numerada nesta lista.</p>
-            <a href="{% url 'activity-create' %}" class="btn btn--primary">Criar atividade</a>
+            <a href="{% url 'activity-create' %}" data-activity-action data-activity-navigate class="btn btn--primary">Criar atividade</a>
         </div>
         {% endif %}
     </div>

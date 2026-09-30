@@ -20,6 +20,7 @@ from core.widgets import (
     SectorPickerWidget,
     SitePickerWidget,
     TagPickerWidget,
+    sprite_icon,
 )
 
 from .models import Activity, ActivityPendency, MessageKind, ReturnReason, Task, WorkSession
@@ -57,9 +58,31 @@ class SplitDateOptionalTimeWidget(forms.SplitDateTimeWidget):
             return [value.date(), value.time().replace(microsecond=0)]
         return [None, None]
 
+    def id_for_label(self, id_):
+        # O rótulo do campo aponta para a data (o primeiro dos dois inputs).
+        return f"{id_}_0" if id_ else id_
+
     def render(self, name, value, attrs=None, renderer=None):
-        html = super().render(name, value, attrs, renderer)
-        return format_html('<div class="split-datetime-input">{}</div>', html)
+        """Data e hora lado a lado, cada uma com o seu ícone (calendário e
+        relógio). Os ids seguem a convenção do `MultiWidget` (`<id>_0`, `<id>_1`)
+        para o rótulo do campo continuar apontando para a data."""
+        if not isinstance(value, (list, tuple)):
+            value = self.decompress(value)
+        attrs = {**self.attrs, **(attrs or {})}
+        base_id = attrs.get("id")
+        cells = []
+        for index, (widget, icon) in enumerate(zip(self.widgets, ("calendar", "clock"))):
+            sub_attrs = {**attrs, "class": "activity-input"}
+            if base_id:
+                sub_attrs["id"] = f"{base_id}_{index}"
+            cells.append(
+                format_html(
+                    '<div class="activity-input-wrap"><span class="activity-input-icon">{}</span>{}</div>',
+                    sprite_icon(icon),
+                    widget.render(f"{name}_{index}", value[index], sub_attrs, renderer),
+                )
+            )
+        return format_html('<div class="activity-date-time">{}{}</div>', *cells)
 
 
 class SplitDateOptionalTimeField(forms.MultiValueField):
@@ -245,50 +268,110 @@ class ActivityWizardStep3Form(forms.ModelForm):
         return sanitize_description(self.cleaned_data.get("description"))
 
 
-class ActivityEditForm(OrganizationScopedFormMixin, forms.ModelForm):
+class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
+    """Criar e editar atividade: o mesmo formulário, em três etapas.
+
+        1. Informações principais  — nome, atribuído a, setor, prazo, urgência, organização
+        2. Informações do cliente  — cliente, obra, centro de custo, solicitante externo, endereço
+        3. Descrição e arquivos    — observações e o link/caminho dos arquivos (sem upload)
+
+    Não tem: marcadores, solicitante interno, anotações internas nem envio de
+    arquivo. Esses campos continuam no modelo, mas ficam **fora** do formulário
+    de propósito: um campo que não está no `ModelForm` nunca é alterado ao salvar,
+    então editar uma atividade antiga não apaga o que ela já tinha.
+
+    Nome, responsável e setor são obrigatórios ao criar e ao salvar uma edição.
+    O rascunho antigo (`acao=rascunho`) e o envio só com título do seletor
+    legado passam `require_essentials=False`.
+    """
+
+    STEP_FIELDS = {
+        1: ("title", "owner", "sector", "requested_deadline", "urgency", "company"),
+        2: ("client", "site", "cost_center", "external_requester", "address"),
+        3: ("description", "files_location"),
+    }
+    STEP_TITLES = {
+        1: ("Informações principais", "Dados básicos da atividade e responsáveis."),
+        2: ("Informações do cliente", "Dados relacionados ao cliente, obra e centro de custo."),
+        3: ("Descrição e arquivos", "Informações complementares para a execução da atividade."),
+    }
+    DESCRIPTION_LIMIT = 2000
+
     requested_deadline = SplitDateOptionalTimeField(
-        label="Prazo da solicitação",
+        label="Prazo de vencimento",
         required=False,
-        help_text="Quando quem pediu precisa da entrega. Sem horário, vale até o fim do dia.",
+        help_text="Data e horário para conclusão da atividade. Sem horário, vale até o fim do dia.",
     )
 
     class Meta:
         model = Activity
         fields = [
-            "client",
-            "title",
-            "urgency",
-            "requested_deadline",
-            "owner",
-            "requested_by",
-            "sector",
-            "company",
-            "site",
-            "cost_center",
-            "address",
-            "tags",
-            "description",
-            "internal_notes",
+            "title", "owner", "sector", "requested_deadline", "urgency", "company",
+            "client", "site", "cost_center", "external_requester", "address",
+            "description", "files_location",
         ]
-        labels = ACTIVITY_FIELD_LABELS
-        help_texts = ACTIVITY_FIELD_HELP_TEXTS
+        labels = {
+            "title": "Nome da atividade",
+            "owner": "Atribuído a",
+            "sector": "Setor responsável",
+            "urgency": "Urgência",
+            "company": "Organização",
+            "client": "Cliente",
+            "site": "Obra",
+            "cost_center": "Centro de custo",
+            "external_requester": "Solicitante (Externo)",
+            "address": "Endereço complementar",
+            "description": "Observações",
+            "files_location": "Link / caminho dos arquivos",
+        }
+        help_texts = {
+            "title": "Descreva a entrega esperada. Ex.: Orçamento do gerador aprovado.",
+            "owner": "Essa pessoa será responsável pela entrega e acompanhará as tarefas.",
+            "sector": "Escolha o setor que será responsável por esta atividade.",
+            "urgency": "Indique o quanto esta atividade precisa de atenção.",
+            "company": "Ex.: Comercial, Engenharia, Operações, etc.",
+            "client": "Selecione o cliente relacionado a esta atividade.",
+            "site": "Selecione a obra relacionada, se houver.",
+            "cost_center": "Escolha o centro de custo para apropriação desta atividade.",
+            "external_requester": "Pessoa que solicitou a demanda (cliente, fornecedor, etc.).",
+            "address": "Informações adicionais do local, se necessário.",
+            "description": "Inclua todas as informações necessárias para a execução desta atividade.",
+            "files_location": "Você pode colar o link ou o caminho da pasta/arquivo relacionado a esta atividade "
+            "(Google Drive, OneDrive, Dropbox, etc.), ou um caminho de rede.",
+        }
         widgets = {
-            "client": ClientPickerWidget(),
-            "owner": PersonPickerWidget(),
-            "requested_by": PersonPickerWidget(),
+            "title": forms.TextInput(
+                attrs={"class": "activity-input", "placeholder": "Ex.: Material disponível na obra", "autofocus": True}
+            ),
+            "owner": PersonPickerWidget(icon="user", selection_label="Buscar pessoa..."),
+            "sector": SectorPickerWidget(icon="users"),
             "urgency": forms.RadioSelect(),
-            "description": RichTextWidget(),
-            "sector": SectorPickerWidget(),
-            "company": CompanyPickerWidget(),
-            "site": SitePickerWidget(),
-            "cost_center": CostCenterPickerWidget(),
-            "tags": TagPickerWidget(),
+            "company": CompanyPickerWidget(icon="building", empty_label="Selecionar organização"),
+            "client": ClientPickerWidget(icon="building"),
+            "site": SitePickerWidget(icon="hardhat", filter_field_id="id_client", filter_param="client"),
+            "cost_center": CostCenterPickerWidget(icon="dollar", filter_field_id="id_site", filter_param="site"),
+            "external_requester": forms.TextInput(attrs={"class": "activity-input", "placeholder": "Nome do solicitante"}),
+            "address": forms.TextInput(
+                attrs={"class": "activity-input", "placeholder": "Ex.: Rua, número, complemento, bairro, cidade"}
+            ),
+            "description": RichTextWidget(
+                placeholder="Descreva aqui os detalhes da atividade, orientações, observações e outras informações "
+                "importantes...",
+                limit=2000,
+            ),
+            "files_location": forms.TextInput(
+                attrs={"class": "activity-input", "placeholder": "Cole aqui o link ou caminho dos arquivos"}
+            ),
         }
 
     def __init__(
         self,
         *args,
         organization=None,
+        user=None,
+        drafting=False,
+        can_change_owner=False,
+        require_essentials=True,
         can_create_person=False,
         can_create_client=False,
         can_create_sector=False,
@@ -298,6 +381,7 @@ class ActivityEditForm(OrganizationScopedFormMixin, forms.ModelForm):
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
+        self.require_essentials = require_essentials
         self.scope_querysets(
             organization,
             can_create_person=can_create_person,
@@ -307,24 +391,44 @@ class ActivityEditForm(OrganizationScopedFormMixin, forms.ModelForm):
             can_create_site=can_create_site,
             can_create_cost_center=can_create_cost_center,
         )
-        self.fields["client"].required = False
-        self.fields["client"].empty_label = None
-        self.fields["owner"].empty_label = None
-        self.fields["requested_by"].empty_label = None
-        for optional in (
-            "description",
-            "internal_notes",
-            "company",
-            "site",
-            "cost_center",
-            "sector",
-            "requested_by",
-            "address",
-            "requested_deadline",
-            "tags",
-            "urgency",
-        ):
-            self.fields[optional].required = False
+        fields = self.fields
+        fields["owner"].empty_label = None
+        fields["client"].empty_label = None
+        # A obrigatoriedade é tratada em `clean()` (e marcada na tela com `*`),
+        # não no campo: o rascunho antigo e o seletor legado precisam aceitar vazio.
+        for name in self._meta.fields:
+            fields[name].required = False
+        fields["owner"].disabled = not can_change_owner
+        if not can_change_owner:
+            fields["owner"].help_text = "A transferência de responsabilidade exige permissão específica."
+        if drafting and not self.is_bound and not self.instance.pk:
+            self.initial["owner"] = user
+        if self.initial.get("title") == Activity.DRAFT_TITLE_PLACEHOLDER:
+            self.initial["title"] = ""
+
+    # -- etapas ------------------------------------------------------------------------
+
+    @property
+    def steps(self):
+        """Para o template: número, título, descrição e campos de cada etapa."""
+        return [
+            {
+                "number": number,
+                "title": self.STEP_TITLES[number][0],
+                "description": self.STEP_TITLES[number][1],
+                "fields": [self[name] for name in names],
+            }
+            for number, names in self.STEP_FIELDS.items()
+        ]
+
+    def step_with_errors(self):
+        """Primeira etapa com erro (1 se não houver): onde a janela deve abrir."""
+        for number, names in self.STEP_FIELDS.items():
+            if any(self[name].errors for name in names):
+                return number
+        return 1
+
+    # -- validação -------------------------------------------------------------------------
 
     def clean_description(self):
         return sanitize_description(self.cleaned_data.get("description"))
@@ -332,52 +436,30 @@ class ActivityEditForm(OrganizationScopedFormMixin, forms.ModelForm):
     def clean_urgency(self):
         return self.cleaned_data.get("urgency") or Activity.Urgency.MEDIA
 
+    def clean_external_requester(self):
+        return (self.cleaned_data.get("external_requester") or "").strip()
 
-class ActivityFilesInput(forms.ClearableFileInput):
-    allow_multiple_selected = True
+    def clean_files_location(self):
+        return (self.cleaned_data.get("files_location") or "").strip()
 
-
-class ActivityFilesField(forms.FileField):
-    widget = ActivityFilesInput
-
-    def clean(self, data, initial=None):
-        if not data:
-            return []
-        values = data if isinstance(data, (list, tuple)) else [data]
-        return [super(ActivityFilesField, self).clean(value, initial) for value in values]
-
-
-class ActivityEditorForm(ActivityEditForm):
-    """Creation and editing share field order, widgets and validation."""
-
-    files = ActivityFilesField(label="Adicionar arquivos", required=False)
-
-    def __init__(self, *args, user=None, drafting=False, can_change_owner=False, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["title"].widget.attrs.update(placeholder="Ex.: Material disponível na obra", autofocus=True)
-        self.fields["internal_notes"].widget.attrs["rows"] = 3
-        self.fields["owner"].disabled = not can_change_owner
-        if not can_change_owner:
-            self.fields["owner"].help_text = "A transferência de responsabilidade exige permissão específica."
-        if drafting:
-            self.fields["title"].required = False
-            self.fields["owner"].required = False
-            if not self.is_bound and not self.instance.pk:
-                self.initial["owner"] = user
-            if self.initial.get("title") == Activity.DRAFT_TITLE_PLACEHOLDER:
-                self.initial["title"] = ""
-
-    @property
-    def essential_fields(self):
-        return [self[name] for name in ("title", "owner", "sector", "requested_deadline", "urgency")]
-
-    @property
-    def context_fields(self):
-        return [self[name] for name in ("client", "site", "company", "cost_center", "requested_by", "address", "tags")]
-
-    @property
-    def context_expanded(self):
-        return any(field.errors or field.value() for field in self.context_fields)
+    def clean(self):
+        cleaned = super().clean()
+        if self.require_essentials:
+            title = (cleaned.get("title") or "").strip()
+            if not title or title == Activity.DRAFT_TITLE_PLACEHOLDER:
+                self.add_error("title", "Informe o nome da atividade.")
+            if not cleaned.get("owner"):
+                self.add_error("owner", "Escolha quem fica com a atividade.")
+            if not cleaned.get("sector"):
+                self.add_error("sector", "Escolha o setor responsável.")
+        # Cliente → Obra → Centro de custo: a escolha de baixo precisa pertencer à de cima
+        # (obra ou centro de custo sem vínculo valem para qualquer um).
+        client, site, cost_center = cleaned.get("client"), cleaned.get("site"), cleaned.get("cost_center")
+        if client and site and site.client_id not in (None, client.pk):
+            self.add_error("site", "Esta obra pertence a outro cliente. Escolha uma obra de quem foi selecionado.")
+        if site and cost_center and cost_center.site_id not in (None, site.pk):
+            self.add_error("cost_center", "Este centro de custo pertence a outra obra.")
+        return cleaned
 
 
 class ChangeOwnerForm(forms.Form):

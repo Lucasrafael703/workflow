@@ -24,6 +24,7 @@ Testes do Django ficam em cada app (`tests.py` e, em `activities`, também
 | `activities/test_task_actions.py` | 88 | “Já realizei este trabalho”: período informado × conclusão agora, fila e sucessoras, auditoria, permissões (responsável/participante, sem exigir tempo manual), status, limites de data e justificativa, travas de dependência e de inputs do processo, atomicidade; botão, barra “Ações da tarefa” filtrada por permissão, popup (JSON), cartão de tempo cronometrado × informado |
 | `activities/test_task_editor.py` | 78 | Editor da tarefa (uma transação: dados, marcadores, responsável, participantes e convites pendentes), Gerenciar dependência (ciclo, fila, tarefa já iniciada), motivo no tempo manual, origem do tempo na gestão, ações da tarefa em janela (JSON) e destaque do menu lateral em toda rota de tarefa |
 | `activities/test_task_popups.py` | 24 | Padrão único das janelas e do painel lateral da tarefa (nova, nova fora da atividade, editar e painel): mesma ordem de blocos, mesmas palavras, dois blocos recolhíveis e o estado aberto/fechado, seletor desenhado uma só vez e com rótulo, `VisibleHiddenInput` |
+| `activities/test_activity_modal.py` | 43 | Nova/Editar atividade em 3 etapas: estrutura, nomes e ajudas, obrigatórios, campos que saíram (upload, marcadores, solicitante interno, anotações), Cliente → Obra → Centro de custo (busca e validação), links e caminhos de arquivos, JSON da janela, edição igual à criação |
 | `accounts`, `audit` | 0 | `tests.py` vazio |
 
 Base compartilhada dos testes de processo: `activities/testing.py`
@@ -33,8 +34,10 @@ em sequência, três inputs e quatro critérios) e `processes/testing.py`
 
 Além disso, `tests/checklist.test.cjs` testa o componente JavaScript do
 checklist, `tests/process-apply.test.cjs`, o assistente de 4 passos do popup
-"Aplicar processo", e `tests/retroactive-work.test.cjs`, o popup "Já realizei este
-trabalho" (aviso de dia anterior e comentário só quando necessário) (seção 4).
+"Aplicar processo", `tests/retroactive-work.test.cjs`, o popup "Já realizei este
+trabalho" (aviso de dia anterior e comentário só quando necessário), e
+`tests/activity-steps.test.cjs`, a janela de atividade em 3 etapas (inclui a integração
+com o `modal.js` real) (seção 4).
 
 ---
 

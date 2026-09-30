@@ -48,6 +48,12 @@ FIELD_LABELS = {
     "order": "a ordem",
     "depends_on": "a dependência",
     "tags": "os marcadores",
+    "external_requester": "o solicitante externo",
+    "files_location": "o link dos arquivos",
+    "urgency": "a urgência",
+    "sector": "o setor responsável",
+    "client": "o cliente",
+    "address": "o endereço",
     "status": "a situação",
 }
 

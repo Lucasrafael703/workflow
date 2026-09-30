@@ -40,6 +40,13 @@ O jsdom não valida layout nem o envio implícito por Enter do navegador. Confer
 também no navegador: botão Adicionar e Enter, página e painel lateral, largura
 de celular e desktop, quebra de textos longos e foco por teclado.
 
+Janela de atividade em 3 etapas (`static/js/activity-steps.js`), com o template e o
+`ActivityEditorForm` reais e o `modal.js` real:
+
+```powershell
+node --test tests/activity-steps.test.cjs
+```
+
 ## Editor e janelas de atividades
 
 ```powershell

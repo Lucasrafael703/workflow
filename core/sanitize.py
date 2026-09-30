@@ -1,10 +1,10 @@
 import nh3
 
 # Allowlist mínima para o editor de descrição (negrito/itálico/sublinhado/
-# lista/link) — qualquer outra tag ou atributo é removido pelo nh3, nunca
+# tachado/listas/link) — qualquer outra tag ou atributo é removido pelo nh3, nunca
 # apenas "escapado". Esta é a ÚNICA porta de entrada de HTML de usuário no
 # projeto: nenhum campo pode ser renderizado com `|safe` sem passar por aqui.
-ALLOWED_TAGS = {"p", "br", "strong", "em", "u", "ul", "ol", "li", "a"}
+ALLOWED_TAGS = {"p", "br", "strong", "em", "u", "s", "strike", "ul", "ol", "li", "a"}
 ALLOWED_ATTRIBUTES = {"a": {"href"}}
 
 

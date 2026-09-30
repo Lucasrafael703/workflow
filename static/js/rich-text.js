@@ -1,5 +1,6 @@
 /* Editor de descrição com formatação básica: contenteditable nativo do
-   navegador + document.execCommand para os 5 comandos da toolbar. O
+   navegador + document.execCommand para os comandos da toolbar (negrito, itálico,
+   tachado, listas, link). O
    <textarea> escondido continua sendo o que o form realmente submete —
    este script só mantém os dois sincronizados, então a tela funciona
    normalmente mesmo se JS falhar (só perde a formatação visual ao vivo). */
@@ -11,8 +12,22 @@
         var textarea = root.querySelector("textarea");
         if (!body || !textarea) return;
 
+        var counter = root.querySelector("[data-rich-text-counter]");
+        var limit = counter ? parseInt(counter.getAttribute("data-limit"), 10) || 0 : 0;
+
+        function refreshState() {
+            var text = (body.innerText || body.textContent || "").replace(/
+$/, "");
+            body.classList.toggle("is-empty", !text.trim() && !body.querySelector("li, img"));
+            if (counter) {
+                counter.textContent = text.length + "/" + limit;
+                counter.classList.toggle("is-over", limit > 0 && text.length > limit);
+            }
+        }
+
         function syncToTextarea() {
             textarea.value = body.innerHTML;
+            refreshState();
         }
 
         body.addEventListener("input", syncToTextarea);
@@ -45,7 +60,7 @@
                 // Chrome deixa a seleção no início do texto convertido em
                 // vez de manter o fim, então digitar em seguida entra antes
                 // do que já existia. Move explicitamente para o fim.
-                if (command === "insertUnorderedList") {
+                if (command === "insertUnorderedList" || command === "insertOrderedList") {
                     var range = document.createRange();
                     range.selectNodeContents(body);
                     range.collapse(false);
@@ -56,6 +71,7 @@
                 syncToTextarea();
             });
         });
+        refreshState();
         root.setAttribute("data-rich-text-ready", "1");
     }
 

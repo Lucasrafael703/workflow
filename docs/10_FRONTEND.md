@@ -82,6 +82,7 @@ Todos são **filtros**, em `activities/templatetags/lps.py`:
 | `rich-text.js` | Editor de descrição (`contenteditable`); o HTML é sanitizado no servidor por `core/sanitize.py` |
 | `form-summary.js` | Resumo ao lado do formulário, atualizado ao digitar |
 | *(ações da tarefa)* | Os itens de Mais ações e o botão Editar tarefa usam `data-activity-action` (`activity-workspace.js` + `LPSModal`): abrem a janela, recarregam a ficha ao salvar e, se a janela falhar, navegam para a página. O menu `<details class="menu-more">` fecha ao escolher um item, ao clicar fora e com Esc (script inline em `task_detail.html`) |
+| `activity-steps.js` | Janela de atividade em 3 etapas (ver seção 6). Registra-se em `window.LPSWidgets`; o teste `tests/activity-steps.test.cjs` exercita o fluxo com o `modal.js` real |
 | `retroactive-work.js` | Popup “Já realizei este trabalho”: avisa quando a data é de um dia anterior e mostra o comentário só quando é necessário (motivo *Outro* ou trabalho de mais de 7 dias atrás). Nenhuma regra mora aqui — o servidor valida tudo; sem JavaScript o comentário fica sempre visível. Registra-se em `window.LPSWidgets` |
 | `process-apply.js` | Popup "Aplicar processo": 4 passos num só formulário (Processo → Responsáveis → Entradas → Confirmar). Mostra/habilita só os campos da versão escolhida; nenhuma regra de negócio (o servidor valida tudo). Registra-se em `window.LPSWidgets` para funcionar dentro do `LPSModal` |
 | `process-editor.js` | Editor de processo: no "Adicionar etapa", sugere primeiro as pessoas do setor escolhido para o responsável padrão (as de outros setores ficam atrás de "Mostrar pessoas de outros setores") |
@@ -107,8 +108,21 @@ basta fazer deploy; não é preciso trocar a URL no template (use sempre
 
 ## 6. Experiência unificada de atividades
 
-O editor de criação/edição é `activities/activity_form.html`, com os campos
-agrupados em `ActivityEditorForm` e estilo em `static/css/activity-workspace.css`.
+O editor de criação/edição é `activities/activity_form.html`: uma janela de **três
+etapas** (Informações principais → Informações do cliente → Descrição e arquivos) com
+cabeçalho, indicador de progresso e rodapé fixos e só o miolo rolando. Os campos são
+agrupados em `ActivityEditorForm` (`STEP_FIELDS`, `steps`) e o estilo está em
+`static/css/activity-workspace.css` (classes `activity-*`, sobre os tokens de `app.css`).
+
+`static/js/activity-steps.js` mostra uma etapa por vez, marca o progresso (✓ nas
+concluídas), valida nome/atribuído a/setor antes de sair da etapa 1 e leva o Enter dos
+campos de texto para “Continuar”. Todos os painéis são do **mesmo formulário** e só
+ficam `hidden`, então nada se perde ao avançar ou voltar. Escuta o envio em captura
+(antes do `LPSModal`) para que só o botão final envie e, quando o servidor devolve
+erros, abre a etapa do primeiro erro. Sem o script as três etapas aparecem empilhadas.
+O editor de texto (`RichTextWidget`) ganhou tachado, lista numerada, marcador de
+vazio e contador (`limit`); seu HTML passa por `sanitize_description` (permite
+`s`/`strike`).
 A antiga ficha lateral foi retirada; lista, quadro e calendário abrem a mesma ficha.
 
 `static/js/activity-workspace.js` liga os links `data-activity-action` ao modal

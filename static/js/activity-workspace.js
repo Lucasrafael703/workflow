@@ -9,7 +9,15 @@
         if (!link || !window.LPSModal || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
         event.preventDefault();
         window.LPSModal.open(link.href, {
-            onSuccess: function () { window.location.reload(); }
+            onSuccess: function (result) {
+                // Criar/editar atividade (data-activity-navigate) segue para a página que o servidor indicou;
+                // as demais ações curtas só recarregam a tela em que estavam.
+                if (link.hasAttribute("data-activity-navigate") && result && result.redirect_url) {
+                    window.location.assign(result.redirect_url);
+                } else {
+                    window.location.reload();
+                }
+            }
         }).catch(function () {
             // The full-page form is also usable if loading the dialog fails.
             window.location.assign(link.href);

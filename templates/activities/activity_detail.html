@@ -62,7 +62,7 @@
                         <button type="button" class="menu-dots__trigger" title="Mais ações">{% include "_icon.html" with name="more" %}</button>
                         <div class="menu-dots__popup" hidden>
                             {% if activity.status != "CONCLUIDA" and activity.status != "CANCELADA" %}
-                            {% if can_edit %}<a href="{% url 'activity-edit' activity.pk %}?next={{ return_url|urlencode }}" class="menu-dots__item">Editar</a>{% endif %}
+                            {% if can_edit %}<a href="{% url 'activity-edit' activity.pk %}?next={{ return_url|urlencode }}" data-activity-action data-activity-navigate class="menu-dots__item">Editar</a>{% endif %}
                             {% if can_change_owner %}<a href="{% url 'activity-change-owner' activity.pk %}" data-activity-action class="menu-dots__item">Transferir responsável</a>{% endif %}
                             {% if can_edit %}<a href="{% url 'activity-change-deadline' activity.pk %}" data-activity-action class="menu-dots__item">Alterar prazo</a>{% endif %}
                             {% if can_mark_pending %}<a href="{% url 'activity-mark-pending' activity.pk %}" class="menu-dots__item" data-activity-action>Marcar como pendente</a>{% endif %}
@@ -195,7 +195,14 @@
                         {% if activity.requested_by %}<div><div class="k">Solicitante</div><div class="v">{{ activity.requested_by.get_full_name|default:activity.requested_by.get_username }}</div></div>{% endif %}
                         {% if activity.process_version_id %}<div><div class="k">Processo</div><div class="v">{{ activity.process_version.process.name }}</div></div>{% endif %}
                         <div><div class="k">Criador</div><div class="v">{{ activity.created_by.get_username }} <span class="muted small">em {{ activity.created_at|date:"d/m/Y H:i" }}</span></div></div>
+                        {% if activity.external_requester %}<div><div class="k">Solicitante (externo)</div><div class="v">{{ activity.external_requester }}</div></div>{% endif %}
                         {% if activity.address %}<div class="full"><div class="k">Endereço</div><div class="v">{{ activity.address }}</div></div>{% endif %}
+                        {% if activity.files_location %}
+                        <div class="full">
+                            <div class="k">Arquivos</div>
+                            <div class="v" style="overflow-wrap:anywhere">{% if activity.files_location|slice:":8"|lower == "https://" or activity.files_location|slice:":7"|lower == "http://" %}<a href="{{ activity.files_location }}" target="_blank" rel="noopener noreferrer">{{ activity.files_location }}</a>{% else %}{{ activity.files_location }}{% endif %}</div>
+                        </div>
+                        {% endif %}
                         {% if activity.tags.all %}
                         <div class="full">
                             <div class="k">Marcadores</div>

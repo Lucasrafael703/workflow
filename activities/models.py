@@ -120,6 +120,20 @@ class Activity(models.Model):
     address = models.CharField(
         "endereço", max_length=255, blank=True, help_text="Endereço adicional, além do cadastro do cliente."
     )
+    external_requester = models.CharField(
+        "solicitante externo",
+        max_length=150,
+        blank=True,
+        help_text="Nome de quem pediu a demanda fora da organização (cliente, fornecedor etc.) — texto livre, "
+        "não é um cadastro. Distinto de `requested_by`, que é alguém da própria equipe.",
+    )
+    files_location = models.CharField(
+        "link / caminho dos arquivos",
+        max_length=500,
+        blank=True,
+        help_text="Link (Drive, OneDrive...) ou caminho de rede/pasta dos arquivos da atividade. "
+        "A LPS não guarda o arquivo: só aponta onde ele está.",
+    )
     tags = models.ManyToManyField(
         "core.Tag", verbose_name="marcadores", blank=True, related_name="activities"
     )

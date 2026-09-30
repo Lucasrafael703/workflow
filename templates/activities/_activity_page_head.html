@@ -3,7 +3,7 @@
         <h1 id="activities-title">Atividades</h1>
         <p>Acompanhe cada entrega e abra uma atividade para ver suas tarefas, prazos e conversas.</p>
     </div>
-    <a href="{% url 'activity-create' %}?next={{ request.get_full_path|urlencode }}" class="btn btn--primary activities-create">
+    <a href="{% url 'activity-create' %}?next={{ request.get_full_path|urlencode }}" data-activity-action data-activity-navigate class="btn btn--primary activities-create">
         {% include "_icon.html" with name="plus" %} Criar atividade
     </a>
 </div>

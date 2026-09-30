@@ -9,7 +9,7 @@
         <p class="sub">Aqui está o que precisa da sua atenção agora.</p>
     </div>
     <div class="page-head__actions">
-        <a href="{% url 'activity-create' %}" class="btn btn--primary">
+        <a href="{% url 'activity-create' %}" data-activity-action data-activity-navigate class="btn btn--primary">
             {% include "_icon.html" with name="plus" %} Nova atividade
         </a>
     </div>
@@ -160,7 +160,7 @@
                 <div class="empty-state__icon">{% include "_icon.html" with name="activity" %}</div>
                 <h3>Você ainda não possui atividades</h3>
                 <p>Uma atividade é o resultado que precisa acontecer. As tarefas são os passos até lá.</p>
-                <a href="{% url 'activity-create' %}" class="btn btn--primary">Criar primeira atividade</a>
+                <a href="{% url 'activity-create' %}" data-activity-action data-activity-navigate class="btn btn--primary">Criar primeira atividade</a>
             </div>
             {% endif %}
         </div>

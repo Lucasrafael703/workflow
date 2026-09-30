@@ -104,14 +104,14 @@
 | Caminho | Função |
 |---|---|
 | `atividades/` (`activity-list`) | Lista com abas e filtros |
-| `atividades/nova/` (`activity-create`) | Editor único de criação e rascunho |
+| `atividades/nova/` (`activity-create`) | Janela de 3 etapas de criação (e rascunho antigo). JSON no Ajax: `{redirect_url}` ou `400 {errors}` |
 | `atividades/<pk>/nova/contexto/`, `.../detalhes/`, `.../descartar/` | GET das etapas antigas redireciona ao editor; POST legado compatível; descartar rascunho |
 | `atividades/nova-rapida/` | Mesmo editor no seletor; resposta JSON em Ajax |
 | `atividades/busca/` | Busca de atividades abertas (JSON) |
 | `atividades/kanban/`, `atividades/calendario/` | Kanban por estágio, calendário por prazo |
 | `atividades/<pk>/` (`activity-detail`) | Ficha da atividade (rascunho redireciona ao editor) |
 | `atividades/<pk>/painel/` | Compatibilidade: redireciona à ficha completa |
-| `atividades/<pk>/editar/`, `prazo/`, `dono/`, `assumir/` | Editar, prazo, trocar dono, assumir |
+| `atividades/<pk>/editar/`, `prazo/`, `dono/`, `assumir/` | Editar (a mesma janela de 3 etapas), prazo, trocar dono, assumir |
 | `atividades/<pk>/finalizar/`, `concluir/`, `cancelar/`, `reabrir/` | Encerramento e reabertura |
 | `atividades/<pk>/processo/aplicar/` (`activity-process-apply`) | Popup "Aplicar processo" — GET mostra os 4 passos (403 sem `processo.aplicar`; redireciona se a atividade já tem processo); POST aplica (JSON `{"redirect_url"}` ou `{"errors"}` no Ajax; redirect sem JS) |
 | `atividades/<pk>/processo/inputs/<input_pk>/` (`activity-input-update`) | POST: registrar/corrigir (`value`, `is_received`) ou reabrir (`clear`) um input do processo aplicado |

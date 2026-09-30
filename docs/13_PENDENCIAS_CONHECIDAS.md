@@ -52,6 +52,10 @@ Legenda de severidade: **Alta** (segurança ou quebra em produção) ·
 | F15 | Editor da tarefa — prazo pedido | O prazo pedido pelo solicitante é editável por quem tem `tarefa.editar` (hoje o Gestor de Setor; o Colaborador não tem). Restringi-lo ao dono da atividade / `atividade.editar` evitaria que a própria equipe mexa no prazo contra o qual é medida (Regras 04 §64), mas tiraria do gestor do setor a correção de um erro de digitação. Decisão de produto em aberto. |
 | F16 | Convites de participante | Um convite pendente (`TaskAssignment`) não pode ser cancelado por quem convidou — só aceito ou recusado pela pessoa convidada. O editor mostra o convite como “aguardando aceite” e não o duplica. |
 | F17 | Origem do tempo — alcance | O quadro “Origem do tempo registrado” da gestão segue os filtros da tela (período da atividade, cliente, responsável...), como os demais indicadores, e conta só sessões encerradas. Não há ainda tela de auditoria do tempo informado por pessoa nem correção de um período já registrado (Regras 04 §114). |
+| F18 | Editor de atividade — campos que saíram | A janela de 3 etapas não tem marcadores, solicitante interno (`requested_by`), anotações internas (`internal_notes`) nem envio de arquivos. Os dados antigos continuam no banco e na ficha, mas não há mais onde **editar** marcadores e anotações internas de uma atividade. Se isso fizer falta, o caminho é um bloco opcional na etapa 2 ou 3. |
+| F19 | Editor de atividade — “Organização” | O campo “Organização” grava `Activity.company` (cadastro de empresas). Se a intenção era outra coisa (ex.: um agrupamento parecido com setor), o rótulo e a origem dos dados precisam ser revistos. |
+| F20 | Editor de atividade — limite do texto | O contador “0/2000” das observações é só orientação: não há corte nem erro acima de 2000 caracteres (descrições antigas maiores continuam editáveis). |
+| F21 | Cliente → Obra → Centro de custo | Obra sem cliente e centro de custo sem obra valem para qualquer escolha no servidor; na busca, ao escolher um cliente somem as obras sem cliente. Não há cadastro que force o vínculo. |
 
 ## 4. Deploy
 

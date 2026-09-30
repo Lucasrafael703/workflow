@@ -17,6 +17,19 @@ class VisibleHiddenInput(forms.HiddenInput):
 
     is_hidden = False
 
+    #: nome do símbolo do sprite (`#i-<nome>`) desenhado no botão; `None` = lupa.
+    icon = None
+
+    def _icon(self):
+        return sprite_icon(self.icon) if self.icon else _SEARCH_ICON
+
+
+def sprite_icon(name):
+    """Ícone do sprite de `templates/_icons.html`, para widgets que montam o HTML à mão."""
+    return format_html(
+        '<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><use href="#i-{}"></use></svg>', name
+    )
+
 
 class PersonPickerWidget(VisibleHiddenInput):
     """Seletor de pessoa com busca, no lugar de um <select> que só cresce.
@@ -37,9 +50,11 @@ class PersonPickerWidget(VisibleHiddenInput):
     search_url_name = "person-search"
 
     def __init__(
-        self, attrs=None, create_url=None, queryset=None, sector_field_id=None, placeholder=None, selection_label=None
+        self, attrs=None, create_url=None, queryset=None, sector_field_id=None, placeholder=None, selection_label=None,
+        icon=None,
     ):
         super().__init__(attrs)
+        self.icon = icon
         self.create_url = create_url
         self.queryset = queryset
         self.sector_field_id = sector_field_id
@@ -78,7 +93,7 @@ class PersonPickerWidget(VisibleHiddenInput):
             placeholder=self.placeholder,
             empty_label=self.selection_label,
             hidden_html=hidden_html,
-            icon=_SEARCH_ICON,
+            icon=self._icon(),
             label_class=label_class,
             label=label or self.selection_label,
         )
@@ -101,8 +116,9 @@ class ClientPickerWidget(VisibleHiddenInput):
 
     search_url_name = "client-search"
 
-    def __init__(self, attrs=None, create_url=None, queryset=None):
+    def __init__(self, attrs=None, create_url=None, queryset=None, icon=None):
         super().__init__(attrs)
+        self.icon = icon
         self.create_url = create_url
         self.queryset = queryset
 
@@ -136,7 +152,7 @@ class ClientPickerWidget(VisibleHiddenInput):
             search_url=search_url,
             create_attr=create_attr,
             hidden_html=hidden_html,
-            icon=_SEARCH_ICON,
+            icon=self._icon(),
             label_class=label_class,
             label=label or "Selecionar cliente",
         )
@@ -152,8 +168,9 @@ class ActivityPickerWidget(VisibleHiddenInput):
 
     search_url_name = "activity-search"
 
-    def __init__(self, attrs=None, create_url=None, queryset=None):
+    def __init__(self, attrs=None, create_url=None, queryset=None, icon=None):
         super().__init__(attrs)
+        self.icon = icon
         self.create_url = create_url
         self.queryset = queryset
 
@@ -186,7 +203,7 @@ class ActivityPickerWidget(VisibleHiddenInput):
             search_url=search_url,
             create_attr=create_attr,
             hidden_html=hidden_html,
-            icon=_SEARCH_ICON,
+            icon=self._icon(),
             label_class=label_class,
             label=label or "Selecionar atividade",
         )
@@ -203,10 +220,23 @@ class _SimpleSearchPickerWidget(VisibleHiddenInput):
     empty_label = "Selecionar"
     placeholder = "Buscar..."
 
-    def __init__(self, attrs=None, create_url=None, queryset=None):
+    def __init__(
+        self, attrs=None, create_url=None, queryset=None, icon=None, empty_label=None, placeholder=None,
+        filter_field_id=None, filter_param=None,
+    ):
         super().__init__(attrs)
         self.create_url = create_url
         self.queryset = queryset
+        self.icon = icon
+        if empty_label:
+            self.empty_label = empty_label
+        if placeholder:
+            self.placeholder = placeholder
+        # Quando `filter_field_id` é informado (ex.: obra depende do cliente), o
+        # JS zera a escolha ao mudar o outro campo e manda o valor dele na busca
+        # como `filter_param` (ver static/js/person-picker.js).
+        self.filter_field_id = filter_field_id
+        self.filter_param = filter_param
 
     def _label_for(self, value):
         if not value or self.queryset is None:
@@ -222,7 +252,11 @@ class _SimpleSearchPickerWidget(VisibleHiddenInput):
         label = self._label_for(value)
         search_url = reverse_lazy(self.search_url_name)
 
-        create_attr = format_html(' data-create-url="{}"', self.create_url) if self.create_url else ""
+        create_attr = format_html(' data-create-url="{}"', self.create_url) if self.create_url else mark_safe("")
+        if self.filter_field_id and self.filter_param:
+            create_attr = format_html(
+                '{} data-filter-field="{}" data-filter-param="{}"', create_attr, self.filter_field_id, self.filter_param
+            )
         label_class = "" if label else " muted"
 
         return format_html(
@@ -241,7 +275,7 @@ class _SimpleSearchPickerWidget(VisibleHiddenInput):
             empty_label=self.empty_label,
             create_attr=create_attr,
             hidden_html=hidden_html,
-            icon=_SEARCH_ICON,
+            icon=self._icon(),
             label_class=label_class,
             label=label or self.empty_label,
         )
@@ -311,39 +345,62 @@ class ColorPaletteWidget(forms.HiddenInput):
 
 
 class RichTextWidget(forms.Textarea):
-    """Editor de descrição com formatação básica (negrito/itálico/sublinhado/
-    lista/link) sobre `contenteditable` nativo do navegador — sem editor
+    """Editor de descrição com formatação básica (negrito/itálico/tachado/
+    listas/link) sobre `contenteditable` nativo do navegador — sem editor
     colaborativo nem versionado, só o suficiente para ser mais legível que
     texto puro. O `<textarea>` real fica escondido mas continua sendo o que
     o form de fato submete (funciona sem JS); `static/js/rich-text.js`
     sincroniza seu conteúdo com a área editável visível.
+
+    `placeholder` aparece enquanto o editor está vazio e `limit` mostra o
+    contador "0/2000" (só orientação: o servidor não corta o texto).
 
     O valor aqui é renderizado com `mark_safe` porque já passou por
     `core.sanitize.sanitize_description()` no momento de salvar — nunca usar
     este widget para exibir um campo que não passa por aquela sanitização.
     """
 
-    def __init__(self, attrs=None):
+    def __init__(self, attrs=None, placeholder="", limit=None):
         attrs = {**(attrs or {}), "hidden": True}
         super().__init__(attrs)
+        self.placeholder = placeholder
+        self.limit = limit
 
     def render(self, name, value, attrs=None, renderer=None):
         textarea_html = super().render(name, value, attrs, renderer)
         body_html = mark_safe(value) if value else ""
+        counter_html = (
+            format_html(
+                '<div class="rich-text__counter" data-rich-text-counter data-limit="{limit}">0/{limit}</div>',
+                limit=self.limit,
+            )
+            if self.limit
+            else ""
+        )
 
         return format_html(
             '<div class="rich-text" data-rich-text>'
             '<div class="rich-text__toolbar">'
-            '<button type="button" class="rich-text__btn" data-command="bold" title="Negrito"><strong>B</strong></button>'
-            '<button type="button" class="rich-text__btn" data-command="italic" title="Itálico"><em>I</em></button>'
-            '<button type="button" class="rich-text__btn" data-command="underline" title="Sublinhado"><u>S</u></button>'
-            '<button type="button" class="rich-text__btn" data-command="insertUnorderedList" title="Lista">&bull;</button>'
-            '<button type="button" class="rich-text__btn" data-command="createLink" title="Link">&#128279;</button>'
+            '<button type="button" class="rich-text__btn" data-command="bold" title="Negrito" aria-label="Negrito"><strong>B</strong></button>'
+            '<button type="button" class="rich-text__btn" data-command="italic" title="Itálico" aria-label="Itálico"><em>I</em></button>'
+            '<button type="button" class="rich-text__btn" data-command="strikeThrough" title="Tachado" aria-label="Tachado"><s>S</s></button>'
+            '<span class="rich-text__sep" aria-hidden="true"></span>'
+            '<button type="button" class="rich-text__btn" data-command="insertUnorderedList" title="Lista com marcadores" aria-label="Lista com marcadores">{ul_icon}</button>'
+            '<button type="button" class="rich-text__btn" data-command="insertOrderedList" title="Lista numerada" aria-label="Lista numerada">{ol_icon}</button>'
+            '<span class="rich-text__sep" aria-hidden="true"></span>'
+            '<button type="button" class="rich-text__btn" data-command="createLink" title="Link" aria-label="Link">{link_icon}</button>'
             "</div>"
-            '<div class="rich-text__body" contenteditable="true" data-mention data-mention-search-url="{search_url}">{body_html}</div>'
+            '<div class="rich-text__body" contenteditable="true" role="textbox" aria-multiline="true" '
+            'data-placeholder="{placeholder}" data-mention data-mention-search-url="{search_url}">{body_html}</div>'
+            "{counter_html}"
             "{textarea_html}"
             "</div>",
+            ul_icon=sprite_icon("list-ul"),
+            ol_icon=sprite_icon("list-ol"),
+            link_icon=sprite_icon("link"),
+            placeholder=self.placeholder,
             body_html=body_html,
+            counter_html=counter_html,
             textarea_html=textarea_html,
             search_url=reverse_lazy("person-search"),
         )

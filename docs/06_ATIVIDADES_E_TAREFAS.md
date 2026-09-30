@@ -49,21 +49,58 @@ Esses três pontos estão em [13_PENDENCIAS_CONHECIDAS.md](13_PENDENCIAS_CONHECI
 ### 1.2 Editor único de atividades
 
 `activities/activity_editor.py` reúne criação, retomada de rascunho e edição.
-Todas usam `ActivityEditorForm` e `activities/activity_form.html`, com três grupos:
-informações principais, contexto opcional e descrição/arquivos.
+Todas usam `ActivityEditorForm` e `activities/activity_form.html`: **a mesma janela,
+em três etapas**, tanto para “Nova atividade” quanto para “Editar atividade”.
 
-- `/atividades/nova/`: publica em uma única submissão, exigindo título e responsável.
-- `Salvar rascunho`: aceita título/responsável vazios e permanece no editor.
-- `?pk=<id>`: retoma apenas um rascunho da organização criado pela pessoa atual.
+| Etapa | Campos (formulário → modelo) |
+|---|---|
+| 1. Informações principais | Nome da atividade (`title`, *), Atribuído a (`owner`, *), Setor responsável (`sector`, *), Prazo de vencimento (`requested_deadline`: data + hora opcional), Urgência (`urgency`, pílulas Baixa/Média/Alta), Organização (`company`) |
+| 2. Informações do cliente | Cliente (`client`), Obra (`site`), Centro de custo (`cost_center`), Solicitante (Externo) (`external_requester`, texto), Endereço complementar (`address`) |
+| 3. Descrição e arquivos | Observações (`description`, editor de texto) e Link / caminho dos arquivos (`files_location`, texto) |
+
+*Obrigatórios ao criar e ao salvar uma edição (a etapa 1 é validada antes de avançar
+e de novo no servidor, em `ActivityEditorForm.clean`).
+
+- **Sem upload:** a etapa 3 só aponta onde os arquivos estão (link do Drive/OneDrive,
+  caminho de rede ou de pasta). `files_location` aceita qualquer texto até 500
+  caracteres; na ficha da atividade só vira link clicável se começar por
+  `http://` ou `https://`. Os anexos já enviados antes continuam na ficha e podem ser
+  removidos pelo editor (lista “Anexos enviados antes”); o envio de anexos pela
+  conversa da atividade não mudou.
+- **Fora do formulário, de propósito:** marcadores, solicitante interno
+  (`requested_by`), anotações internas (`internal_notes`) e o envio de arquivos. Os
+  campos seguem no modelo e na ficha, mas, por não estarem no `ModelForm`, salvar uma
+  edição **nunca os altera** nem os apaga.
+- **Cliente → Obra → Centro de custo:** a busca de obras aceita `?client=<id>` e a de
+  centros de custo `?site=<id>`; ao mudar o campo de cima, o de baixo é zerado
+  (`data-filter-field`, em `person-picker.js`). O servidor recusa obra de outro
+  cliente e centro de custo de outra obra; obra ou centro de custo **sem vínculo**
+  valem para qualquer um. Hoje só os centros de custo sem obra aparecem junto dos da
+  obra escolhida; obras sem cliente somem da busca quando há cliente escolhido.
+- **Organização** é o cadastro de empresas (`company`) — a mesma origem de dados de
+  antes; só o rótulo mudou.
+- O contador “0/2000” do editor de observações é só orientação: o servidor não corta
+  o texto.
+- Nada é gravado antes do botão final (`Criar atividade` / `Salvar alterações`): as
+  três etapas são painéis do mesmo formulário e o backend de criação continua sendo
+  `ActivityService.save_draft` + `publish_draft` (edição: `update_activity`).
+
+Rotas e respostas:
+
+- `/atividades/nova/`: publica em uma única submissão, exigindo nome, responsável e setor.
+  Aberta pelos botões (`data-activity-action data-activity-navigate`), responde JSON:
+  sucesso `{redirect_url}` (a tela segue para a ficha), erro `400 {errors}` (a janela abre
+  na etapa do primeiro erro). Sem JavaScript é uma página com as três etapas empilhadas.
+- Rascunho antigo (`acao=rascunho`, sem botão na tela): aceita tudo vazio; `?pk=<id>`
+  retoma apenas um rascunho da organização criado pela pessoa atual.
 - `/atividades/<pk>/editar/`: mesmo formulário; exige `atividade.editar`.
   A troca de responsável exige também `atividade.alterar_dono` e passa pelo serviço
   de transferência, com histórico. Sem essa ação, o responsável é somente leitura.
-- `/atividades/nova-rapida/`: mesmo editor dentro do seletor de atividades de uma
-  tarefa; retorna `{id, name}` em Ajax. Não possui um segundo conjunto de campos.
-- Notas internas e solicitante são salvos e auditados junto dos demais campos.
-- Arquivos podem ser enviados junto do formulário. Uma falha da operação desfaz
-  as gravações no banco e remove arquivos já gravados por essa submissão.
-- A remoção de um anexo pelo editor é assíncrona para preservar campos não salvos.
+- `/atividades/nova-rapida/`: mesma janela dentro do seletor de atividades de uma
+  tarefa; retorna `{id, name}` em Ajax. O envio antigo só com título continua válido
+  (sem exigir responsável nem setor).
+- Auditoria: `update_activity` registra cada campo alterado (inclusive
+  `external_requester` e `files_location`).
 
 Criação usa `save_draft` e `publish_draft` na mesma transação. A publicação mantém
 as verificações de permissão, auditoria, notificações e menções existentes.

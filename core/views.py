@@ -178,13 +178,28 @@ class _SimpleSearchView(OrganizationRequiredMixin, View):
     MAX_RESULTS = 20
     model = None
 
+    def filter_queryset(self, queryset):
+        """Gancho das buscas que dependem de outro campo da tela."""
+        return queryset
+
     def get(self, request):
         term = request.GET.get("q", "").strip()
         queryset = self.model.objects.filter(organization=self.organization, is_active=True).order_by("name")
+        queryset = self.filter_queryset(queryset)
         if term:
             queryset = queryset.filter(name__icontains=term)
         results = [{"id": obj.pk, "name": str(obj)} for obj in queryset[: self.MAX_RESULTS]]
         return JsonResponse({"results": results})
+
+    def _id_param(self, name):
+        """`?name=<id>` como inteiro; `None` se ausente ou vazio, `False` se inválido."""
+        raw = self.request.GET.get(name, "").strip()
+        if not raw:
+            return None
+        try:
+            return int(raw)
+        except ValueError:
+            return False
 
 
 class SectorSearchView(_SimpleSearchView):
@@ -196,11 +211,27 @@ class CompanySearchView(_SimpleSearchView):
 
 
 class SiteSearchView(_SimpleSearchView):
+    """Obras. Com `?client=<id>` só as obras desse cliente (Cliente → Obras)."""
+
     model = Site
+
+    def filter_queryset(self, queryset):
+        client = self._id_param("client")
+        if client is None:
+            return queryset
+        return queryset.filter(client_id=client) if client else queryset.none()
 
 
 class CostCenterSearchView(_SimpleSearchView):
+    """Centros de custo. Com `?site=<id>`, os dessa obra e os gerais (sem obra)."""
+
     model = CostCenter
+
+    def filter_queryset(self, queryset):
+        site = self._id_param("site")
+        if site is None:
+            return queryset
+        return queryset.filter(Q(site_id=site) | Q(site__isnull=True)) if site else queryset.none()
 
 
 class TagSearchView(OrganizationRequiredMixin, View):

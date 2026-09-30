@@ -421,7 +421,7 @@ class ActivityCreateViewTests(ViewTestCase):
         self.client.force_login(self.requester)
         response = self.client.post(
             reverse("activity-create"),
-            {"title": "Orçamento entregue ao cliente", "owner": self.requester.pk},
+            {"title": "Orçamento entregue ao cliente", "owner": self.requester.pk, "sector": self.sector.pk},
         )
         self.assertEqual(response.status_code, 302)
         self.assertTrue(
@@ -441,6 +441,7 @@ class ActivityCreateViewTests(ViewTestCase):
             {
                 "title": "Prazo sem hora",
                 "owner": self.requester.pk,
+                "sector": self.sector.pk,
                 "requested_deadline_0": "2026-12-25",
                 "requested_deadline_1": "",
             },
@@ -459,6 +460,7 @@ class ActivityCreateViewTests(ViewTestCase):
             {
                 "title": "Prazo com hora",
                 "owner": self.requester.pk,
+                "sector": self.sector.pk,
                 "requested_deadline_0": "2026-12-25",
                 "requested_deadline_1": "14:30",
             },
@@ -477,6 +479,7 @@ class ActivityCreateViewTests(ViewTestCase):
             {
                 "title": "Sem prazo",
                 "owner": self.requester.pk,
+                "sector": self.sector.pk,
                 "requested_deadline_0": "",
                 "requested_deadline_1": "",
             },
@@ -485,10 +488,10 @@ class ActivityCreateViewTests(ViewTestCase):
         activity = self.org.activities.get(title="Sem prazo")
         self.assertIsNone(activity.requested_deadline)
 
-    def test_sector_label_describes_the_responsible_team(self):
+    def test_sector_label_is_setor_responsavel(self):
         self.client.force_login(self.requester)
         response = self.client.get(reverse("activity-create"))
-        self.assertEqual(response.context["form"].fields["sector"].label, "Qual equipe cuida desta atividade?")
+        self.assertEqual(response.context["form"].fields["sector"].label, "Setor responsável")
 
 
 class SearchViewTests(ViewTestCase):

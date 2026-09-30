@@ -13,6 +13,10 @@
         var label = root.querySelector(".person-picker__label");
         var searchUrl = root.getAttribute("data-search-url");
         var sectorFieldId = root.getAttribute("data-sector-field");
+        // Seletor que depende de outro campo (obra ← cliente, centro de custo ← obra):
+        // ao mudar o outro campo a escolha é zerada e o valor dele segue na busca.
+        var filterFieldId = root.getAttribute("data-filter-field");
+        var filterParam = root.getAttribute("data-filter-param");
         var placeholder = root.getAttribute("data-placeholder") || "Buscar pessoa...";
         var emptyLabel = root.getAttribute("data-empty-label") || "Selecionar pessoa";
         var createUrl = root.getAttribute("data-create-url");
@@ -27,6 +31,19 @@
             var sectorField = document.getElementById(sectorFieldId);
             if (sectorField) {
                 sectorField.addEventListener("change", function () {
+                    hidden.value = "";
+                    label.textContent = emptyLabel;
+                    label.classList.add("muted");
+                    hidden.dispatchEvent(new Event("change", { bubbles: true }));
+                });
+            }
+        }
+
+        if (filterFieldId && filterParam) {
+            var filterField = document.getElementById(filterFieldId);
+            if (filterField) {
+                filterField.addEventListener("change", function () {
+                    if (!hidden.value) return;
                     hidden.value = "";
                     label.textContent = emptyLabel;
                     label.classList.add("muted");
@@ -108,6 +125,10 @@
             if (sectorFieldId) {
                 var sectorField = document.getElementById(sectorFieldId);
                 params.set("sector", sectorField ? sectorField.value : "");
+            }
+            if (filterFieldId && filterParam) {
+                var dependsOn = document.getElementById(filterFieldId);
+                if (dependsOn && dependsOn.value) params.set(filterParam, dependsOn.value);
             }
             fetch(searchUrl + "?" + params.toString(), {
                 headers: { "X-Requested-With": "XMLHttpRequest" },

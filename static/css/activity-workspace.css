@@ -1,46 +1,255 @@
-/* Shared activity editor: the same hierarchy on a page and in a selector. */
-.activity-editor { max-width: 1040px; margin: 0 auto; }
-.activity-editor__head { margin-bottom: 24px; }
-.activity-editor__head h1 { margin: 8px 0; font-size: 28px; letter-spacing: -.6px; }
-.activity-editor__head p { margin: 8px 0; }
-.activity-editor__section { margin-bottom: 18px; padding: 24px; background: #fff; border: 1px solid var(--border); border-radius: 12px; }
-.activity-editor__section-head { margin-bottom: 22px; }
-.activity-editor__section-head h2 { margin: 0; font-size: 17px; }
-.activity-editor__section-head p { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
-.activity-editor__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 24px; }
-.activity-editor__grid .form-row { margin: 0; min-width: 0; }
-.activity-editor__grid .form-row--full, .activity-editor__grid .form-row--urgency { grid-column: 1 / -1; }
-.activity-editor .form-row--urgency > label { display: block; padding: 0; border: 0; border-radius: 0; cursor: default; }
-.activity-editor .form-row--urgency > div[id] { display: flex; flex-wrap: wrap; gap: 8px; }
-.activity-editor .form-readonly { padding: 11px 12px; background: #f5f7fa; border: 1px solid var(--border); border-radius: 8px; }
-.activity-editor .rich-text { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-.activity-editor .rich-text:focus-within { outline: 2px solid #2563eb; outline-offset: 2px; }
-.activity-editor .rich-text__toolbar { display: flex; gap: 4px; padding: 8px; background: #f5f7fa; border-bottom: 1px solid var(--border); }
-.activity-editor .rich-text__btn { min-width: 32px; min-height: 32px; border: 1px solid transparent; border-radius: 5px; background: transparent; color: inherit; cursor: pointer; }
-.activity-editor .rich-text__btn:hover, .activity-editor .rich-text__btn:focus-visible { background: #fff; border-color: var(--border); }
-.activity-editor .rich-text__body { min-height: 140px; padding: 12px; overflow-wrap: anywhere; outline: none; }
-.activity-editor__grid input:not([type=radio]):not([type=checkbox]), .activity-editor__grid textarea, .activity-editor__grid select { max-width: 100%; }
-.activity-editor__context summary { cursor: pointer; font-weight: 600; min-height: 24px; }
-.activity-editor__context summary span + span { margin-left: 12px; font-weight: 400; }
-.activity-editor__context[open] summary { margin-bottom: 24px; }
-.activity-editor__footer { position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 20px; background: #fff; border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 -4px 20px #0f274708; }
-.activity-editor__discard { margin-top: 16px; text-align: right; }
-.activity-editor__attachments { list-style: none; margin: 16px 0 0; padding: 0; }
-.activity-editor__attachments li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); }
-.activity-editor__attachments a { overflow-wrap: anywhere; }
-.activity-editor--dialog .activity-editor__head { margin: 0; }
-.activity-editor--dialog .activity-editor__head h1 { font-size: 22px; }
-.activity-editor--dialog .activity-editor__section { padding: 20px 0; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; margin: 0; }
-.activity-editor--dialog .activity-editor__footer { position: static; border-radius: 0; }
+/* Janela de atividade (Nova / Editar) em três etapas + pequenos utilitários da área de atividades.
+   Usa os tokens de app.css (--primary, --border, --text...); as cores de urgência e o brilho do
+   foco seguem o desenho de referência. */
+
 .js-modal-backdrop[hidden] { display: none; }
 .modal-error { margin: 12px 0; }
 .js-activity-row { cursor: pointer; }
 .js-activity-row:focus-within { outline: 2px solid #2563eb; outline-offset: -2px; }
-@media (max-width: 760px) {
-    .activity-editor__head h1 { font-size: 24px; }
-    .activity-editor__section { padding: 18px; }
-    .activity-editor__grid { grid-template-columns: 1fr; gap: 18px; }
-    .activity-editor__footer { padding: 12px; flex-wrap: wrap; }
-    .activity-editor__footer .actions-row { flex-wrap: wrap; flex: 1; justify-content: flex-end; }
-    .activity-editor__context summary span + span { display: block; margin: 6px 0 0; }
+
+/* =========================================================
+   OVERLAY E JANELA
+   Em janela (LPSModal) o overlay é o .js-modal-backdrop de app.css; aqui só muda o visual.
+========================================================= */
+.activity-modal-overlay {
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px; overflow-y: auto;
+    background: rgba(21, 42, 68, 0.58);
+    -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px);
+}
+.activity-modal {
+    width: min(980px, calc(100vw - 48px)); max-width: none; max-height: calc(100vh - 48px);
+    margin: 0; display: flex; flex-direction: column;
+    background: var(--surface); border: 1px solid rgba(215, 226, 238, 0.9); border-radius: 20px;
+    box-shadow: 0 28px 80px rgba(13, 35, 65, 0.18), 0 10px 28px rgba(13, 35, 65, 0.08);
+    overflow: hidden; animation: activity-modal-open .22s ease-out;
+}
+@keyframes activity-modal-open {
+    from { opacity: 0; transform: translateY(12px) scale(.988); }
+    to { opacity: 1; transform: none; }
+}
+/* Aberta como página (sem JavaScript): a mesma janela, no fluxo normal. */
+.container > .activity-modal-overlay {
+    display: block; padding: 0; background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+.container > .activity-modal-overlay > .activity-modal { width: 100%; max-width: 980px; max-height: none; margin: 0 auto; }
+
+.activity-modal .form-row { margin: 0; }
+
+/* =========================================================
+   CABEÇALHO
+========================================================= */
+.activity-modal-header {
+    flex: 0 0 auto; min-height: 88px; display: flex; align-items: center; gap: 16px;
+    padding: 18px 26px; background: var(--surface); border-bottom: 1px solid #e4ebf3;
+}
+.activity-header-icon {
+    width: 54px; height: 54px; flex: 0 0 54px; display: flex; align-items: center; justify-content: center;
+    border-radius: 13px; color: #fff; background: linear-gradient(145deg, var(--brand-blue-light), var(--primary));
+    box-shadow: 0 8px 20px rgba(27, 98, 196, .2);
+}
+.activity-header-icon svg { width: 26px; height: 26px; }
+.activity-header-content { flex: 1 1 auto; min-width: 0; }
+.activity-modal-title { margin: 0 0 4px; font-size: 23px; font-weight: 700; line-height: 1.2; color: var(--text); }
+.activity-modal-subtitle { margin: 0; font-size: 13px; line-height: 1.4; color: var(--text-2); }
+.activity-modal-close {
+    width: 38px; height: 38px; flex: 0 0 38px; display: flex; align-items: center; justify-content: center;
+    padding: 0; border: 0; border-radius: 10px; background: #f3f6fa; color: #304866; font-size: 22px; line-height: 1;
+}
+.activity-modal-close:hover { background: #e8eef5; color: #10233e; }
+
+.activity-modal-form { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; margin: 0; }
+
+/* =========================================================
+   STEPPER  1 → 2 → 3
+========================================================= */
+.activity-stepper {
+    flex: 0 0 auto; display: flex; align-items: flex-start; padding: 23px 84px 22px;
+    background: var(--surface); border-bottom: 1px solid #edf1f6;
+}
+.activity-stepper[hidden] { display: none; }
+.activity-step { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.activity-step:not(:last-child)::after {
+    content: ""; position: absolute; top: 18px; left: calc(50% + 31px); width: calc(100% - 62px); height: 2px;
+    background: #d8e1ed; z-index: 0;
+}
+.activity-step.is-complete:not(:last-child)::after { background: var(--primary); }
+.activity-step-number {
+    position: relative; z-index: 2; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;
+    border-radius: 50%; background: #e9eef5; color: #162944; font-size: 14px; font-weight: 700; transition: .18s ease;
+}
+.activity-step.is-active .activity-step-number { background: var(--primary); color: #fff; box-shadow: 0 0 0 5px rgba(27, 98, 196, .09); }
+.activity-step.is-complete .activity-step-number { background: var(--primary); color: #fff; }
+.activity-step-label { margin-top: 10px; color: #233854; font-size: 13px; font-weight: 600; }
+
+/* =========================================================
+   CORPO (rola sozinho) E CARTÃO DE CADA ETAPA
+========================================================= */
+.activity-modal-body {
+    flex: 1 1 auto; min-height: 0; padding: 14px; overflow-y: auto; background: var(--surface);
+    scrollbar-width: thin; scrollbar-color: #cbd7e5 transparent;
+}
+.activity-form-errors:empty { display: none; }
+.activity-form-errors { margin: 0 0 12px; }
+.activity-form-errors .errorlist { list-style: none; margin: 0; padding: 10px 14px; border-radius: 8px; background: var(--danger-soft); color: var(--danger); font-size: 13px; }
+.activity-step-card { margin-bottom: 14px; padding: 0 10px 12px; border: 1px solid #dce6f0; border-radius: 15px; background: var(--surface); overflow: visible; }
+.activity-step-card[hidden] { display: none; }
+.activity-section-header {
+    display: flex; align-items: center; gap: 14px; margin: 0 -10px 16px; padding: 14px 16px;
+    background: linear-gradient(90deg, #edf5ff 0%, #f7faff 100%); border-radius: 14px 14px 0 0;
+}
+.activity-section-number {
+    width: 42px; height: 42px; flex: 0 0 42px; display: flex; align-items: center; justify-content: center;
+    border-radius: 50%; background: var(--primary); color: #fff; font-size: 16px; font-weight: 700;
+}
+.activity-section-title { margin: 0 0 3px; color: var(--text); font-size: 18px; font-weight: 700; }
+.activity-section-description { margin: 0; color: var(--text-2); font-size: 12.5px; }
+
+/* =========================================================
+   CAMPOS
+========================================================= */
+.activity-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 32px; row-gap: 23px; padding: 0 14px 10px; }
+.activity-form-full { grid-column: 1 / -1; }
+.activity-form-group { min-width: 0; }
+.activity-label { display: flex; align-items: center; gap: 5px; margin-bottom: 7px; color: #15243c; font-size: 13px; font-weight: 650; }
+.activity-required { color: var(--danger); }
+.activity-helper { margin: 6px 0 0; color: #60789b; font-size: 11.5px; line-height: 1.45; }
+
+.activity-modal input.activity-input, .activity-modal .activity-input--static {
+    width: 100%; height: 46px; box-sizing: border-box; padding: 0 14px;
+    border: 1px solid #c8d6e6; border-radius: 8px; background: var(--surface); color: #1e3554;
+    font: inherit; font-size: 13px; outline: none; transition: border-color .15s ease, box-shadow .15s ease;
+}
+.activity-modal input.activity-input::placeholder { color: #7187a6; }
+.activity-modal input.activity-input:hover { border-color: #aebfd3; }
+.activity-modal input.activity-input:focus { border-color: #559ff5; box-shadow: 0 0 0 3px rgba(27, 98, 196, .09); }
+.activity-modal .activity-input--static { display: flex; align-items: center; background: var(--surface-alt); color: var(--text); }
+
+.activity-input-wrap { position: relative; display: flex; align-items: center; min-width: 0; }
+.activity-input-icon {
+    position: absolute; left: 0; top: 0; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center;
+    border-right: 1px solid #dce5ef; color: #385272; pointer-events: none;
+}
+.activity-input-icon svg { width: 18px; height: 18px; }
+.activity-modal .activity-input-wrap .activity-input { padding-left: 58px; }
+
+.activity-date-time { display: grid; grid-template-columns: 1.25fr .85fr; gap: 10px; }
+
+/* Seletores existentes (pessoa, setor, cliente...) com o visual dos demais campos. */
+.activity-modal .person-picker__trigger {
+    position: relative; height: 46px; padding: 0 40px 0 0; gap: 0; border-color: #c8d6e6; border-radius: 8px; font-size: 13px;
+}
+.activity-modal .person-picker__trigger:hover { border-color: #aebfd3; }
+.activity-modal .person-picker__trigger::after {
+    content: ""; position: absolute; right: 16px; top: 50%; width: 7px; height: 7px;
+    border-right: 2px solid #587096; border-bottom: 2px solid #587096; transform: translateY(-70%) rotate(45deg);
+}
+.activity-modal .person-picker__icon {
+    width: 46px; height: 44px; flex: 0 0 46px; display: flex; align-items: center; justify-content: center;
+    border-right: 1px solid #dce5ef; color: #385272;
+}
+.activity-modal .person-picker__icon svg { width: 18px; height: 18px; }
+.activity-modal .person-picker__label { padding: 0 14px; }
+
+/* Urgência em pílulas */
+.activity-urgency { display: flex; align-items: center; gap: 10px; }
+.activity-urgency-option {
+    position: relative; min-width: 105px; height: 46px; display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 0 15px; border: 1px solid #ccd8e5; border-radius: 999px; background: var(--surface); color: #334a67;
+    font-size: 13px; cursor: pointer; transition: .15s ease;
+}
+.activity-urgency-option input { position: absolute; opacity: 0; pointer-events: none; }
+.activity-urgency-option:has(input:focus-visible) { outline: 2px solid var(--primary); outline-offset: 2px; }
+.activity-urgency-dot { width: 12px; height: 12px; border: 2px solid currentColor; border-radius: 50%; box-sizing: border-box; }
+.activity-urgency-option.low { color: #00a968; border-color: #aee7cf; background: #f7fffb; }
+.activity-urgency-option.medium { color: var(--primary); }
+.activity-urgency-option.high { color: #ee3347; border-color: #ffc8ce; background: #fff8f9; }
+.activity-urgency-option:has(input:checked) { border-width: 1.5px; font-weight: 600; }
+.activity-urgency-option.low:has(input:checked) { border-color: #00a968; background: #f2fff9; }
+.activity-urgency-option.medium:has(input:checked) { border-color: var(--primary); background: #f2f7ff; }
+.activity-urgency-option.high:has(input:checked) { border-color: #ee3347; background: #fff4f5; }
+.activity-urgency-option:has(input:checked) .activity-urgency-dot { background: currentColor; box-shadow: inset 0 0 0 2px #fff; }
+
+/* Editor de texto (vale em qualquer janela que use o RichTextWidget, não só na de atividade) */
+.rich-text { position: relative; }
+.rich-text__btn svg { width: 18px; height: 18px; }
+.rich-text__btn s { text-decoration: line-through; }
+
+/* Editor de observações */
+.activity-modal .rich-text { position: relative; border: 1px solid #c9d7e6; border-radius: 9px; background: var(--surface); overflow: hidden; transition: border-color .15s ease, box-shadow .15s ease; }
+.activity-modal .rich-text:focus-within { border-color: #559ff5; box-shadow: 0 0 0 3px rgba(27, 98, 196, .08); }
+.activity-modal .rich-text__toolbar { min-height: 45px; display: flex; align-items: center; gap: 4px; padding: 0 12px; border-bottom: 1px solid #dce5ef; background: #fbfcfe; }
+.activity-modal .rich-text__btn { width: 34px; height: 32px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 6px; background: transparent; color: #192a44; font-size: 15px; cursor: pointer; }
+.activity-modal .rich-text__btn:hover, .activity-modal .rich-text__btn:focus-visible { background: #edf4fd; }
+.activity-modal .rich-text__btn svg { width: 18px; height: 18px; }
+.rich-text__sep { width: 1px; height: 20px; margin: 0 6px; background: #dce5ef; }
+.activity-modal .rich-text__body { min-height: 135px; padding: 17px 17px 34px; color: #263c5a; font-size: 13px; overflow-wrap: anywhere; outline: none; }
+.rich-text__body.is-empty::before, .rich-text__body:empty::before { content: attr(data-placeholder); color: #7187a6; pointer-events: none; }
+.rich-text__counter { position: absolute; right: 14px; bottom: 10px; color: #6c809d; font-size: 11px; pointer-events: none; }
+.rich-text__counter.is-over { color: var(--danger); font-weight: 600; }
+
+.activity-legacy-files { list-style: none; margin: 0; padding: 0; }
+.activity-legacy-files li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--border); }
+.activity-legacy-files a { overflow-wrap: anywhere; }
+
+/* =========================================================
+   RODAPÉ E BOTÕES
+========================================================= */
+.activity-modal-footer {
+    flex: 0 0 auto; min-height: 74px; display: flex; align-items: center; justify-content: space-between; flex-wrap: nowrap; gap: 12px;
+    padding: 12px 26px; border: 0; border-top: 1px solid #e3ebf4; border-radius: 0; background: rgba(255, 255, 255, .97);
+    box-shadow: 0 -6px 18px rgba(20, 41, 66, .035);
+}
+.activity-footer-right { display: flex; align-items: center; gap: 10px; }
+.activity-btn {
+    min-height: 47px; display: inline-flex; align-items: center; justify-content: center; gap: 9px; padding: 0 19px;
+    border-radius: 9px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none;
+    transition: background .15s ease, border-color .15s ease, box-shadow .15s ease, transform .1s ease;
+}
+.activity-btn svg { width: 16px; height: 16px; }
+.activity-btn:active { transform: translateY(1px); }
+.activity-btn[hidden] { display: none; }
+.activity-btn-secondary { border: 1px solid #cbd8e7; background: var(--surface); color: #1a2d47; }
+.activity-btn-secondary:hover { background: #f7f9fc; border-color: #aebfd3; text-decoration: none; }
+.activity-btn-primary {
+    min-width: 140px; border: 1px solid var(--primary-hover); color: #fff;
+    background: linear-gradient(180deg, #2a72d4, var(--primary)); box-shadow: 0 6px 16px rgba(27, 98, 196, .2);
+}
+.activity-btn-primary:hover { background: linear-gradient(180deg, var(--primary), var(--primary-hover)); box-shadow: 0 8px 20px rgba(27, 98, 196, .26); }
+.activity-btn:disabled { cursor: not-allowed; opacity: .48; box-shadow: none; }
+.activity-btn--small { min-height: 34px; padding: 0 12px; }
+.activity-modal-discard { padding: 10px 26px 14px; text-align: right; border-top: 1px solid #edf1f6; }
+
+/* =========================================================
+   ERROS DE VALIDAÇÃO
+========================================================= */
+.activity-form-group.has-error .activity-input,
+.activity-form-group.has-error .person-picker__trigger { border-color: #ef4050; box-shadow: 0 0 0 3px rgba(239, 64, 80, .07); }
+.activity-form-group .errorlist, .activity-error { margin: 5px 0 0; padding: 0; list-style: none; color: #db2c3e; font-size: 11.5px; }
+
+/* =========================================================
+   RESPONSIVO
+========================================================= */
+@media (max-width: 850px) {
+    .activity-modal-overlay { padding: 12px; }
+    .activity-modal { width: 100%; max-height: calc(100vh - 24px); }
+    .activity-stepper { padding-left: 28px; padding-right: 28px; }
+    .activity-form-grid { grid-template-columns: 1fr; }
+    .activity-form-full { grid-column: auto; }
+    .activity-urgency { flex-wrap: wrap; }
+}
+@media (max-width: 580px) {
+    .activity-modal-overlay { align-items: flex-end; padding: 0; }
+    .activity-modal { max-height: 96vh; border-radius: 18px 18px 0 0; }
+    .activity-modal-header { padding: 15px 16px; }
+    .activity-header-icon { width: 45px; height: 45px; flex-basis: 45px; }
+    .activity-modal-title { font-size: 19px; }
+    .activity-stepper { padding: 18px 10px; }
+    .activity-step-label { font-size: 10px; }
+    .activity-step-number { width: 32px; height: 32px; }
+    .activity-step:not(:last-child)::after { top: 15px; }
+    .activity-modal-body { padding: 10px; }
+    .activity-date-time { grid-template-columns: 1fr; }
+    .activity-urgency-option { flex: 1; min-width: 90px; }
+    .activity-modal-footer { padding: 10px 14px; flex-wrap: wrap; }
 }

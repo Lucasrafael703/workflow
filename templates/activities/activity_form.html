@@ -1,59 +1,130 @@
 {% extends "base.html" %}
 {% block title %}{{ editor_title }} — LPS{% endblock %}
+
+{% comment %}
+Nova atividade e Editar atividade: a MESMA janela, em três etapas.
+
+    1. Informações principais   2. Informações do cliente   3. Descrição e arquivos
+
+Todas as etapas são campos de um único formulário; nada é gravado antes do envio
+final (static/js/activity-steps.js só mostra uma etapa por vez e valida a
+primeira). Sem JavaScript as três etapas aparecem empilhadas na página e o
+formulário funciona do mesmo jeito — o Django valida tudo no envio.
+Não há upload: a etapa 3 só tem as observações e o link/caminho dos arquivos.
+{% endcomment %}
+
 {% block content %}
-{% if picker %}<div class="modal-backdrop"><div class="modal modal--wide">{% endif %}
-<div class="activity-editor{% if picker %} activity-editor--dialog{% endif %}">
-    <header class="activity-editor__head{% if picker %} modal__head{% endif %}">
-        <div>
-            {% if not picker %}<nav class="breadcrumb" aria-label="Localização"><a href="{{ return_url }}">Atividades</a><span aria-hidden="true">›</span><span>{{ editor_title }}</span></nav>{% endif %}
-            <h1>{{ editor_title }}</h1>
-            <p class="muted">Defina a entrega, o responsável e o prazo. Complete o contexto quando precisar.</p>
-            {% if draft %}<span class="tag">Rascunho · {{ draft.code }}</span>{% elif activity %}<span class="id-badge">{{ activity.code }}</span>{% endif %}
-        </div>
-        {% if picker %}<button type="button" class="modal__close" aria-label="Fechar">&times;</button>{% endif %}
-    </header>
-    <form method="post" enctype="multipart/form-data" id="activity-editor-form">
-        {% csrf_token %}
-        <input type="hidden" name="next" value="{{ return_url }}">
-        {% if draft %}<input type="hidden" name="pk" value="{{ draft.pk }}">{% endif %}
-        <div{% if picker %} class="modal__body"{% endif %}>
-            {% if form.errors %}
-            <div class="message message--error" role="alert"><strong>Revise os campos indicados abaixo.</strong>{{ form.non_field_errors }}</div>
-            {% endif %}
-            <section class="activity-editor__section" aria-labelledby="activity-essential-title">
-                <div class="activity-editor__section-head"><h2 id="activity-essential-title">Informações principais</h2><p>O necessário para organizar o trabalho.</p></div>
-                <div class="activity-editor__grid">
-                    {% for field in form.essential_fields %}{% include "activities/_activity_field.html" with publishing=True %}{% endfor %}
-                </div>
-            </section>
-            <details class="activity-editor__section activity-editor__context"{% if form.context_expanded %} open{% endif %}>
-                <summary><span>Contexto da atividade</span><span class="muted small">Cliente, obra e organização</span></summary>
-                <div class="activity-editor__grid">
-                    {% for field in form.context_fields %}{% include "activities/_activity_field.html" %}{% endfor %}
-                </div>
-            </details>
-            <section class="activity-editor__section" aria-labelledby="activity-details-title">
-                <div class="activity-editor__section-head"><h2 id="activity-details-title">Descrição e arquivos</h2><p>Informações que ajudam a equipe a executar a entrega.</p></div>
-                <div class="activity-editor__grid">
-                    {% include "activities/_activity_field.html" with field=form.description %}
-                    {% include "activities/_activity_field.html" with field=form.internal_notes %}
-                    {% include "activities/_activity_field.html" with field=form.files full=True %}
-                </div>
-                {% if attachments %}<ul class="activity-editor__attachments">
-                    {% for attachment in attachments %}<li id="editor-attachment-{{ attachment.pk }}"><a href="{{ attachment.file.url }}" target="_blank" rel="noopener">{{ attachment.original_name|default:attachment.file.name }}</a><button type="submit" form="remove-attachment-{{ attachment.pk }}" class="btn btn--ghost btn--sm">Remover</button></li>{% endfor %}
-                </ul>{% endif %}
-            </section>
-        </div>
-        <footer class="activity-editor__footer{% if picker %} modal__foot{% endif %}">
-            <a href="{{ cancel_url }}" class="btn btn--ghost">Cancelar</a>
-            <div class="actions-row">
-                {% if not editing and not picker %}<button type="submit" name="acao" value="rascunho" formnovalidate class="btn">Salvar rascunho</button>{% endif %}
-                <button type="submit" name="acao" value="publicar" class="btn btn--primary">{% if editing %}Salvar alterações{% else %}Criar atividade{% endif %}</button>
+<div class="modal-backdrop activity-modal-overlay">
+    <div class="modal activity-modal" data-activity-stepper data-initial-step="{{ initial_step }}">
+        <header class="activity-modal-header">
+            <span class="activity-header-icon" aria-hidden="true">{% include "_icon.html" with name="file-text" %}</span>
+            <div class="activity-header-content">
+                <h2 class="activity-modal-title">{{ editor_title }}</h2>
+                <p class="activity-modal-subtitle">{{ editor_subtitle }}{% if draft %} <span class="id-badge">Rascunho · {{ draft.code }}</span>{% elif activity %} <span class="id-badge">{{ activity.code }}</span>{% endif %}</p>
             </div>
-        </footer>
-    </form>
-    {% if draft and not picker %}<form method="post" action="{% url 'activity-wizard-discard' draft.pk %}" class="activity-editor__discard" onsubmit="return confirm('Descartar este rascunho e seus anexos?');">{% csrf_token %}<button class="btn btn--ghost btn--sm" type="submit">Descartar rascunho</button></form>{% endif %}
-    {% for attachment in attachments %}<form id="remove-attachment-{{ attachment.pk }}" data-editor-attachment-remove data-attachment-row="editor-attachment-{{ attachment.pk }}" method="post" action="{% url 'activity-attachment-delete' activity.pk attachment.pk %}" hidden>{% csrf_token %}</form>{% endfor %}
+            <a href="{{ cancel_url }}" class="modal__close activity-modal-close" title="Fechar sem salvar" aria-label="Fechar sem salvar">&times;</a>
+        </header>
+
+        <form method="post" id="activity-editor-form" class="activity-modal-form" novalidate>
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ return_url }}">
+            {% if draft %}<input type="hidden" name="pk" value="{{ draft.pk }}">{% endif %}
+
+            <div class="activity-stepper" data-stepper role="list" aria-label="Etapas" hidden>
+                {% for step in steps %}
+                <div class="activity-step" role="listitem" data-step-indicator="{{ step.number }}">
+                    <div class="activity-step-number">{{ step.number }}</div>
+                    <div class="activity-step-label">{{ step.title }}</div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="activity-modal-body">
+                <div class="activity-form-errors" data-form-errors role="alert">
+                    {% if form.non_field_errors %}{% for error in form.non_field_errors %}<p class="message message--error">{{ error }}</p>{% endfor %}{% endif %}
+                </div>
+
+                {% for step in steps %}
+                <section class="activity-step-card" data-step-panel="{{ step.number }}" aria-labelledby="activity-step-{{ step.number }}-title">
+                    <div class="activity-section-header">
+                        <span class="activity-section-number" aria-hidden="true">{{ step.number }}</span>
+                        <div>
+                            <h3 class="activity-section-title" id="activity-step-{{ step.number }}-title">{{ step.title }}</h3>
+                            <p class="activity-section-description">{{ step.description }}</p>
+                        </div>
+                    </div>
+
+                    {% if step.number == 1 %}
+                    <div class="activity-form-grid">
+                        {% include "activities/_activity_modal_field.html" with field=form.title icon="file-text" full=True required=True %}
+                        {% if form.owner.field.disabled %}
+                        <div class="activity-form-group form-row" data-field="owner">
+                            <label class="activity-label">{{ form.owner.label }} <span class="activity-required" aria-hidden="true">*</span></label>
+                            <div class="activity-input-wrap"><span class="activity-input-icon" aria-hidden="true">{% include "_icon.html" with name="user" %}</span><div class="activity-input activity-input--static">{{ activity.owner.get_full_name|default:activity.owner.get_username }}</div></div>
+                            {{ form.owner.as_hidden }}
+                            <p class="activity-helper">{{ form.owner.help_text }}</p>
+                        </div>
+                        {% else %}
+                        {% include "activities/_activity_modal_field.html" with field=form.owner required=True %}
+                        {% endif %}
+                        {% include "activities/_activity_modal_field.html" with field=form.sector required=True %}
+                        {% include "activities/_activity_modal_field.html" with field=form.requested_deadline %}
+                        <div class="activity-form-group form-row{% if form.urgency.errors %} has-error{% endif %}" data-field="urgency">
+                            <span class="activity-label" id="urgency-label">{{ form.urgency.label }}</span>
+                            <div class="activity-urgency" role="radiogroup" aria-labelledby="urgency-label">
+                                {% for radio in form.urgency %}
+                                <label class="activity-urgency-option {% if radio.data.value == 'BAIXA' %}low{% elif radio.data.value == 'ALTA' %}high{% else %}medium{% endif %}" for="{{ radio.id_for_label }}">
+                                    {{ radio.tag }}
+                                    <span class="activity-urgency-dot" aria-hidden="true"></span>
+                                    <span>{{ radio.choice_label }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                            <p class="activity-helper">{{ form.urgency.help_text }}</p>
+                            {% if form.urgency.errors %}<ul class="errorlist" role="alert">{% for error in form.urgency.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+                        </div>
+                        {% include "activities/_activity_modal_field.html" with field=form.company full=True %}
+                    </div>
+
+                    {% elif step.number == 2 %}
+                    <div class="activity-form-grid">
+                        {% include "activities/_activity_modal_field.html" with field=form.client %}
+                        {% include "activities/_activity_modal_field.html" with field=form.site %}
+                        {% include "activities/_activity_modal_field.html" with field=form.cost_center %}
+                        {% include "activities/_activity_modal_field.html" with field=form.external_requester icon="user" %}
+                        {% include "activities/_activity_modal_field.html" with field=form.address icon="pin" full=True %}
+                    </div>
+
+                    {% else %}
+                    <div class="activity-form-grid">
+                        {% include "activities/_activity_modal_field.html" with field=form.description full=True %}
+                        {% include "activities/_activity_modal_field.html" with field=form.files_location icon="link" full=True %}
+                        {% if attachments %}
+                        <div class="activity-form-group activity-form-full">
+                            <span class="activity-label">Anexos enviados antes</span>
+                            <ul class="activity-legacy-files">
+                                {% for attachment in attachments %}<li id="editor-attachment-{{ attachment.pk }}"><a href="{{ attachment.file.url }}" target="_blank" rel="noopener">{{ attachment.original_name|default:attachment.file.name }}</a><button type="submit" form="remove-attachment-{{ attachment.pk }}" class="activity-btn activity-btn-secondary activity-btn--small">Remover</button></li>{% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </section>
+                {% endfor %}
+            </div>
+
+            <footer class="activity-modal-footer modal__foot">
+                <a href="{{ cancel_url }}" class="activity-btn activity-btn-secondary btn">Cancelar</a>
+                <div class="activity-footer-right">
+                    <button type="button" class="activity-btn activity-btn-secondary" data-step-prev hidden disabled>{% include "_icon.html" with name="back" %} Voltar</button>
+                    <button type="button" class="activity-btn activity-btn-primary" data-step-next hidden>Continuar {% include "_icon.html" with name="arrow-right" %}</button>
+                    <button type="submit" name="acao" value="publicar" class="activity-btn activity-btn-primary" data-step-submit>{{ submit_label }} {% include "_icon.html" with name="arrow-right" %}</button>
+                </div>
+            </footer>
+        </form>
+
+        {% if draft %}<form method="post" action="{% url 'activity-wizard-discard' draft.pk %}" class="activity-modal-discard" onsubmit="return confirm('Descartar este rascunho?');">{% csrf_token %}<button class="activity-btn activity-btn-secondary activity-btn--small" type="submit">Descartar rascunho</button></form>{% endif %}
+        {% for attachment in attachments %}<form id="remove-attachment-{{ attachment.pk }}" data-editor-attachment-remove data-attachment-row="editor-attachment-{{ attachment.pk }}" method="post" action="{% url 'activity-attachment-delete' activity.pk attachment.pk %}" hidden>{% csrf_token %}</form>{% endfor %}
+    </div>
 </div>
-{% if picker %}</div></div>{% endif %}
 {% endblock %}

@@ -405,6 +405,8 @@ class ActivityService:
             "urgency",
             "sector",
             "address",
+            "external_requester",
+            "files_location",
         }
         changed = []
         for field, value in fields.items():
