@@ -5,111 +5,69 @@
 <div class="page-head">
     <div class="page-head__text">
         <h1>Usuários</h1>
-        <p class="sub">Quem acessa o sistema, em qual equipe trabalha e quais telas pode abrir.</p>
+        <p class="sub">Quem acessa a LPS, com quais perfis e em qual escopo.</p>
     </div>
     <div class="page-head__actions">
-        {% if can_manage_groups %}
-        <a href="{% url 'group-list' %}" class="btn">{% include "_icon.html" with name="shield" %} Grupos de acesso</a>
-        {% endif %}
-        {% if can_edit %}
-        <a href="{% url 'user-create' %}" class="btn btn--primary">{% include "_icon.html" with name="plus" %} Novo usuário</a>
-        {% endif %}
+        <a href="{% url 'user-create' %}" class="btn btn--primary">
+            {% include "_icon.html" with name="plus" %} Novo usuário
+        </a>
     </div>
 </div>
-
-{% if full_access_count > 1 and can_manage_groups %}
-<div class="banner-warn">
-    {% include "_icon.html" with name="alert" %}
-    <div style="flex:1"><strong>{{ full_access_count }} pessoas têm acesso a todas as telas.</strong> Se alguém só precisa de algumas, mova para um grupo mais restrito.</div>
-    <a href="{% url 'group-list' %}?comparar=1" style="font-weight:600;color:inherit">Comparar grupos</a>
-</div>
-{% endif %}
 
 <form method="get">
     <div class="toolbar">
         <div class="toolbar__search">
             {% include "_icon.html" with name="search" %}
-            <input type="search" name="q" value="{{ search }}" placeholder="Nome, usuário ou e-mail…" aria-label="Buscar usuário">
+            <input type="search" name="q" value="{{ search }}" placeholder="Nome, usuário ou e-mail…">
         </div>
-        <label class="inline" for="f-grupo">Grupo</label>
-        <select id="f-grupo" name="grupo" onchange="this.form.submit()">
-            <option value="">Todos</option>
-            {% for g in groups %}<option value="{{ g.pk }}"{% if group_filter == g.pk|stringformat:"s" %} selected{% endif %}>{{ g.name }}</option>{% endfor %}
-            <option value="sem"{% if group_filter == "sem" %} selected{% endif %}>Sem grupo</option>
-        </select>
-        <label class="inline" for="f-situacao">Situação</label>
-        <select id="f-situacao" name="situacao" onchange="this.form.submit()">
-            <option value="ativos"{% if status == "ativos" %} selected{% endif %}>Ativos</option>
-            <option value="inativos"{% if status == "inativos" %} selected{% endif %}>Inativos</option>
-            <option value="todos"{% if status == "todos" %} selected{% endif %}>Todos</option>
-        </select>
-        <input type="hidden" name="equipe" value="{{ sector_filter }}">
         <button type="submit" class="btn">Buscar</button>
+        {% if search %}<a href="{% url 'user-list' %}" class="btn btn--ghost">Limpar</a>{% endif %}
     </div>
-    {% if sectors %}
-    <div class="toolbar__chips" style="margin:-4px 0 14px">
-        <a href="?q={{ search|urlencode }}&grupo={{ group_filter }}&situacao={{ status }}" class="chip-filter{% if not sector_filter %} is-active{% endif %}">Todas as equipes</a>
-        {% for s in sectors %}
-        <a href="?q={{ search|urlencode }}&grupo={{ group_filter }}&situacao={{ status }}&equipe={{ s.pk }}" class="chip-filter{% if sector_filter == s.pk|stringformat:'s' %} is-active{% endif %}">{{ s.name }}</a>
-        {% endfor %}
-    </div>
-    {% endif %}
 </form>
 
 <div class="card card--flush">
-    {% if rows %}
     <div class="table-wrap">
-        <table class="people-table">
-            <thead><tr><th>Pessoa</th><th>Equipe</th><th>Grupo de acesso</th><th>Telas</th><th>Situação</th><th></th></tr></thead>
+        <table class="responsive">
+            <thead><tr><th>Usuário</th><th>E-mail</th><th>Perfis</th><th>Situação</th><th class="col-actions">Ações</th></tr></thead>
             <tbody>
-            {% for row in rows %}
+            {% for item in users %}
             <tr>
-                <td>
-                    <div class="person">
-                        <span class="person__avatar" aria-hidden="true">{{ row.initials }}</span>
-                        <div>
-                            <div class="person__name">{{ row.user.get_full_name|default:row.user.username }}</div>
-                            <div class="muted small">{{ row.user.email|default:row.user.username }}</div>
-                        </div>
-                    </div>
+                <td data-label="Usuário">
+                    <span class="title">{{ item.get_full_name|default:item.username }}</span>
+                    <div class="muted small">{{ item.username }}</div>
                 </td>
-                <td>
-                    <div class="chips">
-                        {% for m in row.teams %}<span class="chip{% if m.sector_id == row.main_sector_id %} chip--main{% endif %}"{% if m.sector_id == row.main_sector_id %} title="Equipe principal"{% endif %}>{{ m.sector.name }}{% if m.role == "GESTOR" %} · gestor{% endif %}</span>{% empty %}<span class="muted">—</span>{% endfor %}
-                    </div>
+                <td data-label="E-mail">{{ item.email|default:"—" }}</td>
+                <td data-label="Perfis">
+                    {% for assignment in item.access_profiles.all %}{% if assignment.is_active %}
+                        {{ assignment.profile.name }} <span class="muted small">({{ assignment.scope.label }})</span>{% if not forloop.last %}<br>{% endif %}
+                    {% endif %}{% empty %}<span class="muted">—</span>{% endfor %}
                 </td>
-                <td>
-                    {% if row.is_superuser %}<span class="group-badge group-badge--full" title="Superusuário do Django: passa por cima de qualquer grupo">Superusuário</span>
-                    {% else %}
-                    {% for a in row.groups %}<span class="group-badge{% if row.all_screens %} group-badge--full{% endif %}">{{ a.profile.name }}</span> {% empty %}<span class="group-badge group-badge--none">Sem grupo</span>{% endfor %}
-                    {% endif %}
+                <td data-label="Situação">
+                    {% if item.is_active %}<span class="dot-state dot-state--success"></span>Ativo
+                    {% else %}<span class="dot-state"></span><span class="muted">Inativo</span>{% endif %}
                 </td>
-                <td>
-                    {% if row.is_superuser or row.all_screens %}Todas{% else %}{{ row.screen_count }} tela{{ row.screen_count|pluralize }}{% endif %}
-                    {% if row.extras %}<div class="small" style="color:var(--primary-hover)">+{{ row.extras }} individual{{ row.extras|pluralize:"is" }}</div>{% endif %}
+                <td data-label="Ações" class="col-actions">
+                    <a href="{% url 'user-edit' item.pk %}">Editar</a> ·
+                    <a href="{% url 'user-access' item.pk %}">Acessos</a>
                 </td>
-                <td>
-                    {% if not row.user.is_active %}<span class="dot-state"></span><span class="muted">Inativo</span>
-                    {% elif row.never_logged %}<span class="dot-state dot-state--warning"></span>Convite pendente
-                    {% else %}<span class="dot-state dot-state--success"></span>Ativo{% endif %}
-                </td>
-                <td class="col-actions">{% if can_edit %}<a href="{% url 'user-edit' row.user.pk %}">Editar</a>{% endif %}</td>
             </tr>
+            {% empty %}
+            <tr><td colspan="5">
+                <div class="empty-state">
+                    <div class="empty-state__icon">{% include "_icon.html" with name="users" %}</div>
+                    <h3>Nenhum usuário nesta organização</h3>
+                    <p>Cadastre as pessoas que vão operar a LPS e defina o perfil de cada uma.</p>
+                    <a href="{% url 'user-create' %}" class="btn btn--primary">Cadastrar usuário</a>
+                </div>
+            </td></tr>
             {% endfor %}
             </tbody>
         </table>
     </div>
-    {% else %}
-    <div class="empty-state">
-        <div class="empty-state__icon">{% include "_icon.html" with name="users" %}</div>
-        {% if search or sector_filter or group_filter %}
-        <h3>Ninguém encontrado</h3><p>Ajuste a busca ou os filtros.</p><a href="{% url 'user-list' %}" class="btn">Limpar filtros</a>
-        {% else %}
-        <h3>Nenhum usuário nesta organização</h3>
-        <p>Cadastre as pessoas que vão usar o sistema e escolha o grupo de cada uma.</p>
-        {% if can_edit %}<a href="{% url 'user-create' %}" class="btn btn--primary">Cadastrar usuário</a>{% endif %}
-        {% endif %}
-    </div>
-    {% endif %}
+</div>
+
+<div class="hint-bar">
+    {% include "_icon.html" with name="info" %}
+    <span>Em <strong>Acessos</strong> você vê por que a pessoa tem cada permissão: qual perfil concedeu e em qual escopo.</span>
 </div>
 {% endblock %}
