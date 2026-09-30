@@ -175,6 +175,7 @@ class UserFormAjaxTests(TestCase):
             "first_name": "Nova Pessoa",
             "email": "nova@example.com",
             "username": "novapessoa",
+            "organization": self.org.pk,
             "password1": "senha-segura-123",
             "password2": "senha-segura-123",
             "is_active": "on",

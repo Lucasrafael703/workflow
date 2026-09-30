@@ -50,6 +50,7 @@
                     {% include "core/_field.html" with field=form.first_name required=True %}
                     {% include "core/_field.html" with field=form.email required=True %}
                     {% include "core/_field.html" with field=form.username required=True %}
+                    {% include "core/_field.html" with field=form.organization required=True %}
                     {% if instance %}
                     <div class="form-row form-row--check" style="align-self:end"><label for="{{ form.is_active.id_for_label }}">{{ form.is_active }} Usuário ativo</label></div>
                     {% endif %}

@@ -1401,8 +1401,9 @@ class UserFormView(OrganizationRequiredMixin, ActionRequiredMixin, FormView):
 
         profile = instance.profile
         fields = []
-        if profile.organization_id != self.organization.id:
-            profile.organization = self.organization
+        organization = data["organization"]
+        if profile.organization_id != organization.id:
+            profile.organization = organization
             fields.append("organization")
         sectors = list(data["sectors"])
         main = data.get("main_sector") or (sectors[0] if len(sectors) == 1 else None)

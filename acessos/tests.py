@@ -605,6 +605,7 @@ class UserAndGroupScreensTests(_TestCase):
             "first_name": "Maria Oliveira",
             "email": "maria@example.com",
             "username": "maria",
+            "organization": self.org.pk,
             "first_access": "senha",
             "password1": "senha-segura-123",
             "password2": "senha-segura-123",
