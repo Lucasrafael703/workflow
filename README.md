@@ -1,54 +1,57 @@
 # LPS — Plataforma de Gestão do Trabalho
 
-Aplicação Django que implementa o núcleo D0 da LPS (ver `Regras/`): uma
-plataforma de gestão do trabalho multi-organização que organiza atividades e
-tarefas, torna filas e responsabilidades visíveis, registra o que acontece
-durante a execução e transforma esse histórico em informação para gestão.
+Aplicação Django que implementa o núcleo D0 da LPS: uma plataforma de gestão do
+trabalho **multi-organização** que organiza atividades e tarefas, torna filas e
+responsabilidades visíveis, registra o que acontece durante a execução e
+transforma esse histórico em informação para gestão.
 
-Construída apenas com recursos nativos do Django (auth, ORM, CBVs, Forms,
-Admin, `django.core.mail`, `django.contrib.messages`, signals, management
-commands) — a única dependência externa é `django-environ`, usada só para
-o parsing tipado de variáveis de ambiente.
+- **O produto** (regras de negócio e telas) está em [`Regras/`](Regras/00_INDICE_LPS.md) e [`Telas/`](Telas/).
+- **O código** (como essas regras foram implementadas) está documentado em [`docs/`](#documentação-técnica).
 
-## Setup local
+## Stack
 
-```bash
-python -m venv venv
-venv\Scripts\activate          # Windows
+| Item | Versão / escolha |
+|---|---|
+| Framework | Django 5.2 (LTS) |
+| Python | 3.14 no desenvolvimento local · 3.12.7 no Render |
+| Banco | SQLite (dev) · PostgreSQL via `DATABASE_URL` (prod) |
+| Servidor | `runserver` (dev) · gunicorn + whitenoise (prod) |
+| Frontend | Templates Django + CSS/JS estáticos, sem bundler |
+| Dependências | `django-environ`, `nh3` (sanitização de HTML), `gunicorn`, `whitenoise`, `psycopg` — ver [`requirements.txt`](requirements.txt) |
+
+## Início rápido (Windows / PowerShell)
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-copy .env.example .env         # e ajuste os valores
+copy .env.example .env          # e defina SECRET_KEY
 python manage.py migrate
-python manage.py seed_lps_demo
+python manage.py seed_lps_demo  # organização "Biasi", setores, ações e perfis
 python manage.py createsuperuser
 python manage.py runserver
 ```
 
-`DJANGO_SETTINGS_MODULE` já aponta para `config.settings.dev` via
-`manage.py` (SQLite + e-mail no console). Para produção, use
-`config.settings.prod` (requer `DATABASE_URL` no ambiente).
+Antes de usar as telas, **vincule seu usuário a uma organização** (Admin do
+Django → Accounts → Perfis → campo "organização"); sem isso toda tela redireciona para o
+perfil. Detalhes em [`docs/02_AMBIENTE_LOCAL.md`](docs/02_AMBIENTE_LOCAL.md).
 
-## Apps
+O login é feito **por e-mail**, não por nome de usuário.
 
-- `core` — estrutura multi-tenant: `Organization`, `Company`, `Sector` (configurável, nunca fixo no código), `Site` (obra), `CostCenter`.
-- `accounts` — `Profile` (1:1 com `User`, vinculado a uma única `Organization`), `UserSector` (participação operacional em setores, separada de permissões).
-- `activities` — núcleo operacional da LPS: `Activity` (dono único), `Task` (setor, executores, sessões de trabalho), fila por setor (`QueueEntry`/`QueuePositionChange`), devolução (`TaskReturn`/`ReturnReason`), negociação de prazo (`DeadlineProposal`/`DeadlineConflict`), `ActivityService`/`TaskService`/`QueueService`/`DeadlineService`.
-- `notifications` — `Notification`, inbox in-app, `EmailService` (e-mail restrito ao evento de tarefa atrasada).
-- `audit` — `AuditLog`, histórico de todos os eventos relevantes (criação, mudança de dono, execução, devolução, fila, prazo, conclusão).
+## Documentação técnica
 
-## Management commands
-
-- `seed_lps_demo` — cria (idempotentemente) uma organização de demonstração, empresa, setores básicos e perfis (`Administrador`, `Gestor`, `Colaborador`) com as permissões correspondentes.
-- `check_overdue_tasks` — verifica tarefas com prazo comprometido vencido e dispara notificação in-app + e-mail. **Deve ser agendado** periodicamente (Task Scheduler no Windows, cron no Linux) — o MVP não usa Celery/Redis, então este comando substitui um worker assíncrono.
-
-## Testes
-
-```bash
-python manage.py test
-```
-
-Cobre as regras centrais do núcleo D0: dono único da atividade e auditoria
-de troca de dono, múltiplos executores com tempo individual (horas-homem),
-pausa automática de sessão ao iniciar outra tarefa, devolução com motivo
-obrigatório preservando histórico, posição e total de fila com reordenação
-auditada, negociação de prazo solicitado x comprometido com conflito
-registrado na recusa, e isolamento entre organizações.
+| # | Documento | Conteúdo |
+|---|---|---|
+| 01 | [Arquitetura](docs/01_ARQUITETURA.md) | Apps, camadas, multi-tenancy, convenções do código |
+| 02 | [Ambiente local](docs/02_AMBIENTE_LOCAL.md) | Instalação, dados de demonstração, management commands |
+| 03 | [Configuração](docs/03_CONFIGURACAO.md) | Settings dev/prod, variáveis de ambiente, estáticos e anexos |
+| 04 | [Modelos de dados](docs/04_MODELOS_DE_DADOS.md) | Todos os models por app, enums, constraints, diagrama ER |
+| 05 | [Autorização](docs/05_AUTORIZACAO.md) | Motor de acessos: ações, perfis, escopos, `AuthorizationService` |
+| 06 | [Atividades e tarefas](docs/06_ATIVIDADES_E_TAREFAS.md) | Ciclos de vida, fila, prazos, sessões, processos |
+| 07 | [Contas e autenticação](docs/07_CONTAS_E_AUTENTICACAO.md) | Cadastro, confirmação de e-mail, login, senha |
+| 08 | [Notificações e auditoria](docs/08_NOTIFICACOES_E_AUDITORIA.md) | O que gera notificação, e-mail e registro de auditoria |
+| 09 | [Rotas](docs/09_ROTAS.md) | Referência de todas as URLs |
+| 10 | [Frontend](docs/10_FRONTEND.md) | Templates, JS, CSS, context processors, template tags |
+| 11 | [Testes](docs/11_TESTES.md) | Como rodar, organização, helpers, teste JS |
+| 12 | [Deploy no Render](docs/12_DEPLOY_RENDER.md) | `render.yaml`, primeiro deploy, limitações do plano free |
+| 13 | [Pendências conhecidas](docs/13_PENDENCIAS_CONHECIDAS.md) | Defeitos e dívidas técnicas mapeados |
