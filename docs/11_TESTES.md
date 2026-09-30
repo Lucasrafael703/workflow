@@ -23,6 +23,7 @@ Testes do Django ficam em cada app (`tests.py` e, em `activities`, também
 | `activities/test_reopen.py` | 44 | Reabrir tarefa e atividade concluídas: fila, histórico preservado, permissão por setor, motivo, tarefas seguintes, atividade concluída/cancelada, atomicidade, botões e popup |
 | `activities/test_task_actions.py` | 88 | “Já realizei este trabalho”: período informado × conclusão agora, fila e sucessoras, auditoria, permissões (responsável/participante, sem exigir tempo manual), status, limites de data e justificativa, travas de dependência e de inputs do processo, atomicidade; botão, barra “Ações da tarefa” filtrada por permissão, popup (JSON), cartão de tempo cronometrado × informado |
 | `activities/test_task_editor.py` | 78 | Editor da tarefa (uma transação: dados, marcadores, responsável, participantes e convites pendentes), Gerenciar dependência (ciclo, fila, tarefa já iniciada), motivo no tempo manual, origem do tempo na gestão, ações da tarefa em janela (JSON) e destaque do menu lateral em toda rota de tarefa |
+| `activities/test_task_popups.py` | 24 | Padrão único das janelas e do painel lateral da tarefa (nova, nova fora da atividade, editar e painel): mesma ordem de blocos, mesmas palavras, dois blocos recolhíveis e o estado aberto/fechado, seletor desenhado uma só vez e com rótulo, `VisibleHiddenInput` |
 | `accounts`, `audit` | 0 | `tests.py` vazio |
 
 Base compartilhada dos testes de processo: `activities/testing.py`

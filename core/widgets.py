@@ -4,7 +4,21 @@ from django.utils.html import format_html, format_html_join
 from django.utils.safestring import mark_safe
 
 
-class PersonPickerWidget(forms.HiddenInput):
+class VisibleHiddenInput(forms.HiddenInput):
+    """Guarda o valor num `<input type="hidden">`, mas o controle que a pessoa
+    vê e usa (busca, lista, botão) é desenhado pelo widget.
+
+    O Django trata todo widget "hidden" como campo sem rótulo: `hidden_fields()`
+    o separa dos demais e os parciais de formulário (`_form_field.html`) pulam o
+    rótulo e o texto de ajuda. Para os seletores isso significava tela sem
+    rótulo e, onde havia um laço de `hidden_fields`, o seletor desenhado duas
+    vezes. `is_hidden = False` faz o campo ser tratado como visível.
+    """
+
+    is_hidden = False
+
+
+class PersonPickerWidget(VisibleHiddenInput):
     """Seletor de pessoa com busca, no lugar de um <select> que só cresce.
 
     Continua sendo um input escondido com o id do usuário por baixo: o campo
@@ -75,7 +89,7 @@ _SEARCH_ICON = format_html(
 )
 
 
-class ClientPickerWidget(forms.HiddenInput):
+class ClientPickerWidget(VisibleHiddenInput):
     """Seletor de cliente com busca (Regras 1-2 da tela de atividade).
 
     Mesmo padrão do `PersonPickerWidget` — digitar filtra, "Cadastra cliente"
@@ -128,7 +142,7 @@ class ClientPickerWidget(forms.HiddenInput):
         )
 
 
-class ActivityPickerWidget(forms.HiddenInput):
+class ActivityPickerWidget(VisibleHiddenInput):
     """Seletor de atividade com busca, para o fluxo "+ Nova tarefa" fora do
     contexto de uma atividade já aberta: toda tarefa continua pertencendo a
     uma atividade, mas a pessoa escolhe/cria a atividade sem sair do popup.
@@ -178,7 +192,7 @@ class ActivityPickerWidget(forms.HiddenInput):
         )
 
 
-class _SimpleSearchPickerWidget(forms.HiddenInput):
+class _SimpleSearchPickerWidget(VisibleHiddenInput):
     """Base para pickers "busca por nome" simples (Setor/Empresa/Obra/Centro
     de custo): mesmo padrão de `ClientPickerWidget`, só troca o endpoint de
     busca e os textos. Subclasses só declaram `search_url_name`,

@@ -404,7 +404,51 @@ class ActivityDeadlineChangeForm(forms.Form):
     )
 
 
-class TaskEditorForm(forms.Form):
+# Mesmas palavras nos dois lugares em que se descreve uma tarefa (criar e editar):
+# quem compara as duas janelas vê as mesmas perguntas e as mesmas ajudas.
+TASK_LABELS = {
+    "title": "O que precisa ser feito?",
+    "sector": "Setor",
+    "responsavel": "Responsável",
+    "participantes": "Participantes",
+    "requested_deadline": "Prazo pedido pelo solicitante",
+    "description": "Instruções para fazer a tarefa",
+    "tags": "Marcadores",
+}
+TASK_HELP = {
+    "title": "Comece com uma ação. Ex.: Conferir os preços da planilha.",
+    "sector": "Equipe que recebe a tarefa na fila de trabalho.",
+    "responsavel": "Quem acompanha a tarefa até a conclusão.",
+    "participantes": "Quem ajuda a executar a tarefa. Uma pessoa que você convida só entra depois de aceitar.",
+    "requested_deadline": "Quando quem pediu precisa receber a entrega. O prazo que a equipe se compromete a "
+    "cumprir é combinado depois, em Mais ações → Propor novo prazo.",
+    "description": "Explique o que fazer e como saber que o trabalho está pronto.",
+    "tags": "Palavras-chave para organizar e encontrar a tarefa depois.",
+}
+TASK_TITLE_PLACEHOLDER = "Ex.: Entrevistar os candidatos"
+
+
+class TaskFoldsMixin:
+    """Quais blocos recolhíveis da janela de tarefa (“Participantes” e “Prazo e
+    detalhes”) já nascem abertos: os que têm conteúdo ou erro para mostrar.
+    Nova tarefa abre com os dois fechados; editar abre o que já foi preenchido."""
+
+    def _filled(self, name):
+        if name not in self.fields:
+            return False
+        bound = self[name]
+        return bool(bound.errors or bound.value())
+
+    @property
+    def participants_open(self):
+        return self._filled("participantes")
+
+    @property
+    def details_open(self):
+        return any(self._filled(name) for name in ("requested_deadline", "description", "tags"))
+
+
+class TaskEditorForm(TaskFoldsMixin, forms.Form):
     """Editor único da tarefa (popup no padrão do editor de atividade): dados,
     prazo pedido, marcadores, responsável e participantes num só lugar.
 
@@ -417,42 +461,41 @@ class TaskEditorForm(forms.Form):
     """
 
     title = forms.CharField(
-        label="O que precisa ser feito?",
+        label=TASK_LABELS["title"],
         max_length=200,
-        help_text="Comece com uma ação. Ex.: Conferir os preços da planilha.",
-        widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "Ex.: Realizar cotação"}),
+        help_text=TASK_HELP["title"],
+        widget=forms.TextInput(attrs={"autofocus": True, "placeholder": TASK_TITLE_PLACEHOLDER}),
     )
     description = forms.CharField(
-        label="Instruções para fazer a tarefa",
+        label=TASK_LABELS["description"],
         required=False,
-        help_text="Explique o que fazer e como saber que o trabalho está pronto.",
+        help_text=TASK_HELP["description"],
         widget=RichTextWidget(),
     )
     requested_deadline = forms.DateTimeField(
-        label="Prazo pedido pelo solicitante",
+        label=TASK_LABELS["requested_deadline"],
         required=False,
         widget=DateTimeLocalInput(),
-        help_text="Quando quem pediu precisa receber a entrega. O prazo que a equipe se comprometeu a cumprir "
-        "é outro e se combina em Mais ações → Propor novo prazo.",
+        help_text=TASK_HELP["requested_deadline"],
     )
     tags = forms.ModelMultipleChoiceField(
         queryset=Tag.objects.none(),
         required=False,
-        label="Marcadores",
-        help_text="Use palavras-chave para organizar e encontrar a tarefa depois.",
+        label=TASK_LABELS["tags"],
+        help_text=TASK_HELP["tags"],
         widget=TagPickerWidget(),
     )
     responsavel = forms.ModelChoiceField(
         queryset=User.objects.none(),
-        label="Responsável pela tarefa",
-        help_text="Quem acompanha a tarefa até a conclusão.",
+        label=TASK_LABELS["responsavel"],
+        help_text=TASK_HELP["responsavel"],
         widget=PersonPickerWidget(placeholder="Buscar responsável...", selection_label="Selecionar responsável..."),
     )
     participantes = forms.ModelMultipleChoiceField(
         queryset=User.objects.none(),
         required=False,
-        label="Participantes",
-        help_text="Quem ajuda a executar a tarefa. Uma pessoa que você convida só entra depois de aceitar.",
+        label=TASK_LABELS["participantes"],
+        help_text=TASK_HELP["participantes"],
         widget=PersonMultiPickerWidget(),
     )
 
@@ -527,7 +570,7 @@ class TaskDependencyForm(forms.Form):
             self.initial["depends_on"] = current.pk
 
 
-class TaskQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
+class TaskQuickCreateForm(TaskFoldsMixin, OrganizationScopedFormMixin, forms.ModelForm):
     """Popup "+ Adicionar tarefa" (Regra 12): título e prazo à vista, descrição
     opcional escondida até a pessoa abrir. O setor vem pré-preenchido com o
     "Grupo designado" da atividade quando houver, mas continua visível e
@@ -537,8 +580,8 @@ class TaskQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
 
     responsavel = forms.ModelChoiceField(
         queryset=User.objects.none(),
-        label="Responsável pela tarefa",
-        help_text="Pessoa que acompanha esta tarefa até a conclusão.",
+        label=TASK_LABELS["responsavel"],
+        help_text=TASK_HELP["responsavel"],
         required=True,
         widget=PersonPickerWidget(
             placeholder="Buscar responsável...",
@@ -547,8 +590,8 @@ class TaskQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
     )
     participantes = forms.ModelMultipleChoiceField(
         queryset=User.objects.none(),
-        label="Participantes",
-        help_text="Outras pessoas que vão ajudar a executar a tarefa. É opcional.",
+        label=TASK_LABELS["participantes"],
+        help_text=TASK_HELP["participantes"],
         required=False,
         widget=PersonMultiPickerWidget(),
     )
@@ -556,22 +599,10 @@ class TaskQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
     class Meta:
         model = Task
         fields = ["title", "sector", "requested_deadline", "tags", "description"]
-        labels = {
-            "title": "O que precisa ser feito?",
-            "sector": "Setor responsável",
-            "requested_deadline": "Prazo solicitado",
-            "description": "Instruções para fazer a tarefa",
-            "tags": "Marcadores",
-        }
-        help_texts = {
-            "title": "Escreva uma ação clara. Ex.: Conferir os preços da planilha.",
-            "sector": "Equipe que receberá a tarefa na sua fila de trabalho.",
-            "requested_deadline": "Data e horário em que você precisa da entrega. Pode ser definido depois.",
-            "description": "Explique os passos, cuidados ou informações de apoio.",
-            "tags": "Palavras-chave para organizar e encontrar a tarefa depois.",
-        }
+        labels = {name: TASK_LABELS[name] for name in fields}
+        help_texts = {name: TASK_HELP[name] for name in fields}
         widgets = {
-            "title": forms.TextInput(attrs={"autofocus": True, "placeholder": "Ex.: Realizar cotação"}),
+            "title": forms.TextInput(attrs={"autofocus": True, "placeholder": TASK_TITLE_PLACEHOLDER}),
             "sector": SectorPickerWidget(),
             "description": RichTextWidget(),
             "requested_deadline": DateTimeLocalInput(),

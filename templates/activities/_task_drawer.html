@@ -1,17 +1,25 @@
 {% comment %}Fragmento do painel lateral de uma tarefa — versão estreita de task_detail.html,
 sem navegar para fora da ficha da atividade. Só o essencial cabe aqui:
-descrição, checklist, timer, comentários. O resto (devoluções, "por onde
-passou" etc.) continua só na ficha completa.{% endcomment %}
+o que fazer agora, quem cuida e os prazos, checklist, timer, comentários. O resto
+(devoluções, "por onde passou" etc.) continua só na ficha completa.
+
+Tem a mesma cara das janelas "Nova tarefa" / "Editar tarefa": cabeçalho
+"Atividade: …", Setor e Responsável como campos de leitura e os blocos
+recolhíveis "Participantes" e "Prazo e detalhes" (.fold, ver
+_task_editor_fields.html).{% endcomment %}
 <div class="drawer-backdrop js-drawer-backdrop">
     <div class="drawer">
         <div class="drawer__head">
             <div>
-                <div class="muted small">Tarefa · Setor {{ task.sector.name }}</div>
+                <div class="muted small">Atividade: {{ activity.title }}</div>
                 <h2>{{ task.title }}</h2>
                 <span class="tag tag--{{ task.status }}">{{ task.status_label }}</span>
                 {% if queue_info %}<span class="position-pill">Na fila: {{ queue_info.position }} de {{ queue_info.total }}</span>{% endif %}
             </div>
             <div class="drawer__head-actions">
+                {% if can_edit_task and task.status != "CONCLUIDA" and task.status != "CANCELADA" %}
+                <a href="{% url 'task-edit' task.pk %}" data-activity-action class="btn btn--sm">Editar</a>
+                {% endif %}
                 <a href="{% url 'task-detail' task.pk %}" class="btn btn--sm">Ver todos os detalhes</a>
                 <button type="button" class="modal__close js-drawer-close" title="Fechar painel" aria-label="Fechar painel da tarefa">&times;</button>
             </div>
@@ -75,18 +83,73 @@ passou" etc.) continua só na ficha completa.{% endcomment %}
                 {% endif %}
             </div>
 
-            {% if task.tags.all %}
             <div class="drawer__section">
-                {% for tag in task.tags.all %}<span class="tag-chip tag-chip--{{ tag.color }}">{{ tag.name }}</span>{% endfor %}
-            </div>
-            {% endif %}
+                <div class="drawer__facts">
+                    <div class="form-row">
+                        <label>Setor</label>
+                        <div class="field-static">{% include "_icon.html" with name="users" %}<span>{{ task.sector.name }}</span></div>
+                    </div>
+                    <div class="form-row">
+                        <label>Responsável</label>
+                        <div class="field-static">{% include "_icon.html" with name="user" %}<span>{{ responsavel.get_username }}</span></div>
+                    </div>
+                </div>
 
-            {% if task.description %}
-            <div class="drawer__section">
-                <h3>Instruções da tarefa</h3>
-                <div class="rich-text-content">{{ task.description|safe }}</div>
+                <details class="fold"{% if executors or pending_assignments %} open{% endif %}>
+                    <summary>
+                        <span class="fold__icon" aria-hidden="true">{% include "_icon.html" with name="user-plus" %}</span>
+                        <span class="fold__text">
+                            <span class="fold__title">Participantes <span class="muted">(opcional)</span></span>
+                            <span class="fold__sub">Adicione outras pessoas para ajudar na tarefa.</span>
+                        </span>
+                        <span class="fold__chevron" aria-hidden="true">{% include "_icon.html" with name="chevron-down" %}</span>
+                    </summary>
+                    <div class="fold__body">
+                        {% if executors or pending_assignments %}
+                        <ul class="list-rows">
+                            {% for executor in executors %}<li>{{ executor.user.get_username }}</li>{% endfor %}
+                            {% for invite in pending_assignments %}
+                            <li>{{ invite.user.get_username }} <span class="tag tag--PENDENTE" title="Convidado por {{ invite.assigned_by.get_username }} em {{ invite.assigned_at|date:'d/m/Y H:i' }}">aguardando aceite</span></li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <p class="muted" style="margin:0">Ainda não há participantes adicionais.</p>
+                        {% endif %}
+                        {% if can_assign and task.status != "CONCLUIDA" and task.status != "CANCELADA" %}
+                        <p style="margin:10px 0 0"><a href="{% url 'task-edit' task.pk %}" data-activity-action>Gerenciar participantes</a></p>
+                        {% endif %}
+                    </div>
+                </details>
+
+                <details class="fold"{% if task.requested_deadline or task.committed_deadline or task.description or task.tags.all %} open{% endif %}>
+                    <summary>
+                        <span class="fold__icon" aria-hidden="true">{% include "_icon.html" with name="calendar" %}</span>
+                        <span class="fold__text">
+                            <span class="fold__title">Prazo e detalhes <span class="muted">(opcional)</span></span>
+                            <span class="fold__sub">Prazos, instruções e marcadores da tarefa.</span>
+                        </span>
+                        <span class="fold__chevron" aria-hidden="true">{% include "_icon.html" with name="chevron-down" %}</span>
+                    </summary>
+                    <div class="fold__body">
+                        <div class="form-row">
+                            <label>Prazo pedido pelo solicitante</label>
+                            <div class="field-static">{% include "_icon.html" with name="clock" %}<span>{% if task.requested_deadline %}{{ task.requested_deadline|date:"d/m/Y H:i" }}{% else %}<span class="muted">Não informado</span>{% endif %}</span></div>
+                        </div>
+                        <div class="form-row">
+                            <label>Prazo que a equipe se comprometeu a cumprir</label>
+                            <div class="field-static">{% include "_icon.html" with name="clock" %}<span>{% if task.committed_deadline %}{{ task.committed_deadline|date:"d/m/Y H:i" }}{% else %}<span class="muted">Ainda não combinado</span>{% endif %}</span></div>
+                        </div>
+                        <div class="form-row">
+                            <label>Instruções para fazer a tarefa</label>
+                            {% if task.description %}<div class="rich-text-content">{{ task.description|safe }}</div>{% else %}<p class="muted" style="margin:0">Sem instruções.</p>{% endif %}
+                        </div>
+                        <div class="form-row">
+                            <label>Marcadores</label>
+                            {% for tag in task.tags.all %}<span class="tag-chip" style="--tag-bg: {{ tag.color }}1A; --tag-fg: {{ tag.color }};">{{ tag.name }}</span>{% empty %}<p class="muted" style="margin:0">Sem marcadores.</p>{% endfor %}
+                        </div>
+                    </div>
+                </details>
             </div>
-            {% endif %}
 
             <div class="drawer__section">
                 {% include "activities/_task_checklist.html" %}

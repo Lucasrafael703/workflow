@@ -15,7 +15,7 @@
         <form method="post">
             {% csrf_token %}
             <div class="modal__body">
-                {% include "activities/_task_quick_fields.html" %}
+                {% include "activities/_task_editor_fields.html" %}
             </div>
             <div class="modal__foot">
                 <a href="{% url 'task-list' %}" class="btn">Cancelar</a>

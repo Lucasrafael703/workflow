@@ -926,6 +926,40 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .edit-readonly .v { margin: 2px 0; font-weight: 600; }
 .edit-pending .list-rows { margin: 6px 0; }
 
+.sr-only {
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
+    clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+/* Janela de tarefa (criar e editar): campo só de leitura e blocos recolhíveis
+   "Participantes" e "Prazo e detalhes". */
+.field-static {
+    display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 8px 12px;
+    background: var(--surface-alt); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    color: var(--text); font-weight: 500;
+}
+.field-static svg { width: 17px; height: 17px; flex: 0 0 auto; color: var(--muted); }
+.fold {
+    margin-top: 14px; background: var(--surface-alt);
+    border: 1px solid var(--border); border-radius: var(--radius);
+}
+.fold > summary {
+    display: flex; align-items: center; gap: 14px; padding: 14px 16px; cursor: pointer; list-style: none;
+}
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: var(--radius); }
+.fold__icon { flex: 0 0 auto; display: inline-flex; color: var(--text-2); }
+.fold__icon svg { width: 24px; height: 24px; }
+.fold__text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.fold__title { font-weight: 700; font-size: 14px; color: var(--text); }
+.fold__title .muted { font-weight: 400; }
+.fold__sub { font-size: 12.5px; color: var(--muted); }
+.fold__chevron { flex: 0 0 auto; display: inline-flex; color: var(--muted); transition: transform .15s ease; }
+.fold__chevron svg { width: 18px; height: 18px; }
+.fold[open] > summary .fold__chevron { transform: rotate(180deg); }
+.fold__body { padding: 16px; background: var(--surface); border-top: 1px solid var(--border); border-radius: 0 0 var(--radius) var(--radius); }
+.fold__body > .form-row:first-child { margin-top: 0; }
+
 /* Cartão "Tempo registrado": cronometrado × informado pela pessoa. */
 .time-split { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
 .time-split > div {
@@ -1134,6 +1168,11 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .drawer__section h3 { margin: 0 0 10px; font-size: 13.5px; }
 .drawer__section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .drawer__section-head h3 { margin: 0; }
+/* Painel da tarefa no mesmo padrão das janelas Nova/Editar tarefa. */
+.drawer__facts { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.drawer .fold__body .form-row:last-child { margin-bottom: 0; }
+.drawer__head { flex-direction: column-reverse; align-items: stretch; gap: 10px; }  /* botões em cima, título com a largura toda */
+.drawer__head-actions { flex-wrap: wrap; justify-content: flex-end; }
 .timer-hero--drawer { padding: 10px 0 18px; }
 .timer-hero--drawer .timer-hero__clock { font-size: 32px; }
 

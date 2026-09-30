@@ -1,19 +1,15 @@
 {% extends "base.html" %}
-{% load lps %}
 {% block title %}Editar tarefa — LPS{% endblock %}
 
 {% comment %}
-Editor único da tarefa: dados, prazo pedido, marcadores, responsável e
-participantes numa janela só, no padrão do editor de atividade. O que a pessoa
-não pode mudar (responsável, participantes) não vira campo desabilitado: é
-mostrado como informação. Setor e dependência não se editam aqui — mexem no
-fluxo e têm janela própria em Mais ações. Sem JavaScript continua sendo uma
-página normal com POST.
+Editar tarefa: a mesma janela de "Nova tarefa" (mesmos campos, mesma ordem,
+mesmos blocos recolhíveis — ver _task_editor_fields.html), com os valores atuais.
+Sem JavaScript continua sendo uma página normal com POST.
 {% endcomment %}
 
 {% block content %}
 <div class="modal-backdrop">
-    <div class="modal modal--wide">
+    <div class="modal">
         <div class="modal__head">
             <div>
                 <h2>Editar tarefa</h2>
@@ -25,73 +21,8 @@ página normal com POST.
         <form method="post">
             {% csrf_token %}
             <div class="modal__body">
-                {% if form.non_field_errors %}
-                <ul class="messages" role="alert">
-                    {% for error in form.non_field_errors %}<li class="message message--error">{{ error }}</li>{% endfor %}
-                </ul>
-                {% endif %}
-                <p class="muted small">Campos com <span class="req">*</span> são obrigatórios.</p>
-
-                <section class="form-section" aria-label="O trabalho a fazer">
-                    <div class="form-section__head"><span class="form-section__num">1</span><div><h3>O trabalho a fazer</h3><div class="sub">O que a equipe precisa saber para executar.</div></div></div>
-                    {% include "activities/_form_field.html" with field=form.title %}
-                    {% include "activities/_form_field.html" with field=form.description %}
-                    {% include "activities/_form_field.html" with field=form.tags %}
-                </section>
-
-                <section class="form-section" aria-label="Prazos">
-                    <div class="form-section__head"><span class="form-section__num">2</span><div><h3>Prazos</h3><div class="sub">Dois prazos diferentes: o que foi pedido e o que a equipe combinou.</div></div></div>
-                    {% include "activities/_form_field.html" with field=form.requested_deadline %}
-                    <div class="edit-readonly">
-                        <div class="k">Prazo que a equipe se comprometeu a cumprir</div>
-                        <div class="v">{% if task.committed_deadline %}{{ task.committed_deadline|date:"d/m/Y H:i" }}{% else %}<span class="muted">Ainda não combinado</span>{% endif %}</div>
-                        <div class="muted small">Não se edita aqui: é combinado com o responsável pela atividade em Mais ações → Propor novo prazo.</div>
-                    </div>
-                </section>
-
-                <section class="form-section" aria-label="Quem cuida da tarefa">
-                    <div class="form-section__head"><span class="form-section__num">3</span><div><h3>Quem cuida da tarefa</h3><div class="sub">Responsável e participantes.</div></div></div>
-                    <div class="edit-readonly">
-                        <div class="k">Setor responsável</div>
-                        <div class="v">{{ task.sector.name }}</div>
-                        <div class="muted small">Para mudar de setor, use Mais ações → Enviar para outro setor.</div>
-                    </div>
-
-                    {% if form.responsavel %}
-                    {# o seletor de pessoa é um input escondido: _form_field.html não mostraria o rótulo #}
-                    {% include "activities/_activity_field.html" with field=form.responsavel %}
-                    {% else %}
-                    <div class="edit-readonly">
-                        <div class="k">Responsável pela tarefa</div>
-                        <div class="v">{{ current_responsavel.get_username }}</div>
-                        <div class="muted small">Você não tem permissão para trocar o responsável.</div>
-                    </div>
-                    {% endif %}
-
-                    {% if form.participantes %}
-                    {% include "activities/_form_field.html" with field=form.participantes %}
-                    {% else %}
-                    <div class="edit-readonly">
-                        <div class="k">Participantes</div>
-                        <div class="v">{% for person in current_participants %}{{ person.get_username }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="muted">Nenhum participante</span>{% endfor %}</div>
-                        <div class="muted small">Você não tem permissão para incluir ou remover participantes.</div>
-                    </div>
-                    {% endif %}
-
-                    {% if pending_assignments %}
-                    <div class="edit-pending" aria-label="Convites aguardando aceite">
-                        <div class="k">Convites enviados</div>
-                        <ul class="list-rows">
-                            {% for invite in pending_assignments %}
-                            <li>{{ invite.user.get_username }} <span class="tag tag--PENDENTE">aguardando aceite</span></li>
-                            {% endfor %}
-                        </ul>
-                        <div class="muted small">Quem foi convidado só passa a ser participante depois de aceitar.</div>
-                    </div>
-                    {% endif %}
-                </section>
+                {% include "activities/_task_editor_fields.html" %}
             </div>
-
             <div class="modal__foot">
                 <a href="{% url 'task-detail' task.pk %}" class="btn">Cancelar</a>
                 <button type="submit" class="btn btn--primary">Salvar alterações</button>

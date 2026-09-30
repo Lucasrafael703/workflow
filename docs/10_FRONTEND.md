@@ -116,3 +116,37 @@ compartilhado e remove anexos sem descartar o texto ainda não salvo no editor.
 `modal.js` preserva a janela anterior ao abrir um cadastro auxiliar, impede envio
 duplicado, mostra erros de validação/rede, controla foco por teclado e devolve
 foco ao elemento de origem ao fechar.
+
+### Janelas de tarefa: um padrão só
+
+“Nova tarefa” (dentro de uma atividade, `task_quick_form.html`, e fora dela,
+`task_quick_form_standalone.html`) e “Editar tarefa” (`task_edit_form.html`)
+incluem o **mesmo corpo**, `activities/_task_editor_fields.html`:
+
+    título · setor · responsável
+    ▸ Participantes (opcional)        ← `<details class="fold">`
+    ▸ Prazo e detalhes (opcional)     ← prazo pedido, instruções, marcadores
+
+- **Uma fonte de palavras:** `TASK_LABELS`/`TASK_HELP` em `activities/forms.py`
+  alimentam `TaskQuickCreateForm` e `TaskEditorForm`; mudar um rótulo muda nas
+  duas janelas.
+- **Edição:** o setor e o prazo combinado aparecem como informação
+  (`.field-static`); responsável e participantes também, para quem não tem a
+  ação. O convite pendente fica dentro de “Participantes”.
+- **Blocos recolhíveis:** `TaskFoldsMixin` (`participants_open`, `details_open`)
+  decide quais nascem abertos — os que têm conteúdo ou erro. `modal.js` abre o
+  `<details>` que esconde o campo com erro, então o campo precisa ficar dentro dele.
+- **Rótulo dos seletores:** `PersonPickerWidget`, `ClientPickerWidget`,
+  `ActivityPickerWidget` e os seletores simples (setor, empresa, obra, centro de
+  custo) herdam de `VisibleHiddenInput` (`core/widgets.py`): guardam o valor num
+  input `hidden`, mas `is_hidden = False`. Sem isso o Django os tratava como
+  campo escondido — sem rótulo nem ajuda em `_form_field.html` e, onde havia um
+  laço de `hidden_fields`, desenhados duas vezes (era o que acontecia em
+  “Nova tarefa”). Use `_activity_field.html` (aceita `hide_label` e `compact`)
+  para campos dentro de janelas.
+- **Painel lateral da tarefa** (`_task_drawer.html`): mesmo padrão em modo leitura —
+  cabeçalho “Atividade: …” com os botões **Editar** e “Ver todos os detalhes” numa
+  linha acima do título, Setor e Responsável em `.field-static`, e os blocos
+  “Participantes” (com convites “aguardando aceite” e o link “Gerenciar
+  participantes”) e “Prazo e detalhes” (prazo pedido, prazo combinado, instruções e
+  marcadores). Checklist e comentários seguem como seções abaixo.

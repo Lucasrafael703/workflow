@@ -1,11 +1,11 @@
-<div class="form-row{% if full or field.name == 'title' or field.name == 'description' or field.name == 'internal_notes' or field.name == 'address' or field.name == 'tags' %} form-row--full{% endif %}{% if field.name == 'urgency' %} form-row--urgency{% endif %}">
-    <label for="{{ field.id_for_label }}">
+{% comment %}Opções: `hide_label` (rótulo só para leitor de tela) e `compact` (sem texto de ajuda).{% endcomment %}<div class="form-row{% if full or field.name == 'title' or field.name == 'description' or field.name == 'internal_notes' or field.name == 'address' or field.name == 'tags' %} form-row--full{% endif %}{% if field.name == 'urgency' %} form-row--urgency{% endif %}">
+    <label for="{{ field.id_for_label }}"{% if hide_label %} class="sr-only"{% endif %}>
         {{ field.label }}{% if field.field.required %} <span class="req" aria-label="obrigatório">*</span>{% elif publishing and field.name == 'title' or publishing and field.name == 'owner' %} <span class="muted small">(necessário para criar)</span>{% else %} <span class="muted small">(opcional)</span>{% endif %}
     </label>
     {% if field.name == 'owner' and field.field.disabled %}
     <div class="form-readonly">{{ activity.owner.get_full_name|default:activity.owner.get_username }}</div>
     {{ field.as_hidden }}
     {% else %}{{ field }}{% endif %}
-    {% if field.help_text %}<div class="helptext">{{ field.help_text }}</div>{% endif %}
+    {% if field.help_text and not compact %}<div class="helptext">{{ field.help_text }}</div>{% endif %}
     {% if field.errors %}<ul class="errorlist" role="alert">{% for error in field.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
 </div>
