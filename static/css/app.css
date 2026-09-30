@@ -917,6 +917,15 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .menu-more__popup .menu-more__danger:hover { background: var(--danger-soft); }
 .menu-more__divider { height: 1px; margin: 4px 2px; background: var(--border); }
 
+/* Editor da tarefa: o que a pessoa não edita ali aparece como informação. */
+.edit-readonly, .edit-pending {
+    margin: 0 0 14px; padding: 10px 12px;
+    background: var(--surface-alt); border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.edit-readonly .k, .edit-pending .k { font-size: 12px; font-weight: 700; color: var(--text-2); }
+.edit-readonly .v { margin: 2px 0; font-weight: 600; }
+.edit-pending .list-rows { margin: 6px 0; }
+
 /* Cartão "Tempo registrado": cronometrado × informado pela pessoa. */
 .time-split { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
 .time-split > div {

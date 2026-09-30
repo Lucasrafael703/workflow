@@ -23,6 +23,7 @@ from core.widgets import (
 )
 
 from .models import Activity, ActivityPendency, MessageKind, ReturnReason, Task, WorkSession
+from .services import RETROACTIVE_JUSTIFICATION_DAYS
 
 User = get_user_model()
 
@@ -403,55 +404,127 @@ class ActivityDeadlineChangeForm(forms.Form):
     )
 
 
-class TaskForm(OrganizationScopedFormMixin, forms.ModelForm):
-    """Editar tarefa (doc 09 §81-84). O setor aparece só para contexto — sua
-    edição de fato tem serviço próprio (movimentação com histórico), então
-    `TaskEditView.form_valid` descarta esse campo antes de chamar
-    `TaskService.update_task`."""
+class TaskEditorForm(forms.Form):
+    """Editor único da tarefa (popup no padrão do editor de atividade): dados,
+    prazo pedido, marcadores, responsável e participantes num só lugar.
 
-    class Meta:
-        model = Task
-        fields = ["title", "sector", "requested_deadline", "tags", "description", "depends_on"]
-        labels = {
-            "title": "O que precisa ser feito?",
-            "sector": "Setor responsável",
-            "requested_deadline": "Prazo solicitado",
-            "description": "Instruções para fazer a tarefa",
-            "depends_on": "Qual tarefa precisa terminar antes desta?",
-            "tags": "Marcadores",
-        }
-        help_texts = {
-            "title": "Comece com uma ação. Ex.: Conferir os preços da planilha.",
-            "sector": "Equipe que recebe esta tarefa. Para trocar de equipe, use Enviar para outro setor na tarefa.",
-            "requested_deadline": "Data e horário em que você precisa da entrega.",
-            "description": "Explique o que fazer e como saber que o trabalho está pronto.",
-            "depends_on": "Se escolher uma tarefa, esta só poderá começar depois que ela for concluída.",
-            "tags": "Use palavras-chave para organizar e encontrar a tarefa depois.",
-        }
-        widgets = {
-            "title": forms.TextInput(attrs={"autofocus": True, "placeholder": "Ex.: Realizar cotação"}),
-            "sector": SectorPickerWidget(),
-            "description": RichTextWidget(),
-            "requested_deadline": DateTimeLocalInput(),
-            "tags": TagPickerWidget(),
-        }
+    O que a pessoa não pode mudar **sai do formulário** (em vez de aparecer
+    desabilitado): responsável exige `tarefa.alterar_responsavel`; participantes,
+    `tarefa.atribuir`. O setor e a dependência não são editados aqui — mexem no
+    fluxo e têm janela própria (“Enviar para outro setor” e “Gerenciar
+    dependência”, em Mais ações). É um `Form` comum, não um `ModelForm`, para
+    não alterar a instância antes de o serviço comparar o antes e o depois.
+    """
 
-    def __init__(self, *args, organization=None, activity=None, **kwargs):
+    title = forms.CharField(
+        label="O que precisa ser feito?",
+        max_length=200,
+        help_text="Comece com uma ação. Ex.: Conferir os preços da planilha.",
+        widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "Ex.: Realizar cotação"}),
+    )
+    description = forms.CharField(
+        label="Instruções para fazer a tarefa",
+        required=False,
+        help_text="Explique o que fazer e como saber que o trabalho está pronto.",
+        widget=RichTextWidget(),
+    )
+    requested_deadline = forms.DateTimeField(
+        label="Prazo pedido pelo solicitante",
+        required=False,
+        widget=DateTimeLocalInput(),
+        help_text="Quando quem pediu precisa receber a entrega. O prazo que a equipe se comprometeu a cumprir "
+        "é outro e se combina em Mais ações → Propor novo prazo.",
+    )
+    tags = forms.ModelMultipleChoiceField(
+        queryset=Tag.objects.none(),
+        required=False,
+        label="Marcadores",
+        help_text="Use palavras-chave para organizar e encontrar a tarefa depois.",
+        widget=TagPickerWidget(),
+    )
+    responsavel = forms.ModelChoiceField(
+        queryset=User.objects.none(),
+        label="Responsável pela tarefa",
+        help_text="Quem acompanha a tarefa até a conclusão.",
+        widget=PersonPickerWidget(placeholder="Buscar responsável...", selection_label="Selecionar responsável..."),
+    )
+    participantes = forms.ModelMultipleChoiceField(
+        queryset=User.objects.none(),
+        required=False,
+        label="Participantes",
+        help_text="Quem ajuda a executar a tarefa. Uma pessoa que você convida só entra depois de aceitar.",
+        widget=PersonMultiPickerWidget(),
+    )
+
+    def __init__(
+        self, *args, organization=None, task=None, can_change_responsavel=False, can_assign=False,
+        can_create_person=False, **kwargs,
+    ):
         super().__init__(*args, **kwargs)
-        self.scope_querysets(organization)
-        for optional in ("description", "requested_deadline", "depends_on", "tags"):
-            self.fields[optional].required = False
-
-        siblings = Task.objects.none()
-        if activity is not None:
-            siblings = activity.tasks.exclude(status=Task.Status.CANCELADA)
-            if self.instance.pk:
-                siblings = siblings.exclude(pk=self.instance.pk)
-        self.fields["depends_on"].queryset = siblings
-        self.fields["depends_on"].empty_label = "Nenhuma"
+        self.task = task
+        people = User.objects.filter(profile__organization=organization, is_active=True).order_by(
+            "first_name", "username"
+        )
+        tags = Tag.objects.filter(organization=organization, is_active=True)
+        self.fields["tags"].queryset = tags
+        self.fields["tags"].widget.queryset = tags
+        self.fields["responsavel"].queryset = people
+        self.fields["responsavel"].widget.queryset = people
+        self.fields["participantes"].queryset = people
+        self.fields["participantes"].widget.queryset = people
+        if can_create_person:
+            self.fields["responsavel"].widget.create_url = reverse("user-create")
+            self.fields["participantes"].widget.create_url = reverse("user-create")
+        if not can_change_responsavel:
+            del self.fields["responsavel"]
+        if not can_assign:
+            del self.fields["participantes"]
+        if task is not None and not self.is_bound:
+            self.initial.update(
+                title=task.title,
+                description=task.description,
+                requested_deadline=task.requested_deadline,
+                tags=list(task.tags.values_list("pk", flat=True)),
+                responsavel=task.responsavel_id,
+                participantes=list(
+                    task.executors.filter(removed_at__isnull=True).values_list("user_id", flat=True)
+                ),
+            )
 
     def clean_description(self):
         return sanitize_description(self.cleaned_data.get("description"))
+
+    def clean(self):
+        cleaned = super().clean()
+        participantes = cleaned.get("participantes")
+        responsavel = cleaned.get("responsavel") or (self.task.responsavel if self.task is not None else None)
+        if participantes is not None and responsavel is not None:
+            # Responsável e participantes são conjuntos disjuntos.
+            cleaned["participantes"] = participantes.exclude(pk=responsavel.pk)
+        return cleaned
+
+
+class TaskDependencyForm(forms.Form):
+    """“Gerenciar dependência”: só oferece as tarefas que podem ser predecessoras
+    (da mesma atividade, não canceladas e sem ciclo — ver
+    `TaskService.dependency_candidates`)."""
+
+    depends_on = forms.ModelChoiceField(
+        queryset=Task.objects.none(),
+        required=False,
+        empty_label="Nenhuma — esta tarefa não espera por ninguém",
+        label="Qual tarefa precisa terminar antes desta?",
+        help_text="Enquanto ela não for concluída, esta tarefa fica aguardando a etapa anterior e não entra "
+        "na fila do setor.",
+    )
+
+    def __init__(self, *args, candidates=None, current=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        field = self.fields["depends_on"]
+        field.queryset = candidates if candidates is not None else Task.objects.none()
+        field.label_from_instance = lambda item: f"{item.title} — {item.get_status_display()}"
+        if current is not None and not self.is_bound:
+            self.initial["depends_on"] = current.pk
 
 
 class TaskQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
@@ -685,11 +758,26 @@ class ConflictResolutionForm(forms.Form):
 
 
 class ManualTimeForm(forms.Form):
-    """Apropriação posterior de tempo (Regras 04 §110-113)."""
+    """“Adicionar tempo trabalhado” (Regras 04 §110-113): acrescenta um período
+    já trabalhado, com motivo, sem concluir a tarefa. Mesmas regras de motivo e
+    comentário de “Já realizei este trabalho”, aplicadas pelo serviço."""
 
     started_at = forms.DateTimeField(label="Quando você começou a trabalhar?", widget=DateTimeLocalInput())
     ended_at = forms.DateTimeField(label="Quando você parou?", widget=DateTimeLocalInput(),
                                    help_text="Informe um período já trabalhado. O sistema calcula a duração entre o início e o fim.")
+    reason = forms.ChoiceField(
+        label="Motivo",
+        choices=WorkSession.ManualReason.choices,
+        initial=WorkSession.ManualReason.ESQUECI_INICIAR,
+    )
+    note = forms.CharField(
+        label="Comentário",
+        required=False,
+        max_length=255,
+        widget=forms.Textarea(attrs={"rows": 2, "maxlength": 255, "data-mention": "1"}),
+        help_text=f"Explique quando escolher “Outro” ou quando o trabalho foi há mais de "
+        f"{RETROACTIVE_JUSTIFICATION_DAYS} dias.",
+    )
 
 
 class RetroactiveWorkForm(forms.Form):

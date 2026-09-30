@@ -43,7 +43,8 @@ from .forms import (
     RetroactiveWorkForm,
     TaskBlockForm,
     TaskChangeResponsavelForm,
-    TaskForm,
+    TaskDependencyForm,
+    TaskEditorForm,
     TaskQuickCreateForm,
     TaskQuickCreateStandaloneForm,
     TaskReturnForm,
@@ -75,6 +76,7 @@ from .services import (
     MessageService,
     QueueService,
     TaskService,
+    WorkTimeService,
 )
 
 
@@ -1849,9 +1851,11 @@ class TaskDetailView(OrganizationRequiredMixin, DetailView):
         pending_proposal = task.deadline_proposals.filter(
             status=DeadlineProposal.Status.PENDENTE
         ).select_related("proposed_by").first()
-        my_pending_assignment = task.assignments.filter(
-            user=user, status=TaskAssignment.Status.PENDENTE
-        ).select_related("assigned_by").first()
+        pending_assignments = list(
+            task.assignments.filter(status=TaskAssignment.Status.PENDENTE).select_related("user", "assigned_by")
+        )
+        my_pending_assignment = next((item for item in pending_assignments if item.user_id == user.id), None)
+        task_is_open = task.status not in (Task.Status.CONCLUIDA, Task.Status.CANCELADA)
 
         context.update(
             {
@@ -1874,6 +1878,7 @@ class TaskDetailView(OrganizationRequiredMixin, DetailView):
                 "can_toggle_checklist": TaskService.can_toggle_checklist(task, user),
                 "pending_proposal": pending_proposal,
                 "my_pending_assignment": my_pending_assignment,
+                "pending_assignments": pending_assignments,
                 "can_accept_assignment": can(user, catalog.TAREFA_ACEITAR, task),
                 "can_reject_assignment": can(user, catalog.TAREFA_RECUSAR, task),
                 "assignment_reject_form": AssignmentRejectForm(organization=self.organization),
@@ -1896,6 +1901,7 @@ class TaskDetailView(OrganizationRequiredMixin, DetailView):
                 "can_cancel_task": can(user, catalog.TAREFA_CANCELAR, task),
                 "can_reopen_task": task.status == Task.Status.CONCLUIDA and can(user, catalog.TAREFA_REABRIR, task),
                 "can_edit_task": can(user, catalog.TAREFA_EDITAR, task),
+                "can_manage_dependency": task_is_open and can(user, catalog.TAREFA_EDITAR, task),
                 "can_log_time": can(user, catalog.TEMPO_LANCAR_MANUAL, task),
                 "can_propose": can(user, catalog.PRAZO_PROPOR, task),
                 "can_resolve_conflict": can(user, catalog.ESCALONAMENTO_RESOLVER, task),
@@ -2158,45 +2164,6 @@ class ActivityAttachmentDeleteView(ServiceActionView):
         return f"{reverse('activity-detail', args=[self.kwargs['pk']])}#feed-panel"
 
 
-class TaskEditView(OrganizationRequiredMixin, FormView):
-    template_name = "activities/task_form.html"
-    form_class = TaskForm
-
-    def get_task(self):
-        return get_object_or_404(
-            Task, pk=self.kwargs["pk"], activity__organization=self.organization
-        )
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        task = self.get_task()
-        kwargs["organization"] = self.organization
-        kwargs["activity"] = task.activity
-        kwargs["instance"] = task
-        return kwargs
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        task = self.get_task()
-        context["activity"] = task.activity
-        context["task"] = task
-        context["is_edit"] = True
-        return context
-
-    def form_valid(self, form):
-        task = self.get_task()
-        data = dict(form.cleaned_data)
-        # Setor tem serviço próprio (movimentação com histórico); não entra no update.
-        data.pop("sector", None)
-        try:
-            TaskService.update_task(task, self.request.user, **data)
-        except ActivityError as exc:
-            form.add_error(None, str(exc))
-            return self.form_invalid(form)
-        messages.success(self.request, "Tarefa atualizada.")
-        return redirect("task-detail", pk=task.pk)
-
-
 class TaskActionView(ServiceActionView):
     """Ações de estado da tarefa, cada uma delegando ao serviço correspondente."""
 
@@ -2236,8 +2203,13 @@ class TaskActionView(ServiceActionView):
             raise ActivityError("Ação desconhecida.")
 
 
-class TaskFormActionView(OrganizationRequiredMixin, FormView):
-    """Ações que exigem dados extras (devolver, bloquear, mover, prazo...)."""
+class TaskFormActionView(ActivityActionResponseMixin, OrganizationRequiredMixin, FormView):
+    """Ações que exigem dados extras (devolver, bloquear, mover, prazo...).
+
+    Todas servem de página (sem JavaScript) ou de janela sobre a tela de onde a
+    pessoa veio: com `X-Requested-With`, sucesso vira `{redirect_url}` e erro
+    vira 400 com `{errors}` (`ActivityActionResponseMixin`).
+    """
 
     template_name = "activities/task_action_form.html"
     title = ""
@@ -2348,7 +2320,7 @@ class TaskCancelView(TaskFormActionView):
         messages.success(self.request, "Tarefa cancelada.")
 
 
-class TaskReopenView(ActivityActionResponseMixin, TaskFormActionView):
+class TaskReopenView(TaskFormActionView):
     """Popup "Reabrir tarefa" (motivo obrigatório). Mesmo formulário serve de
     janela sobre a ficha/painel/lista (JSON) ou de página, sem JavaScript."""
 
@@ -2362,7 +2334,7 @@ class TaskReopenView(ActivityActionResponseMixin, TaskFormActionView):
         messages.success(self.request, "Tarefa reaberta.")
 
 
-class TaskRetroactiveView(ActivityActionResponseMixin, TaskFormActionView):
+class TaskRetroactiveView(TaskFormActionView):
     """Popup "Já realizei este trabalho": a pessoa informa quando fez o
     trabalho e a tarefa é concluída agora (`TaskService.register_completed_work`).
     Janela (JSON) sobre a ficha/painel, ou página sem JavaScript."""
@@ -2389,6 +2361,86 @@ class TaskRetroactiveView(ActivityActionResponseMixin, TaskFormActionView):
             note=data.get("note") or "",
         )
         messages.success(self.request, "Trabalho registrado e tarefa concluída.")
+
+
+class TaskEditView(TaskFormActionView):
+    """Editor único da tarefa, em janela (ou página, sem JavaScript): dados,
+    prazo pedido, marcadores, responsável e participantes, salvos numa
+    transação (`TaskService.edit_task`). Exige `tarefa.editar` já ao abrir.
+    Setor e dependência ficam de fora: têm janela própria em Mais ações."""
+
+    template_name = "activities/task_edit_form.html"
+    form_class = TaskEditorForm
+    required_action = catalog.TAREFA_EDITAR
+    title = "Editar tarefa"
+    submit_label = "Salvar alterações"
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        task = self.get_task()
+        user = self.request.user
+        kwargs.update(
+            organization=self.organization,
+            task=task,
+            can_change_responsavel=can(user, catalog.TAREFA_ALTERAR_RESPONSAVEL, task),
+            can_assign=can(user, catalog.TAREFA_ATRIBUIR, task),
+            can_create_person=can(user, catalog.USUARIO_CRIAR),
+        )
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        task = context["task"]
+        context.update(
+            activity=task.activity,
+            pending_assignments=task.assignments.filter(status=TaskAssignment.Status.PENDENTE).select_related("user"),
+            current_responsavel=task.responsavel,
+            current_participants=[
+                link.user for link in task.executors.filter(removed_at__isnull=True).select_related("user")
+            ],
+        )
+        return context
+
+    def run(self, task, data):
+        result = TaskService.edit_task(
+            task,
+            self.request.user,
+            title=data["title"],
+            description=data.get("description") or "",
+            requested_deadline=data.get("requested_deadline"),
+            tags=data.get("tags"),
+            responsavel=data.get("responsavel"),
+            participants=list(data["participantes"]) if data.get("participantes") is not None else None,
+        )
+        text = "Tarefa atualizada."
+        if result["invited"]:
+            names = ", ".join(person.get_username() for person in result["invited"])
+            text += f" Convite enviado a {names}: a pessoa só entra como participante depois de aceitar."
+        messages.success(self.request, text)
+
+
+class TaskDependencyView(TaskFormActionView):
+    """“Gerenciar dependência”: qual tarefa precisa terminar antes desta.
+    Janela própria porque muda o fluxo operacional (fila e liberação)."""
+
+    form_class = TaskDependencyForm
+    required_action = catalog.TAREFA_EDITAR
+    title = "Gerenciar dependência"
+    submit_label = "Salvar dependência"
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        task = self.get_task()
+        kwargs.update(candidates=TaskService.dependency_candidates(task), current=task.depends_on)
+        return kwargs
+
+    def run(self, task, data):
+        depends_on = data.get("depends_on")
+        TaskService.change_dependency(task, self.request.user, depends_on)
+        if depends_on is None:
+            messages.success(self.request, "Dependência removida: a tarefa não espera mais por ninguém.")
+        else:
+            messages.success(self.request, f"Agora esta tarefa só começa depois de «{depends_on.title}».")
 
 
 class TaskExecutorAddView(ServiceActionView):
@@ -2534,8 +2586,10 @@ class TaskManualTimeView(TaskFormActionView):
             started_at=data["started_at"],
             ended_at=data["ended_at"],
             logged_by=self.request.user,
+            reason=data["reason"],
+            note=data.get("note") or "",
         )
-        messages.success(self.request, "Tempo lançado manualmente.")
+        messages.success(self.request, "Tempo adicionado à tarefa.")
 
 
 # ---------------------------------------------------------------------------
@@ -2942,6 +2996,9 @@ class ManagementView(OrganizationRequiredMixin, TemplateView):
                 # trazido também para dentro do painel filtrado; respeita o
                 # filtro de setor quando um setor específico é escolhido.
                 "dash_filas_por_setor": sectors.filter(pk=d_sector) if d_sector else sectors,
+                # Origem das horas registradas nas atividades filtradas:
+                # cronômetro × informado pela pessoa, e por quê (Regras 04 §119).
+                "dash_time_origin": WorkTimeService.origin_breakdown(dash_activities),
             }
         )
         return context

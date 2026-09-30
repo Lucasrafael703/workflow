@@ -1,8 +1,9 @@
 import re
+from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import Max
+from django.db.models import Count, DurationField, ExpressionWrapper, F, Max, Sum
 from django.utils import timezone
 
 from acessos import catalog
@@ -1162,7 +1163,7 @@ class TaskService:
         if task.status in (Task.Status.CONCLUIDA, Task.Status.CANCELADA):
             raise ActivityError("Não é possível editar uma tarefa concluída ou cancelada.")
 
-        editable = {"title", "description", "requested_deadline", "order", "depends_on"}
+        editable = {"title", "description", "requested_deadline", "order"}
         changed = []
         for field, value in fields.items():
             if field not in editable:
@@ -1172,8 +1173,6 @@ class TaskService:
                 continue
             if field == "title" and not value:
                 raise ActivityError("Informe o título da tarefa.")
-            if field == "depends_on" and value is not None and value.pk == task.pk:
-                raise ActivityError("Uma tarefa não pode depender dela mesma.")
             setattr(task, field, value)
             changed.append(field)
             AuditService.log(
@@ -1189,15 +1188,11 @@ class TaskService:
         if changed:
             task.save(update_fields=changed)
 
-        if "depends_on" in changed and TaskService.pending_dependency(task) is None:
-            # Tarefa que só esperava a antiga predecessora e agora não espera
-            # mais ninguém não pode ficar esquecida fora da fila.
-            TaskService._release_task(
-                task, user, reason="A dependência da tarefa foi removida ou já está concluída."
-            )
+        if "depends_on" in fields:
+            TaskService._apply_dependency(task, user, fields["depends_on"])
 
         if "tags" in fields:
-            task.tags.set(fields["tags"])
+            TaskService._set_tags(task, user, fields["tags"])
 
         if "description" in changed:
             notify_mentions(task.description, user, task, activity=task.activity, task=task)
@@ -1205,39 +1200,265 @@ class TaskService:
         return task
 
     @staticmethod
+    def _set_tags(task, user, tags):
+        """Troca os marcadores da tarefa e audita o que mudou (antes e depois)."""
+        old = set(task.tags.values_list("pk", flat=True))
+        new_tags = list(tags or [])
+        if old == {tag.pk for tag in new_tags}:
+            return False
+        old_names = ", ".join(task.tags.order_by("name").values_list("name", flat=True))
+        task.tags.set(new_tags)
+        AuditService.log(
+            user=user,
+            action=AuditLog.Action.UPDATE,
+            activity=task.activity,
+            task=task,
+            field_name="tags",
+            old_value=old_names or "Nenhum",
+            new_value=", ".join(sorted(tag.name for tag in new_tags)) or "Nenhum",
+        )
+        return True
+
+    # ------------------------------------------------------------------
+    # Dependência: troca, ciclo e candidatas (Regras 02 §29)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _descendant_ids(task):
+        """Tarefas da atividade que dependem de `task`, direta ou indiretamente."""
+        children = {}
+        rows = Task.objects.filter(activity_id=task.activity_id, depends_on__isnull=False).values_list(
+            "pk", "depends_on_id"
+        )
+        for pk, parent_id in rows:
+            children.setdefault(parent_id, []).append(pk)
+        found, pending = set(), [task.pk]
+        while pending:
+            for child in children.get(pending.pop(), ()):
+                if child not in found:
+                    found.add(child)
+                    pending.append(child)
+        return found
+
+    @staticmethod
+    def dependency_candidates(task):
+        """Tarefas que `task` pode ter como predecessora: da mesma atividade,
+        não canceladas e que não dependam (nem indiretamente) dela — senão as
+        duas ficariam esperando uma pela outra para sempre."""
+        blocked = TaskService._descendant_ids(task) | {task.pk}
+        return (
+            Task.objects.filter(activity_id=task.activity_id)
+            .exclude(status=Task.Status.CANCELADA)
+            .exclude(pk__in=blocked)
+            .order_by("order", "pk")
+        )
+
+    @staticmethod
+    def _apply_dependency(task, user, depends_on):
+        """Troca a predecessora de `task` — **sem autorizar**: quem chama já
+        exigiu `tarefa.editar`. Devolve `True` se algo mudou.
+
+        Recusa ciclo, predecessora de outra atividade ou cancelada e uma nova
+        espera numa tarefa que já começou. Uma tarefa que estava na fila e passa
+        a esperar sai da fila (como na reabertura); a que deixa de esperar
+        entra na fila, para não ficar esquecida fora dela.
+        """
+        if task.depends_on_id == (depends_on.pk if depends_on is not None else None):
+            return False
+        if depends_on is not None:
+            if depends_on.pk == task.pk:
+                raise ActivityError("Uma tarefa não pode depender dela mesma.")
+            if depends_on.activity_id != task.activity_id:
+                raise ActivityError("A tarefa anterior precisa ser da mesma atividade.")
+            if depends_on.status == Task.Status.CANCELADA:
+                raise ActivityError("Não dá para depender de uma tarefa cancelada.")
+            if depends_on.pk in TaskService._descendant_ids(task):
+                raise ActivityError(
+                    f"«{depends_on.title}» já depende desta tarefa: a dependência formaria um ciclo "
+                    "e nenhuma das duas poderia começar."
+                )
+        will_wait = depends_on is not None and depends_on.status != Task.Status.CONCLUIDA
+        if will_wait and (
+            task.status not in (Task.Status.DISPONIVEL, Task.Status.EM_FILA)
+            or (task.status == Task.Status.EM_FILA and task.work_sessions.exists())
+        ):
+            raise ActivityError(
+                "Esta tarefa já começou; não dá para fazê-la esperar por outra tarefa que ainda não terminou."
+            )
+
+        old = task.depends_on
+        task.depends_on = depends_on
+        task.save(update_fields=["depends_on"])
+        AuditService.log(
+            user=user,
+            action=AuditLog.Action.UPDATE,
+            activity=task.activity,
+            task=task,
+            field_name="depends_on",
+            old_value=old.title if old is not None else "Nenhuma",
+            new_value=depends_on.title if depends_on is not None else "Nenhuma",
+        )
+
+        if will_wait and task.status == Task.Status.EM_FILA:
+            entry = task.queue_entries.filter(left_at__isnull=True).select_related("sector").first()
+            if entry is not None:
+                entry.left_at = timezone.now()
+                entry.save(update_fields=["left_at"])
+                QueueService.renumber(entry.sector)
+            task.status = Task.Status.DISPONIVEL
+            task.save(update_fields=["status"])
+            AuditService.log(
+                user=user,
+                action=AuditLog.Action.UPDATE,
+                activity=task.activity,
+                task=task,
+                field_name="status",
+                old_value=Task.Status.EM_FILA,
+                new_value=Task.Status.DISPONIVEL,
+                reason=f"A tarefa passou a depender de «{depends_on.title}».",
+            )
+        elif not will_wait:
+            # Tarefa que só esperava a antiga predecessora e agora não espera
+            # mais ninguém não pode ficar esquecida fora da fila.
+            TaskService._release_task(
+                task, user, reason="A dependência da tarefa foi removida ou já está concluída."
+            )
+        return True
+
+    @staticmethod
     @transaction.atomic
-    def log_manual_time(task, user, started_at, ended_at, logged_by):
+    def change_dependency(task, user, depends_on):
+        """“Gerenciar dependência”: define (ou retira, com `None`) a tarefa que
+        precisa terminar antes desta. Muda o fluxo operacional — por isso tem
+        janela própria e não faz parte do editor comum. Exige `tarefa.editar`."""
+        task = Task.objects.select_for_update(of=("self",)).select_related("activity", "sector", "depends_on").get(pk=task.pk)
+        require_action(user, catalog.TAREFA_EDITAR, task)
+        if task.status in (Task.Status.CONCLUIDA, Task.Status.CANCELADA):
+            raise ActivityError("Não é possível mudar a dependência de uma tarefa concluída ou cancelada.")
+        TaskService._apply_dependency(task, user, depends_on)
+        return task
+
+    # ------------------------------------------------------------------
+    # Editor da tarefa: tudo numa transação só
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    @transaction.atomic
+    def edit_task(
+        task, user, *, title, description, requested_deadline, tags, responsavel=None, participants=None
+    ):
+        """Salva o editor da tarefa de uma vez: dados, marcadores, responsável
+        e participantes. Se qualquer parte for recusada, **nada** é gravado.
+
+        Cada parte continua exigindo a sua própria ação: dados e marcadores,
+        `tarefa.editar`; responsável, `tarefa.alterar_responsavel`; participantes,
+        `tarefa.atribuir` (ou `tarefa.assumir`, para a própria pessoa).
+        `responsavel=None` e `participants=None` deixam essas partes como estão
+        (é o que a tela envia para quem não pode mexer nelas).
+
+        Adicionar *outra* pessoa como participante não a inclui já: cria um
+        convite que ela precisa aceitar (`TaskAssignment` pendente). Por isso o
+        retorno diz quem foi convidado.
+        """
+        task = Task.objects.select_for_update(of=("self",)).select_related("activity", "sector", "responsavel").get(pk=task.pk)
+        TaskService.update_task(
+            task, user, title=title, description=description, requested_deadline=requested_deadline, tags=tags
+        )
+        if responsavel is not None and responsavel.pk != task.responsavel_id:
+            TaskService.change_responsavel(task, responsavel, user)
+
+        invited, added, removed = [], [], []
+        if participants is not None:
+            wanted = {person.pk: person for person in participants if person.pk != task.responsavel_id}
+            current = {
+                link.user_id: link.user
+                for link in task.executors.filter(removed_at__isnull=True).select_related("user")
+            }
+            pending = set(
+                task.assignments.filter(status=TaskAssignment.Status.PENDENTE).values_list("user_id", flat=True)
+            )
+            for pk, person in current.items():
+                if pk not in wanted:
+                    TaskService.remove_executor(task, person, removed_by=user)
+                    removed.append(person)
+            for pk, person in wanted.items():
+                if pk in current or pk in pending:
+                    continue
+                result = TaskService.add_executor(task, person, added_by=user)
+                (invited if isinstance(result, TaskAssignment) else added).append(person)
+        return {"task": task, "invited": invited, "added": added, "removed": removed}
+
+    @staticmethod
+    def _clean_informed_reason(reason, note, started_at, now):
+        """Motivo e comentário de um período informado pela pessoa — a mesma
+        regra para “Já realizei este trabalho” e “Adicionar tempo trabalhado”:
+        motivo válido, comentário para *Outro* e para trabalho de mais de
+        `RETROACTIVE_JUSTIFICATION_DAYS` dias atrás, até 255 caracteres."""
+        if reason not in WorkSession.ManualReason.values:
+            raise ActivityError("Escolha o motivo.")
+        note = (note or "").strip()
+        if reason == WorkSession.ManualReason.OUTRO and not note:
+            raise ActivityError("Explique o motivo no comentário.")
+        days_ago = (timezone.localdate(now) - timezone.localdate(started_at)).days
+        if days_ago > RETROACTIVE_JUSTIFICATION_DAYS and not note:
+            raise ActivityError(
+                f"O trabalho foi há mais de {RETROACTIVE_JUSTIFICATION_DAYS} dias: escreva uma justificativa no comentário."
+            )
+        max_note = WorkSession._meta.get_field("note").max_length
+        if len(note) > max_note:
+            raise ActivityError(f"O comentário deve ter no máximo {max_note} caracteres.")
+        return note
+
+    @staticmethod
+    @transaction.atomic
+    def log_manual_time(task, user, started_at, ended_at, logged_by, reason="", note=""):
         """Apropriação posterior de tempo trabalhado (Regras 04 §110-113, §214).
 
         Fica marcada como lançamento manual para diferenciar do tempo capturado
-        pelo timer, preservando a confiabilidade das métricas.
+        pelo timer, preservando a confiabilidade das métricas. Só acrescenta
+        tempo: não conclui a tarefa (para isso, `register_completed_work`).
+
+        O motivo (`WorkSession.ManualReason`) e o comentário seguem as mesmas
+        regras de “Já realizei este trabalho”. A tela sempre pede o motivo; em
+        código ele continua opcional para não invalidar chamadores antigos — sem
+        motivo, a sessão fica sem `manual_reason`, como as anteriores a ele.
         """
         require_action(logged_by, catalog.TEMPO_LANCAR_MANUAL, task)
         if started_at is None or ended_at is None:
             raise ActivityError("Informe o início e o fim do período trabalhado.")
         if ended_at <= started_at:
             raise ActivityError("O fim do período precisa ser posterior ao início.")
-        if started_at > timezone.now():
+        now = timezone.now()
+        if started_at > now:
             raise ActivityError("Não é possível lançar tempo no futuro.")
         # Tempo só pode ser apropriado a quem de fato executa a tarefa — do
         # contrário as horas-homem deixam de refletir o trabalho real.
         if not TaskService._is_responsavel_or_participant(task, user):
             raise ActivityError("Só é possível lançar tempo para o responsável ou um participante da tarefa.")
+        if reason:
+            note = TaskService._clean_informed_reason(reason, note, started_at, now)
+        else:
+            reason, note = "", ""
 
         session = WorkSession.objects.create(
             task=task, user=user, started_at=started_at, ended_at=ended_at, is_manual=True,
-            logged_at=timezone.now(),
+            logged_at=now, manual_reason=reason, note=note,
         )
         ActivityService._register_first_action(task)
         ActivityService._register_first_action(task.activity)
 
+        audit_reason = "Lançamento manual de tempo"
+        if reason:
+            audit_reason += f" · {WorkSession.ManualReason(reason).label}"
+            if note:
+                audit_reason += f" · {note}"
         AuditService.log(
             user=logged_by,
             action=AuditLog.Action.SESSION_STARTED,
             activity=task.activity,
             task=task,
             new_value=f"{started_at:%d/%m/%Y %H:%M} - {ended_at:%d/%m/%Y %H:%M}",
-            reason="Lançamento manual de tempo",
+            reason=audit_reason,
         )
         return session
 
@@ -1287,19 +1508,7 @@ class TaskService:
             raise ActivityError(
                 f"Esta tarefa só foi criada em {created:%d/%m/%Y às %H:%M}; o trabalho não pode ter terminado antes disso."
             )
-        if reason not in WorkSession.ManualReason.values:
-            raise ActivityError("Escolha o motivo.")
-        note = (note or "").strip()
-        if reason == WorkSession.ManualReason.OUTRO and not note:
-            raise ActivityError("Explique o motivo no comentário.")
-        days_ago = (timezone.localdate(now) - timezone.localdate(started_at)).days
-        if days_ago > RETROACTIVE_JUSTIFICATION_DAYS and not note:
-            raise ActivityError(
-                f"O trabalho foi há mais de {RETROACTIVE_JUSTIFICATION_DAYS} dias: escreva uma justificativa no comentário."
-            )
-        max_note = WorkSession._meta.get_field("note").max_length
-        if len(note) > max_note:
-            raise ActivityError(f"O comentário deve ter no máximo {max_note} caracteres.")
+        note = TaskService._clean_informed_reason(reason, note, started_at, now)
 
         WorkSession.objects.create(
             task=task, user=user, started_at=started_at, ended_at=ended_at, is_manual=True,
@@ -1783,6 +1992,8 @@ class TaskService:
             raise ActivityError("Informe o motivo do bloqueio.")
         if task.status == Task.Status.BLOQUEADA:
             raise ActivityError("Esta tarefa já está bloqueada.")
+        if task.status in (Task.Status.CONCLUIDA, Task.Status.CANCELADA):
+            raise ActivityError("Não é possível bloquear uma tarefa concluída ou cancelada.")
 
         old_status = task.status
         TaskBlock.objects.create(task=task, reason=reason, observation=observation, started_by=user)
@@ -2018,6 +2229,56 @@ class TaskService:
             task.save(update_fields=["overdue_notified_at"])
             count += 1
         return count
+
+
+class WorkTimeService:
+    """Origem do tempo registrado (Regras 04 §113 e §119): quanto foi
+    cronometrado, quanto foi informado pela pessoa e por que motivo. Não muda
+    nenhum dado — só responde “de onde vêm as horas” para a gestão."""
+
+    @staticmethod
+    def origin_breakdown(activities):
+        """`activities`: queryset de `Activity` já recortado pelos filtros da
+        tela. Só conta sessões encerradas. `informed_pct` é `None` sem tempo."""
+        duration = ExpressionWrapper(F("ended_at") - F("started_at"), output_field=DurationField())
+        rows = (
+            WorkSession.objects.filter(task__activity__in=activities, ended_at__isnull=False)
+            .values("is_manual", "manual_reason")
+            .annotate(total=Sum(duration), sessions=Count("id"))
+        )
+        zero = timedelta(0)
+        timer, informed, by_reason = zero, zero, {}
+        for row in rows:
+            total = row["total"] or zero
+            if row["is_manual"]:
+                informed += total
+                bucket = by_reason.setdefault(row["manual_reason"], {"total": zero, "sessions": 0})
+                bucket["total"] += total
+                bucket["sessions"] += row["sessions"]
+            else:
+                timer += total
+        everything = timer + informed
+        labels = dict(WorkSession.ManualReason.choices)
+        reasons = [
+            {
+                "reason": reason,
+                "label": labels.get(reason) or "Sem motivo (registrado antes de o motivo existir)",
+                "total": bucket["total"],
+                "sessions": bucket["sessions"],
+                "pct_of_informed": round(bucket["total"] / informed * 100, 1) if informed else None,
+                "pct_of_all": round(bucket["total"] / everything * 100, 1) if everything else None,
+            }
+            for reason, bucket in by_reason.items()
+        ]
+        reasons.sort(key=lambda item: item["total"], reverse=True)
+        return {
+            "timer": timer,
+            "informed": informed,
+            "total": everything,
+            "timer_pct": round(timer / everything * 100, 1) if everything else None,
+            "informed_pct": round(informed / everything * 100, 1) if everything else None,
+            "reasons": reasons,
+        }
 
 
 class QueueService:

@@ -2184,8 +2184,9 @@ Governança leve, **sem aprovação** (aprovar tudo vira burocracia e ninguém u
 Distinção de confiabilidade (§113): o cartão de tempo da tarefa separa **tempo
 cronometrado** de **tempo informado pela pessoa**; a auditoria registra o evento
 “Trabalho informado depois” com o período, o momento do registro, o motivo e o
-comentário. O indicador “% do tempo informado manualmente, por motivo” (§119)
-fica para a gestão em etapa posterior.
+comentário. O indicador “% do tempo informado manualmente, por motivo” (§119) aparece
+na Visão do gestor, no quadro “Origem do tempo registrado”, e “Adicionar tempo
+trabalhado” também pede o motivo.
 
 ---
 
@@ -4631,7 +4632,7 @@ Precisam ser detalhadas posteriormente:
 - definição formal de primeira ação;
 - calendário útil no D0 ou D1;
 - comportamento exato de pausas curtas;
-- regra de lançamento retroativo (definida para o D0 em 112.1; falta o indicador por motivo e a política de correção de tempo já registrado);
+- regra de lançamento retroativo (definida para o D0 em 112.1; falta a política de correção de tempo já registrado);
 - necessidade de aprovação de correção de tempo;
 - classificação completa de bloqueios;
 - definição de retrabalho;

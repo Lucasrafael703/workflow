@@ -25,7 +25,8 @@ normal com POST — o fundo é decorativo e o "fechar" é um link de verdade.
                     {% if form.to_sector and form.reason %}<p>Envie a tarefa de volta para correção. Escolha o setor e explique o que precisa ser ajustado.</p>
                     {% elif form.to_sector %}<p>A tarefa vai para a fila do setor escolhido. Deixe uma orientação para a equipe que vai recebê-la.</p>
                     {% elif form.proposed_deadline %}<p>Proponha uma nova data de entrega. O responsável pela atividade receberá o pedido para aceitar ou recusar.</p>
-                    {% elif form.started_at %}<p>Use este registro para um trabalho que você já fez sem usar o cronômetro.</p>
+                    {% elif form.started_at %}<p>Use este registro para acrescentar um trabalho que você já fez sem usar o cronômetro. A tarefa continua como está; para concluí-la, use “Já realizei este trabalho”.</p>
+                    {% elif form.depends_on %}<p>Escolha a tarefa que precisa terminar antes desta. Enquanto ela não for concluída, esta tarefa fica aguardando a etapa anterior e não entra na fila do setor. Escolha “Nenhuma” para tirar a dependência.</p>
                     {% elif title == "Registrar bloqueio" %}<p>Avise o que impede o trabalho de continuar. Depois de resolver o problema, você poderá liberar a tarefa.</p>
                     {% elif title == "Recusar atribuição" %}<p>Explique por que você não pode assumir esta tarefa. Quem a atribuiu receberá o motivo.</p>
                     {% elif title == "Reabrir tarefa" %}<p>A tarefa volta ao fim da fila do setor, com o trabalho e o tempo já registrados preservados. Explique por que ela precisa ser reaberta: o motivo fica no histórico. Se a atividade estiver concluída, ela é reaberta junto.</p>

@@ -362,7 +362,7 @@ class TaskAuthorizationTests(ViewTestCase):
         self.client.force_login(self.member)
         response = self.client.post(
             reverse("task-manual-time", args=[self.task.pk]),
-            {"started_at": "2026-09-01T08:00", "ended_at": "2026-09-01T09:00"},
+            {"started_at": "2026-09-01T08:00", "ended_at": "2026-09-01T09:00", "reason": "AJUSTE_PERIODO"},
         )
         self.assertContains(response, "participante da tarefa")
         self.assertEqual(self.task.work_sessions.count(), 0)

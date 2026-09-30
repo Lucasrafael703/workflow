@@ -128,10 +128,12 @@
 |---|---|
 | `tarefas/` (`task-list`), `tarefas/kanban/`, `tarefas/calendario/` | Lista, Kanban, calendário |
 | `tarefas/nova-rapida/` | Nova tarefa com seletor de atividade |
-| `tarefas/<pk>/` (`task-detail`), `tarefas/<pk>/painel/`, `tarefas/<pk>/editar/` | Ficha, painel lateral, edição |
+| `tarefas/<pk>/` (`task-detail`), `tarefas/<pk>/painel/` | Ficha, painel lateral |
+| `tarefas/<pk>/editar/` (`task-edit`) | Editor único: dados, prazo pedido, marcadores, responsável e participantes (`tarefa.editar` na view, já no GET; responsável e participantes exigem as suas ações no serviço). Janela (JSON no Ajax) ou página |
+| `tarefas/<pk>/dependencia/` (`task-dependency`) | Gerenciar dependência (`tarefa.editar` na view). Janela (JSON no Ajax) ou página |
 | `tarefas/<pk>/assumir/`, `iniciar/`, `pausar/`, `retomar/`, `concluir/`, `desbloquear/` | Ações de execução (`task-assume`, `task-start`...) |
 | `tarefas/<pk>/iniciar/ajax/`, `pausar/ajax/`, `concluir/ajax/` | Mesmas ações em JSON, para o painel |
-| `tarefas/<pk>/bloquear/` | Bloquear (`tarefa.bloquear` na view) |
+| `tarefas/<pk>/bloquear/` | Bloquear (`tarefa.bloquear` na view). **Todas as ações de formulário abaixo (devolver, bloquear, mover, cancelar, reabrir, já realizei, tempo, prazo, dependência) respondem JSON quando chamadas com `X-Requested-With`** |
 | `tarefas/<pk>/devolver/` | Devolver (`tarefa.devolver` na view) |
 | `tarefas/<pk>/mover/` | Outro setor (`tarefa.mover_setor` na view) |
 | `tarefas/<pk>/cancelar/` | Cancelar (`tarefa.cancelar` na view) |

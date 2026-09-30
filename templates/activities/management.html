@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load lps %}
 {% block title %}Visão do gestor — LPS{% endblock %}
 
 {% block content %}
@@ -273,6 +274,37 @@ ao que o modelo trazia.{% endcomment %}
             </div>
             {% else %}
             <div class="card__body"><p class="muted" style="margin:0">Nenhuma atividade com centro de custo no recorte atual.</p></div>
+            {% endif %}
+        </div>
+
+        {# Origem das horas: o que o cronômetro mediu × o que a pessoa informou depois (Regras 04 §113, §119). #}
+        <div class="card card--flush" id="origem-do-tempo">
+            <div class="card__head"><h2>Origem do tempo registrado</h2></div>
+            {% if dash_time_origin.total %}
+            <div class="card__body">
+                <div class="time-split">
+                    <div><span class="muted small">Cronometrado</span><strong>{{ dash_time_origin.timer|duration_hm }}</strong><span class="muted small">{{ dash_time_origin.timer_pct }}% do total</span></div>
+                    <div><span class="muted small">Informado pela pessoa</span><strong>{{ dash_time_origin.informed|duration_hm }}</strong><span class="muted small">{{ dash_time_origin.informed_pct }}% do total</span></div>
+                </div>
+            </div>
+            {% if dash_time_origin.reasons %}
+            <div class="table-wrap">
+                <table class="responsive">
+                    <thead><tr><th>Motivo</th><th>Tempo</th><th>% do informado</th></tr></thead>
+                    <tbody>
+                    {% for row in dash_time_origin.reasons %}
+                    <tr>
+                        <td data-label="Motivo">{{ row.label }}</td>
+                        <td data-label="Tempo">{{ row.total|duration_hm }}</td>
+                        <td data-label="% do informado">{{ row.pct_of_informed }}%</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+            {% else %}
+            <div class="card__body"><p class="muted" style="margin:0">Ainda não há tempo registrado no recorte atual.</p></div>
             {% endif %}
         </div>
     </div>

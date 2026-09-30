@@ -35,7 +35,8 @@ E-mails são **síncronos** (enviados durante a requisição) via
 | Aprovar pendência | `PENDENCY_APPROVED` | `ACTIVITY_APPROVED` → dono | — |
 | Anexo incluído/removido | `UPDATE` (campo "anexo") | — | — |
 | Tarefa criada | `TASK_CREATED` | `TASK_ASSIGNED` → membros e gestores do setor | — |
-| Tarefa editada | `UPDATE` | menções | — |
+| Tarefa editada (editor) | `UPDATE` (um por campo: título, descrição, prazo pedido e `tags`, com antes e depois); `RESPONSAVEL_CHANGED`, `EXECUTOR_ADDED/REMOVED` e `ASSIGNMENT_CREATED` quando o editor mexe em responsável e participantes | menções; `TASK_RESPONSAVEL_CHANGED`; `TASK_ASSIGNMENT_PENDING` → convidado | — |
+| Mudar a dependência | `UPDATE` de `depends_on` (títulos antes e depois); `UPDATE` de `status` (`EM_FILA`→`DISPONIVEL`) se a tarefa passou a esperar; `TASK_RELEASED` se deixou de esperar | `TASK_ASSIGNED` (“Tarefa liberada para a fila”) quando é liberada | — |
 | Assumir / aceitar atribuição | `EXECUTOR_ADDED` (+ `ASSIGNMENT_ACCEPTED`) | `TASK_ASSIGNED` → quem aceitou | — |
 | Atribuir a outra pessoa | `ASSIGNMENT_CREATED` | `TASK_ASSIGNMENT_PENDING` → atribuído | — |
 | Recusar atribuição | `ASSIGNMENT_REJECTED` | `TASK_ASSIGNMENT_REJECTED` → quem atribuiu | — |

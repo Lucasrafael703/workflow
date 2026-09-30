@@ -79,6 +79,7 @@ urlpatterns = [
     path("tarefas/<int:pk>/cancelar/", views.TaskCancelView.as_view(), name="task-cancel"),
     path("tarefas/<int:pk>/reabrir/", views.TaskReopenView.as_view(), name="task-reopen"),
     path("tarefas/<int:pk>/ja-realizei/", views.TaskRetroactiveView.as_view(), name="task-retroactive"),
+    path("tarefas/<int:pk>/dependencia/", views.TaskDependencyView.as_view(), name="task-dependency"),
     path("tarefas/<int:pk>/executores/", views.TaskExecutorAddView.as_view(), name="task-executor-add"),
     path(
         "tarefas/<int:pk>/executores/<int:user_pk>/remover/",

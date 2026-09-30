@@ -107,7 +107,8 @@
                         <p class="muted small">Vai interromper o trabalho? Pause o cronômetro. Terminou a entrega? Conclua a tarefa.</p>
                     </div>
                 {% elif dependency_blocking %}
-                    <p class="muted" style="margin:0">Esta tarefa entra na fila do setor quando <a href="{% url 'task-detail' task.depends_on.pk %}">{{ task.depends_on.title }}</a> for concluída. Até lá, não dá para iniciá-la.</p>
+                    <p class="muted" style="margin:0">Esta tarefa entra na fila do setor quando <a href="{% url 'task-detail' task.depends_on.pk %}">{{ task.depends_on.title }}</a> for concluída. Até lá, não dá para iniciá-la.
+                    {% if can_manage_dependency %}<a href="{% url 'task-dependency' task.pk %}" data-activity-action>Gerenciar dependência</a>{% endif %}</p>
                 {% elif missing_process_inputs %}
                     <div class="message message--warning" style="margin:0">
                         Antes de começar, registre o recebimento dos inputs obrigatórios do processo:
@@ -139,25 +140,26 @@
                 {% endif %}
 
                 {% if task.status != "CONCLUIDA" and task.status != "CANCELADA" %}
-                {% if can_edit_task or can_return or can_move or can_block and not open_block or can_propose or can_log_time or can_cancel_task %}
-                {# Ações da tarefa: Editar à vista; o resto em "Mais ações", cada item só para quem pode. #}
+                {% if can_edit_task or can_return or can_move or can_manage_dependency or can_block and not open_block or can_propose or can_log_time or can_cancel_task %}
+                {# Ações da tarefa: Editar à vista; o resto em "Mais ações", cada item só para quem pode. Todas abrem em janela (sem JavaScript, viram página). #}
                 <div class="task-actions-bar">
                     <span class="task-actions-bar__label">{% include "_icon.html" with name="settings" %} Ações da tarefa</span>
                     {% if can_edit_task %}
-                    <a href="{% url 'task-edit' task.pk %}" class="btn task-actions-bar__edit">{% include "_icon.html" with name="task" %} Editar tarefa</a>
+                    <a href="{% url 'task-edit' task.pk %}" data-activity-action class="btn task-actions-bar__edit">{% include "_icon.html" with name="task" %} Editar tarefa</a>
                     {% endif %}
-                    {% if can_return or can_move or can_block and not open_block or can_propose or can_log_time or can_cancel_task %}
+                    {% if can_return or can_move or can_manage_dependency or can_block and not open_block or can_propose or can_log_time or can_cancel_task %}
                     <details class="menu-more">
                         <summary class="btn btn--ghost" aria-haspopup="menu">{% include "_icon.html" with name="more" %} Mais ações {% include "_icon.html" with name="chevron-down" %}</summary>
                         <div class="menu-more__popup" role="menu">
-                            {% if can_return %}<a href="{% url 'task-return' task.pk %}" role="menuitem">Devolver para correção</a>{% endif %}
-                            {% if can_move %}<a href="{% url 'task-move' task.pk %}" role="menuitem">Enviar para outro setor</a>{% endif %}
-                            {% if can_block and not open_block %}<a href="{% url 'task-block' task.pk %}" role="menuitem">Registrar bloqueio</a>{% endif %}
-                            {% if can_propose %}<a href="{% url 'deadline-propose' task.pk %}" role="menuitem">Propor novo prazo</a>{% endif %}
-                            {% if can_log_time %}<a href="{% url 'task-manual-time' task.pk %}" role="menuitem">Adicionar tempo trabalhado</a>{% endif %}
+                            {% if can_return %}<a href="{% url 'task-return' task.pk %}" data-activity-action role="menuitem">Devolver para correção</a>{% endif %}
+                            {% if can_move %}<a href="{% url 'task-move' task.pk %}" data-activity-action role="menuitem">Enviar para outro setor</a>{% endif %}
+                            {% if can_manage_dependency %}<a href="{% url 'task-dependency' task.pk %}" data-activity-action role="menuitem">Gerenciar dependência</a>{% endif %}
+                            {% if can_block and not open_block %}<a href="{% url 'task-block' task.pk %}" data-activity-action role="menuitem">Registrar bloqueio</a>{% endif %}
+                            {% if can_propose %}<a href="{% url 'deadline-propose' task.pk %}" data-activity-action role="menuitem">Propor novo prazo</a>{% endif %}
+                            {% if can_log_time %}<a href="{% url 'task-manual-time' task.pk %}" data-activity-action role="menuitem">Adicionar tempo trabalhado</a>{% endif %}
                             {% if can_cancel_task %}
                             <div class="menu-more__divider"></div>
-                            <a href="{% url 'task-cancel' task.pk %}" role="menuitem" class="menu-more__danger">Cancelar tarefa</a>
+                            <a href="{% url 'task-cancel' task.pk %}" data-activity-action role="menuitem" class="menu-more__danger">Cancelar tarefa</a>
                             {% endif %}
                         </div>
                     </details>
@@ -195,13 +197,13 @@
             <div class="card__body">
                 <div class="deadline-compare">
                     <div>
-                        <div class="k" title="Quando quem pediu precisa da entrega">Prazo solicitado</div>
-                        <p class="muted small">Quando quem pediu precisa receber.</p>
+                        <div class="k" title="Quando quem pediu precisa da entrega">Prazo pedido pelo solicitante</div>
+                        <p class="muted small">Quando quem pediu precisa receber a entrega.</p>
                         <div class="v">{% if task.requested_deadline %}{{ task.requested_deadline|date:"d/m/Y H:i" }}{% else %}<span class="muted">Não informado</span>{% endif %}</div>
                     </div>
                     <div>
-                        <div class="k" title="Prazo comprometido pelo setor responsável">Prazo combinado</div>
-                        <p class="muted small">Quando a equipe se comprometeu a entregar.</p>
+                        <div class="k" title="Prazo comprometido pelo setor responsável">Prazo que a equipe se comprometeu a cumprir</div>
+                        <p class="muted small">Combinado com o responsável pela atividade (Propor novo prazo).</p>
                         <div class="v">{% if task.committed_deadline %}{{ task.committed_deadline|date:"d/m/Y H:i" }}{% else %}<span class="muted">Ainda não combinado</span>{% endif %}</div>
                     </div>
                 </div>
@@ -295,7 +297,7 @@
                             <option value="{{ value }}">{{ label }}</option>
                             {% endfor %}
                         </select>
-                        {% if can_propose %}<a href="{% url 'deadline-propose' task.pk %}" class="btn">Propor novo prazo</a>{% endif %}
+                        {% if can_propose %}<a href="{% url 'deadline-propose' task.pk %}" data-activity-action class="btn">Propor novo prazo</a>{% endif %}
                         <button type="submit" class="btn btn--primary">Enviar comentário</button>
                     </div>
                 </form>
@@ -329,7 +331,7 @@
             <div class="card__head"><h2>Participantes</h2></div>
             <div class="card__body">
                 <p class="muted small">Pessoas que ajudam a executar esta tarefa.</p>
-                {% if executors %}
+                {% if executors or pending_assignments %}
                 <ul class="list-rows">
                     {% for executor in executors %}
                     <li style="display:flex;justify-content:space-between;align-items:center;gap:10px">
@@ -339,6 +341,12 @@
                             {% csrf_token %}<button type="submit" class="link-button" aria-label="Remover {{ executor.user.get_username }} dos participantes">Remover</button>
                         </form>
                         {% endif %}
+                    </li>
+                    {% endfor %}
+                    {% for invite in pending_assignments %}
+                    <li style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+                        <span>{{ invite.user.get_username }}</span>
+                        <span class="tag tag--PENDENTE" title="Convidado por {{ invite.assigned_by.get_username }} em {{ invite.assigned_at|date:'d/m/Y H:i' }}">aguardando aceite</span>
                     </li>
                     {% endfor %}
                 </ul>
@@ -431,6 +439,9 @@
     if (!menu) return;
     document.addEventListener("click", function (event) {
         if (!menu.contains(event.target)) menu.removeAttribute("open");
+    });
+    menu.addEventListener("click", function (event) {
+        if (event.target.closest(".menu-more__popup a")) menu.removeAttribute("open");
     });
     document.addEventListener("keydown", function (event) {
         if (event.key === "Escape") menu.removeAttribute("open");

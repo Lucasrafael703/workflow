@@ -81,6 +81,7 @@ Todos são **filtros**, em `activities/templatetags/lps.py`:
 | `mention.js` | Autocomplete de `@menção` em campos marcados |
 | `rich-text.js` | Editor de descrição (`contenteditable`); o HTML é sanitizado no servidor por `core/sanitize.py` |
 | `form-summary.js` | Resumo ao lado do formulário, atualizado ao digitar |
+| *(ações da tarefa)* | Os itens de Mais ações e o botão Editar tarefa usam `data-activity-action` (`activity-workspace.js` + `LPSModal`): abrem a janela, recarregam a ficha ao salvar e, se a janela falhar, navegam para a página. O menu `<details class="menu-more">` fecha ao escolher um item, ao clicar fora e com Esc (script inline em `task_detail.html`) |
 | `retroactive-work.js` | Popup “Já realizei este trabalho”: avisa quando a data é de um dia anterior e mostra o comentário só quando é necessário (motivo *Outro* ou trabalho de mais de 7 dias atrás). Nenhuma regra mora aqui — o servidor valida tudo; sem JavaScript o comentário fica sempre visível. Registra-se em `window.LPSWidgets` |
 | `process-apply.js` | Popup "Aplicar processo": 4 passos num só formulário (Processo → Responsáveis → Entradas → Confirmar). Mostra/habilita só os campos da versão escolhida; nenhuma regra de negócio (o servidor valida tudo). Registra-se em `window.LPSWidgets` para funcionar dentro do `LPSModal` |
 | `process-editor.js` | Editor de processo: no "Adicionar etapa", sugere primeiro as pessoas do setor escolhido para o responsável padrão (as de outros setores ficam atrás de "Mostrar pessoas de outros setores") |

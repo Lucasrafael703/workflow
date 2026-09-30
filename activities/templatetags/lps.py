@@ -47,6 +47,7 @@ FIELD_LABELS = {
     "cost_center": "o centro de custo",
     "order": "a ordem",
     "depends_on": "a dependência",
+    "tags": "os marcadores",
     "status": "a situação",
 }
 

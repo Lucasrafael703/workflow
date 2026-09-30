@@ -587,13 +587,15 @@ class TaskActionsBarTests(RetroactiveViewTestCase):
         response = self.client.get(self.detail)
         self.assertNotContains(response, "task-actions-bar")
 
-    def test_page_actions_keep_working_as_plain_links(self):
-        # os formulários antigos não respondem JSON: continuam abrindo como página
+    def test_every_action_opens_as_a_window_and_keeps_a_real_link(self):
+        # sem JavaScript o link continua levando à página da ação
+        grant_actions(self.ryan, [catalog.TAREFA_DEVOLVER, catalog.PRAZO_PROPOR, catalog.TEMPO_LANCAR_MANUAL], organization=self.org)
         self.login(self.ryan)
         body = self.client.get(self.detail).content.decode()
-        move = f'href="{reverse("task-move", args=[self.task.pk])}"'
-        self.assertIn(move, body)
-        self.assertNotIn(move + " data-activity-action", body)
+        for name in ("task-edit", "task-return", "task-move", "task-dependency", "task-block",
+                     "deadline-propose", "task-manual-time", "task-cancel"):
+            url = reverse(name, args=[self.task.pk])
+            self.assertIn(f'href="{url}" data-activity-action', body, msg=name)
 
 
 class RetroactivePopupTests(RetroactiveViewTestCase):

@@ -232,8 +232,10 @@ atividade (`tarefas/nova-rapida/`).
 - `resume` (`tarefa.retomar`): delega para `start`.
 - `log_manual_time` (`tempo.lancar_manual`, “Adicionar tempo trabalhado”): cria
   `WorkSession` com `is_manual=True` e `logged_at` = agora; sem datas futuras
-  ou invertidas. Só acrescenta tempo — não conclui a tarefa (para isso, ver
-  §2.10.1, “Já realizei este trabalho”).
+  ou invertidas. **A tela pede o motivo** (os mesmos de “Já realizei este
+  trabalho”) e o comentário, com as mesmas regras (*Outro* e mais de 7 dias exigem
+  comentário); em código `reason` continua opcional para não invalidar chamadores
+  antigos. Só acrescenta tempo — não conclui a tarefa (para isso, ver §2.10.1).
 - O cronômetro da barra superior lista as sessões abertas do usuário
   (context processor `my_active_sessions`).
 
@@ -337,12 +339,53 @@ quando, o motivo e o comentário. “Adicionar tempo trabalhado”
 acrescenta tempo, não conclui a tarefa e também grava `logged_at`.
 
 **Ações da tarefa** (ficha): barra com **Editar tarefa** à vista e o menu
-**Mais ações** — Devolver para correção, Enviar para outro setor, Registrar
-bloqueio, Propor novo prazo, Adicionar tempo trabalhado e, separado e em
-vermelho, Cancelar tarefa. Cada item só aparece para quem tem a ação
-(`can_return`, `can_move`, `can_block`, `can_propose`, `can_log_time`,
-`can_cancel_task`); se nada é permitido a barra some. Continuam páginas
-comuns (não popup).
+**Mais ações** — Devolver para correção, Enviar para outro setor, **Gerenciar
+dependência**, Registrar bloqueio, Propor novo prazo, Adicionar tempo trabalhado
+e, separado e em vermelho, Cancelar tarefa. Cada item só aparece para quem tem a
+ação (`can_return`, `can_move`, `can_manage_dependency`, `can_block`,
+`can_propose`, `can_log_time`, `can_cancel_task`); se nada é permitido a barra
+some. **Todas abrem em janela** sobre a ficha (`data-activity-action` +
+`LPSModal`) e, sem JavaScript, continuam sendo páginas: `TaskFormActionView`
+usa `ActivityActionResponseMixin` (sucesso → `{redirect_url}`, erro de campo ou
+de serviço → 400 com `{errors}`).
+
+#### Editor da tarefa (`task-edit`)
+
+Janela única no padrão do editor de atividade: **título, instruções, marcadores,
+prazo pedido pelo solicitante, responsável e participantes**, salvos por
+`TaskService.edit_task` numa transação só — se qualquer parte for recusada, nada
+é gravado. A ação `tarefa.editar` é exigida já ao **abrir** (403 no GET).
+
+| Parte | Ação exigida | Observação |
+|---|---|---|
+| Título, instruções, prazo pedido, marcadores | `tarefa.editar` | Cada mudança é auditada (`UPDATE`, com antes e depois — inclusive `tags`) |
+| Responsável | `tarefa.alterar_responsavel` | Sem a ação, o campo **sai do formulário** e aparece como informação; quem vira responsável deixa de ser participante |
+| Participantes | `tarefa.atribuir` (ou `tarefa.assumir`, para si) | Adicionar **outra** pessoa cria um **convite** (`TaskAssignment` pendente): aparece como “aguardando aceite” no editor e na ficha e só vira participante quando ela aceita. Adicionar a si mesmo é imediato |
+
+Fora do editor, de propósito: o **setor** (texto apontando “Enviar para outro
+setor”) e a **dependência**, que mudam o fluxo. O prazo que a equipe se
+comprometeu a cumprir (`committed_deadline`) também não se edita ali — é
+combinado por “Propor novo prazo”. Na tela os dois prazos têm nomes distintos:
+**Prazo pedido pelo solicitante** × **Prazo que a equipe se comprometeu a
+cumprir**. O prazo pedido continua editável por quem tem `tarefa.editar`
+(hoje, o Gestor de Setor): restringi-lo ao dono da atividade é uma decisão em
+aberto (F15).
+
+#### Gerenciar dependência (`task-dependency`)
+
+`TaskService.change_dependency(task, user, depends_on)` — exige `tarefa.editar`;
+janela própria em Mais ações. O formulário só oferece tarefas que podem ser
+predecessoras (`TaskService.dependency_candidates`: mesma atividade, não
+canceladas, sem ciclo). O serviço recusa:
+
+- **ciclo**, direto ou indireto (A→B→C e C←A) — também em `update_task`;
+- tarefa de outra atividade, cancelada ou a própria tarefa;
+- **nova espera numa tarefa que já começou** (em execução, bloqueada, devolvida ou
+  na fila com sessões de trabalho).
+
+Consequências: tarefa `EM_FILA` que passa a esperar sai da fila (renumera) e volta
+a `DISPONIVEL`, com auditoria; tarefa que deixa de esperar é liberada para a fila.
+Auditoria `UPDATE` de `depends_on` com os títulos antes e depois.
 
 ### 2.11 Reabrir tarefa concluída
 
@@ -443,7 +486,8 @@ Regras (no serviço, não só na tela):
   auditoria `TASK_RELEASED` e aviso ao setor e ao responsável. É idempotente;
 - **só `CONCLUIDA` satisfaz a dependência.** Predecessora cancelada, bloqueada ou
   devolvida mantém a sucessora esperando (a sucessora nunca é liberada sozinha; quem
-  gerencia pode remover a dependência em "Editar tarefa", o que também a libera);
+  gerencia pode remover a dependência em Mais ações → Gerenciar dependência, o que
+  também a libera);
 - `move_to_sector` de uma tarefa que espera muda o setor mas não a enfileira;
   `unblock` a devolve a `DISPONIVEL`; `return_task` é recusado (não há o que devolver).
 
