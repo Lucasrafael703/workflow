@@ -10,7 +10,7 @@
             {% if is_edit %}Editar tarefa{% else %}Nova tarefa{% endif %}
         </div>
         <h1>{% if is_edit %}Editar tarefa{% else %}Adicionar tarefa{% endif %}</h1>
-        <p class="sub">A tarefa é um passo da atividade. Ela pertence a um setor e pode ter vários executores.</p>
+        <p class="sub">Descreva o trabalho a fazer e as informações de que a equipe precisa para concluir.</p>
     </div>
 </div>
 
@@ -23,7 +23,7 @@
                     <span class="form-section__num">1</span>
                     <div>
                         <h3>Dados da tarefa</h3>
-                        <div class="sub">O setor define em qual fila ela entra.</div>
+                        <div class="sub">Os campos opcionais podem ser preenchidos depois.</div>
                     </div>
                 </div>
                 {% include "activities/_form_fields.html" %}
@@ -43,7 +43,7 @@
         </div>
 
         <aside class="summary-panel">
-            <h3>Atividade</h3>
+            <h3>Esta tarefa faz parte de</h3>
             <div class="summary-item">
                 <div>
                     <div class="k">Resultado esperado</div>
@@ -52,7 +52,7 @@
             </div>
             <div class="summary-item">
                 <div>
-                    <div class="k">Dono</div>
+                    <div class="k">Responsável pela atividade</div>
                     <div class="v">{{ activity.owner.get_username }}</div>
                 </div>
             </div>
@@ -66,7 +66,7 @@
                 </div>
             </div>
             <p class="muted small" style="margin:12px 0 0">
-                O prazo solicitado é o que você pede. O setor responde com um prazo comprometido.
+                Prazo solicitado é quando você precisa da entrega. Prazo combinado é quando a equipe se comprometeu a entregar.
             </p>
         </aside>
     </div>

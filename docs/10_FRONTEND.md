@@ -24,9 +24,14 @@
 | `registration/` | Assunto e corpo do e-mail de recuperação de senha |
 
 Convenção: arquivos que começam com `_` são **parciais** incluídos em outras
-telas ou devolvidos por Ajax — ex.: `activities/_activity_drawer.html`,
-`_task_drawer.html`, `_task_checklist.html`, `_timeline.html`,
-`_tasks_block.html`, `_activity_kanban_card.html`.
+telas ou devolvidos por Ajax — ex.: `activities/_task_drawer.html`, `_task_checklist.html`, `_timeline.html`,
+`_tasks_block.html`, `_activity_kanban_card.html`, `_process_panel.html`.
+
+Processo aplicado: `activities/_process_panel.html` é o cartão **Processo** da
+ficha (entradas, etapas, critérios; sem processo, o convite "Aplicar processo") e
+`activities/activity_process_apply.html` é o popup de aplicação. Os estilos novos
+(`proc-panel`, `proc-block`, `proc-item`, `proc-step`, `apply-*`) ficam no fim de
+`static/css/app.css` e só usam variáveis, cards e tags que já existiam.
 `activities/_form_fields.html` renderiza qualquer formulário campo a campo e é
 reutilizado por várias telas.
 
@@ -76,6 +81,8 @@ Todos são **filtros**, em `activities/templatetags/lps.py`:
 | `mention.js` | Autocomplete de `@menção` em campos marcados |
 | `rich-text.js` | Editor de descrição (`contenteditable`); o HTML é sanitizado no servidor por `core/sanitize.py` |
 | `form-summary.js` | Resumo ao lado do formulário, atualizado ao digitar |
+| `process-apply.js` | Popup "Aplicar processo": 4 passos num só formulário (Processo → Responsáveis → Entradas → Confirmar). Mostra/habilita só os campos da versão escolhida; nenhuma regra de negócio (o servidor valida tudo). Registra-se em `window.LPSWidgets` para funcionar dentro do `LPSModal` |
+| `process-editor.js` | Editor de processo: no "Adicionar etapa", sugere primeiro as pessoas do setor escolhido para o responsável padrão (as de outros setores ficam atrás de "Mostrar pessoas de outros setores") |
 | `color-utils.js`, `color-palette-picker.js` | Paleta de 36 cores (espelha `core/colors.py`) e seletor |
 | `notifications.js` | Evita que o cache do navegador mostre contador/lista antigos |
 | `auth.js` | Mostrar/ocultar senha nas telas de conta |
@@ -95,3 +102,15 @@ Em produção os arquivos são coletados por `collectstatic` em `staticfiles/` e
 servidos pelo whitenoise com nome versionado por hash — ao editar um CSS/JS,
 basta fazer deploy; não é preciso trocar a URL no template (use sempre
 `{% static %}`).
+
+## 6. Experiência unificada de atividades
+
+O editor de criação/edição é `activities/activity_form.html`, com os campos
+agrupados em `ActivityEditorForm` e estilo em `static/css/activity-workspace.css`.
+A antiga ficha lateral foi retirada; lista, quadro e calendário abrem a mesma ficha.
+
+`static/js/activity-workspace.js` liga os links `data-activity-action` ao modal
+compartilhado e remove anexos sem descartar o texto ainda não salvo no editor.
+`modal.js` preserva a janela anterior ao abrir um cadastro auxiliar, impede envio
+duplicado, mostra erros de validação/rede, controla foco por teclado e devolve
+foco ao elemento de origem ao fechar.

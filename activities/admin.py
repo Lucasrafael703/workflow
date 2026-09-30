@@ -106,6 +106,8 @@ class TaskAdmin(admin.ModelAdmin):
     list_filter = ("sector", "status")
     search_fields = ("title", "activity__title")
     autocomplete_fields = ("activity", "sector", "depends_on", "created_by")
+    # Muitas etapas de processo: um <select> com todas seria inviável.
+    raw_id_fields = ("process_step",)
     inlines = [
         TaskExecutorInline,
         WorkSessionInline,

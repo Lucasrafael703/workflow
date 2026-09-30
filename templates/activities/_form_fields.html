@@ -1,20 +1,7 @@
 {% if form.non_field_errors %}
-<ul class="messages">
+<ul class="messages" role="alert">
     {% for error in form.non_field_errors %}<li class="message message--error">{{ error }}</li>{% endfor %}
 </ul>
 {% endif %}
-{% for field in form %}
-{# Checkbox tem o rótulo ao lado; os demais campos, acima (Zoonor §11). #}
-<div class="form-row{% if field.field.widget.input_type == 'checkbox' %} form-row--check{% endif %}">
-    {% if field.field.widget.input_type == 'checkbox' %}
-    <label for="{{ field.id_for_label }}">{{ field }} {{ field.label }}</label>
-    {% else %}
-    <label for="{{ field.id_for_label }}">
-        {{ field.label }}{% if field.field.required %} <span class="req">*</span>{% endif %}
-    </label>
-    {{ field }}
-    {% endif %}
-    {% if field.help_text %}<div class="helptext">{{ field.help_text }}</div>{% endif %}
-    {% if field.errors %}<ul class="errorlist">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
-</div>
-{% endfor %}
+<p class="muted small">Campos com <span class="req">*</span> são obrigatórios. Os demais podem ficar em branco.</p>
+{% for field in form %}{% include "activities/_form_field.html" %}{% endfor %}

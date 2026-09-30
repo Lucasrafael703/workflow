@@ -25,6 +25,49 @@ def _require(user, action_key, resource=None):
         raise ProcessError(str(exc)) from exc
 
 
+def people_with_sector_members(organization, sector_ids):
+    """Pessoas ativas da organização e, por setor, quem participa dele agora.
+
+    Serve aos seletores de responsável (editor de processo e tela de aplicar):
+    quem é do setor da etapa é sugerido primeiro, mas qualquer pessoa da
+    organização continua elegível. Retorna `(pessoas, {setor_id: {user_id}})`.
+    """
+    from django.contrib.auth import get_user_model
+
+    from accounts.models import UserSector
+
+    people = list(
+        get_user_model()
+        .objects.filter(profile__organization=organization, is_active=True)
+        .order_by("first_name", "username")
+    )
+    members = {sector_id: set() for sector_id in sector_ids}
+    rows = UserSector.objects.filter(sector_id__in=list(members), removed_at__isnull=True).values_list(
+        "sector_id", "user_id"
+    )
+    for sector_id, user_id in rows:
+        members[sector_id].add(user_id)
+    return people, members
+
+
+def validate_default_responsavel(process, responsavel):
+    """O responsável padrão de uma etapa precisa ser uma pessoa ativa da
+    mesma organização do processo.
+
+    Não exige participar do setor da etapa: a criação manual de tarefas já
+    aceita como responsável qualquer pessoa da organização (a busca de
+    responsável não se restringe ao setor, Regras 02), e o processo segue a
+    mesma regra. O setor serve para *sugerir* pessoas no editor.
+    """
+    if responsavel is None:
+        return
+    organization_id = getattr(getattr(responsavel, "profile", None), "organization_id", None)
+    if organization_id != process.organization_id:
+        raise ProcessError("O responsável padrão precisa pertencer à mesma organização do processo.")
+    if not responsavel.is_active:
+        raise ProcessError("O responsável padrão precisa ser uma pessoa ativa.")
+
+
 def _assert_unique_name(company, name, instance=None):
     queryset = Process.objects.filter(company=company, name__iexact=name.strip())
     if instance is not None:
@@ -98,6 +141,7 @@ class ProcessService:
                     name=item.name,
                     order=item.order,
                     depends_on_previous=item.depends_on_previous,
+                    default_responsavel=item.default_responsavel,
                 )
         return new_version
 
@@ -243,7 +287,7 @@ class ProcessCriterionService:
 class ProcessStepService:
     @staticmethod
     @transaction.atomic
-    def add(version, user, sector, name, depends_on_previous=True):
+    def add(version, user, sector, name, depends_on_previous=True, default_responsavel=None):
         if not version.is_editable:
             raise ProcessError("Esta versão já foi publicada e não pode ser alterada.")
         _require(user, catalog.PROCESSO_EDITAR_RASCUNHO, ResourceContext(organization_id=version.process.organization_id, company_id=version.process.company_id))
@@ -252,10 +296,35 @@ class ProcessStepService:
             raise ProcessError("Informe o nome da etapa.")
         if sector is None:
             raise ProcessError("Selecione o setor responsável pela etapa.")
+        if sector.organization_id != version.process.organization_id:
+            raise ProcessError("O setor informado pertence a outra organização.")
+        validate_default_responsavel(version.process, default_responsavel)
         next_order = (version.steps.count() or 0) + 1
         return ProcessStep.objects.create(
-            version=version, sector=sector, name=name, order=next_order, depends_on_previous=depends_on_previous
+            version=version,
+            sector=sector,
+            name=name,
+            order=next_order,
+            depends_on_previous=depends_on_previous,
+            default_responsavel=default_responsavel,
         )
+
+    @staticmethod
+    @transaction.atomic
+    def set_default_responsavel(step, user, responsavel):
+        """Define (ou limpa, com `None`) o responsável padrão de uma etapa.
+
+        Só em rascunho: numa versão publicada o molde é imutável, e mudar quem
+        responde por uma etapa mudaria o que a versão aplicada promete.
+        """
+        version = step.version
+        if not version.is_editable:
+            raise ProcessError("Esta versão já foi publicada e não pode ser alterada. Crie uma nova versão.")
+        _require(user, catalog.PROCESSO_EDITAR_RASCUNHO, ResourceContext(organization_id=version.process.organization_id, company_id=version.process.company_id))
+        validate_default_responsavel(version.process, responsavel)
+        step.default_responsavel = responsavel
+        step.save(update_fields=["default_responsavel"])
+        return step
 
     @staticmethod
     @transaction.atomic

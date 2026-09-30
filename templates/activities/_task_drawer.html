@@ -6,14 +6,14 @@ passou" etc.) continua só na ficha completa.{% endcomment %}
     <div class="drawer">
         <div class="drawer__head">
             <div>
-                <div class="muted small">{{ task.sector.name }}</div>
+                <div class="muted small">Tarefa · Setor {{ task.sector.name }}</div>
                 <h2>{{ task.title }}</h2>
                 <span class="tag tag--{{ task.status }}">{{ task.status_label }}</span>
-                {% if queue_info %}<span class="position-pill">Posição {{ queue_info.position }} de {{ queue_info.total }}</span>{% endif %}
+                {% if queue_info %}<span class="position-pill">Na fila: {{ queue_info.position }} de {{ queue_info.total }}</span>{% endif %}
             </div>
             <div class="drawer__head-actions">
-                <a href="{% url 'task-detail' task.pk %}" class="btn btn--sm">Abrir ficha completa</a>
-                <button type="button" class="modal__close js-drawer-close" title="Fechar">&times;</button>
+                <a href="{% url 'task-detail' task.pk %}" class="btn btn--sm">Ver todos os detalhes</a>
+                <button type="button" class="modal__close js-drawer-close" title="Fechar painel" aria-label="Fechar painel da tarefa">&times;</button>
             </div>
         </div>
 
@@ -32,26 +32,43 @@ passou" etc.) continua só na ficha completa.{% endcomment %}
             {% endif %}
 
             <div class="drawer__section">
+                <h3>O que fazer agora</h3>
                 {% if my_open_session %}
                 <div class="timer-hero timer-hero--drawer">
+                    <p class="muted small">Seu tempo nesta sessão de trabalho</p>
                     <div class="timer-hero__clock" data-started-at="{{ my_open_session.started_at.isoformat }}">--:--:--</div>
                     <div class="actions-row" style="justify-content:center">
-                        <button type="button" class="btn js-task-ajax" data-url="{% url 'task-pause-ajax' task.pk %}">Pausar</button>
+                        <button type="button" class="btn js-task-ajax" data-url="{% url 'task-pause-ajax' task.pk %}">Pausar cronômetro</button>
                         <button type="button" class="btn btn--primary js-task-ajax" data-url="{% url 'task-complete-ajax' task.pk %}">Concluir tarefa</button>
                     </div>
+                    <p class="muted small">Pause ao interromper. Conclua quando a entrega estiver pronta.</p>
                 </div>
                 {% elif task.status == "CONCLUIDA" %}
                 <p class="message message--success" style="margin:0">Concluída em {{ task.completed_at|date:"d/m/Y H:i" }}{% if task.completed_by %} por {{ task.completed_by.get_username }}{% endif %}.</p>
+                {% if can_reopen_task %}
+                <a href="{% url 'task-reopen' task.pk %}" data-activity-action class="btn btn--primary btn--block" style="margin-top:12px">Reabrir tarefa</a>
+                {% endif %}
                 {% elif task.status == "CANCELADA" %}
                 <p class="muted" style="margin:0">Tarefa cancelada em {{ task.cancelled_at|date:"d/m/Y H:i" }}.</p>
                 {% elif open_block %}
+                <p class="muted small">O impedimento foi resolvido? Libere a tarefa para continuar.</p>
                 <a href="{% url 'task-unblock' task.pk %}" class="btn btn--primary btn--block">Resolver bloqueio</a>
+                {% elif dependency_blocking %}
+                <p class="muted small" style="margin:0">Esta tarefa entra na fila do setor quando <strong>{{ task.depends_on.title }}</strong> for concluída. Até lá, não dá para iniciá-la.</p>
+                {% elif missing_process_inputs %}
+                <div class="message message--warning" style="margin:0">
+                    Antes de começar, registre o recebimento dos inputs obrigatórios do processo:
+                    <strong>{{ missing_process_inputs|join:"; " }}</strong>.
+                    <div style="margin-top:8px"><a href="{% url 'activity-detail' activity.pk %}#processo" class="btn btn--sm">Ir para o processo</a></div>
+                </div>
                 {% elif is_participant or is_responsavel %}
+                <p class="muted small">Ao iniciar, o sistema começa a contar seu tempo de trabalho.</p>
                 <button type="button" class="btn btn--primary btn--block js-task-ajax" data-url="{% url 'task-start-ajax' task.pk %}">Iniciar tarefa</button>
                 {% elif can_assume %}
-                <a href="{% url 'task-assume' task.pk %}" class="btn btn--primary btn--block">Assumir tarefa</a>
+                <p class="muted small">Esta tarefa está disponível. Assuma para começar a trabalhar nela.</p>
+                <a href="{% url 'task-assume' task.pk %}" class="btn btn--primary btn--block">Assumir esta tarefa</a>
                 {% else %}
-                <p class="muted small" style="margin:0">Sem permissão para iniciar esta tarefa.</p>
+                <p class="muted small" style="margin:0">Você pode acompanhar esta tarefa. Para trabalhar nela, peça ao responsável que adicione você como participante.</p>
                 {% endif %}
             </div>
 
@@ -63,7 +80,7 @@ passou" etc.) continua só na ficha completa.{% endcomment %}
 
             {% if task.description %}
             <div class="drawer__section">
-                <h3>Descrição</h3>
+                <h3>Instruções da tarefa</h3>
                 <div class="rich-text-content">{{ task.description|safe }}</div>
             </div>
             {% endif %}
@@ -89,19 +106,21 @@ passou" etc.) continua só na ficha completa.{% endcomment %}
                     {% endfor %}
                 </ul>
                 {% else %}
-                <p class="muted">Nenhum comentário ainda.</p>
+                <p class="muted">Ainda não há comentários. Tire uma dúvida ou registre uma decisão abaixo.</p>
                 {% endif %}
                 <form class="js-drawer-message" data-url="{% url 'task-message' task.pk %}">
                     <div class="form-row">
-                        <textarea name="body" rows="2" placeholder="Escreva um comentário… use @ para mencionar alguém" data-mention></textarea>
+                        <label for="drawer-message-body">Seu comentário</label>
+                        <textarea id="drawer-message-body" name="body" rows="2" placeholder="Escreva aqui. Use @ para mencionar alguém." data-mention></textarea>
                     </div>
                     <div class="form-foot form-foot--split">
-                        <select name="kind">
+                        <label for="drawer-message-kind">Tipo de comentário</label>
+                        <select id="drawer-message-kind" name="kind">
                             {% for value, label in message_kind_choices %}
                             <option value="{{ value }}">{{ label }}</option>
                             {% endfor %}
                         </select>
-                        <button type="submit" class="btn btn--primary">Comentar</button>
+                        <button type="submit" class="btn btn--primary">Enviar comentário</button>
                     </div>
                 </form>
             </div>

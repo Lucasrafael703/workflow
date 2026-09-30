@@ -6,7 +6,7 @@ urlpatterns = [
     path("", views.HomeView.as_view(), name="home"),
     # Atividades
     path("atividades/", views.ActivityListView.as_view(), name="activity-list"),
-    path("atividades/nova/", views.ActivityWizardStep1View.as_view(), name="activity-create"),
+    path("atividades/nova/", views.ActivityCreateView.as_view(), name="activity-create"),
     path("atividades/<int:pk>/nova/contexto/", views.ActivityWizardStep2View.as_view(), name="activity-wizard-contexto"),
     path("atividades/<int:pk>/nova/detalhes/", views.ActivityWizardStep3View.as_view(), name="activity-wizard-detalhes"),
     path("atividades/<int:pk>/nova/descartar/", views.ActivityWizardDiscardView.as_view(), name="activity-wizard-discard"),
@@ -27,6 +27,17 @@ urlpatterns = [
     ),
     path("atividades/<int:pk>/assumir/", views.ActivityClaimView.as_view(), name="activity-claim"),
     path("atividades/<int:pk>/finalizar/", views.ActivityFinalizeView.as_view(), name="activity-finalize"),
+    path("atividades/<int:pk>/processo/aplicar/", views.ActivityProcessApplyView.as_view(), name="activity-process-apply"),
+    path(
+        "atividades/<int:pk>/processo/inputs/<int:input_pk>/",
+        views.ActivityInputUpdateView.as_view(),
+        name="activity-input-update",
+    ),
+    path(
+        "atividades/<int:pk>/processo/criterios/<int:check_pk>/",
+        views.ActivityCriterionUpdateView.as_view(),
+        name="activity-criterion-update",
+    ),
     path("atividades/<int:pk>/pendente/", views.ActivityMarkPendingView.as_view(), name="activity-mark-pending"),
     path(
         "atividades/<int:pk>/pendencia/aprovar/",
@@ -66,6 +77,7 @@ urlpatterns = [
     path("tarefas/<int:pk>/bloquear/", views.TaskBlockView.as_view(), name="task-block"),
     path("tarefas/<int:pk>/mover/", views.TaskMoveView.as_view(), name="task-move"),
     path("tarefas/<int:pk>/cancelar/", views.TaskCancelView.as_view(), name="task-cancel"),
+    path("tarefas/<int:pk>/reabrir/", views.TaskReopenView.as_view(), name="task-reopen"),
     path("tarefas/<int:pk>/executores/", views.TaskExecutorAddView.as_view(), name="task-executor-add"),
     path(
         "tarefas/<int:pk>/executores/<int:user_pk>/remover/",

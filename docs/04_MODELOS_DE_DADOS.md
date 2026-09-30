@@ -39,6 +39,9 @@ erDiagram
     Task ||--o{ TaskExecutor : "executors"
     Task ||--o{ QueueEntry : "queue_entries"
     Task ||--o{ WorkSession : "work_sessions"
+    Task |o--o{ Task : "depends_on / dependents"
+    ProcessStep |o--o{ Task : "process_step / tasks"
+    ProcessVersion ||--o{ Activity : "process_version"
 ```
 
 ---
@@ -122,7 +125,7 @@ Enums:
 
 | Model | Campos relevantes |
 |---|---|
-| `Task` | `activity` (CASCADE, `tasks`), `sector` (PROTECT), `stage` → `TaskStage`, `responsavel` (PROTECT, obrigatório desde a migration `0015`), `depends_on` → `Task`, `order`, `title`, `description`, `status`, `requested_deadline`, `committed_deadline`, `first_action_at`, `completed_at`, `cancelled_at`, `overdue_notified_at`, `tags` |
+| `Task` | `activity` (CASCADE, `tasks`), `sector` (PROTECT), `stage` → `TaskStage`, `responsavel` (PROTECT, obrigatório desde a migration `0015`), `depends_on` → `Task` (`dependents`), `process_step` → `processes.ProcessStep` (null, PROTECT, `tasks`), `order`, `title`, `description`, `status`, `requested_deadline`, `committed_deadline`, `first_action_at`, `completed_at`, `cancelled_at`, `overdue_notified_at`, `tags` |
 | `TaskExecutor` (participante) | `task` (`executors`), `user` (`tasks_executed`), `added_by`, `removed_at` (remoção lógica) |
 | `TaskAssignment` | `task` (`assignments`), `user`, `assigned_by`, `status` (`PENDENTE`, `ACEITA`, `RECUSADA`), `reason` → `ReturnReason`, `observation` |
 | `TaskResponsavelChangeLog` | `task` (`responsavel_changes`), `previous_responsavel`, `new_responsavel`, `changed_by` |
@@ -136,6 +139,18 @@ Enums:
 `Task.Status`: `NAO_INICIADA` (padrão do model, mas nenhum fluxo deixa a tarefa
 nele), `DISPONIVEL`, `EM_FILA`, `EM_EXECUCAO`, `BLOQUEADA`, `DEVOLVIDA`,
 `CONCLUIDA`, `CANCELADA`.
+
+**Constraint de `Task`:** `unique_task_per_activity_process_step` — `UniqueConstraint`
+em (`activity`, `process_step`) com `condition=process_step IS NOT NULL`. Uma
+etapa de processo gera no máximo uma tarefa por atividade; tarefas manuais
+(`process_step` nulo) não participam. Índice parcial, suportado por SQLite e
+PostgreSQL.
+
+**Tarefa que aguarda a etapa anterior:** é `DISPONIVEL`, **sem** `QueueEntry`,
+com `depends_on` apontando para uma tarefa ainda não `CONCLUIDA`. Ao concluir a
+predecessora, `TaskService` a enfileira e ela vira `EM_FILA`. A propriedade
+`Task.waiting_for` devolve a predecessora pendente (só para exibição) e
+`Task.status_label` mostra "Aguardando etapa anterior" nesse caso.
 
 ### Fila e prazo
 
@@ -161,9 +176,27 @@ autorização real é o motor do `acessos`.
 | `ProcessVersion` | `process` (`versions`), `number`, `status` (`RASCUNHO`, `PUBLICADO`, `SUBSTITUIDO`), `output_description`, `output_evidence_type` (`ARQUIVO`, `LINK`, `CHECKLIST`, `CONFIRMACAO`), `published_by/at` — só editável em rascunho |
 | `ProcessInput` | `version` (`inputs`), `name`, `input_type` (`TEXTO`, `ARQUIVO`, `DATA`, `NUMERO`, `LINK`, `SELECAO`), `is_required`, `source` (`SOLICITANTE`, `EXECUTOR`, `TERCEIRO`), `order` |
 | `ProcessCriterion` | `version` (`criteria`), `name`, `is_required`, `order` |
-| `ProcessStep` | `version` (`steps`), `sector`, `name`, `order`, `depends_on_previous` |
-| `ActivityInputValue` | `activity`, `process_input`, `value`, `is_received` — único por (activity, input) |
-| `ActivityCriterionCheck` | `activity`, `process_criterion`, `is_met` — único por (activity, criterion) |
+| `ProcessStep` | `version` (`steps`), `sector`, `name`, `order`, `depends_on_previous`, `default_responsavel` → `User` (null, SET_NULL) |
+| `ActivityInputValue` | `activity`, `process_input` (PROTECT), `value`, `is_received`, `received_at`, `received_by` — único por (activity, input) |
+| `ActivityCriterionCheck` | `activity`, `process_criterion` (PROTECT), `is_met`, `met_at`, `met_by` — único por (activity, criterion) |
+
+**`ProcessStep.default_responsavel`** — quem responde pela tarefa gerada pela
+etapa. Opcional; precisa ser uma pessoa **ativa da mesma organização** do
+processo (validado em `ProcessStep.clean()`/`save()` e em
+`ProcessStepService`), mas **não** precisa participar do setor da etapa — a
+criação manual de tarefas já aceita qualquer pessoa da organização como
+responsável. Só se altera em rascunho; `create_new_version` copia o valor.
+
+**`ActivityInputValue.value`** é texto. `TEXTO` guarda o texto; `DATA`, a data
+ISO (`AAAA-MM-DD`); `NUMERO`, o decimal normalizado (`1500.5`); `LINK`, uma URL
+http(s). `ARQUIVO` e `SELECAO` guardam apenas a confirmação de recebimento
+(`is_received`) e uma observação livre em `value` — não há vínculo com anexos
+nem lista de opções no molde (ver
+[13_PENDENCIAS_CONHECIDAS.md](13_PENDENCIAS_CONHECIDAS.md)).
+
+**Vínculo permanente:** `Activity.process_version` é gravado uma única vez, por
+`ProcessApplicationService.apply`, e nunca é trocado nem removido. Publicar a
+versão 2 de um processo não altera atividades que receberam a versão 1.
 
 ---
 
@@ -188,5 +221,10 @@ Os valores de `Notification.EventType` e `AuditLog.Action` estão em
   - `activities/0014_populate_task_responsavel` e `0015_task_responsavel_not_null`: preenchem e tornam obrigatório o responsável.
   - `core/0006`–`0007`: migram cores de tag para hex.
   - `core/0010_remove_site_company_site_client`: obra passa a ter cliente em vez de empresa.
+  - Aplicação de processo (30/09/2026): `processes/0002_processstep_default_responsavel`,
+    `activities/0016_task_process_step` (campo + constraint parcial),
+    `audit/0007_process_execution_actions` (novos valores de `AuditLog.Action`) e
+    `notifications/0006_process_applied_event` (novo `Notification.EventType`). São só
+    mudanças de esquema; nada de dados a migrar.
 - Depois de mudar um model: `python manage.py makemigrations` e confira com
   `python manage.py makemigrations --check --dry-run` antes de commitar.

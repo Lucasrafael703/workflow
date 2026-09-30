@@ -45,9 +45,14 @@ E-mails são **síncronos** (enviados durante a requisição) via
 | Pausar | `SESSION_PAUSED` | — | — |
 | Concluir tarefa | `COMPLETE` | `TASK_COMPLETED` → dono da atividade, responsável | — |
 | Cancelar tarefa | `CANCEL` | — | — |
+| Reabrir tarefa concluída | `REOPEN` da tarefa (`old_value=CONCLUIDA`, `new_value=EM_FILA` ou `DISPONIVEL`, motivo); `REOPEN` da atividade junto, se ela estava concluída; `UPDATE` de `status` (`EM_FILA`→`DISPONIVEL`) em cada tarefa seguinte que voltou a esperar | `TASK_ASSIGNED` ("Tarefa reaberta") → setor, responsável e dono da atividade; `ACTIVITY_REOPENED` → dono, se a atividade reabriu junto | — |
 | Bloquear / desbloquear | `BLOCK` / `UNBLOCK` | `TASK_BLOCKED` / `TASK_UNBLOCKED` → dono da atividade | — |
 | Enviar a outro setor | `SECTOR_MOVED` | `TASK_ASSIGNED` → novo setor | — |
 | Devolver | `RETURNED` (+ `SECTOR_MOVED`) | `TASK_RETURNED` → os dois setores, dono | — |
+| Aplicar processo | `PROCESS_APPLIED` (`new_value` = "Processo vN"; `reason` = contagens) + um `TASK_CREATED` por etapa + `INPUT_UPDATED` por input já informado | `TASK_ASSIGNED` → setor e responsável de cada tarefa **que já nasceu na fila** (etapas que esperam não avisam); `PROCESS_APPLIED` → dono da atividade, se não foi quem aplicou | — |
+| Etapa liberada (predecessora concluída) | `TASK_RELEASED` (`new_value` = setor da fila; `reason` = etapa que liberou) | `TASK_ASSIGNED` ("Tarefa liberada para a fila") → setor e responsável | — |
+| Input do processo registrado/corrigido/reaberto | `INPUT_UPDATED` (`field_name` = nome do input; antes e depois: `não recebido` / `recebido: valor`) | — | — |
+| Critério de aceite marcado/reaberto | `CRITERION_UPDATED` (`field_name` = critério; `pendente` ↔ `atendido`) | — | — |
 | Reordenar fila | `QUEUE_POSITION_CHANGED` (por entrada afetada) | `QUEUE_POSITION_CHANGED` → dono da atividade | — |
 | Propor prazo | `DEADLINE_PROPOSED` | `DEADLINE_PROPOSED` → dono | — |
 | Aceitar prazo | `DEADLINE_ACCEPTED` | `DEADLINE_ACCEPTED` → quem propôs | — |
@@ -60,11 +65,24 @@ E-mails são **síncronos** (enviados durante a requisição) via
 "Membros e gestores do setor" vem de `resolve_sector_and_admins`, que, apesar
 do nome, **não** inclui nenhum grupo de administradores.
 
+**Por que eventos de auditoria novos e não `UPDATE` + `field_name`:** aplicar um
+processo, liberar uma etapa, registrar um input e atender um critério são eventos
+que as Regras (04 §178-214) pedem por nome e que a tela precisa ler como frases
+("aplicou o processo Orçamento v3", "liberou a tarefa para a fila de Compras",
+"marcou o critério “Escopo revisado” como atendido"). Com `UPDATE` o histórico diria
+"alterou um campo". As frases estão em `activities/templatetags/lps.py`.
+
+Ao **finalizar como “Concluído com pendências”** com critérios obrigatórios em
+aberto, o `reason` do `COMPLETE` e a mensagem "Finalização (…)" na conversa da
+atividade listam os critérios que ficaram de fora.
+
 ### Não auditado
 
 Movimento de card no Kanban (atividade e tarefa), checklist, CRUD de
 cadastros, cores e status configuráveis, criação/publicação/versão de
-processo, autocadastro e confirmação de e-mail, troca de senha pelo próprio
+processo e alteração do responsável padrão de uma etapa (o **molde**;
+a *aplicação* do processo e a execução de inputs/critérios são auditadas),
+autocadastro e confirmação de e-mail, troca de senha pelo próprio
 usuário.
 
 `AuditLog.Action.SESSION_RESUMED` existe mas nunca é gravado (`resume` delega

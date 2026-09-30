@@ -1,0 +1,11 @@
+<div data-access-fields>
+    {% if form.non_field_errors %}<div class="message message--error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+    {% if form.profile %}{% include "core/_field.html" with field=form.profile %}{% endif %}
+    {% if form.action %}{% include "core/_field.html" with field=form.action %}{% endif %}
+    {% include "core/_field.html" with field=form.scope_type %}
+    <div data-scope-field="EMPRESA">{% include "core/_field.html" with field=form.company %}</div>
+    <div data-scope-field="SETOR">{% include "core/_field.html" with field=form.sector %}</div>
+    <div data-scope-field="OBRA">{% include "core/_field.html" with field=form.site %}</div>
+    <div data-scope-field="CENTRO_CUSTO">{% include "core/_field.html" with field=form.cost_center %}</div>
+    <div data-scope-field="RELACIONAL">{% include "core/_field.html" with field=form.relation %}</div>
+</div>

@@ -104,15 +104,18 @@
 | Caminho | Função |
 |---|---|
 | `atividades/` (`activity-list`) | Lista com abas e filtros |
-| `atividades/nova/` (`activity-create`) | Wizard passo 1 |
-| `atividades/<pk>/nova/contexto/`, `.../detalhes/`, `.../descartar/` | Wizard passos 2 e 3, descartar rascunho |
-| `atividades/nova-rapida/` | Criação mínima (JSON) |
+| `atividades/nova/` (`activity-create`) | Editor único de criação e rascunho |
+| `atividades/<pk>/nova/contexto/`, `.../detalhes/`, `.../descartar/` | GET das etapas antigas redireciona ao editor; POST legado compatível; descartar rascunho |
+| `atividades/nova-rapida/` | Mesmo editor no seletor; resposta JSON em Ajax |
 | `atividades/busca/` | Busca de atividades abertas (JSON) |
 | `atividades/kanban/`, `atividades/calendario/` | Kanban por estágio, calendário por prazo |
-| `atividades/<pk>/` (`activity-detail`) | Ficha da atividade (rascunho redireciona ao wizard) |
-| `atividades/<pk>/painel/` | Fragmento para painel lateral |
+| `atividades/<pk>/` (`activity-detail`) | Ficha da atividade (rascunho redireciona ao editor) |
+| `atividades/<pk>/painel/` | Compatibilidade: redireciona à ficha completa |
 | `atividades/<pk>/editar/`, `prazo/`, `dono/`, `assumir/` | Editar, prazo, trocar dono, assumir |
 | `atividades/<pk>/finalizar/`, `concluir/`, `cancelar/`, `reabrir/` | Encerramento e reabertura |
+| `atividades/<pk>/processo/aplicar/` (`activity-process-apply`) | Popup "Aplicar processo" — GET mostra os 4 passos (403 sem `processo.aplicar`; redireciona se a atividade já tem processo); POST aplica (JSON `{"redirect_url"}` ou `{"errors"}` no Ajax; redirect sem JS) |
+| `atividades/<pk>/processo/inputs/<input_pk>/` (`activity-input-update`) | POST: registrar/corrigir (`value`, `is_received`) ou reabrir (`clear`) um input do processo aplicado |
+| `atividades/<pk>/processo/criterios/<check_pk>/` (`activity-criterion-update`) | POST: marcar/desmarcar (`is_met`) um critério de aceite |
 | `atividades/<pk>/pendente/`, `pendencia/aprovar/` | Pendência |
 | `atividades/<pk>/mensagem/`, `continuar/` | Mensagem; comentário + anexo num envio |
 | `atividades/<pk>/anexos/`, `anexos/<attachment_pk>/remover/` | Anexos |
@@ -132,6 +135,7 @@
 | `tarefas/<pk>/devolver/` | Devolver (`tarefa.devolver` na view) |
 | `tarefas/<pk>/mover/` | Outro setor (`tarefa.mover_setor` na view) |
 | `tarefas/<pk>/cancelar/` | Cancelar (`tarefa.cancelar` na view) |
+| `tarefas/<pk>/reabrir/` (`task-reopen`) | Reabrir tarefa concluída (`tarefa.reabrir` na view; motivo obrigatório). Popup (JSON no Ajax) ou página; 403 sem a ação |
 | `tarefas/<pk>/executores/`, `executores/<user_pk>/remover/` | Participantes |
 | `tarefas/<pk>/alterar-responsavel/` | Responsável |
 | `tarefas/<pk>/atribuicoes/<assignment_pk>/aceitar/`, `.../recusar/` | Responder atribuição |
@@ -146,8 +150,10 @@
 `` (`process-list`), `novo/` (`process-create`), `<pk>/` (`process-edit`),
 `<pk>/informacoes/`, `<pk>/output/`, `<pk>/inputs/` (+ `<input_pk>/remover/`),
 `<pk>/criterios/` (+ `<criterion_pk>/remover/`), `<pk>/fluxo/`
-(+ `reordenar/`, `<step_pk>/remover/`), `<pk>/publicar/`, `<pk>/nova-versao/`,
-`<pk>/ativo/`. Autorização nos serviços (`processo.*`).
+(+ `reordenar/`, `<step_pk>/remover/`, `<step_pk>/responsavel/` — define ou limpa
+o responsável padrão de uma etapa do rascunho, `process-step-responsavel`),
+`<pk>/publicar/`, `<pk>/nova-versao/`, `<pk>/ativo/`. Autorização nos serviços
+(`processo.*`). **Aplicar** um processo é uma rota de atividade (seção 4).
 
 ## 6. `notifications` (`/notificacoes/`)
 

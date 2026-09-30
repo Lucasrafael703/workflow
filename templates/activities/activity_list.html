@@ -42,9 +42,9 @@
             </thead>
             <tbody>
                 {% for activity in activities %}
-                <tr class="js-activity-row" data-drawer-url="{% url 'activity-drawer' activity.pk %}">
+                <tr class="js-activity-row">
                     <td class="activities-table__activity">
-                        <a href="{% url 'activity-detail' activity.pk %}">
+                        <a href="{% url 'activity-detail' activity.pk %}?next={{ request.get_full_path|urlencode }}">
                             {% include "_icon.html" with name="activity" %}
                             <strong>{{ activity.title }}</strong>
                         </a>
@@ -89,15 +89,16 @@
                     <td><span class="activity-stage-pill" style="--stage-color: {{ activity.stage_color }};">{{ activity.stage_name }}</span></td>
                     <td><span class="activity-status-pill" style="--status-color: {{ activity.status_color }};">{{ activity.status_label }}</span></td>
                     <td class="activities-table__actions">
-                        {% if activity.can_assumir or activity.can_edit or activity.can_repassar or activity.can_complete or activity.can_cancel %}
+                        {% if activity.can_assumir or activity.can_edit or activity.can_repassar or activity.can_complete or activity.can_cancel or activity.can_reopen %}
                         <details class="activity-menu">
                             <summary aria-label="Mais acoes">{% include "_icon.html" with name="more" %}</summary>
                             <div class="activity-menu__items">
                                 {% if activity.can_assumir %}<form method="post" action="{% url 'activity-claim' activity.pk %}">{% csrf_token %}<button type="submit">Assumir atividade</button></form>{% endif %}
-                                {% if activity.can_edit %}<a href="{% url 'activity-edit' activity.pk %}">Editar</a>{% endif %}
-                                {% if activity.can_repassar %}<a href="{% url 'activity-change-owner' activity.pk %}">Transferir responsabilidade</a>{% endif %}
-                                {% if activity.can_complete %}<a href="{% url 'activity-finalize' activity.pk %}">Concluir</a>{% endif %}
-                                {% if activity.can_cancel %}<a href="{% url 'activity-cancel' activity.pk %}" class="is-danger">Cancelar</a>{% endif %}
+                                {% if activity.can_edit %}<a href="{% url 'activity-edit' activity.pk %}?next={{ request.get_full_path|urlencode }}">Editar</a>{% endif %}
+                                {% if activity.can_repassar %}<a href="{% url 'activity-change-owner' activity.pk %}" data-activity-action>Transferir responsabilidade</a>{% endif %}
+                                {% if activity.can_complete %}<a href="{% url 'activity-finalize' activity.pk %}?outcome=SUCESSO" data-activity-action>Concluir</a>{% endif %}
+                                {% if activity.can_cancel %}<a href="{% url 'activity-finalize' activity.pk %}?outcome=CANCELADO" data-activity-action class="is-danger">Cancelar</a>{% endif %}
+                                {% if activity.can_reopen %}<a href="{% url 'activity-reopen' activity.pk %}" data-activity-action>Reabrir atividade</a>{% endif %}
                             </div>
                         </details>
                         {% endif %}
@@ -133,24 +134,18 @@
 <script>
 (function () {
     "use strict";
-    var form = document.querySelector("[data-activity-filters]");
-    if (!form) return;
-    form.querySelectorAll("[data-auto-submit]").forEach(function (field) {
-        field.addEventListener("change", function () { form.submit(); });
-    });
     document.addEventListener("click", function (event) {
         document.querySelectorAll(".activity-menu[open]").forEach(function (menu) {
             if (!menu.contains(event.target)) menu.removeAttribute("open");
         });
     });
 
-    // Clique na linha (fora de checkbox/link/menu) abre o painel lateral,
-    // mesmo padrão de `.js-task-row` em `task_list.html`.
+    // The title is a real link (keyboard/new-tab support); the row follows it.
     document.querySelectorAll("tr.js-activity-row").forEach(function (row) {
         row.addEventListener("click", function (event) {
-            if (event.target.closest("a, button, details, summary")) return;
-            if (!window.LPSDrawer) return;
-            window.LPSDrawer.open(row.dataset.drawerUrl);
+            if (event.target.closest("a, button, input, details, summary") || window.getSelection().toString()) return;
+            var link = row.querySelector("a");
+            if (link) window.location.assign(link.href);
         });
     });
 })();

@@ -23,8 +23,18 @@
 
                 <div class="message message--info">
                     Ao finalizar a atividade, ela será movida para Concluídas ou Declinadas/Canceladas,
-                    conforme o resultado informado. Esta ação não pode ser desfeita.
+                    conforme o resultado informado. O resultado e o comentário ficam registrados no histórico.
                 </div>
+
+                {% if unmet_required_criteria %}
+                <div class="message message--warning">
+                    <strong>Critérios de aceite obrigatórios ainda não atendidos:</strong>
+                    <ul style="margin:6px 0 6px 18px; padding:0">
+                        {% for name in unmet_required_criteria %}<li>{{ name }}</li>{% endfor %}
+                    </ul>
+                    “Sucesso” exige todos atendidos. “Concluído com pendências” encerra a atividade e registra no histórico o que ficou em aberto.
+                </div>
+                {% endif %}
 
                 <div class="form-row">
                     <label>Resultado da finalização <span class="req">*</span></label>

@@ -20,9 +20,9 @@
 
 ```mermaid
 stateDiagram-v2
-    [*] --> RASCUNHO: wizard passo 1 (save_draft)
+    [*] --> RASCUNHO: editor: salvar rascunho
     [*] --> ABERTA: criação rápida (create_activity)
-    RASCUNHO --> ABERTA: publish_draft (passo 3)
+    RASCUNHO --> ABERTA: editor: publicar
     RASCUNHO --> [*]: discard_draft
     ABERTA --> PENDENTE: mark_pending
     EM_ANDAMENTO --> PENDENTE: mark_pending
@@ -46,21 +46,37 @@ stateDiagram-v2
 
 Esses três pontos estão em [13_PENDENCIAS_CONHECIDAS.md](13_PENDENCIAS_CONHECIDAS.md).
 
-### 1.2 Criação
+### 1.2 Editor único de atividades
 
-**Wizard em 3 passos** (`/atividades/nova/`):
+`activities/activity_editor.py` reúne criação, retomada de rascunho e edição.
+Todas usam `ActivityEditorForm` e `activities/activity_form.html`, com três grupos:
+informações principais, contexto opcional e descrição/arquivos.
 
-| Passo | URL | Campos | Serviço |
-|---|---|---|---|
-| 1. Essencial | `atividades/nova/` (`?pk=` retoma um rascunho) | título, cliente, obra, setor, dono, prazo solicitado, urgência | `ActivityService.save_draft` — exige `atividade.criar`; cria em `RASCUNHO` (sem auditoria nem notificação). O código `ATV-AAAA-NNNNN` já é gerado aqui. |
-| 2. Contexto | `atividades/<pk>/nova/contexto/` | empresa, centro de custo, solicitante, endereço, tags | salva o form diretamente |
-| 3. Detalhes | `atividades/<pk>/nova/detalhes/` | descrição, notas internas, anexos, resumo | `publish_draft` — re-verifica `atividade.criar`, exige título real e dono, vai para `ABERTA`, audita `CREATE`, notifica dono e criador (`ACTIVITY_CREATED`) e processa @menções. "Publicar e criar tarefas" leva direto para a criação de tarefas. |
+- `/atividades/nova/`: publica em uma única submissão, exigindo título e responsável.
+- `Salvar rascunho`: aceita título/responsável vazios e permanece no editor.
+- `?pk=<id>`: retoma apenas um rascunho da organização criado pela pessoa atual.
+- `/atividades/<pk>/editar/`: mesmo formulário; exige `atividade.editar`.
+  A troca de responsável exige também `atividade.alterar_dono` e passa pelo serviço
+  de transferência, com histórico. Sem essa ação, o responsável é somente leitura.
+- `/atividades/nova-rapida/`: mesmo editor dentro do seletor de atividades de uma
+  tarefa; retorna `{id, name}` em Ajax. Não possui um segundo conjunto de campos.
+- Notas internas e solicitante são salvos e auditados junto dos demais campos.
+- Arquivos podem ser enviados junto do formulário. Uma falha da operação desfaz
+  as gravações no banco e remove arquivos já gravados por essa submissão.
+- A remoção de um anexo pelo editor é assíncrona para preservar campos não salvos.
 
-`discard_draft` (só o criador) apaga o rascunho e seus anexos.
+Criação usa `save_draft` e `publish_draft` na mesma transação. A publicação mantém
+as verificações de permissão, auditoria, notificações e menções existentes.
+`discard_draft` continua disponível somente para o criador.
 
-**Criação rápida** (`atividades/nova-rapida/`, JSON): só título; dono = quem
-criou; nasce `ABERTA`. Usada pelos seletores que criam atividade sem sair da
-tela.
+Links antigos das etapas 2/3 redirecionam ao editor. Seus POSTs permanecem
+compatíveis para formulários já abertos antes da atualização.
+
+Lista, Quadro e Calendário abrem a ficha completa da atividade. A antiga rota de
+painel lateral redireciona à ficha. O parâmetro `next`, validado em `navigation.py`,
+preserva o retorno à visualização e aos filtros de origem; URLs externas não são aceitas.
+Alterar prazo, transferir responsável, concluir, cancelar, pendência e reabertura
+usam janelas sobre a tela atual, com alternativa de página sem JavaScript.
 
 ### 1.3 Dono, edição e pendência
 
@@ -92,9 +108,16 @@ obrigatório.
 | `SUCESSO`, `CONCLUIDO_COM_PENDENCIAS` | `atividade.concluir` | `CONCLUIDA` | nenhuma tarefa aberta |
 | `DECLINADO`, `CANCELADO` | `atividade.cancelar` | `CANCELADA` (comentário vira `cancelled_reason`) | — |
 
+Se a atividade tem processo aplicado, `SUCESSO` também exige os critérios de
+aceite obrigatórios atendidos (§3.4).
+
 Pendências abertas viram `ENCERRADA`; audita `COMPLETE`/`CANCEL`; notifica o
 dono. `reopen_activity` (`atividade.reabrir`) leva `CONCLUIDA` →
-`EM_ANDAMENTO` com motivo obrigatório (`REOPEN`). Os endpoints antigos
+`EM_ANDAMENTO` com motivo obrigatório (`REOPEN`, com o estado anterior em
+`old_value`). Só atividade **concluída** reabre; cancelada não (o serviço recusa
+e a tela não oferece). O botão "Reabrir atividade" aparece no aviso "Concluída
+em…" da ficha (e no menu ⋮ e no menu da lista, aba "concluídas") para quem tem
+`atividade.reabrir` — hoje só o perfil Administrador. Os endpoints antigos
 `complete_activity`/`cancel_activity` ainda existem.
 
 ### 1.5 Anexos, mensagens e menções
@@ -147,6 +170,7 @@ stateDiagram-v2
     EM_FILA --> CANCELADA: cancel
     EM_EXECUCAO --> CANCELADA: cancel
     BLOQUEADA --> CANCELADA: cancel
+    CONCLUIDA --> EM_FILA: reopen (DISPONIVEL se a predecessora não terminou)
 ```
 
 O diagrama mostra os caminhos usuais; em código, `block` aceita qualquer
@@ -154,7 +178,13 @@ estado exceto já bloqueada, e `cancel` qualquer estado exceto concluída ou
 cancelada.
 
 - Uma tarefa recém-criada termina em `EM_FILA`: `create_task` grava
-  `DISPONIVEL` e `QueueService.enqueue` troca para `EM_FILA`.
+  `DISPONIVEL` e `QueueService.enqueue` troca para `EM_FILA`. **Exceção:** a etapa
+  de um processo que depende da anterior fica `DISPONIVEL` e fora da fila até a
+  predecessora ser concluída (§3.2); só então `QueueService.enqueue` a leva a
+  `EM_FILA`.
+- `start` e `complete` recusam a tarefa cuja predecessora (`depends_on`) não está
+  `CONCLUIDA`, e a tarefa gerada por processo enquanto houver input obrigatório
+  não recebido (§3.3).
 - `return_task` grava `DEVOLVIDA`, mas em seguida chama `move_to_sector`, que
   enfileira e sobrescreve para `EM_FILA`. Na prática nenhuma tarefa fica
   `DEVOLVIDA` (ver pendências).
@@ -263,6 +293,29 @@ Mesma ideia das atividades: colunas = `TaskStage` da organização, mover
 altera só `stage`. A ordem das colunas é arrastável em Cadastros → Estágios
 (`TaskStageReorderView`).
 
+### 2.11 Reabrir tarefa concluída
+
+`TaskService.reopen(task, user, reason)` — ação **`tarefa.reabrir`** (sensível;
+perfis sugeridos Gestor de Setor e Administrador), motivo obrigatório, só para
+tarefa `CONCLUIDA`. As Regras eram omissas; as decisões estão em `Regras/02`
+(seção "Reabertura de tarefa concluída").
+
+| Aspecto | O que acontece |
+|---|---|
+| Estado | `CONCLUIDA` → `EM_FILA`. Se a **própria** predecessora ainda não terminou, fica `DISPONIVEL` fora da fila ("Aguardando etapa anterior") |
+| Fila | nova passagem (`QueueEntry`) no **fim** da fila do setor; a passagem antiga fica como histórico |
+| Preservado | sessões de trabalho e tempo, checklist, participantes, prazos, `first_action_at` (o histórico é fato); limpa `completed_at`/`completed_by` |
+| Atividade `CONCLUIDA` | é reaberta **junto**, na mesma transação e com o mesmo motivo — exige também `atividade.reabrir`; sem ela a reabertura é recusada e nada é gravado |
+| Atividade `CANCELADA` | recusa |
+| Tarefas que dependiam dela | se alguma **já foi trabalhada** (em execução, concluída, bloqueada, devolvida ou com sessão registrada), a reabertura é recusada listando-as; as que só esperam na fila voltam a `DISPONIVEL` (saem da fila, fila renumerada, auditoria `UPDATE` de situação) e são liberadas de novo quando esta for concluída |
+| Auditoria / avisos | `REOPEN` da tarefa (`old_value=CONCLUIDA`, motivo); `TASK_ASSIGNED` "Tarefa reaberta" para setor, responsável e dono da atividade; menções no motivo |
+
+Onde aparece: botão **Reabrir tarefa** na ficha da tarefa e no painel lateral
+(bloco "O que fazer agora" de tarefa concluída) e item no menu ⋮ das linhas da
+lista com filtro "concluídas", sempre em popup de motivo
+(`activities/task_action_form.html`, rota `task-reopen`). Tarefa cancelada não
+reabre.
+
 ---
 
 ## 3. Processos (`processes/`)
@@ -279,8 +332,115 @@ empresa (Regras 11 / `Regras/12_PROCESSOS_INPUTS_OUTPUTS_E_CRITERIOS_DE_ACEITE.m
 - `create_new_version` (`processo.criar_versao`) copia a publicada para
   v(n+1) em rascunho; recusa se já houver rascunho.
 - `set_active` (`processo.inativar`).
+- Cada etapa pode ter um **responsável padrão** (`ProcessStep.default_responsavel`,
+  opcional, só editável em rascunho, copiado por `create_new_version`).
 
-> **Ainda não ligado às atividades.** `Activity.process_version`,
-> `ActivityInputValue` e `ActivityCriterionCheck` existem no banco, mas nenhum
-> código aplica um processo a uma atividade nem gera tarefas a partir das
-> etapas. `processo.aplicar` só existe no catálogo.
+### 3.1 Aplicar um processo a uma atividade
+
+Um `ProcessVersion` publicado é um **molde imutável**. Aplicá-lo a uma atividade
+(`ProcessApplicationService.apply`, em `activities/process_application.py`)
+materializa, numa única transação:
+
+```
+versão publicada ─► Activity.process_version        vínculo permanente
+                 ├─► ActivityInputValue × inputs    um por ProcessInput, is_received=False
+                 ├─► ActivityCriterionCheck × crit. um por ProcessCriterion, is_met=False
+                 └─► Task × etapas                  ordem, setor, título e process_step da etapa
+```
+
+**Antes de gravar** (qualquer falha aborta sem deixar nada): a pessoa está na
+organização da atividade e tem `processo.aplicar` nela; processo da mesma
+organização e **da mesma empresa da atividade**; processo ativo; versão
+`PUBLICADO`; atividade sem processo, não `RASCUNHO`, `CONCLUIDA` nem `CANCELADA`;
+todos os setores das etapas ativos e da organização; **toda etapa com
+responsável** (padrão da etapa ou escolhido agora, sempre pessoa ativa da
+organização — todas as etapas que faltam são listadas de uma vez); valores
+iniciais de input válidos.
+
+**Concorrência:** a atividade é relida com `select_for_update` dentro da
+transação; uma segunda aplicação (clique duplo, duas abas com a página antiga)
+vê `process_version` já preenchido e é recusada. A constraint
+`unique_task_per_activity_process_step` é a rede de segurança no banco; um
+`IntegrityError` vira "Este processo já foi aplicado a esta atividade".
+
+**Não existe** trocar, reaplicar, atualizar para a versão nova nem remover o
+processo de uma atividade: essas operações apagariam ou corromperiam o histórico.
+
+**Autorização:** `processo.aplicar` na atividade autoriza materializar as
+tarefas de todos os setores do fluxo, sem exigir `tarefa.criar` em cada um
+(detalhes em [05_AUTORIZACAO.md](05_AUTORIZACAO.md) §4.1).
+`TaskService.create_task` e a aplicação compartilham `_create_task_core`, que não
+autoriza e é privado.
+
+### 3.2 Dependência e liberação das etapas
+
+`ProcessStep.depends_on_previous` vira `Task.depends_on`: a tarefa da etapa *n*
+depende da tarefa da etapa *n − 1* (dependência linear; não há grafo).
+
+| Etapa | Estado ao aplicar |
+|---|---|
+| sem dependência (a primeira, ou `depends_on_previous=False`) | entra na fila do setor → `EM_FILA` |
+| depende da anterior | criada e ligada, mas **fora da fila**, `DISPONIVEL`; a tela diz "Aguardando etapa anterior" |
+
+Regras (no serviço, não só na tela):
+
+- **iniciar** e **concluir** uma tarefa cuja predecessora não está `CONCLUIDA`
+  levantam `Esta tarefa depende da conclusão de «X».` O estado da predecessora é
+  lido do banco, não do objeto em cache;
+- **concluir a predecessora** libera as dependentes que estavam `DISPONIVEL`, fora
+  da fila e em atividade ainda aberta: `QueueService.enqueue` (fila do setor certo),
+  auditoria `TASK_RELEASED` e aviso ao setor e ao responsável. É idempotente;
+- **só `CONCLUIDA` satisfaz a dependência.** Predecessora cancelada, bloqueada ou
+  devolvida mantém a sucessora esperando (a sucessora nunca é liberada sozinha; quem
+  gerencia pode remover a dependência em "Editar tarefa", o que também a libera);
+- `move_to_sector` de uma tarefa que espera muda o setor mas não a enfileira;
+  `unblock` a devolve a `DISPONIVEL`; `return_task` é recusado (não há o que devolver).
+
+### 3.3 Inputs, critérios e entrega esperada
+
+- **Inputs** (`ActivityInputValue`): registrados na ficha da atividade por quem pode
+  atualizá-los (`ActivityProcessService.can_update`, ver doc 05). Cada tipo é
+  validado (`TEXTO`, `DATA`, `NUMERO`, `LINK`); `ARQUIVO` e `SELECAO` só confirmam o
+  recebimento com uma observação. Cada mudança é auditada (`INPUT_UPDATED`, com o
+  estado de antes e de depois).
+- **Input obrigatório faltante não impede aplicar o processo** (a atividade pode
+  nascer incompleta), **mas impede o início do fluxo**: `start` e `complete` de uma
+  tarefa *gerada por processo* recusam enquanto houver input obrigatório não recebido
+  (`Antes de trabalhar nesta tarefa, registre o recebimento dos inputs obrigatórios…`).
+  Tarefas manuais não são afetadas.
+- **Critérios de aceite** (`ActivityCriterionCheck`): marcar/desmarcar grava
+  `met_by`/`met_at` e audita `CRITERION_UPDATED` (inclusive reabrir). O critério do
+  molde não muda.
+- **Entrega esperada** (`output_description`) e **tipo de evidência** aparecem no
+  painel; ainda não há onde registrar a evidência (ver pendências).
+
+### 3.4 Finalização de atividade com processo
+
+| Resultado | Critérios obrigatórios em aberto |
+|---|---|
+| `SUCESSO` | **bloqueia**, listando os que faltam (`Falta atender: A; B`) |
+| `CONCLUIDO_COM_PENDENCIAS` | permite, com comentário obrigatório; os critérios abertos entram na auditoria e na conversa da atividade |
+| `DECLINADO` / `CANCELADO` | não olha critérios |
+
+O caminho antigo `complete_activity` segue a regra do `SUCESSO`. Critérios
+opcionais nunca bloqueiam. Atividade sem processo não muda de comportamento.
+
+### 3.5 Tela
+
+- Ficha da atividade → cartão **Processo** (âncora `#processo`): identificação da
+  versão, resultado esperado, **Entradas** (`x / y recebidas`), **Etapas**
+  (`x / y concluídas`, com o estado de cada uma) e **Critérios de aceite**
+  (`x / y atendidos`, com caixa para marcar).
+- Sem processo, quem tem `processo.aplicar` vê **Aplicar processo**: popup em 4
+  passos (Processo → Responsáveis → Entradas → Confirmar). O passo 1 lista só
+  processos elegíveis (ativos, com versão publicada, da organização e da empresa da
+  atividade); o passo 2 vem com o responsável padrão preenchido e sugere primeiro as
+  pessoas do setor da etapa.
+
+### 3.6 Notificações
+
+- Ao aplicar: um aviso por tarefa que **já nasceu na fila** (setor + responsável,
+  `TASK_ASSIGNED`); etapas que esperam não geram aviso; o dono da atividade, se não
+  foi quem aplicou, recebe um resumo (`PROCESS_APPLIED`).
+- Ao liberar uma etapa: aviso ao setor e ao responsável (`TASK_ASSIGNED`,
+  "Tarefa liberada para a fila").

@@ -5,7 +5,7 @@
 {% block content %}
 <div class="activity-detail">
     <div class="breadcrumb">
-        <a href="{% url 'activity-list' %}">Atividades</a><span>›</span>{{ activity.title|truncatechars:48 }}
+        <a href="{{ return_url }}">Atividades</a><span>›</span>{{ activity.title|truncatechars:48 }}
     </div>
 
     <header class="ad-header">
@@ -62,17 +62,17 @@
                         <button type="button" class="menu-dots__trigger" title="Mais ações">{% include "_icon.html" with name="more" %}</button>
                         <div class="menu-dots__popup" hidden>
                             {% if activity.status != "CONCLUIDA" and activity.status != "CANCELADA" %}
-                            {% if can_edit %}<a href="{% url 'activity-edit' activity.pk %}" class="menu-dots__item">Editar</a>{% endif %}
-                            {% if can_change_owner %}<a href="{% url 'activity-change-owner' activity.pk %}" class="menu-dots__item">Transferir responsável</a>{% endif %}
-                            {% if can_edit %}<a href="{% url 'activity-change-deadline' activity.pk %}" class="menu-dots__item">Alterar prazo</a>{% endif %}
-                            {% if can_mark_pending %}<a href="{% url 'activity-mark-pending' activity.pk %}" class="menu-dots__item js-activity-mark-pending">Marcar como pendente</a>{% endif %}
+                            {% if can_edit %}<a href="{% url 'activity-edit' activity.pk %}?next={{ return_url|urlencode }}" class="menu-dots__item">Editar</a>{% endif %}
+                            {% if can_change_owner %}<a href="{% url 'activity-change-owner' activity.pk %}" data-activity-action class="menu-dots__item">Transferir responsável</a>{% endif %}
+                            {% if can_edit %}<a href="{% url 'activity-change-deadline' activity.pk %}" data-activity-action class="menu-dots__item">Alterar prazo</a>{% endif %}
+                            {% if can_mark_pending %}<a href="{% url 'activity-mark-pending' activity.pk %}" class="menu-dots__item" data-activity-action>Marcar como pendente</a>{% endif %}
                             {% if can_finalize %}
                             <div class="menu-dots__divider"></div>
-                            <a href="{% url 'activity-finalize' activity.pk %}?outcome=SUCESSO" class="menu-dots__item js-activity-finalize">Concluir</a>
-                            <a href="{% url 'activity-finalize' activity.pk %}?outcome=CANCELADO" class="menu-dots__item menu-dots__item--danger js-activity-finalize">Cancelar</a>
+                            <a href="{% url 'activity-finalize' activity.pk %}?outcome=SUCESSO" class="menu-dots__item" data-activity-action>Concluir</a>
+                            <a href="{% url 'activity-finalize' activity.pk %}?outcome=CANCELADO" class="menu-dots__item menu-dots__item--danger" data-activity-action>Cancelar</a>
                             {% endif %}
                             {% elif can_reopen %}
-                            <a href="{% url 'activity-reopen' activity.pk %}" class="menu-dots__item">Reabrir atividade</a>
+                            <a href="{% url 'activity-reopen' activity.pk %}" data-activity-action class="menu-dots__item">Reabrir atividade</a>
                             {% endif %}
                         </div>
                     </div>
@@ -95,7 +95,7 @@
         </div>
         {% if can_approve_pendency %}
         <div class="pendency-banner__actions">
-            <a href="{% url 'activity-approve-pendency' activity.pk %}" class="btn btn--primary btn--sm js-activity-approve-pendency">
+            <a href="{% url 'activity-approve-pendency' activity.pk %}" class="btn btn--primary btn--sm" data-activity-action>
                 {% include "_icon.html" with name="check" %} Aprovar
             </a>
         </div>
@@ -106,7 +106,10 @@
     {% if activity.status == "CANCELADA" %}
     <p class="message message--warning">Cancelada em {{ activity.cancelled_at|date:"d/m/Y H:i" }}. Motivo: {{ activity.cancelled_reason }}</p>
     {% elif activity.status == "CONCLUIDA" %}
-    <p class="message message--success">Concluída em {{ activity.completed_at|date:"d/m/Y H:i" }} por {{ activity.completed_by.get_username }}.</p>
+    <div class="message message--success" style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap">
+        <span>Concluída em {{ activity.completed_at|date:"d/m/Y H:i" }} por {{ activity.completed_by.get_username }}.</span>
+        {% if can_reopen %}<a href="{% url 'activity-reopen' activity.pk %}" data-activity-action class="btn btn--sm">Reabrir atividade</a>{% endif %}
+    </div>
     {% endif %}
 
     <div class="split split--history">
@@ -124,7 +127,7 @@
                             </div>
                             <div>
                                 <div class="ad-situation__count-label">{{ tasks_done }} de {{ tasks_total }} concluídas</div>
-                                <div class="ad-situation__count-sub">{{ status_counts.waiting }} em fila · {{ status_counts.blocked }} bloqueada{{ status_counts.blocked|pluralize }}</div>
+                                <div class="ad-situation__count-sub">{{ status_counts.waiting }} em fila · {{ status_counts.blocked }} bloqueada{{ status_counts.blocked|pluralize }}{% if status_counts.dependency_waiting %} · {{ status_counts.dependency_waiting }} aguardando etapa anterior{% endif %}</div>
                             </div>
                         </div>
 
@@ -156,6 +159,15 @@
                                 <div class="situation-attention__body">Todas as tarefas foram finalizadas.</div>
                             </div>
                         </div>
+                        {% elif is_blocked_by_criteria %}
+                        <div class="situation-attention situation-attention--danger">
+                            <span class="situation-attention__icon">{% include "_icon.html" with name="alert" %}</span>
+                            <div class="situation-attention__copy">
+                                <div class="situation-attention__title">Faltam critérios de aceite</div>
+                                <div class="situation-attention__body">As tarefas terminaram, mas {{ process_panel.unmet_required_criteria|length }} critério{{ process_panel.unmet_required_criteria|length|pluralize }} obrigatório{{ process_panel.unmet_required_criteria|length|pluralize }} ainda não {{ process_panel.unmet_required_criteria|length|pluralize:"foi,foram" }} atendido{{ process_panel.unmet_required_criteria|length|pluralize }}.</div>
+                            </div>
+                            <div class="situation-attention__action"><a href="#processo" class="btn btn--sm">Ver critérios</a></div>
+                        </div>
                         {% endif %}
                     </div>
 
@@ -170,15 +182,7 @@
 
             {% include "activities/_tasks_block.html" %}
 
-            {% if activity.process_version_id %}
-            <div class="card">
-                <div class="card__head" style="padding:0 0 10px"><h2 style="margin:0">Processo</h2></div>
-                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap">
-                    <div>{{ activity.process_version.process.name }} · v{{ activity.process_version.number }}</div>
-                    <a href="{% url 'process-edit' activity.process_version.process_id %}?v={{ activity.process_version.pk }}" class="btn btn--sm">Ver processo →</a>
-                </div>
-            </div>
-            {% endif %}
+            {% include "activities/_process_panel.html" %}
 
             <div class="card card--flush ad-details-card">
                 <div class="card__head"><h2><span class="ad-section-icon">{% include "_icon.html" with name="info" %}</span> Detalhes da atividade</h2></div>
@@ -315,16 +319,21 @@
         });
     }
 
-    document.querySelectorAll(".js-activity-finalize, .js-activity-mark-pending, .js-activity-approve-pendency")
-        .forEach(function (link) {
-            link.addEventListener("click", function (event) {
-                if (!window.LPSModal) return;
-                event.preventDefault();
-                window.LPSModal.open(link.getAttribute("href"), {
-                    onSuccess: function () { window.location.reload(); }
-                });
+    document.querySelectorAll(".js-process-apply").forEach(function (link) {
+        link.addEventListener("click", function (event) {
+            if (!window.LPSModal) return;
+            event.preventDefault();
+            window.LPSModal.open(link.getAttribute("href"), {
+                onSuccess: function () {
+                    window.location.hash = "processo";
+                    window.location.reload();
+                }
+            }).catch(function () {
+                // Sem popup (sessão expirada, sem permissão): abre a página normal.
+                window.location.href = link.getAttribute("href");
             });
         });
+    });
 
     document.querySelectorAll(".js-menu-dots").forEach(function (root) {
         var trigger = root.querySelector(".menu-dots__trigger");

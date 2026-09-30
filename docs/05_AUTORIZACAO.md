@@ -101,11 +101,35 @@ em `UserSector` invalida o cache via signal (`invalidate_sector_cache`).
 | Views de `core` (cadastros, usuários, segurança) | `ActionRequiredMixin` com `required_action = catalog.X`. Deve vir **depois** de `OrganizationRequiredMixin` nas bases. Nega com `PermissionDenied`. Escopo padrão: organização (`get_scope_object()` retorna `None`). |
 | Serviços de `activities` | `require_action(user, catalog.X, recurso)` no início de cada método; converte a negação em `ActivityError`. |
 | Serviços de `processes` | `_require(...)` com endereço org + empresa; levanta `ProcessError`. |
+| Aplicar processo (`ProcessApplicationService.apply`) | `require_action(user, PROCESSO_APLICAR, atividade)` — o recurso é a **atividade**, então escopos de empresa, setor designado, obra, centro de custo e "minhas atividades" valem. Ver a seção 4.1. |
+| Inputs e critérios do processo aplicado (`ActivityProcessService`) | Sem ação nova: `ActivityProcessService.can_update` aceita quem pode `atividade.editar` na atividade, o dono e quem é responsável/participante de alguma tarefa dela (mesmo critério do checklist da tarefa), sempre dentro da organização e nunca em atividade encerrada. |
 | Menu lateral | `acessos.context_processors.navigation` — **só UX**, não protege nada. |
 
 Algumas ações do catálogo ainda não são verificadas em nenhum ponto (ex.:
 `atividade.visualizar`) — ver
 [13_PENDENCIAS_CONHECIDAS.md](13_PENDENCIAS_CONHECIDAS.md).
+
+### 4.1 `processo.aplicar` × `tarefa.criar`
+
+Aplicar um processo cria tarefas em **vários setores**, e quem aplica (o
+`Colaborador` sugerido, por exemplo) normalmente não tem `tarefa.criar` em todos
+eles. O desenho é:
+
+1. `ProcessApplicationService.apply` exige **`processo.aplicar`** na atividade
+   (e que a pessoa seja da mesma organização dela);
+2. as tarefas são criadas por `TaskService._create_task_core`, o mesmo núcleo que
+   `create_task` usa **depois** de exigir `tarefa.criar`. O núcleo **não autoriza**
+   — por isso é privado, só `create_task` e `apply` o chamam e nenhuma view o
+   chama —, mas valida organização, setor, título e responsável como qualquer
+   criação;
+3. a auditoria registra as tarefas como criadas por quem aplicou o processo.
+
+Ou seja, `processo.aplicar` autoriza materializar **o fluxo de uma versão já
+publicada** (o molde é imutável e foi aprovado por quem tem `processo.publicar`);
+não autoriza criar tarefas avulsas, e `tarefa.criar` continua sendo exigido para
+elas. As Regras não dizem se aplicar processo dispensa o escopo de setor de
+`tarefa.criar`; a decisão segue `Regras/05` §2057 (usar o fluxo padrão não exige
+poder editar o fluxo) e está registrada em `Regras/12` §41.
 
 ---
 
@@ -134,8 +158,18 @@ partida — a organização pode renomear e alterar (doc 05 §11).
 | Perfil | Resumo |
 |---|---|
 | **Colaborador** | Ver e criar atividades; assumir e marcar pendente; executar tarefas (assumir, aceitar, recusar, iniciar, pausar, retomar, concluir, devolver, bloquear); ver a própria posição na fila; propor/aceitar/recusar prazo; conversar; ver e aplicar processos; gerir clientes. |
-| **Gestor de Setor** | Tudo do Colaborador + ver todas as atividades, editar, aprovar pendência; criar/editar/atribuir tarefas, mover de setor, lançar tempo manual; fila completa e reordenar; resolver conflito de prazo; métricas e auditoria; todas as ações de processo; estágios, tags e cores. |
+| **Gestor de Setor** | Tudo do Colaborador + ver todas as atividades, editar, aprovar pendência; criar/editar/atribuir tarefas, mover de setor, **reabrir tarefa concluída (`tarefa.reabrir`)**, lançar tempo manual; fila completa e reordenar; resolver conflito de prazo; métricas e auditoria; todas as ações de processo; estágios, tags e cores. |
 | **Administrador** | Todas as ações do catálogo. |
+
+> **Ação nova em organização já implantada:** `seed_acoes` cria a ação no
+> catálogo, mas **não** a acrescenta a perfis que já existem no banco — nem ao
+> Administrador. Depois de rodar `seed_acoes`, marque `tarefa.reabrir` nos
+> perfis que devem ter (Matriz de permissões, `/permissoes/`). Rodar
+> `seed_lps_demo` de novo também a acrescentaria, mas ele re-adiciona **todas** as
+> ações sugeridas (desfazendo remoções feitas de propósito) e recria setores de
+> demonstração que faltarem — não use em produção. Reabrir uma tarefa
+> de atividade já concluída também exige `atividade.reabrir` (hoje só no
+> Administrador). Ver [06_ATIVIDADES_E_TAREFAS.md](06_ATIVIDADES_E_TAREFAS.md) §2.11.
 
 ---
 

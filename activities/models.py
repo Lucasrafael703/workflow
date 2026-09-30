@@ -534,6 +534,18 @@ class Task(models.Model):
         related_name="dependents",
         help_text="Dependência simples: esta tarefa não deveria iniciar antes da conclusão da anterior (Regras 02 §29).",
     )
+    process_step = models.ForeignKey(
+        "processes.ProcessStep",
+        verbose_name="etapa do processo",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="tasks",
+        help_text=(
+            "Etapa do processo que gerou esta tarefa (Regras 12 §16). Vazio nas tarefas criadas "
+            "manualmente. Uma etapa gera no máximo uma tarefa por atividade."
+        ),
+    )
 
     status = models.CharField("status", max_length=14, choices=Status.choices, default=Status.NAO_INICIADA)
 
@@ -579,6 +591,16 @@ class Task(models.Model):
             ("can_reorder_queue", "Pode reordenar a fila do setor"),
             ("can_view_full_queue", "Pode visualizar a fila completa do setor"),
         ]
+        constraints = [
+            # Trava de banco contra tarefas duplicadas quando o processo é aplicado
+            # duas vezes (clique duplo, duas abas). Parcial: tarefas manuais
+            # (process_step nulo) não participam. Suportado por SQLite e PostgreSQL.
+            models.UniqueConstraint(
+                fields=["activity", "process_step"],
+                condition=models.Q(process_step__isnull=False),
+                name="unique_task_per_activity_process_step",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.activity} - {self.title}"
@@ -603,7 +625,12 @@ class Task(models.Model):
     def status_color(self):
         """Cor efetiva do status — só decorativa, nunca regra de negócio.
         Para telas de objeto único; listagens anexam isto como atributo
-        solto via EnumColorResolver para não fazer 1 query por linha."""
+        solto via EnumColorResolver para não fazer 1 query por linha.
+
+        Etapa que aguarda a anterior usa o cinza legível do tema: a cor de
+        "Disponível" é clara demais para o texto "Aguardando etapa anterior"."""
+        if self.status == self.Status.DISPONIVEL and self.waiting_for is not None:
+            return "#607188"
         if getattr(self, "_status_color", None):
             return self._status_color
         from core.colors import EnumColorResolver
@@ -617,10 +644,30 @@ class Task(models.Model):
         return get_contrast_text(self.status_color)
 
     @property
+    def waiting_for(self):
+        """Predecessora que ainda impede a tarefa de andar, ou `None`.
+
+        Só para exibição (leitura do que a view já carregou; use
+        `select_related("depends_on")` em listagens). A regra que barra
+        início e conclusão está em `TaskService.pending_dependency`, que
+        consulta o estado atual. Só `CONCLUIDA` satisfaz a dependência.
+        """
+        dependency = self.depends_on
+        if dependency is not None and dependency.status != self.Status.CONCLUIDA:
+            return dependency
+        return None
+
+    @property
     def status_label(self):
         """Nome exibido efetivo do status (customizado pela organização, ou
         o label nativo do TextChoices) — nunca altera o código gravado em
-        `status` nem a lógica de negócio, que continua comparando o code."""
+        `status` nem a lógica de negócio, que continua comparando o code.
+
+        Etapa `DISPONIVEL` que espera a anterior não está disponível para
+        ninguém: aparece como "Aguardando etapa anterior".
+        """
+        if self.status == self.Status.DISPONIVEL and self.waiting_for is not None:
+            return "Aguardando etapa anterior"
         if getattr(self, "_status_label", None):
             return self._status_label
         from core.colors import EnumColorResolver

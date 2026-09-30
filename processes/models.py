@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 
 
@@ -198,6 +199,18 @@ class ProcessStep(models.Model):
         default=True,
         help_text="Dependência simples e linear (Regras 11 §37) — sem regras condicionais.",
     )
+    default_responsavel = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="responsável padrão",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        help_text=(
+            "Quem responde pela tarefa gerada por esta etapa. Opcional: sem ele, quem aplica o processo "
+            "escolhe o responsável. Precisa ser da mesma organização; não precisa participar do setor."
+        ),
+    )
 
     class Meta:
         verbose_name = "etapa do fluxo padrão"
@@ -206,6 +219,23 @@ class ProcessStep(models.Model):
 
     def __str__(self):
         return f"{self.order}. {self.name} — {self.sector}"
+
+    def clean(self):
+        super().clean()
+        if self.default_responsavel_id is None or self.version_id is None:
+            return
+        organization_id = self.version.process.organization_id
+        profile = getattr(self.default_responsavel, "profile", None)
+        if getattr(profile, "organization_id", None) != organization_id:
+            raise ValidationError(
+                {"default_responsavel": "O responsável padrão precisa pertencer à mesma organização do processo."}
+            )
+
+    def save(self, *args, **kwargs):
+        # Toda gravação passa pela mesma checagem de tenant, inclusive as que
+        # não vêm de formulário (Admin, shell, migrations de dados).
+        self.clean()
+        super().save(*args, **kwargs)
 
 
 # ---------------------------------------------------------------------------

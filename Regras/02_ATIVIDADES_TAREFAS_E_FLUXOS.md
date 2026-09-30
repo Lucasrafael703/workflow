@@ -1245,6 +1245,33 @@ A reabertura deve:
 - registrar data e hora;
 - registrar motivo quando aplicável.
 
+No D0 o **motivo é obrigatório** e só atividade **concluída** reabre (a cancelada
+não). O estado anterior fica no registro.
+
+## 50.1 Reabertura de tarefa concluída
+
+Decisão do D0 (30/09/2026); as demais Regras eram omissas sobre desfazer a
+conclusão de uma tarefa.
+
+Uma tarefa concluída pode ser reaberta por quem tem a ação sensível
+`tarefa.reabrir` no setor da tarefa, **sempre com motivo** e com registro no
+histórico. Ao reabrir:
+
+- a tarefa volta ao **fim da fila** do seu setor (nova passagem pela fila; a
+  passagem antiga continua como histórico). Se a tarefa anterior do fluxo ainda
+  não terminou, ela volta a "aguardar a etapa anterior";
+- o trabalho já feito é fato e não se apaga: sessões e tempo registrados,
+  checklist, participantes e prazos permanecem;
+- se a atividade já estava concluída, ela é **reaberta junto** — o que exige
+  também `atividade.reabrir`; sem essa permissão a tarefa não é reaberta;
+  atividade cancelada não permite reabrir tarefa;
+- as tarefas que **dependiam** da reaberta e já foram trabalhadas (em execução,
+  concluídas, bloqueadas, devolvidas ou com tempo registrado) impedem a
+  reabertura; as que apenas esperam na fila voltam a aguardar e são liberadas
+  de novo quando a reaberta for concluída.
+
+Tarefa cancelada não é reaberta.
+
 ---
 
 # 51. Fluxo configurável

@@ -1,54 +1,59 @@
 {% extends "base.html" %}
-{% load static %}
-{% block title %}Editar atividade — LPS{% endblock %}
-
+{% block title %}{{ editor_title }} — LPS{% endblock %}
 {% block content %}
-<div class="page-head">
-    <div class="page-head__text">
-        <div class="breadcrumb">
-            <a href="{% url 'activity-list' %}">Atividades</a><span>›</span>
-            {{ activity.title }}
+{% if picker %}<div class="modal-backdrop"><div class="modal modal--wide">{% endif %}
+<div class="activity-editor{% if picker %} activity-editor--dialog{% endif %}">
+    <header class="activity-editor__head{% if picker %} modal__head{% endif %}">
+        <div>
+            {% if not picker %}<nav class="breadcrumb" aria-label="Localização"><a href="{{ return_url }}">Atividades</a><span aria-hidden="true">›</span><span>{{ editor_title }}</span></nav>{% endif %}
+            <h1>{{ editor_title }}</h1>
+            <p class="muted">Defina a entrega, o responsável e o prazo. Complete o contexto quando precisar.</p>
+            {% if draft %}<span class="tag">Rascunho · {{ draft.code }}</span>{% elif activity %}<span class="id-badge">{{ activity.code }}</span>{% endif %}
         </div>
-        <h1>Editar atividade</h1>
-        <p class="sub">
-            Descreva o resultado esperado. Os passos vêm depois, como tarefas.
-            {% if activity.code %}<span class="id-badge">{{ activity.code }}</span>{% endif %}
-        </p>
-    </div>
-</div>
-
-<form method="post" id="activity-form">
-    {% csrf_token %}
-    {% if form.non_field_errors %}
-    <ul class="messages">
-        {% for error in form.non_field_errors %}<li class="message message--error">{{ error }}</li>{% endfor %}
-    </ul>
-    {% endif %}
-
-    <div class="card card--form">
-        <h2 class="form-title-bar">Informações da atividade</h2>
-
-        <div class="form-grid form-grid--wide">
-            {% for field in form %}
-            <div class="form-row
-                {% if field.name == 'urgency' %} form-row--urgency{% endif %}
-                {% if field.name == 'address' or field.name == 'description' or field.name == 'internal_notes' %} form-row--full{% endif %}">
-                <label for="{{ field.id_for_label }}">
-                    {{ field.label }}{% if field.field.required %} <span class="req">*</span>{% endif %}
-                </label>
-                {{ field }}
-                {% if field.help_text %}<div class="helptext">{{ field.help_text }}</div>{% endif %}
-                {% if field.errors %}<ul class="errorlist">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+        {% if picker %}<button type="button" class="modal__close" aria-label="Fechar">&times;</button>{% endif %}
+    </header>
+    <form method="post" enctype="multipart/form-data" id="activity-editor-form">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ return_url }}">
+        {% if draft %}<input type="hidden" name="pk" value="{{ draft.pk }}">{% endif %}
+        <div{% if picker %} class="modal__body"{% endif %}>
+            {% if form.errors %}
+            <div class="message message--error" role="alert"><strong>Revise os campos indicados abaixo.</strong>{{ form.non_field_errors }}</div>
+            {% endif %}
+            <section class="activity-editor__section" aria-labelledby="activity-essential-title">
+                <div class="activity-editor__section-head"><h2 id="activity-essential-title">Informações principais</h2><p>O necessário para organizar o trabalho.</p></div>
+                <div class="activity-editor__grid">
+                    {% for field in form.essential_fields %}{% include "activities/_activity_field.html" with publishing=True %}{% endfor %}
+                </div>
+            </section>
+            <details class="activity-editor__section activity-editor__context"{% if form.context_expanded %} open{% endif %}>
+                <summary><span>Contexto da atividade</span><span class="muted small">Cliente, obra e organização</span></summary>
+                <div class="activity-editor__grid">
+                    {% for field in form.context_fields %}{% include "activities/_activity_field.html" %}{% endfor %}
+                </div>
+            </details>
+            <section class="activity-editor__section" aria-labelledby="activity-details-title">
+                <div class="activity-editor__section-head"><h2 id="activity-details-title">Descrição e arquivos</h2><p>Informações que ajudam a equipe a executar a entrega.</p></div>
+                <div class="activity-editor__grid">
+                    {% include "activities/_activity_field.html" with field=form.description %}
+                    {% include "activities/_activity_field.html" with field=form.internal_notes %}
+                    {% include "activities/_activity_field.html" with field=form.files full=True %}
+                </div>
+                {% if attachments %}<ul class="activity-editor__attachments">
+                    {% for attachment in attachments %}<li id="editor-attachment-{{ attachment.pk }}"><a href="{{ attachment.file.url }}" target="_blank" rel="noopener">{{ attachment.original_name|default:attachment.file.name }}</a><button type="submit" form="remove-attachment-{{ attachment.pk }}" class="btn btn--ghost btn--sm">Remover</button></li>{% endfor %}
+                </ul>{% endif %}
+            </section>
+        </div>
+        <footer class="activity-editor__footer{% if picker %} modal__foot{% endif %}">
+            <a href="{{ cancel_url }}" class="btn btn--ghost">Cancelar</a>
+            <div class="actions-row">
+                {% if not editing and not picker %}<button type="submit" name="acao" value="rascunho" formnovalidate class="btn">Salvar rascunho</button>{% endif %}
+                <button type="submit" name="acao" value="publicar" class="btn btn--primary">{% if editing %}Salvar alterações{% else %}Criar atividade{% endif %}</button>
             </div>
-            {% endfor %}
-        </div>
-    </div>
-
-    <div class="form-foot form-foot--split">
-        <a href="{% url 'activity-detail' activity.pk %}" class="btn btn--ghost">Cancelar</a>
-        <div class="actions-row">
-            <button type="submit" class="btn btn--primary">Salvar alterações</button>
-        </div>
-    </div>
-</form>
+        </footer>
+    </form>
+    {% if draft and not picker %}<form method="post" action="{% url 'activity-wizard-discard' draft.pk %}" class="activity-editor__discard" onsubmit="return confirm('Descartar este rascunho e seus anexos?');">{% csrf_token %}<button class="btn btn--ghost btn--sm" type="submit">Descartar rascunho</button></form>{% endif %}
+    {% for attachment in attachments %}<form id="remove-attachment-{{ attachment.pk }}" data-editor-attachment-remove data-attachment-row="editor-attachment-{{ attachment.pk }}" method="post" action="{% url 'activity-attachment-delete' activity.pk attachment.pk %}" hidden>{% csrf_token %}</form>{% endfor %}
+</div>
+{% if picker %}</div></div>{% endif %}
 {% endblock %}

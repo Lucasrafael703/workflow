@@ -306,7 +306,7 @@ class TaskAuthorizationTests(ViewTestCase):
 
     def test_stranger_cannot_reach_other_task_actions(self):
         self.client.force_login(self.requester)
-        for name in ("task-return", "task-move", "task-cancel", "task-manual-time"):
+        for name in ("task-return", "task-move", "task-cancel", "task-reopen", "task-manual-time"):
             self.assertEqual(
                 self.client.get(reverse(name, args=[self.task.pk])).status_code, 403, msg=name
             )
@@ -483,10 +483,10 @@ class ActivityCreateViewTests(ViewTestCase):
         activity = self.org.activities.get(title="Sem prazo")
         self.assertIsNone(activity.requested_deadline)
 
-    def test_sector_label_is_setor_responsavel(self):
+    def test_sector_label_describes_the_responsible_team(self):
         self.client.force_login(self.requester)
         response = self.client.get(reverse("activity-create"))
-        self.assertEqual(response.context["form"].fields["sector"].label, "Setor Responsável")
+        self.assertEqual(response.context["form"].fields["sector"].label, "Qual equipe cuida desta atividade?")
 
 
 class SearchViewTests(ViewTestCase):
@@ -621,8 +621,10 @@ class ActivityKanbanAndCalendarViewTests(ViewTestCase):
 
 class ActivityWizardViewTests(ViewTestCase):
     """Wizard de 3 etapas: cada etapa só aceita o próprio rascunho
-    (status=RASCUNHO, created_by=quem está logado), e um rascunho nunca
-    aparece nas telas normais (Lista/Kanban/Calendário/Home/Detalhe)."""
+    (status=RASCUNHO, created_by=quem está logado). Um rascunho aparece na
+    aba "Minhas" de quem o criou (senão fica impossível retomá-lo depois de
+    salvar e sair), mas nunca nas telas de outras pessoas nem nas demais
+    abas (Do meu setor/Participando/Concluídas/Todas)."""
 
     def _create_draft(self, user=None):
         from activities.services import ActivityService
@@ -680,13 +682,30 @@ class ActivityWizardViewTests(ViewTestCase):
         draft.refresh_from_db()
         self.assertEqual(draft.status, "ABERTA")
 
-    def test_draft_never_appears_in_activity_list(self):
+    def test_draft_appears_in_own_creators_minhas_tab(self):
         draft = self._create_draft()
-        draft.title = "Rascunho invisivel"
+        draft.title = "Rascunho retomavel"
         draft.save(update_fields=["title"])
         self.client.force_login(self.requester)
         response = self.client.get(reverse("activity-list"))
-        self.assertNotContains(response, "Rascunho invisivel")
+        self.assertContains(response, "Rascunho retomavel")
+
+    def test_draft_never_appears_for_another_user(self):
+        draft = self._create_draft(user=self.member)
+        draft.title = "Rascunho alheio"
+        draft.save(update_fields=["title"])
+        self.client.force_login(self.requester)
+        response = self.client.get(reverse("activity-list"))
+        self.assertNotContains(response, "Rascunho alheio")
+
+    def test_draft_never_appears_outside_the_minhas_tab(self):
+        draft = self._create_draft()
+        draft.title = "Rascunho fora de minhas"
+        draft.save(update_fields=["title"])
+        self.client.force_login(self.requester)
+        for tab in ("grupo", "participando", "concluidas", "todas"):
+            response = self.client.get(reverse("activity-list"), {"tab": tab})
+            self.assertNotContains(response, "Rascunho fora de minhas", msg_prefix=f"tab={tab}")
 
     def test_draft_detail_redirects_to_wizard(self):
         draft = self._create_draft()

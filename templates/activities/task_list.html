@@ -157,18 +157,19 @@
                             <button type="button" class="menu-dots__trigger" title="Mais ações">{% include "_icon.html" with name="more" %}</button>
                             <div class="menu-dots__popup" hidden>
                                 <a href="{% url 'task-detail' task.pk %}" class="menu-dots__item">Ver detalhes</a>
+                                {% if task.can_reopen %}<a href="{% url 'task-reopen' task.pk %}" data-activity-action class="menu-dots__item">Reabrir tarefa</a>{% endif %}
                                 {% comment %}Assumir/Resolver bloqueio não têm endpoint AJAX (só o de página cheia,
                                 que sempre redireciona para task-detail — aceitável, são ações que já
                                 levam a mais contexto mesmo). Iniciar/Pausar/Concluir usam o endpoint
                                 ajax já criado para o painel lateral, para permanecer na lista.{% endcomment %}
-                                {% if task.status == "DISPONIVEL" %}
+                                {% if task.status == "DISPONIVEL" and not task.waiting_for %}
                                 <form method="post" action="{% url 'task-assume' task.pk %}" class="js-menu-form">
                                     {% csrf_token %}<button type="submit" class="menu-dots__item">Assumir</button>
                                 </form>
                                 {% endif %}
-                                {% if task.status == "DISPONIVEL" or task.status == "EM_FILA" %}
+                                {% if task.status == "DISPONIVEL" or task.status == "EM_FILA" %}{% if not task.waiting_for %}
                                 <button type="button" class="menu-dots__item js-menu-ajax" data-url="{% url 'task-start-ajax' task.pk %}">Iniciar</button>
-                                {% endif %}
+                                {% endif %}{% endif %}
                                 {% if task.status == "EM_EXECUCAO" %}
                                 <button type="button" class="menu-dots__item js-menu-ajax" data-url="{% url 'task-pause-ajax' task.pk %}">Pausar</button>
                                 <button type="button" class="menu-dots__item js-menu-ajax" data-url="{% url 'task-complete-ajax' task.pk %}">Concluir</button>

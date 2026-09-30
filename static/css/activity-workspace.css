@@ -1,0 +1,46 @@
+/* Shared activity editor: the same hierarchy on a page and in a selector. */
+.activity-editor { max-width: 1040px; margin: 0 auto; }
+.activity-editor__head { margin-bottom: 24px; }
+.activity-editor__head h1 { margin: 8px 0; font-size: 28px; letter-spacing: -.6px; }
+.activity-editor__head p { margin: 8px 0; }
+.activity-editor__section { margin-bottom: 18px; padding: 24px; background: #fff; border: 1px solid var(--border); border-radius: 12px; }
+.activity-editor__section-head { margin-bottom: 22px; }
+.activity-editor__section-head h2 { margin: 0; font-size: 17px; }
+.activity-editor__section-head p { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+.activity-editor__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 24px; }
+.activity-editor__grid .form-row { margin: 0; min-width: 0; }
+.activity-editor__grid .form-row--full, .activity-editor__grid .form-row--urgency { grid-column: 1 / -1; }
+.activity-editor .form-row--urgency > label { display: block; padding: 0; border: 0; border-radius: 0; cursor: default; }
+.activity-editor .form-row--urgency > div[id] { display: flex; flex-wrap: wrap; gap: 8px; }
+.activity-editor .form-readonly { padding: 11px 12px; background: #f5f7fa; border: 1px solid var(--border); border-radius: 8px; }
+.activity-editor .rich-text { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.activity-editor .rich-text:focus-within { outline: 2px solid #2563eb; outline-offset: 2px; }
+.activity-editor .rich-text__toolbar { display: flex; gap: 4px; padding: 8px; background: #f5f7fa; border-bottom: 1px solid var(--border); }
+.activity-editor .rich-text__btn { min-width: 32px; min-height: 32px; border: 1px solid transparent; border-radius: 5px; background: transparent; color: inherit; cursor: pointer; }
+.activity-editor .rich-text__btn:hover, .activity-editor .rich-text__btn:focus-visible { background: #fff; border-color: var(--border); }
+.activity-editor .rich-text__body { min-height: 140px; padding: 12px; overflow-wrap: anywhere; outline: none; }
+.activity-editor__grid input:not([type=radio]):not([type=checkbox]), .activity-editor__grid textarea, .activity-editor__grid select { max-width: 100%; }
+.activity-editor__context summary { cursor: pointer; font-weight: 600; min-height: 24px; }
+.activity-editor__context summary span + span { margin-left: 12px; font-weight: 400; }
+.activity-editor__context[open] summary { margin-bottom: 24px; }
+.activity-editor__footer { position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 20px; background: #fff; border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 -4px 20px #0f274708; }
+.activity-editor__discard { margin-top: 16px; text-align: right; }
+.activity-editor__attachments { list-style: none; margin: 16px 0 0; padding: 0; }
+.activity-editor__attachments li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); }
+.activity-editor__attachments a { overflow-wrap: anywhere; }
+.activity-editor--dialog .activity-editor__head { margin: 0; }
+.activity-editor--dialog .activity-editor__head h1 { font-size: 22px; }
+.activity-editor--dialog .activity-editor__section { padding: 20px 0; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; margin: 0; }
+.activity-editor--dialog .activity-editor__footer { position: static; border-radius: 0; }
+.js-modal-backdrop[hidden] { display: none; }
+.modal-error { margin: 12px 0; }
+.js-activity-row { cursor: pointer; }
+.js-activity-row:focus-within { outline: 2px solid #2563eb; outline-offset: -2px; }
+@media (max-width: 760px) {
+    .activity-editor__head h1 { font-size: 24px; }
+    .activity-editor__section { padding: 18px; }
+    .activity-editor__grid { grid-template-columns: 1fr; gap: 18px; }
+    .activity-editor__footer { padding: 12px; flex-wrap: wrap; }
+    .activity-editor__footer .actions-row { flex-wrap: wrap; flex: 1; justify-content: flex-end; }
+    .activity-editor__context summary span + span { display: block; margin: 6px 0 0; }
+}

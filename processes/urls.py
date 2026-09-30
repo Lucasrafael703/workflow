@@ -15,6 +15,11 @@ urlpatterns = [
     path("<int:pk>/fluxo/", views.ProcessStepAddView.as_view(), name="process-step-add"),
     path("<int:pk>/fluxo/reordenar/", views.ProcessStepReorderView.as_view(), name="process-step-reorder"),
     path("<int:pk>/fluxo/<int:step_pk>/remover/", views.ProcessStepRemoveView.as_view(), name="process-step-remove"),
+    path(
+        "<int:pk>/fluxo/<int:step_pk>/responsavel/",
+        views.ProcessStepResponsavelView.as_view(),
+        name="process-step-responsavel",
+    ),
     path("<int:pk>/publicar/", views.ProcessPublishView.as_view(), name="process-publish"),
     path("<int:pk>/nova-versao/", views.ProcessNewVersionView.as_view(), name="process-new-version"),
     path("<int:pk>/ativo/", views.ProcessToggleActiveView.as_view(), name="process-toggle-active"),

@@ -9,7 +9,7 @@
     <span>em {{ task.title }}</span>
     <span class="timerbar__spacer"></span>
     <form method="post" action="{% url 'task-pause' task.pk %}">
-        {% csrf_token %}<button type="submit" class="btn btn--sm">Pausar</button>
+        {% csrf_token %}<button type="submit" class="btn btn--sm">Pausar cronômetro</button>
     </form>
 </div>
 {% endif %}
@@ -27,10 +27,20 @@
         <div class="sub">
             <span class="tag" style="--tag-bg: {{ task.status_color }}1A; --tag-fg: {{ task.status_color }};">{{ task.status_label }}</span>
             · Setor: <strong>{{ task.sector.name }}</strong>
-            {% if queue_info %} · <span class="position-pill">Posição {{ queue_info.position }} de {{ queue_info.total }}</span>{% endif %}
+            {% if queue_info %} · <span class="position-pill">Na fila: {{ queue_info.position }} de {{ queue_info.total }}</span>{% endif %}
         </div>
     </div>
+    <div class="page-head__actions"><a href="{% url 'activity-detail' activity.pk %}" class="btn">Voltar à atividade</a></div>
 </div>
+
+<nav class="tabs" aria-label="Seções da tarefa">
+    <a href="#fazer-agora">O que fazer agora</a>
+    <a href="#checklist">Checklist</a>
+    <a href="#prazo">Prazos</a>
+    <a href="#conversa">Comentários</a>
+    <a href="#equipe">Pessoas e tempo</a>
+    <a href="#historico">Histórico</a>
+</nav>
 
 {% if open_block %}
 <div class="message message--warning">
@@ -48,68 +58,87 @@
 <div class="split">
     <div>
         {# Uma única ação primária por vez; o resto fica em "Mais ações" (doc 09 §71) #}
-        <div class="card card--flush">
+        <div class="card card--flush" id="fazer-agora">
             <div class="card__head"><h2>O que fazer agora</h2></div>
             <div class="card__body">
                 {% if my_pending_assignment %}
                     <div class="message message--warning" style="margin:0">
                         <strong>{{ my_pending_assignment.assigned_by.get_username }}</strong> atribuiu esta tarefa a você em {{ my_pending_assignment.assigned_at|date:"d/m/Y H:i" }}.
-                        <div class="small">Aceite para se tornar executor, ou recuse informando o motivo.</div>
+                        <div class="small">Aceite para participar da execução. Se não puder fazer a tarefa, recuse e explique o motivo.</div>
                         <div class="actions-row" style="margin-top:10px">
                             {% if can_accept_assignment %}
                             <form method="post" action="{% url 'task-assignment-accept' task.pk my_pending_assignment.pk %}">
-                                {% csrf_token %}<button type="submit" class="btn btn--sm btn--primary">Aceitar</button>
+                                {% csrf_token %}<button type="submit" class="btn btn--sm btn--primary">Aceitar tarefa</button>
                             </form>
                             {% endif %}
                             {% if can_reject_assignment %}
-                            <a href="{% url 'task-assignment-reject' task.pk my_pending_assignment.pk %}" class="btn btn--sm btn--danger">Recusar</a>
+                            <a href="{% url 'task-assignment-reject' task.pk my_pending_assignment.pk %}" class="btn btn--sm btn--danger">Recusar tarefa</a>
                             {% endif %}
                         </div>
                     </div>
                 {% elif task.status == "CONCLUIDA" %}
                     <p class="message message--success" style="margin:0">Concluída em {{ task.completed_at|date:"d/m/Y H:i" }}
                        {% if task.completed_by %}por {{ task.completed_by.get_username }}{% endif %}.</p>
+                    {% if can_reopen_task %}
+                    <div class="actions-row" style="margin-top:12px">
+                        <a href="{% url 'task-reopen' task.pk %}" data-activity-action class="btn btn--primary">Reabrir tarefa</a>
+                        <span class="muted small">Ela volta ao fim da fila do setor; o motivo fica no histórico.</span>
+                    </div>
+                    {% endif %}
                 {% elif task.status == "CANCELADA" %}
                     <p class="muted" style="margin:0">Tarefa cancelada em {{ task.cancelled_at|date:"d/m/Y H:i" }}.</p>
                 {% elif open_block %}
+                    <p class="muted">O impedimento foi resolvido? Libere a tarefa para que o trabalho possa continuar.</p>
                     <form method="post" action="{% url 'task-unblock' task.pk %}">
                         {% csrf_token %}<button type="submit" class="btn btn--primary btn--lg">Resolver bloqueio</button>
                     </form>
                 {% elif my_open_session %}
                     <div class="timer-hero">
+                        <p class="muted small">Seu tempo nesta sessão de trabalho</p>
                         <div class="timer-hero__clock" data-started-at="{{ my_open_session.started_at.isoformat }}">--:--:--</div>
                         <div class="actions-row" style="justify-content:center">
                             <form method="post" action="{% url 'task-pause' task.pk %}">
-                                {% csrf_token %}<button type="submit" class="btn btn--lg">Pausar</button>
+                                {% csrf_token %}<button type="submit" class="btn btn--lg">Pausar cronômetro</button>
                             </form>
                             <form method="post" action="{% url 'task-complete' task.pk %}">
                                 {% csrf_token %}<button type="submit" class="btn btn--lg btn--primary">Concluir tarefa</button>
                             </form>
                         </div>
+                        <p class="muted small">Vai interromper o trabalho? Pause o cronômetro. Terminou a entrega? Conclua a tarefa.</p>
+                    </div>
+                {% elif dependency_blocking %}
+                    <p class="muted" style="margin:0">Esta tarefa entra na fila do setor quando <a href="{% url 'task-detail' task.depends_on.pk %}">{{ task.depends_on.title }}</a> for concluída. Até lá, não dá para iniciá-la.</p>
+                {% elif missing_process_inputs %}
+                    <div class="message message--warning" style="margin:0">
+                        Antes de começar, registre o recebimento dos inputs obrigatórios do processo:
+                        <strong>{{ missing_process_inputs|join:"; " }}</strong>.
+                        <div style="margin-top:10px"><a href="{% url 'activity-detail' activity.pk %}#processo" class="btn btn--sm">Ir para o processo da atividade</a></div>
                     </div>
                 {% elif is_participant or is_responsavel %}
+                    <p class="muted">Ao iniciar, o sistema começa a contar seu tempo de trabalho. Você pode pausar quando precisar.</p>
                     <form method="post" action="{% url 'task-start' task.pk %}">
                         {% csrf_token %}<button type="submit" class="btn btn--primary btn--lg">Iniciar tarefa</button>
                     </form>
                 {% elif can_assume %}
+                    <p class="muted">Esta tarefa está disponível. Assuma para começar a trabalhar nela.</p>
                     <form method="post" action="{% url 'task-assume' task.pk %}">
-                        {% csrf_token %}<button type="submit" class="btn btn--primary btn--lg">Assumir tarefa</button>
+                        {% csrf_token %}<button type="submit" class="btn btn--primary btn--lg">Assumir esta tarefa</button>
                     </form>
                 {% else %}
-                    <p class="muted" style="margin:0">Sem permissão para iniciar esta tarefa.</p>
+                    <p class="muted" style="margin:0">Você pode acompanhar esta tarefa. Para trabalhar nela, peça ao responsável que adicione você como participante.</p>
                 {% endif %}
 
                 {% if task.status != "CONCLUIDA" and task.status != "CANCELADA" %}
                 <details class="disclosure" style="margin-top:16px">
-                    <summary>Mais ações</summary>
+                    <summary>Editar, mudar prazo ou encaminhar tarefa</summary>
                     <div class="disclosure__body">
                         <div class="actions-row">
-                            <a href="{% url 'task-return' task.pk %}" class="btn btn--sm">Devolver</a>
+                            <a href="{% url 'task-return' task.pk %}" class="btn btn--sm">Devolver para correção</a>
                             <a href="{% url 'task-move' task.pk %}" class="btn btn--sm">Enviar para outro setor</a>
                             {% if not open_block %}<a href="{% url 'task-block' task.pk %}" class="btn btn--sm">Registrar bloqueio</a>{% endif %}
                             <a href="{% url 'deadline-propose' task.pk %}" class="btn btn--sm">Propor novo prazo</a>
-                            <a href="{% url 'task-manual-time' task.pk %}" class="btn btn--sm">Adicionar tempo</a>
-                            <a href="{% url 'task-edit' task.pk %}" class="btn btn--sm">Editar</a>
+                            <a href="{% url 'task-manual-time' task.pk %}" class="btn btn--sm">Registrar tempo já trabalhado</a>
+                            <a href="{% url 'task-edit' task.pk %}" class="btn btn--sm">Editar tarefa</a>
                             <a href="{% url 'task-cancel' task.pk %}" class="btn btn--sm btn--danger">Cancelar tarefa</a>
                         </div>
                     </div>
@@ -129,45 +158,48 @@
 
         {% if task.description %}
         <div class="card card--flush">
-            <div class="card__head"><h2>Descrição</h2></div>
+            <div class="card__head"><h2>Instruções da tarefa</h2></div>
             <div class="card__body"><div class="rich-text-content">{{ task.description|safe }}</div></div>
         </div>
         {% endif %}
 
-        <div class="card card--flush">
+        <div class="card card--flush" id="checklist">
             <div class="card__body">
                 {% include "activities/_task_checklist.html" %}
             </div>
         </div>
 
         <div class="card card--flush" id="prazo">
-            <div class="card__head"><h2>Prazo</h2></div>
+            <div class="card__head"><h2>Prazos da entrega</h2></div>
             <div class="card__body">
                 <div class="deadline-compare">
                     <div>
                         <div class="k" title="Quando quem pediu precisa da entrega">Prazo solicitado</div>
+                        <p class="muted small">Quando quem pediu precisa receber.</p>
                         <div class="v">{% if task.requested_deadline %}{{ task.requested_deadline|date:"d/m/Y H:i" }}{% else %}<span class="muted">Não informado</span>{% endif %}</div>
                     </div>
                     <div>
-                        <div class="k" title="Quando o setor responsável se compromete a entregar">Prazo comprometido</div>
-                        <div class="v">{% if task.committed_deadline %}{{ task.committed_deadline|date:"d/m/Y H:i" }}{% else %}<span class="muted">Ainda não comprometido</span>{% endif %}</div>
+                        <div class="k" title="Prazo comprometido pelo setor responsável">Prazo combinado</div>
+                        <p class="muted small">Quando a equipe se comprometeu a entregar.</p>
+                        <div class="v">{% if task.committed_deadline %}{{ task.committed_deadline|date:"d/m/Y H:i" }}{% else %}<span class="muted">Ainda não combinado</span>{% endif %}</div>
                     </div>
                 </div>
 
                 {% if pending_proposal %}
                 <div class="message message--warning" style="margin-top:14px">
                     <strong>Novo prazo proposto:</strong> {{ pending_proposal.proposed_deadline|date:"d/m/Y H:i" }}
-                    <div class="small">Por {{ pending_proposal.proposed_by.get_username }} em {{ pending_proposal.proposed_at|date:"d/m/Y H:i" }} — aguardando decisão do dono.</div>
+                    <div class="small">Por {{ pending_proposal.proposed_by.get_username }} em {{ pending_proposal.proposed_at|date:"d/m/Y H:i" }} — aguardando decisão do responsável pela atividade.</div>
                     {% if is_owner %}
                     <div class="actions-row" style="margin-top:10px">
                         <form method="post" action="{% url 'deadline-accept' pending_proposal.pk %}">
-                            {% csrf_token %}<button type="submit" class="btn btn--sm btn--primary">Aceitar</button>
+                            {% csrf_token %}<button type="submit" class="btn btn--sm btn--primary">Aceitar novo prazo</button>
                         </form>
                         <form method="post" action="{% url 'deadline-reject' pending_proposal.pk %}" class="actions-row">
                             {% csrf_token %}
-                            <input type="text" name="note" placeholder="Motivo da recusa" data-mention
+                            <label for="deadline-reject-note">Motivo da recusa</label>
+                            <input id="deadline-reject-note" type="text" name="note" placeholder="Explique por que o prazo não atende" data-mention
                                    style="padding:6px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font:inherit">
-                            <button type="submit" class="btn btn--sm btn--danger">Recusar</button>
+                            <button type="submit" class="btn btn--sm btn--danger">Recusar novo prazo</button>
                         </form>
                     </div>
                     {% endif %}
@@ -209,7 +241,7 @@
         </div>
 
         <div class="card card--flush" id="conversa">
-            <div class="card__head"><h2>Conversa</h2></div>
+            <div class="card__head"><h2>Comentários da tarefa</h2></div>
             <div class="card__body">
                 <div class="context-banner">
                     {% include "_icon.html" with name="info" %}
@@ -230,41 +262,43 @@
                     {% endfor %}
                 </ul>
                 {% else %}
-                <p class="muted">Nenhuma mensagem ainda.</p>
+                <p class="muted">Ainda não há comentários. Use este espaço para tirar dúvidas ou registrar decisões sobre a tarefa.</p>
                 {% endif %}
                 <form method="post" action="{% url 'task-message' task.pk %}">
                     {% csrf_token %}
-                    <div class="form-row">{{ message_form.body }}</div>
+                    <div class="form-row"><label for="{{ message_form.body.id_for_label }}">Seu comentário</label>{{ message_form.body }}</div>
                     <div class="form-foot form-foot--split">
-                        <select name="kind">
+                        <label for="task-message-kind">Tipo de comentário</label>
+                        <select id="task-message-kind" name="kind">
                             {% for value, label in message_kind_choices %}
                             <option value="{{ value }}">{{ label }}</option>
                             {% endfor %}
                         </select>
                         <a href="{% url 'deadline-propose' task.pk %}" class="btn">Propor novo prazo</a>
-                        <button type="submit" class="btn btn--primary">Enviar mensagem</button>
+                        <button type="submit" class="btn btn--primary">Enviar comentário</button>
                     </div>
                 </form>
             </div>
         </div>
 
         <div class="card card--flush" id="historico">
-            <div class="card__head"><h2>Linha do tempo</h2></div>
+            <div class="card__head"><h2>Histórico da tarefa</h2></div>
             <div class="card__body">{% include "activities/_timeline.html" with entries=history %}</div>
         </div>
     </div>
 
     <div>
-        <div class="card card--flush">
-            <div class="card__head"><h2>Responsável</h2></div>
+        <div class="card card--flush" id="equipe">
+            <div class="card__head"><h2>Quem cuida desta tarefa</h2></div>
             <div class="card__body">
+                <p class="muted small">O responsável acompanha o trabalho até a conclusão.</p>
                 <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
                     <span class="responsible-cell">
                         <span class="avatar avatar--{{ responsavel|avatar_color }}">{{ responsavel.get_username|slice:":2"|upper }}</span>
                         {{ responsavel.get_username }}
                     </span>
                     {% if can_change_responsavel %}
-                    <a href="{% url 'task-change-responsavel' task.pk %}" class="btn btn--sm btn--ghost">Trocar</a>
+                    <a href="{% url 'task-change-responsavel' task.pk %}" class="btn btn--sm btn--ghost">Trocar responsável</a>
                     {% endif %}
                 </div>
             </div>
@@ -273,6 +307,7 @@
         <div class="card card--flush">
             <div class="card__head"><h2>Participantes</h2></div>
             <div class="card__body">
+                <p class="muted small">Pessoas que ajudam a executar esta tarefa.</p>
                 {% if executors %}
                 <ul class="list-rows">
                     {% for executor in executors %}
@@ -280,21 +315,21 @@
                         <span>{{ executor.user.get_username }}</span>
                         {% if can_assign %}
                         <form method="post" action="{% url 'task-executor-remove' task.pk executor.user.pk %}">
-                            {% csrf_token %}<button type="submit" class="link-button">remover</button>
+                            {% csrf_token %}<button type="submit" class="link-button" aria-label="Remover {{ executor.user.get_username }} dos participantes">Remover</button>
                         </form>
                         {% endif %}
                     </li>
                     {% endfor %}
                 </ul>
-                <p class="muted small" style="margin:10px 0 0">Horas-homem totais: <strong>{{ man_hours|duration_hm }}</strong></p>
+                <p class="muted small" style="margin:10px 0 0">Tempo total da equipe: <strong>{{ man_hours|duration_hm }}</strong></p>
                 {% else %}
-                <p class="muted" style="margin:0">Sem participantes.</p>
+                <p class="muted" style="margin:0">Ainda não há participantes adicionais.</p>
                 {% endif %}
 
                 {% if can_assign %}
                 <form method="post" action="{% url 'task-executor-add' task.pk %}" style="margin-top:14px">
                     {% csrf_token %}
-                    <div class="form-row">{{ executor_form.user }}</div>
+                    <div class="form-row"><label for="{{ executor_form.user.id_for_label }}">Quem vai ajudar nesta tarefa?</label>{{ executor_form.user }}</div>
                     <button type="submit" class="btn btn--block">Adicionar participante</button>
                 </form>
                 {% endif %}
@@ -317,7 +352,7 @@
                     {% endfor %}
                 </ul>
                 {% else %}
-                <p class="muted" style="margin:0">Nenhum tempo registrado.</p>
+                <p class="muted" style="margin:0">Ainda não há tempo registrado. O cronômetro começa quando você inicia a tarefa.</p>
                 {% endif %}
             </div>
         </div>

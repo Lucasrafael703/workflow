@@ -17,10 +17,20 @@ Testes do Django ficam em cada app (`tests.py` e, em `activities`, também
 | `acessos/tests.py` | 36 | Motor de autorização: escopos, perfis, concessões, teto de tenant |
 | `core/tests.py` | 28 | Cadastros, busca de pessoas, formulário de usuário |
 | `notifications/tests.py` | 23 | Destinatários, categorias, "ação necessária" |
-| `accounts`, `audit`, `processes` | 0 | `tests.py` vazio |
+| `processes/tests.py` | 22 | Molde: responsável padrão (tenant, ativo, fora do setor), versão publicada imutável, cópia na nova versão, editor de etapas |
+| `activities/test_process_application.py` | 99 | Aplicação de processo: materialização (inputs, critérios, tarefas), validações que não gravam nada, dependências e liberação, inputs e critérios, trava de inputs obrigatórios, atomicidade, reaplicação, versões, isolamento entre organizações, finalização e o cenário de aceite completo |
+| `activities/test_process_views.py` | 55 | Telas do processo: botão e popup "Aplicar processo", painel da ficha, progresso, atualização de inputs/critérios, finalização, tarefas que aguardam |
+| `activities/test_reopen.py` | 44 | Reabrir tarefa e atividade concluídas: fila, histórico preservado, permissão por setor, motivo, tarefas seguintes, atividade concluída/cancelada, atomicidade, botões e popup |
+| `accounts`, `audit` | 0 | `tests.py` vazio |
+
+Base compartilhada dos testes de processo: `activities/testing.py`
+(`ProcessTestCase`, com o cenário Orçamento v3: três setores/pessoas, três etapas
+em sequência, três inputs e quatro critérios) e `processes/testing.py`
+(`build_process`, que monta e publica um molde direto pelo ORM).
 
 Além disso, `tests/checklist.test.cjs` testa o componente JavaScript do
-checklist (seção 4).
+checklist e `tests/process-apply.test.cjs`, o assistente de 4 passos do popup
+"Aplicar processo" (seção 4).
 
 ---
 
@@ -40,15 +50,20 @@ Opções úteis: `-v 2` (nome de cada teste), `--parallel` (mais rápido),
 Os testes usam `config.settings.dev` (via `manage.py`) com um banco SQLite em
 memória criado e destruído a cada execução — o seu `db.sqlite3` não é tocado.
 A suíte completa leva alguns minutos, porque todas as migrations rodam no
-início.
+início. Grande parte do resto é o hash de senha: cada `create_user(..., password=...)`
+usa PBKDF2 (centenas de milissegundos). Para iterar mais rápido **localmente**,
+rode com um módulo de settings que herda de `config.settings.dev` e troca só
+`PASSWORD_HASHERS` por `["django.contrib.auth.hashers.MD5PasswordHasher"]`
+(`--settings=meu_settings_de_teste`); testes novos que não precisam de senha podem
+criar o usuário sem ela (`create_user(username, email=...)`) e usar
+`client.force_login`. O `--parallel` não funciona no Windows deste projeto (erro
+`cannot pickle 'traceback' object` ao reportar uma falha).
 
-### Falhas conhecidas
+### Formulário de usuário
 
-`core.tests.UserFormAjaxTests.test_ajax_request_returns_json_without_redirect`
-e `test_non_ajax_request_still_redirects` falham: o payload de teste não envia
-`password1`/`password2`, que são obrigatórios ao criar usuário. O teste está
-desatualizado, não o código. Ver
-[13_PENDENCIAS_CONHECIDAS.md](13_PENDENCIAS_CONHECIDAS.md).
+Os testes de criação devem enviar organização, `password1` e `password2`,
+assim como a interface atual. Os testes de atividades estão também em
+`activities/test_activity_workspace.py` (editor, anexos e navegação).
 
 ---
 

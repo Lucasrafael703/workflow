@@ -1,126 +1,135 @@
-/* Modal via JS: busca um formulário existente (fetch) e o injeta por cima da
-   tela atual, sem navegar. Reaproveita o HTML de ".modal-backdrop" que as
-   telas de cadastro já renderizam — aqui ele só ganha vida sem redirect.
-   window.LPSModal.open(url, {onSuccess}) devolve o JSON de sucesso da view. */
+/* Reuse server-rendered forms as dialogs, preserving the calling page. */
 (function () {
     "use strict";
-
-    var current = null;
-
+    var stack = [];
+    var loading = 0;
+    var originalOverflow = "";
+    function current() { return stack[stack.length - 1]; }
+    function focusable(element) {
+        return Array.from(element.querySelectorAll("a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), [tabindex='0']"))
+            .filter(function (node) { return node.getClientRects().length && !node.closest("[hidden]"); });
+    }
     function close() {
-        if (!current) return;
-        current.remove();
-        current = null;
-        document.removeEventListener("keydown", onKeydown);
+        var item = current();
+        if (!item || item.busy) return;
+        loading += 1;
+        stack.pop();
+        item.element.remove();
+        if (current()) current().element.hidden = false;
+        else {
+            document.body.style.overflow = originalOverflow;
+            document.removeEventListener("keydown", onKeydown);
+        }
+        if (item.opener && item.opener.isConnected) item.opener.focus();
     }
-
     function onKeydown(event) {
-        if (event.key === "Escape") close();
+        var item = current();
+        if (!item) return;
+        if (event.key === "Escape") { event.preventDefault(); close(); }
+        if (event.key !== "Tab") return;
+        var nodes = focusable(item.element);
+        if (!nodes.length) { event.preventDefault(); return; }
+        var first = nodes[0], last = nodes[nodes.length - 1];
+        if (event.shiftKey && (document.activeElement === first || !item.element.contains(document.activeElement))) {
+            event.preventDefault(); last.focus();
+        } else if (!event.shiftKey && (document.activeElement === last || !item.element.contains(document.activeElement))) {
+            event.preventDefault(); first.focus();
+        }
     }
-
     function extractModal(html) {
-        var wrapper = document.createElement("div");
-        wrapper.innerHTML = html;
-        return wrapper.querySelector(".modal-backdrop");
+        return new DOMParser().parseFromString(html, "text/html").querySelector(".modal-backdrop");
     }
-
-    function bindForm(backdrop, onSuccess, sourceUrl) {
-        var form = backdrop.querySelector("form");
-        if (!form) return;
-
-        form.addEventListener("submit", function (event) {
-            event.preventDefault();
-            var submitButton = form.querySelector("[type=submit]");
-            if (submitButton) submitButton.disabled = true;
-
-            fetch(sourceUrl, {
-                method: "POST",
-                headers: { "X-Requested-With": "XMLHttpRequest" },
-                body: new FormData(form),
-            })
-                .then(function (response) {
-                    return response.json().then(function (data) {
-                        return { ok: response.ok, data: data };
-                    });
-                })
-                .then(function (result) {
-                    if (!result.ok) {
-                        renderErrors(form, result.data.errors || {});
-                        if (submitButton) submitButton.disabled = false;
-                        return;
-                    }
-                    close();
-                    if (typeof onSuccess === "function") onSuccess(result.data);
-                })
-                .catch(function () {
-                    if (submitButton) submitButton.disabled = false;
-                });
-        });
-    }
-
     function renderErrors(form, errors) {
-        form.querySelectorAll(".errorlist").forEach(function (el) { el.remove(); });
-        Object.keys(errors).forEach(function (fieldName) {
-            var field = form.querySelector("[name='" + fieldName + "']");
-            var row = field ? field.closest(".form-row") : null;
-            var target = row || form;
+        form.querySelectorAll(".errorlist, .modal-error").forEach(function (el) { el.remove(); });
+        var firstTarget = null;
+        Object.keys(errors).forEach(function (name) {
+            var field = form.elements.namedItem(name) || form.elements.namedItem(name + "_0");
+            if (field && !field.closest) field = field[0];
+            var row = field && field.closest(".form-row");
+            var target = row || form.querySelector(".modal__body") || form;
             var list = document.createElement("ul");
             list.className = "errorlist";
-            errors[fieldName].forEach(function (message) {
-                var item = document.createElement("li");
-                item.textContent = typeof message === "string" ? message : message.message;
-                list.appendChild(item);
+            list.setAttribute("role", "alert");
+            errors[name].forEach(function (error) {
+                var li = document.createElement("li");
+                li.textContent = typeof error === "string" ? error : error.message;
+                list.appendChild(li);
             });
             target.appendChild(list);
+            var details = target.closest("details");
+            if (details) details.open = true;
+            if (field && !firstTarget) firstTarget = field;
         });
+        if (firstTarget) firstTarget.focus();
     }
-
-    function open(url, options) {
-        options = options || {};
-        return fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } })
-            .then(function (response) { return response.text(); })
-            .then(function (html) {
-                var backdrop = extractModal(html);
-                if (!backdrop) return;
-
-                backdrop.classList.add("js-modal-backdrop");
-                backdrop.addEventListener("click", function (event) {
-                    if (event.target === backdrop) close();
+    function setBusy(item, busy) {
+        item.busy = busy;
+        item.element.setAttribute("aria-busy", String(busy));
+        item.element.querySelectorAll("button[type=submit], input[type=submit]").forEach(function (button) { button.disabled = busy; });
+    }
+    function initialize(item) {
+        var element = item.element;
+        var dialog = element.querySelector(".modal");
+        dialog.setAttribute("role", "dialog");
+        dialog.setAttribute("aria-modal", "true");
+        var title = dialog.querySelector("h1, h2");
+        if (title) dialog.setAttribute("aria-label", title.textContent.trim());
+        element.classList.add("js-modal-backdrop");
+        element.addEventListener("click", function (event) {
+            if (event.target === element) close();
+        });
+        element.querySelectorAll(".modal__close, .modal__foot a.btn").forEach(function (button) {
+            button.addEventListener("click", function (event) { event.preventDefault(); close(); });
+        });
+        var form = element.querySelector("form");
+        if (form) form.addEventListener("submit", async function (event) {
+            event.preventDefault();
+            if (item.busy) return;
+            var data = new FormData(form);
+            if (event.submitter && event.submitter.name) data.append(event.submitter.name, event.submitter.value);
+            setBusy(item, true);
+            try {
+                var response = await fetch(form.getAttribute("action") || item.url, {
+                    method: "POST", headers: {"X-Requested-With": "XMLHttpRequest"}, body: data
                 });
-                var closeButton = backdrop.querySelector(".modal__close");
-                if (closeButton) {
-                    closeButton.setAttribute("type", "button");
-                    closeButton.removeAttribute("href");
-                    closeButton.addEventListener("click", function (event) {
-                        event.preventDefault();
-                        close();
-                    });
+                if (!(response.headers.get("content-type") || "").includes("application/json")) {
+                    throw new Error("Não foi possível confirmar a operação. Verifique sua conexão ou sessão e tente novamente.");
                 }
-                var cancelLink = backdrop.querySelector(".modal__foot a.btn");
-                if (cancelLink) {
-                    cancelLink.addEventListener("click", function (event) {
-                        event.preventDefault();
-                        close();
-                    });
+                var result = await response.json();
+                if (!response.ok) {
+                    renderErrors(form, result.errors || {__all__: ["Não foi possível salvar. Tente novamente."]});
+                    return;
                 }
-
-                bindForm(backdrop, options.onSuccess, url);
-
+                setBusy(item, false);
                 close();
-                document.body.appendChild(backdrop);
-                current = backdrop;
-                document.addEventListener("keydown", onKeydown);
-
-                // Widgets como PersonPickerWidget/TagPickerWidget/RichTextWidget
-                // só ligam seus listeners uma vez, no carregamento da página —
-                // um formulário injetado agora precisa que cada um se
-                // reinicialize dentro deste backdrop específico.
-                (window.LPSWidgets || []).forEach(function (initIn) { initIn(backdrop); });
-
-                var firstField = backdrop.querySelector(".modal__body input, .modal__body select, .modal__body textarea");
-                if (firstField) firstField.focus();
-            });
+                if (typeof item.onSuccess === "function") item.onSuccess(result);
+            } catch (error) {
+                renderErrors(form, {__all__: [error.message || "Não foi possível salvar. Tente novamente."]});
+            } finally { setBusy(item, false); }
+        });
+        (window.LPSWidgets || []).forEach(function (init) { init(element); });
+        var first = element.querySelector("[autofocus]") || focusable(element)[0];
+        if (first) first.focus();
     }
-
-    window.LPSModal = { open: open, close: close };
+    async function open(url, options) {
+        options = options || {};
+        var token = ++loading;
+        var opener = document.activeElement;
+        var response = await fetch(url, {headers: {"X-Requested-With": "XMLHttpRequest"}});
+        if (!response.ok || response.redirected) throw new Error("Formulário indisponível.");
+        var element = extractModal(await response.text());
+        if (!element) throw new Error("Formulário indisponível.");
+        if (token !== loading) return;
+        if (current()) current().element.hidden = true;
+        else {
+            originalOverflow = document.body.style.overflow;
+            document.body.style.overflow = "hidden";
+            document.addEventListener("keydown", onKeydown);
+        }
+        var item = {element: element, url: url, opener: opener, onSuccess: options.onSuccess, busy: false};
+        stack.push(item);
+        document.body.appendChild(element);
+        initialize(item);
+    }
+    window.LPSModal = {open: open, close: close};
 })();

@@ -13,19 +13,20 @@ User = get_user_model()
 
 
 class SectorForm(forms.Form):
-    name = forms.CharField(label="Nome", max_length=150)
-    description = forms.CharField(label="Descrição", max_length=255, required=False)
+    name = forms.CharField(label="Nome do setor", max_length=150, help_text="Ex.: Compras, Orçamento ou Engenharia.")
+    description = forms.CharField(label="O que este setor faz", max_length=255, required=False)
 
 
 class CompanyForm(forms.Form):
-    name = forms.CharField(label="Nome", max_length=150)
+    name = forms.CharField(label="Nome da empresa", max_length=150, help_text="Informe a empresa da sua organização que realiza o trabalho.")
     document = forms.CharField(label="CNPJ/CPF", max_length=20, required=False)
 
 
 class SiteForm(forms.Form):
-    name = forms.CharField(label="Nome", max_length=150)
+    name = forms.CharField(label="Nome da obra", max_length=150, help_text="Use o nome pelo qual a equipe reconhece a obra.")
     client = forms.ModelChoiceField(
-        label="Cliente", queryset=Client.objects.none(), required=False, widget=ClientPickerWidget()
+        label="Cliente desta obra", queryset=Client.objects.none(), required=False, widget=ClientPickerWidget(),
+        help_text="Selecione quem contratou ou solicitou o trabalho nesta obra.",
     )
 
     def __init__(self, *args, organization=None, **kwargs):
@@ -37,9 +38,9 @@ class SiteForm(forms.Form):
 
 
 class CostCenterForm(forms.Form):
-    name = forms.CharField(label="Nome", max_length=150)
+    name = forms.CharField(label="Nome do centro de custo", max_length=150, help_text="Grupo usado para acompanhar onde o tempo e o trabalho são gastos.")
     site = forms.ModelChoiceField(
-        label="Obra", queryset=Site.objects.none(), required=False, widget=SitePickerWidget()
+        label="Obra relacionada", queryset=Site.objects.none(), required=False, widget=SitePickerWidget()
     )
 
     def __init__(self, *args, organization=None, **kwargs):
@@ -62,7 +63,7 @@ class ClientForm(forms.Form):
 
 
 class ReturnReasonForm(forms.Form):
-    name = forms.CharField(label="Motivo", max_length=150)
+    name = forms.CharField(label="Motivo da devolução", max_length=150, help_text="Ex.: Faltam informações ou é necessário corrigir o documento.")
 
 
 class TaskStageForm(forms.Form):
@@ -79,8 +80,8 @@ class ActivityStageForm(forms.Form):
 
 class WorkflowStatusForm(forms.Form):
     name = forms.CharField(label="Nome", max_length=150)
-    description = forms.CharField(label="Descricao", max_length=255, required=False)
-    behavior = forms.ChoiceField(label="Comportamento base", choices=())
+    description = forms.CharField(label="O que este status significa", max_length=255, required=False)
+    behavior = forms.ChoiceField(label="Qual situação este status representa?", choices=(), help_text="Escolha a situação existente que corresponde a este nome.")
     color = forms.CharField(label="Cor", widget=ColorPaletteWidget, initial="#94A3B8")
 
     def __init__(self, *args, domain=None, **kwargs):
@@ -97,12 +98,12 @@ class EnumColorLabelForm(forms.Form):
     que continua fixo no code."""
 
     label = forms.CharField(label="Nome exibido", max_length=100, required=False)
-    description = forms.CharField(label="Descricao", max_length=255, required=False)
-    is_hidden = forms.BooleanField(label="Ocultar este status das opcoes", required=False)
+    description = forms.CharField(label="O que este status significa", max_length=255, required=False)
+    is_hidden = forms.BooleanField(label="Ocultar este status das opções", required=False)
 
 
 class TagForm(forms.Form):
-    name = forms.CharField(label="Nome", max_length=80)
+    name = forms.CharField(label="Nome do marcador", max_length=80, help_text="Uma palavra curta para encontrar trabalhos parecidos. Ex.: Revisão.")
     color = forms.CharField(label="Cor", widget=ColorPaletteWidget, initial="#94A3B8")
 
 
@@ -113,9 +114,9 @@ class UserForm(forms.Form):
     é definido na tela de acessos, sempre dentro de um escopo (doc 05 §8, §45).
     """
 
-    first_name = forms.CharField(label="Nome", max_length=150)
-    email = forms.EmailField(label="E-mail")
-    username = forms.CharField(label="Usuário", max_length=150)
+    first_name = forms.CharField(label="Nome da pessoa", max_length=150)
+    email = forms.EmailField(label="E-mail para entrar na LPS")
+    username = forms.CharField(label="Nome de usuário", max_length=150, help_text="Identificador único da conta. Ex.: maria.silva.")
     organization = forms.ModelChoiceField(
         label="Organização", queryset=Organization.objects.none(), required=True, empty_label=None
     )
@@ -140,9 +141,10 @@ class UserForm(forms.Form):
         queryset=Sector.objects.none(),
         required=False,
         widget=forms.CheckboxSelectMultiple,
-        help_text="Ser gestor é um vínculo estrutural: não concede autorização por si só.",
+        help_text="Escolha apenas setores marcados acima. As permissões são definidas depois, em Acessos.",
     )
-    is_active = forms.BooleanField(label="Ativo", required=False, initial=True)
+    is_active = forms.BooleanField(label="Permitir que esta pessoa entre na LPS", required=False, initial=True,
+                                 help_text="Ao desmarcar, a conta fica inativa e o histórico é preservado.")
 
     def __init__(self, *args, organization=None, instance=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -158,7 +160,7 @@ class UserForm(forms.Form):
             # e-mail nesta versão, então a pessoa não teria como entrar.
             self.fields["password1"].required = True
             self.fields["password2"].required = True
-            self.fields["password1"].help_text = "A pessoa poderá alterá-la depois, em Perfil."
+            self.fields["password1"].help_text = "Defina uma senha inicial e informe à pessoa como entrar com seu e-mail."
         else:
             self.fields["password1"].help_text = "Deixe em branco para manter a senha atual."
             self.fields["password2"].help_text = "Repita a nova senha, se estiver redefinindo."
@@ -211,14 +213,15 @@ class UserForm(forms.Form):
 class AccessProfileForm(forms.Form):
     """Perfil de acesso = conjunto reutilizável de ações (doc 05 §11, §32)."""
 
-    name = forms.CharField(label="Nome do perfil", max_length=120)
-    description = forms.CharField(label="Descrição", max_length=255, required=False)
+    name = forms.CharField(label="Nome do perfil", max_length=120, help_text="Ex.: Colaborador, Gestor de setor ou Administrador.")
+    description = forms.CharField(label="Para quem é este perfil?", max_length=255, required=False)
 
 
 class ScopedGrantForm(forms.Form):
     """Base das telas que concedem algo: a concessão sempre tem um "onde"."""
 
-    scope_type = forms.ChoiceField(label="Onde vale", choices=Scope.Type.choices)
+    scope_type = forms.ChoiceField(label="Onde a pessoa poderá usar este acesso?", choices=Scope.Type.choices,
+                                  help_text="Escolha toda a organização ou limite o acesso a uma empresa, setor, obra ou aos trabalhos da pessoa.")
     company = forms.ModelChoiceField(label="Empresa", queryset=Company.objects.none(), required=False)
     sector = forms.ModelChoiceField(label="Setor", queryset=Sector.objects.none(), required=False)
     site = forms.ModelChoiceField(label="Obra", queryset=Site.objects.none(), required=False)
@@ -226,7 +229,7 @@ class ScopedGrantForm(forms.Form):
         label="Centro de custo", queryset=CostCenter.objects.none(), required=False
     )
     relation = forms.ChoiceField(
-        label="Relação", choices=[("", "---------")] + list(Scope.Relation.choices), required=False
+        label="Quais trabalhos da pessoa?", choices=[("", "Selecione a relação")] + list(Scope.Relation.choices), required=False
     )
 
     def __init__(self, *args, organization=None, **kwargs):
@@ -275,6 +278,7 @@ class GrantActionForm(ScopedGrantForm):
     action = forms.ModelChoiceField(label="Ação", queryset=Action.objects.none())
 
     def __init__(self, *args, organization=None, **kwargs):
+        kwargs.setdefault("auto_id", "grant_%s")
         super().__init__(*args, organization=organization, **kwargs)
         self.fields["action"].queryset = Action.objects.filter(is_active=True).select_related("group")
         self.order_fields(["action", "scope_type", "company", "sector", "site", "cost_center", "relation"])

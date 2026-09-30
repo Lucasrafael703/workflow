@@ -1,0 +1,163 @@
+{% load lps %}
+{% comment %}Área "Processo" da ficha da atividade (Regras 12 §28-31): o processo é entendido
+DENTRO da atividade — entradas, etapas, critérios e a entrega esperada. Sem
+processo aplicado, mostra só o convite para aplicar (se a pessoa puder).
+O molde é imutável; o que muda aqui são as linhas da atividade.{% endcomment %}
+{% if process_panel %}
+{% with panel=process_panel version=process_panel.version %}
+<div class="card card--flush proc-panel" id="processo">
+    <div class="card__head">
+        <h2><span class="ad-section-icon">{% include "_icon.html" with name="task" %}</span> Processo</h2>
+        <a href="{% url 'process-edit' version.process_id %}?v={{ version.pk }}" class="btn btn--sm btn--ghost">Ver molde {% include "_icon.html" with name="arrow-right" %}</a>
+    </div>
+    <div class="card__body">
+        <div class="proc-panel__id">
+            <div class="proc-panel__name">{{ version.process.name }} <span class="tag tag--PUBLICADO">Versão {{ version.number }}</span></div>
+            <div class="muted small">
+                {{ version.process.company.name }}
+                {% if version.published_at %} · publicada em {{ version.published_at|date:"d/m/Y" }}{% endif %}
+                · esta atividade fica na versão {{ version.number }}, mesmo que saia uma nova.
+            </div>
+        </div>
+
+        <div class="proc-panel__output">
+            <div class="k">Resultado esperado</div>
+            <div class="v">{{ panel.output_description|default:"—" }}</div>
+            {% if panel.output_evidence_label %}<div class="muted small">Tipo de evidência: {{ panel.output_evidence_label }}</div>{% endif %}
+        </div>
+
+        {# ---- Entradas -------------------------------------------------- #}
+        <details class="proc-block" open id="processo-entradas">
+            <summary>
+                <h3>Entradas</h3>
+                <span class="proc-block__count{% if panel.missing_required_inputs %} is-alert{% endif %}">{{ panel.inputs_received }} / {{ panel.inputs_total }} recebidas</span>
+            </summary>
+            {% if panel.missing_required_inputs %}
+            <p class="proc-block__hint">
+                Falta receber: <strong>{% for row in panel.missing_required_inputs %}{{ row.process_input.name }}{% if not forloop.last %}; {% endif %}{% endfor %}</strong>.
+                As tarefas do processo só começam com as entradas obrigatórias recebidas.
+            </p>
+            {% endif %}
+            <ul class="proc-list">
+                {% for row in panel.inputs %}
+                <li class="proc-item{% if row.is_received %} is-done{% endif %}">
+                    <span class="proc-item__mark" aria-hidden="true">{% if row.is_received %}{% include "_icon.html" with name="check" %}{% endif %}</span>
+                    <div class="proc-item__main">
+                        <div class="proc-item__title">
+                            {{ row.process_input.name }}
+                            {% if row.process_input.is_required %}<span class="tag tag--BLOQUEADA">Obrigatório</span>{% else %}<span class="tag tag--PENDENTE">Opcional</span>{% endif %}
+                        </div>
+                        <div class="muted small">
+                            {{ row.process_input.get_input_type_display }}{% if row.process_input.source %} · origem: {{ row.process_input.get_source_display }}{% endif %}{% if row.process_input.help_text %} · {{ row.process_input.help_text }}{% endif %}
+                        </div>
+                        {% if row.value %}
+                        <div class="proc-item__value">
+                            {% if row.process_input.input_type == "LINK" and row.value|slice:":4" == "http" %}<a href="{{ row.value }}" target="_blank" rel="noopener noreferrer">{{ row.value }}</a>
+                            {% elif row.process_input.input_type == "DATA" %}{{ row.value|date:"d/m/Y" }}
+                            {% else %}{{ row.value }}{% endif %}
+                        </div>
+                        {% endif %}
+                        {% if row.is_received and row.received_by %}<div class="muted small">Recebido{% if row.received_at %} em {{ row.received_at|date:"d/m/Y H:i" }}{% endif %} — registrado por {{ row.received_by.get_full_name|default:row.received_by.get_username }}</div>{% endif %}
+
+                        {% if can_update_process %}
+                        <details class="proc-edit">
+                            <summary>{% if row.is_received %}Corrigir{% else %}Registrar{% endif %}</summary>
+                            <form method="post" action="{% url 'activity-input-update' activity.pk row.pk %}" class="proc-edit__form">
+                                {% csrf_token %}
+                                {% with kind=row.process_input.input_type %}
+                                {% if kind == "DATA" %}
+                                <input type="date" name="value" value="{{ row.value }}" aria-label="{{ row.process_input.name }}">
+                                {% elif kind == "NUMERO" %}
+                                <input type="text" inputmode="decimal" name="value" value="{{ row.value }}" placeholder="Ex.: 1500,50" aria-label="{{ row.process_input.name }}">
+                                {% elif kind == "LINK" %}
+                                <input type="url" name="value" value="{{ row.value }}" placeholder="https://…" aria-label="{{ row.process_input.name }}">
+                                {% elif kind == "ARQUIVO" or kind == "SELECAO" %}
+                                <label class="proc-edit__check"><input type="checkbox" name="is_received" {% if row.is_received %}checked{% endif %}> Já recebi</label>
+                                <input type="text" name="value" value="{{ row.value }}" maxlength="500" placeholder="{% if kind == 'ARQUIVO' %}Onde está o arquivo? (opcional){% else %}Opção escolhida (opcional){% endif %}" aria-label="Observação">
+                                {% if kind == "ARQUIVO" %}<div class="muted small">Anexe o arquivo na conversa da atividade e marque como recebido aqui.</div>{% endif %}
+                                {% else %}
+                                <input type="text" name="value" value="{{ row.value }}" maxlength="5000" aria-label="{{ row.process_input.name }}">
+                                {% endif %}
+                                {% endwith %}
+                                <div class="proc-edit__actions">
+                                    <button type="submit" class="btn btn--sm btn--primary">Salvar</button>
+                                    {% if row.is_received %}<button type="submit" name="clear" value="1" class="btn btn--sm">Marcar como não recebido</button>{% endif %}
+                                </div>
+                            </form>
+                        </details>
+                        {% endif %}
+                    </div>
+                    <span class="tag {% if row.is_received %}tag--CONCLUIDA{% else %}tag--PENDENTE{% endif %}">{% if row.is_received %}Recebido{% else %}Faltando{% endif %}</span>
+                </li>
+                {% empty %}
+                <li class="muted small">Esta versão do processo não define entradas.</li>
+                {% endfor %}
+            </ul>
+        </details>
+
+        {# ---- Etapas ---------------------------------------------------- #}
+        <details class="proc-block" open id="processo-etapas">
+            <summary>
+                <h3>Etapas</h3>
+                <span class="proc-block__count">{{ panel.steps_done }} / {{ panel.steps_total }} concluídas</span>
+            </summary>
+            <ol class="proc-steps">
+                {% for row in panel.steps %}
+                <li class="proc-step proc-step--{{ row.state }}">
+                    <span class="proc-step__num">{% if row.state == "concluida" %}{% include "_icon.html" with name="check" %}{% else %}{{ row.order }}{% endif %}</span>
+                    <div class="proc-step__main">
+                        <a href="{% url 'task-detail' row.task.pk %}" class="proc-step__title">{{ row.task.title }}</a>
+                        <div class="muted small">
+                            {{ row.task.sector.name }} · {{ row.task.responsavel.get_full_name|default:row.task.responsavel.get_username }}
+                            {% if row.state == "aguardando" %} · entra na fila quando «{{ row.task.depends_on.title }}» for concluída{% endif %}
+                        </div>
+                    </div>
+                    <span class="proc-step__state">{{ row.state_label }}</span>
+                </li>
+                {% empty %}
+                <li class="muted small">Nenhuma tarefa foi gerada por este processo.</li>
+                {% endfor %}
+            </ol>
+        </details>
+
+        {# ---- Critérios de aceite --------------------------------------- #}
+        <details class="proc-block" open id="processo-criterios">
+            <summary>
+                <h3>Critérios de aceite</h3>
+                <span class="proc-block__count{% if panel.unmet_required_criteria %} is-alert{% endif %}">{{ panel.criteria_met }} / {{ panel.criteria_total }} atendidos</span>
+            </summary>
+            {% if panel.unmet_required_criteria %}
+            <p class="proc-block__hint">Para concluir com sucesso, todos os critérios obrigatórios precisam estar atendidos.</p>
+            {% endif %}
+            <ul class="proc-list">
+                {% for check in panel.criteria %}
+                <li class="proc-item{% if check.is_met %} is-done{% endif %}">
+                    <form method="post" action="{% url 'activity-criterion-update' activity.pk check.pk %}" class="proc-criterion">
+                        {% csrf_token %}
+                        <label class="proc-criterion__label">
+                            <input type="checkbox" name="is_met" value="1" {% if check.is_met %}checked{% endif %} {% if not can_update_process %}disabled{% endif %} onchange="this.form.submit()">
+                            <span>{{ check.process_criterion.name }}</span>
+                        </label>
+                        {% if check.process_criterion.is_required %}<span class="tag tag--BLOQUEADA">Obrigatório</span>{% else %}<span class="tag tag--PENDENTE">Opcional</span>{% endif %}
+                        {% if check.is_met and check.met_by %}<span class="muted small">por {{ check.met_by.get_full_name|default:check.met_by.get_username }}{% if check.met_at %} em {{ check.met_at|date:"d/m H:i" }}{% endif %}</span>{% endif %}
+                        <noscript><button type="submit" class="btn btn--sm">Salvar</button></noscript>
+                    </form>
+                </li>
+                {% empty %}
+                <li class="muted small">Esta versão do processo não define critérios de aceite.</li>
+                {% endfor %}
+            </ul>
+        </details>
+    </div>
+</div>
+{% endwith %}
+
+{% elif can_apply_process %}
+<div class="card proc-cta" id="processo">
+    <div>
+        <h2 class="proc-cta__title">Processo</h2>
+        <p class="muted" style="margin:4px 0 0">Padronize o trabalho: aplique um processo publicado e as tarefas, entradas e critérios de aceite são montados sozinhos.</p>
+    </div>
+    <a href="{% url 'activity-process-apply' activity.pk %}" class="btn btn--primary js-process-apply">Aplicar processo</a>
+</div>
+{% endif %}

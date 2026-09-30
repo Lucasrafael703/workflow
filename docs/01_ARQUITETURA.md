@@ -41,7 +41,7 @@ apps:
 | `notifications` | `accounts`; FKs para `activities` |
 | `acessos` | `accounts`, `activities`, `audit`, `core` |
 | `core` | `accounts`, `acessos`, `activities`, `audit` |
-| `activities` | `acessos`, `audit`, `core`, `notifications`; FK para `processes` |
+| `activities` | `acessos`, `audit`, `core`, `notifications`, `processes` (FKs `Activity.process_version` e `Task.process_step`; aplicação do processo em `activities/process_application.py`, que também usa `processes.services.people_with_sector_members`) |
 
 Há dependências circulares (`core` ↔ `acessos` ↔ `activities`). Elas são
 resolvidas com imports **dentro das funções** e FKs por string

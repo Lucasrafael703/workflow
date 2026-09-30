@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20260929d">
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20260929-usabilidade1">
     <script>
     // Aplica o estado recolhido antes do primeiro paint — sem isto, a
     // sidebar apareceria expandida por um instante e "pularia" pro estado
@@ -17,8 +17,10 @@
         document.documentElement.classList.add("sidebar--collapsed");
     }
     </script>
+<link rel="stylesheet" href="{% static 'css/activity-workspace.css' %}?v=20260930b">
 </head>
 <body data-mention-search-url="{% url 'person-search' %}">
+<a class="skip-link" href="#main-content">Ir para o conteúdo</a>
 {% include "_icons.html" %}
 
 {% if user.is_authenticated %}
@@ -41,12 +43,12 @@
         {% if lps_org %}
         <div class="sidebar__org">
             <div class="name">{{ lps_org.name }}</div>
-            <div class="sub">Organização atual</div>
+            <div class="sub">Você está trabalhando aqui</div>
         </div>
         {% endif %}
 
-        <nav class="sidebar__nav">
-            <div class="sidebar__section">Operação</div>
+        <nav class="sidebar__nav" aria-label="Menu principal">
+            <div class="sidebar__section">Trabalho do dia a dia</div>
 
             <a href="{% url 'home' %}" class="nav-item {% if nav_active == 'home' %}is-active{% endif %}" data-tooltip="Início">
                 <span class="nav-item__icon">{% include "_icon.html" with name="home" %}</span>
@@ -62,7 +64,7 @@
                 </summary>
                 <div class="nav-group__flyout">
                     <div class="nav-group__flyout-title">Atividades</div>
-                    <a href="{% url 'activity-list' %}?tab=minhas" class="nav-subitem">Minhas</a>
+                    <a href="{% url 'activity-list' %}?tab=minhas" class="nav-subitem">Sob minha responsabilidade</a>
                     <a href="{% url 'activity-list' %}?tab=participando" class="nav-subitem">Participando</a>
                     <a href="{% url 'activity-list' %}?tab=grupo" class="nav-subitem">Do meu setor</a>
                     <a href="{% url 'activity-list' %}?tab=concluidas" class="nav-subitem">Concluídas</a>
@@ -79,7 +81,7 @@
                 </summary>
                 <div class="nav-group__flyout">
                     <div class="nav-group__flyout-title">Tarefas</div>
-                    <a href="{% url 'task-list' %}?tab=minhas" class="nav-subitem">Minhas</a>
+                    <a href="{% url 'task-list' %}?tab=minhas" class="nav-subitem">Minhas tarefas</a>
                     <a href="{% url 'task-list' %}?tab=participando" class="nav-subitem">Participando</a>
                     <a href="{% url 'task-list' %}?tab=setor" class="nav-subitem">Do meu setor</a>
                     <a href="{% url 'task-list' %}?tab=concluidas&status=concluidas" class="nav-subitem">Concluídas</a>
@@ -88,7 +90,7 @@
 
             <a href="{% url 'queue' %}" class="nav-item {% if nav_active == 'queue' %}is-active{% endif %}" data-tooltip="Fila">
                 <span class="nav-item__icon">{% include "_icon.html" with name="queue" %}</span>
-                <span class="nav-item__label">Fila</span>
+                <span class="nav-item__label">Ordem das tarefas</span>
             </a>
             <a href="{% url 'notification-list' %}" class="nav-item {% if nav_active == 'notifications' %}is-active{% endif %}" data-tooltip="Notificações">
                 <span class="nav-item__icon">{% include "_icon.html" with name="bell" %}</span>
@@ -234,7 +236,26 @@
     <header class="topbar">
         <label for="nav-toggle" class="sidebar__toggle" title="Menu">{% include "_icon.html" with name="menu" %}</label>
 
+        <span class="workspace-location">
+            {% if nav_active == 'activities' %}Atividades · Entregas
+            {% elif nav_active == 'tasks' %}Tarefas · Trabalho a fazer
+            {% elif nav_active == 'notifications' %}Notificações · Avisos para você
+            {% elif nav_active == 'queue' %}Ordem das tarefas
+            {% elif nav_active == 'management' %}Acompanhamento da equipe
+            {% elif nav_active == 'cadastros' %}Cadastros
+            {% elif nav_active == 'home' %}Início · Seu dia de trabalho
+            {% else %}LPS · Gestão do trabalho{% endif %}
+        </span>
         <div class="topbar__spacer"></div>
+        <details class="workspace-help">
+            <summary>Como usar</summary>
+            <div class="workspace-help__body">
+                <h2>Por onde começar?</h2>
+                <a href="{% url 'task-list' %}?tab=minhas"><strong>Quero saber o que fazer</strong><span>Abra suas tarefas e escolha uma para trabalhar.</span></a>
+                <a href="{% url 'activity-list' %}?tab=minhas"><strong>Quero acompanhar uma entrega</strong><span>Atividades reúnem as tarefas e mostram o andamento da entrega.</span></a>
+                <a href="{% url 'notification-list' %}"><strong>Quero ver o que precisa de mim</strong><span>Abra os avisos para ver pedidos, decisões e mensagens.</span></a>
+            </div>
+        </details>
 
         {% if my_active_sessions_count %}
         <div class="timer-topbar">
@@ -258,7 +279,7 @@
         </div>
         {% endif %}
 
-        <a href="{% url 'notification-list' %}" class="topbar__icon" title="Notificações">
+        <a href="{% url 'notification-list' %}" class="topbar__icon" title="Abrir notificações" aria-label="Abrir notificações{% if unread_notifications_count %}: {{ unread_notifications_count }} não lidas{% endif %}">
             {% include "_icon.html" with name="bell" %}
             {% if unread_notifications_count %}<span class="dot">{{ unread_notifications_count }}</span>{% endif %}
         </a>
@@ -276,7 +297,7 @@
         </div>
     </header>
 
-    <div class="content">
+    <main class="content" id="main-content" tabindex="-1">
         {% block timerbar %}{% endblock %}
 
         <div class="container">
@@ -290,10 +311,10 @@
 
             {% block content %}{% endblock %}
         </div>
-    </div>
+    </main>
 </div>
 {% else %}
-<main class="container">
+<main class="container" id="main-content" tabindex="-1">
     {% if messages %}
     <ul class="messages">
         {% for message in messages %}
@@ -307,7 +328,8 @@
 
 {% if user.is_authenticated %}
 <script src="{% static 'js/shell.js' %}?v=20260926d"></script>
-<script src="{% static 'js/modal.js' %}?v=20260919c"></script>
+<script src="{% static 'js/modal.js' %}?v=20260930a"></script>
+<script src="{% static 'js/process-apply.js' %}?v=20260930a"></script>
 <script src="{% static 'js/person-picker.js' %}?v=20260927a"></script>
 <script src="{% static 'js/person-multi-picker.js' %}?v=20260929a"></script>
 <script src="{% static 'js/tag-picker.js' %}?v=20260926a"></script>
@@ -319,6 +341,7 @@
 <script src="{% static 'js/color-utils.js' %}?v=20260926a"></script>
 <script src="{% static 'js/color-palette-picker.js' %}?v=20260926a"></script>
 {% endif %}
+{% if user.is_authenticated %}<script src="{% static 'js/activity-workspace.js' %}?v=20260930b"></script>{% endif %}
 {% block scripts %}{% endblock %}
 </body>
 </html>

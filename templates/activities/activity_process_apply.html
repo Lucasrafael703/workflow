@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}Aplicar processo — LPS{% endblock %}
+
+{% block content %}
+<div class="modal-backdrop">
+    <div class="modal modal--wide proc-apply" data-process-apply>
+        <div class="modal__head">
+            <div>
+                <h2>Aplicar processo</h2>
+                <div class="sub">{{ activity.code|default:activity.title }} · escolha o processo e o trabalho é montado a partir da versão publicada.</div>
+            </div>
+            <a href="{% url 'activity-detail' activity.pk %}" class="modal__close" title="Fechar">&times;</a>
+        </div>
+
+        <form method="post" novalidate>
+            {% csrf_token %}
+            <div class="modal__body">
+                {% if panels %}
+                <ol class="apply-stepper" aria-label="Passos">
+                    <li class="apply-stepper__item is-active" data-step-tab="1"><span>1</span> Processo</li>
+                    <li class="apply-stepper__item" data-step-tab="2"><span>2</span> Responsáveis</li>
+                    <li class="apply-stepper__item" data-step-tab="3"><span>3</span> Entradas</li>
+                    <li class="apply-stepper__item" data-step-tab="4"><span>4</span> Confirmar</li>
+                </ol>
+                {% endif %}
+
+                <div data-form-errors>
+                    {% if form.non_field_errors %}
+                    <ul class="errorlist">{% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}</ul>
+                    {% endif %}
+                </div>
+
+                {% if not panels %}
+                <div class="empty-state" style="padding:28px 12px">
+                    <div class="empty-state__icon">{% include "_icon.html" with name="info" %}</div>
+                    {% if no_company %}
+                    <h3>Esta atividade ainda não tem empresa</h3>
+                    <p>Cada processo pertence a uma empresa. Defina a empresa da atividade (Editar → Contexto) para ver os processos disponíveis.</p>
+                    {% else %}
+                    <h3>Nenhum processo publicado para {{ activity.company.name }}</h3>
+                    <p>Só processos ativos, com versão publicada e da mesma empresa da atividade aparecem aqui.</p>
+                    {% endif %}
+                </div>
+                {% else %}
+
+                {# ---- Passo 1: processo ------------------------------------- #}
+                <section class="apply-pane" data-pane="1">
+                    <p class="muted small" style="margin-top:0">Depois de aplicado, o processo fica preso a esta versão e não pode ser trocado.</p>
+                    <div class="form-row">
+                        <div class="apply-choices" role="radiogroup" aria-label="Processo">
+                            {% for panel in panels %}
+                            {% with version=panel.version %}
+                            <label class="apply-choice">
+                                <input type="radio" name="process_version" value="{{ version.pk }}"
+                                       data-name="{{ version.process.name }}" data-number="{{ version.number }}"
+                                       data-criteria="{{ version.criterion_count }}"
+                                       {% if form.process_version.value|stringformat:"s" == version.pk|stringformat:"s" or panels|length == 1 %}checked{% endif %}>
+                                <span class="apply-choice__body">
+                                    <span class="apply-choice__title">{{ version.process.name }} <span class="tag tag--PUBLICADO">Versão {{ version.number }}</span></span>
+                                    <span class="apply-choice__meta muted small">
+                                        {{ version.process.company.name }}{% if version.process.activity_type %} · {{ version.process.activity_type.name }}{% endif %}
+                                        · {{ version.step_count }} etapa{{ version.step_count|pluralize }}
+                                        · {{ version.input_count }} entrada{{ version.input_count|pluralize }}
+                                        · {{ version.criterion_count }} critério{{ version.criterion_count|pluralize }}
+                                    </span>
+                                    <span class="apply-choice__output"><strong>Resultado esperado:</strong> {{ version.output_description|default:"—" }}</span>
+                                </span>
+                            </label>
+                            {% endwith %}
+                            {% endfor %}
+                        </div>
+                        {% if form.process_version.errors %}<ul class="errorlist">{% for e in form.process_version.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                    </div>
+                </section>
+
+                {# ---- Passo 2: responsáveis --------------------------------- #}
+                <section class="apply-pane" data-pane="2" hidden>
+                    <p class="muted small" style="margin-top:0">Quem vai responder por cada tarefa. O responsável padrão da etapa já vem preenchido; troque se precisar.</p>
+                    {% for panel in panels %}
+                    <div class="apply-version" data-version="{{ panel.version.pk }}" hidden>
+                        <div class="apply-steps-table">
+                            {% for row in panel.steps %}
+                            <div class="apply-step-row form-row">
+                                <div class="apply-step-row__what">
+                                    <span class="apply-step-row__num">{{ row.step.order }}</span>
+                                    <div>
+                                        <div class="apply-step-row__name">{{ row.step.name }}</div>
+                                        <div class="muted small">{{ row.step.sector.name }}{% if row.step.depends_on_previous and not forloop.first %} · espera a etapa anterior{% endif %}</div>
+                                    </div>
+                                </div>
+                                <div class="apply-step-row__who">
+                                    <select name="{{ row.field_name }}" aria-label="Responsável de {{ row.step.name }}" data-step-name="{{ row.step.order }}. {{ row.step.name }}" data-step-sector="{{ row.step.sector.name }}" disabled>
+                                        <option value="">Selecione…</option>
+                                        {% if row.sector_people %}
+                                        <optgroup label="Do setor {{ row.step.sector.name }}">
+                                            {% for person in row.sector_people %}<option value="{{ person.pk }}" {% if row.selected == person.pk|stringformat:"s" %}selected{% endif %}>{{ person.get_full_name|default:person.get_username }}</option>{% endfor %}
+                                        </optgroup>
+                                        {% endif %}
+                                        {% if row.other_people %}
+                                        <optgroup label="{% if row.sector_people %}Outras pessoas{% else %}Pessoas da organização{% endif %}">
+                                            {% for person in row.other_people %}<option value="{{ person.pk }}" {% if row.selected == person.pk|stringformat:"s" %}selected{% endif %}>{{ person.get_full_name|default:person.get_username }}</option>{% endfor %}
+                                        </optgroup>
+                                        {% endif %}
+                                    </select>
+                                    {% if row.has_default %}<span class="muted small">padrão da etapa</span>{% endif %}
+                                    {% if row.errors %}<ul class="errorlist">{% for e in row.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </section>
+
+                {# ---- Passo 3: entradas ------------------------------------- #}
+                <section class="apply-pane" data-pane="3" hidden>
+                    <p class="muted small" style="margin-top:0">Informe o que já chegou. O resto pode ser registrado depois, na ficha da atividade — mas as tarefas do processo só começam com as entradas obrigatórias recebidas.</p>
+                    {% for panel in panels %}
+                    <div class="apply-version" data-version="{{ panel.version.pk }}" hidden>
+                        {% for row in panel.inputs %}
+                        <div class="form-row apply-input" data-input-required="{% if row.input.is_required %}1{% else %}0{% endif %}">
+                            <label for="id_{{ row.value_name }}">
+                                {{ row.input.name }}
+                                {% if row.input.is_required %}<span class="tag tag--BLOQUEADA">Obrigatório</span>{% else %}<span class="tag tag--PENDENTE">Opcional</span>{% endif %}
+                                <span class="muted small">{{ row.input.get_input_type_display }}{% if row.input.source %} · origem: {{ row.input.get_source_display }}{% endif %}</span>
+                            </label>
+                            {% if row.widget == "date" %}
+                            <input type="date" id="id_{{ row.value_name }}" name="{{ row.value_name }}" value="{{ row.value }}" disabled>
+                            {% elif row.widget == "number" %}
+                            <input type="text" inputmode="decimal" id="id_{{ row.value_name }}" name="{{ row.value_name }}" value="{{ row.value }}" placeholder="Ex.: 1500,50" disabled>
+                            {% elif row.widget == "url" %}
+                            <input type="url" id="id_{{ row.value_name }}" name="{{ row.value_name }}" value="{{ row.value }}" placeholder="https://…" disabled>
+                            {% elif row.widget == "confirm" %}
+                            <label class="apply-input__check"><input type="checkbox" name="{{ row.received_name }}" {% if row.received %}checked{% endif %} disabled data-input-received> Já recebi</label>
+                            <input type="text" id="id_{{ row.value_name }}" name="{{ row.value_name }}" value="{{ row.value }}" maxlength="500" disabled
+                                   placeholder="{% if row.input.input_type == 'ARQUIVO' %}Onde está o arquivo? (opcional){% else %}Opção escolhida (opcional){% endif %}">
+                            {% if row.input.input_type == "ARQUIVO" %}<div class="helptext">Anexe o arquivo na conversa da atividade depois de aplicar.</div>{% endif %}
+                            {% else %}
+                            <input type="text" id="id_{{ row.value_name }}" name="{{ row.value_name }}" value="{{ row.value }}" maxlength="5000" disabled>
+                            {% endif %}
+                            {% if row.input.help_text %}<div class="helptext">{{ row.input.help_text }}</div>{% endif %}
+                            {% if row.errors %}<ul class="errorlist">{% for e in row.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                        </div>
+                        {% empty %}
+                        <p class="muted">Este processo não define entradas.</p>
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                </section>
+
+                {# ---- Passo 4: confirmação ---------------------------------- #}
+                <section class="apply-pane" data-pane="4" hidden>
+                    <div class="summary-panel" data-apply-summary aria-live="polite"></div>
+                </section>
+                {% endif %}
+            </div>
+
+            <div class="modal__foot form-foot--split">
+                <a href="{% url 'activity-detail' activity.pk %}" class="btn">Cancelar</a>
+                {% if panels %}
+                <div style="display:flex; gap:8px">
+                    <button type="button" class="btn" data-apply-back hidden>Voltar</button>
+                    <button type="button" class="btn btn--primary" data-apply-next>Continuar</button>
+                    <button type="submit" class="btn btn--primary" data-apply-submit hidden>{% include "_icon.html" with name="check" %} Aplicar processo</button>
+                </div>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -36,7 +36,7 @@
                 <div class="activities-calendar-day {% if not day.in_month %}is-outside-month{% endif %} {% if day.is_today %}is-today{% endif %}">
                     <div class="activities-calendar-day__number">{{ day.date|date:"j" }}</div>
                     {% for activity in day.activities|slice:":3" %}
-                    <a href="{% url 'activity-detail' activity.pk %}" class="activities-calendar-event{% if activity.is_overdue or activity.status == 'BLOQUEADA' %} is-danger{% endif %}" style="--event-color: {{ activity.status_color }};">
+                    <a href="{% url 'activity-detail' activity.pk %}?next={{ request.get_full_path|urlencode }}" class="activities-calendar-event{% if activity.is_overdue or activity.status == 'BLOQUEADA' %} is-danger{% endif %}" style="--event-color: {{ activity.status_color }};">
                         <span>{% include "_icon.html" with name="activity" %} {{ activity.title }}</span>
                         <strong>{% if activity.is_overdue %}Atrasada{% else %}{{ activity.status_label }}{% endif %}</strong>
                     </a>
@@ -54,7 +54,7 @@
     <div class="activities-undated">
         <h2>Sem prazo definido</h2>
         {% for activity in undated_activities %}
-        <a href="{% url 'activity-detail' activity.pk %}">
+        <a href="{% url 'activity-detail' activity.pk %}?next={{ request.get_full_path|urlencode }}">
             <strong>{{ activity.title }}</strong>
             <span>{{ activity.client.name|default:"Sem cliente" }} · {{ activity.status_label }}</span>
         </a>

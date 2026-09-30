@@ -12,7 +12,7 @@
 |---|---|---|
 | `databases[0]` | `lps-db`, free, banco `lps`, usuário `lps` | Postgres gerenciado |
 | `services[0].type` / `runtime` / `plan` | `web` / `python` / `free` | |
-| `buildCommand` | `pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate && python manage.py ensure_superuser` | Instala, coleta estáticos para o whitenoise, aplica migrations e cria o superusuário (se configurado) |
+| `buildCommand` | `pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate && python manage.py seed_acoes && python manage.py ensure_superuser` | Instala, coleta estáticos para o whitenoise, aplica migrations, sincroniza o catálogo de ações (idempotente: uma ação nova do código passa a existir em produção sem precisar de Shell) e cria o superusuário (se configurado) |
 | `startCommand` | `gunicorn config.wsgi:application` | `wsgi.py` já usa `config.settings.prod` |
 | `DJANGO_SETTINGS_MODULE` | `config.settings.prod` | Necessário porque o build usa `manage.py`, que sozinho usaria dev |
 | `SECRET_KEY` | `generateValue: true` | O Render gera um valor aleatório no primeiro deploy |
@@ -42,12 +42,13 @@ e `SECURE_PROXY_SSL_HEADER` (o Render termina o TLS no proxy; sem essa linha,
 4. O banco de produção começa **vazio de dados de negócio**. Pelo Admin:
    1. crie a **Organização**;
    2. em **Accounts → Perfis**, vincule seu usuário a ela.
-5. O build **não** roda `seed_acoes` nem `seed_lps_demo`. Sem o catálogo de
-   ações no banco, não dá para montar perfis de acesso para usuários comuns (o
-   superusuário funciona porque ignora o motor). Até isso entrar no build (ver
-   [13_PENDENCIAS_CONHECIDAS.md](13_PENDENCIAS_CONHECIDAS.md)), a forma de
-   popular é adicionar temporariamente `&& python manage.py seed_acoes` (ou
-   `seed_lps_demo --org-name "..."`) ao `buildCommand`.
+5. O build roda `seed_acoes`, então o catálogo de ações é criado/atualizado a
+   cada deploy. Ele **não** cria perfis de acesso nem os atribui: para usuários
+   comuns, monte os perfis em **/permissoes/** (o superusuário funciona porque
+   ignora o motor) ou, só numa organização de demonstração, use
+   `seed_lps_demo --org-name "..."`. Ação nova do catálogo (ex.: `tarefa.reabrir`)
+   aparece em `/permissoes/`, mas **não** entra sozinha em perfis já existentes:
+   marque-a nos perfis que devem ter.
 
 Deploys seguintes acontecem a cada push na branch `main`.
 

@@ -1,8 +1,8 @@
-<nav class="activities-tabs" aria-label="Escopo de atividades">
-    <a href="?tab=minhas" class="{% if tab == 'minhas' %}is-active{% endif %}">Minhas</a>
-    <a href="?tab=grupo" class="{% if tab == 'grupo' %}is-active{% endif %}">Do meu setor</a>
-    <a href="?tab=participando" class="{% if tab == 'participando' %}is-active{% endif %}">Participando</a>
-    <a href="?tab=concluidas" class="{% if tab == 'concluidas' %}is-active{% endif %}">Concluidas</a>
-    {% if can_view_all %}<a href="?tab=todas" class="{% if tab == 'todas' %}is-active{% endif %}">Todas</a>{% endif %}
+<nav class="activities-tabs" aria-label="Quais atividades mostrar">
+    <a href="{% querystring tab='minhas' page=None %}" class="{% if tab == 'minhas' %}is-active{% endif %}"{% if tab == 'minhas' %} aria-current="page"{% endif %}>Sob minha responsabilidade</a>
+    <a href="{% querystring tab='grupo' page=None %}" class="{% if tab == 'grupo' %}is-active{% endif %}"{% if tab == 'grupo' %} aria-current="page"{% endif %}>Do meu setor</a>
+    <a href="{% querystring tab='participando' page=None %}" class="{% if tab == 'participando' %}is-active{% endif %}"{% if tab == 'participando' %} aria-current="page"{% endif %}>Em que participo</a>
+    <a href="{% querystring tab='concluidas' page=None %}" class="{% if tab == 'concluidas' %}is-active{% endif %}"{% if tab == 'concluidas' %} aria-current="page"{% endif %}>Concluídas</a>
+    {% if can_view_all %}<a href="{% querystring tab='todas' page=None %}" class="{% if tab == 'todas' %}is-active{% endif %}"{% if tab == 'todas' %} aria-current="page"{% endif %}>Todas as atividades</a>{% endif %}
 </nav>
 

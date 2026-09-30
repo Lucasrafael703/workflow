@@ -22,6 +22,7 @@ from .services import (
     ProcessInputService,
     ProcessService,
     ProcessStepService,
+    people_with_sector_members,
 )
 
 
@@ -130,18 +131,42 @@ class ProcessEditView(OrganizationRequiredMixin, DetailView):
             return get_object_or_404(ProcessVersion, pk=pk, process=process)
         return process.draft_version or process.published_version or process.versions.order_by("-number").first()
 
+    def _step_rows(self, steps, sectors):
+        """Etapas com as pessoas sugeridas para o responsável padrão: quem é
+        do setor da etapa primeiro, as demais logo depois."""
+        sector_ids = {step.sector_id for step in steps} | {sector.pk for sector in sectors}
+        people, members = people_with_sector_members(self.organization, sector_ids)
+        rows = [
+            {
+                "step": step,
+                "sector_people": [p for p in people if p.pk in members.get(step.sector_id, set())],
+                "other_people": [p for p in people if p.pk not in members.get(step.sector_id, set())],
+            }
+            for step in steps
+        ]
+        # Para o formulário "Adicionar etapa", o setor só é escolhido no
+        # navegador: cada pessoa leva a lista de setores de que participa.
+        for person in people:
+            person.sector_ids_csv = ",".join(str(sid) for sid, ids in members.items() if person.pk in ids)
+        return rows, people
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         process = context["process"]
         version = self.get_version(process)
+        steps = list(version.steps.select_related("sector", "default_responsavel").all()) if version else []
+        sectors = list(Sector.objects.filter(organization=self.organization, is_active=True))
+        step_rows, people = self._step_rows(steps, sectors)
         context.update(
             {
                 "version": version,
                 "versions": process.versions.order_by("-number"),
                 "inputs": version.inputs.all() if version else [],
                 "criteria": version.criteria.all() if version else [],
-                "steps": version.steps.select_related("sector").all() if version else [],
-                "sectors": Sector.objects.filter(organization=self.organization, is_active=True),
+                "steps": steps,
+                "step_rows": step_rows,
+                "people": people,
+                "sectors": sectors,
                 "input_form": ProcessInputForm(),
                 "output_form": ProcessOutputForm(),
                 "criterion_form": ProcessCriterionForm(),
@@ -276,7 +301,41 @@ class ProcessStepAddView(OrganizationRequiredMixin, View):
                 sector=sector,
                 name=request.POST.get("name", ""),
                 depends_on_previous=bool(request.POST.get("depends_on_previous")),
+                default_responsavel=_person_from_post(request, self.organization, "default_responsavel"),
             )
+        except ProcessError as exc:
+            messages.error(request, str(exc))
+        return redirect(reverse("process-edit", args=[process.pk]) + "#fluxo")
+
+
+def _person_from_post(request, organization, field_name):
+    """Pessoa ativa da organização indicada no POST, ou `None` se em branco.
+
+    Um id que não é da organização vira erro de negócio (não some em
+    silêncio): o serviço valida o tenant, então a pessoa é entregue como está.
+    """
+    from django.contrib.auth import get_user_model
+
+    raw = request.POST.get(field_name, "").strip()
+    if not raw:
+        return None
+    try:
+        return get_user_model().objects.filter(pk=int(raw)).select_related("profile").first()
+    except (TypeError, ValueError):
+        return None
+
+
+class ProcessStepResponsavelView(OrganizationRequiredMixin, View):
+    """Define ou limpa o responsável padrão de uma etapa do rascunho."""
+
+    def post(self, request, pk, step_pk):
+        process = get_object_or_404(Process, pk=pk, organization=self.organization)
+        step = get_object_or_404(ProcessStep, pk=step_pk, version__process=process)
+        try:
+            ProcessStepService.set_default_responsavel(
+                step, request.user, _person_from_post(request, self.organization, "default_responsavel")
+            )
+            messages.success(request, "Responsável padrão atualizado.")
         except ProcessError as exc:
             messages.error(request, str(exc))
         return redirect(reverse("process-edit", args=[process.pk]) + "#fluxo")

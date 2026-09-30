@@ -2,7 +2,7 @@ import datetime
 
 from django import forms
 from django.contrib.auth import get_user_model
-from django.forms.utils import from_current_timezone
+from django.forms.utils import from_current_timezone, to_current_timezone
 from django.urls import reverse
 from django.utils.html import format_html
 
@@ -51,6 +51,7 @@ class SplitDateOptionalTimeWidget(forms.SplitDateTimeWidget):
 
     def decompress(self, value):
         if value:
+            value = to_current_timezone(value)
             return [value.date(), value.time().replace(microsecond=0)]
         return [None, None]
 
@@ -149,89 +150,37 @@ class OrganizationScopedFormMixin:
                 fields["tags"].widget.queryset = queryset
 
 
-# Labels/help_texts compartilhados entre os 3 passos do wizard de criação e
-# o formulário de edição — um único lugar para o texto de cada campo do
-# Activity, independente de em qual tela ele aparece.
+# Labels compartilhados pelo editor único e pelos POSTs legados de rascunho.
 ACTIVITY_FIELD_LABELS = {
-    "title": "O que precisa ser resolvido?",
-    "client": "Cliente",
-    "owner": "Responsável",
-    "urgency": "Urgência",
-    "sector": "Setor Responsável",
-    "description": "Descrição",
-    "internal_notes": "Observações internas",
-    "company": "Empresa",
-    "site": "Obra",
+    "title": "Nome da atividade",
+    "client": "Para qual cliente?",
+    "owner": "Quem acompanha esta atividade?",
+    "urgency": "Qual é a urgência?",
+    "sector": "Qual equipe cuida desta atividade?",
+    "description": "O que precisa ser entregue?",
+    "internal_notes": "Anotações para a equipe",
+    "company": "Empresa que presta o serviço",
+    "site": "Em qual obra?",
     "cost_center": "Centro de custo",
-    "requested_by": "Solicitante",
-    "address": "Endereço complementar",
-    "tags": "Marcadores",
+    "requested_by": "Quem pediu dentro da equipe?",
+    "address": "Local ou complemento do endereço",
+    "tags": "Marcadores para organizar",
 }
 ACTIVITY_FIELD_HELP_TEXTS = {
-    "title": "Descreva o resultado esperado, não a ação. Ex.: “Material disponível na obra”.",
-    "client": "Quem solicitou o serviço.",
-    "owner": "Quem responde pelo resultado até a resolução.",
-    "sector": "Setor responsável por esta atividade.",
-    "requested_by": "Alguém da própria organização que pediu informalmente — não é o cliente. Opcional.",
-    "internal_notes": "Nunca aparece para o cliente; só para uso interno da equipe.",
-    "address": "Endereço adicional, além do que já está no cadastro do cliente.",
+    "title": "Descreva a entrega esperada. Ex.: Orçamento do gerador aprovado.",
+    "client": "Escolha o cliente que vai receber a entrega.",
+    "owner": "Essa pessoa responde pela entrega e acompanha as tarefas.",
+    "sector": "Escolha o setor que vai organizar o trabalho.",
+    "urgency": "Indique o quanto esta entrega precisa de atenção.",
+    "description": "Explique o resultado esperado e o que a equipe precisa saber para trabalhar.",
+    "company": "Escolha a empresa da sua organização responsável pelo serviço.",
+    "site": "Selecione a obra relacionada, se houver.",
+    "cost_center": "Use o grupo que sua empresa utiliza para acompanhar os custos deste trabalho.",
+    "requested_by": "Selecione a pessoa da sua equipe que fez o pedido, se houver.",
+    "internal_notes": "Espaço para informações de uso interno da equipe.",
+    "address": "Acrescente bloco, portaria ou outro detalhe que ajude a encontrar o local.",
+    "tags": "Escolha palavras-chave para encontrar e agrupar esta atividade depois.",
 }
-
-
-class ActivityWizardStep1Form(OrganizationScopedFormMixin, forms.ModelForm):
-    """Etapa 1 (Essencial) do wizard de nova atividade: o mínimo para existir
-    como rascunho. Nada aqui é obrigatório no nível do form — a cobrança de
-    título/responsável de verdade só acontece ao publicar
-    (`ActivityService.publish_draft`), nunca ao simplesmente salvar o
-    rascunho e avançar/sair."""
-
-    requested_deadline = SplitDateOptionalTimeField(
-        label="Prazo da solicitação",
-        required=False,
-        help_text="Quando quem pediu precisa da entrega. Sem horário, vale até o fim do dia.",
-    )
-
-    class Meta:
-        model = Activity
-        fields = ["title", "client", "site", "sector", "owner", "requested_deadline", "urgency"]
-        labels = ACTIVITY_FIELD_LABELS
-        help_texts = ACTIVITY_FIELD_HELP_TEXTS
-        widgets = {
-            "title": forms.TextInput(attrs={"autofocus": True, "placeholder": "Ex.: Material disponível na obra"}),
-            "client": ClientPickerWidget(),
-            "site": SitePickerWidget(),
-            "sector": SectorPickerWidget(),
-            "owner": PersonPickerWidget(),
-            "urgency": forms.RadioSelect(),
-        }
-
-    def __init__(
-        self,
-        *args,
-        organization=None,
-        user=None,
-        can_create_person=False,
-        can_create_client=False,
-        can_create_sector=False,
-        can_create_site=False,
-        **kwargs,
-    ):
-        super().__init__(*args, **kwargs)
-        self.scope_querysets(
-            organization,
-            can_create_person=can_create_person,
-            can_create_client=can_create_client,
-            can_create_sector=can_create_sector,
-            can_create_site=can_create_site,
-        )
-        self.fields["client"].empty_label = None
-        self.fields["owner"].empty_label = None
-        if not self.is_bound and not self.initial.get("urgency"):
-            self.fields["urgency"].initial = Activity.Urgency.MEDIA
-        if user is not None and not self.is_bound and not self.instance.pk:
-            self.fields["owner"].initial = user
-        for optional in ("title", "client", "site", "sector", "owner", "requested_deadline", "urgency"):
-            self.fields[optional].required = False
 
 
 class ActivityWizardStep2Form(OrganizationScopedFormMixin, forms.ModelForm):
@@ -292,17 +241,6 @@ class ActivityWizardStep3Form(forms.ModelForm):
 
     def clean_description(self):
         return sanitize_description(self.cleaned_data.get("description"))
-
-
-class ActivityMiniCreateForm(forms.Form):
-    """Criação mínima de atividade dentro do popup aninhado do "+ Nova
-    tarefa": só o título — dono é sempre quem está criando."""
-
-    title = forms.CharField(
-        label="O que precisa ser resolvido?",
-        max_length=200,
-        widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "Ex.: Material disponível na obra"}),
-    )
 
 
 class ActivityEditForm(OrganizationScopedFormMixin, forms.ModelForm):
@@ -393,9 +331,57 @@ class ActivityEditForm(OrganizationScopedFormMixin, forms.ModelForm):
         return self.cleaned_data.get("urgency") or Activity.Urgency.MEDIA
 
 
+class ActivityFilesInput(forms.ClearableFileInput):
+    allow_multiple_selected = True
+
+
+class ActivityFilesField(forms.FileField):
+    widget = ActivityFilesInput
+
+    def clean(self, data, initial=None):
+        if not data:
+            return []
+        values = data if isinstance(data, (list, tuple)) else [data]
+        return [super(ActivityFilesField, self).clean(value, initial) for value in values]
+
+
+class ActivityEditorForm(ActivityEditForm):
+    """Creation and editing share field order, widgets and validation."""
+
+    files = ActivityFilesField(label="Adicionar arquivos", required=False)
+
+    def __init__(self, *args, user=None, drafting=False, can_change_owner=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["title"].widget.attrs.update(placeholder="Ex.: Material disponível na obra", autofocus=True)
+        self.fields["internal_notes"].widget.attrs["rows"] = 3
+        self.fields["owner"].disabled = not can_change_owner
+        if not can_change_owner:
+            self.fields["owner"].help_text = "A transferência de responsabilidade exige permissão específica."
+        if drafting:
+            self.fields["title"].required = False
+            self.fields["owner"].required = False
+            if not self.is_bound and not self.instance.pk:
+                self.initial["owner"] = user
+            if self.initial.get("title") == Activity.DRAFT_TITLE_PLACEHOLDER:
+                self.initial["title"] = ""
+
+    @property
+    def essential_fields(self):
+        return [self[name] for name in ("title", "owner", "sector", "requested_deadline", "urgency")]
+
+    @property
+    def context_fields(self):
+        return [self[name] for name in ("client", "site", "company", "cost_center", "requested_by", "address", "tags")]
+
+    @property
+    def context_expanded(self):
+        return any(field.errors or field.value() for field in self.context_fields)
+
+
 class ChangeOwnerForm(forms.Form):
     new_owner = forms.ModelChoiceField(
-        queryset=User.objects.none(), label="Novo dono", widget=PersonPickerWidget()
+        queryset=User.objects.none(), label="Quem vai acompanhar esta atividade?", widget=PersonPickerWidget(),
+        help_text="A pessoa escolhida passa a responder pela entrega e pelo acompanhamento das tarefas."
     )
 
     def __init__(self, *args, organization=None, can_create_person=False, **kwargs):
@@ -411,7 +397,8 @@ class ChangeOwnerForm(forms.Form):
 
 class ActivityDeadlineChangeForm(forms.Form):
     requested_deadline = forms.DateTimeField(
-        label="Novo prazo solicitado", widget=DateTimeLocalInput(), required=False
+        label="Nova data para a entrega", widget=DateTimeLocalInput(), required=False,
+        help_text="Informe até quando a atividade precisa ficar pronta. Deixe em branco para retirar o prazo."
     )
 
 
@@ -428,9 +415,17 @@ class TaskForm(OrganizationScopedFormMixin, forms.ModelForm):
             "title": "O que precisa ser feito?",
             "sector": "Setor responsável",
             "requested_deadline": "Prazo solicitado",
-            "description": "Descrição",
-            "depends_on": "Depende de",
+            "description": "Instruções para fazer a tarefa",
+            "depends_on": "Qual tarefa precisa terminar antes desta?",
             "tags": "Marcadores",
+        }
+        help_texts = {
+            "title": "Comece com uma ação. Ex.: Conferir os preços da planilha.",
+            "sector": "Equipe que recebe esta tarefa. Para trocar de equipe, use Enviar para outro setor na tarefa.",
+            "requested_deadline": "Data e horário em que você precisa da entrega.",
+            "description": "Explique o que fazer e como saber que o trabalho está pronto.",
+            "depends_on": "Se escolher uma tarefa, esta só poderá começar depois que ela for concluída.",
+            "tags": "Use palavras-chave para organizar e encontrar a tarefa depois.",
         }
         widgets = {
             "title": forms.TextInput(attrs={"autofocus": True, "placeholder": "Ex.: Realizar cotação"}),
@@ -469,6 +464,7 @@ class TaskQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
     responsavel = forms.ModelChoiceField(
         queryset=User.objects.none(),
         label="Responsável pela tarefa",
+        help_text="Pessoa que acompanha esta tarefa até a conclusão.",
         required=True,
         widget=PersonPickerWidget(
             placeholder="Buscar responsável...",
@@ -478,6 +474,7 @@ class TaskQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
     participantes = forms.ModelMultipleChoiceField(
         queryset=User.objects.none(),
         label="Participantes",
+        help_text="Outras pessoas que vão ajudar a executar a tarefa. É opcional.",
         required=False,
         widget=PersonMultiPickerWidget(),
     )
@@ -486,14 +483,18 @@ class TaskQuickCreateForm(OrganizationScopedFormMixin, forms.ModelForm):
         model = Task
         fields = ["title", "sector", "requested_deadline", "tags", "description"]
         labels = {
-            "title": "Título da tarefa",
+            "title": "O que precisa ser feito?",
             "sector": "Setor responsável",
-            "requested_deadline": "Prazo",
-            "description": "Descrição",
+            "requested_deadline": "Prazo solicitado",
+            "description": "Instruções para fazer a tarefa",
             "tags": "Marcadores",
         }
         help_texts = {
-            "title": "Use #marcador e @usuario no título para preenchê-los automaticamente.",
+            "title": "Escreva uma ação clara. Ex.: Conferir os preços da planilha.",
+            "sector": "Equipe que receberá a tarefa na sua fila de trabalho.",
+            "requested_deadline": "Data e horário em que você precisa da entrega. Pode ser definido depois.",
+            "description": "Explique os passos, cuidados ou informações de apoio.",
+            "tags": "Palavras-chave para organizar e encontrar a tarefa depois.",
         }
         widgets = {
             "title": forms.TextInput(attrs={"autofocus": True, "placeholder": "Ex.: Realizar cotação"}),
@@ -550,7 +551,8 @@ class TaskQuickCreateStandaloneForm(TaskQuickCreateForm):
     ]
 
     activity = forms.ModelChoiceField(
-        queryset=Activity.objects.none(), label="Atividade", widget=ActivityPickerWidget()
+        queryset=Activity.objects.none(), label="De qual atividade esta tarefa faz parte?", widget=ActivityPickerWidget(),
+        help_text="A atividade é o resultado maior; esta tarefa é um dos passos para chegar lá.",
     )
 
     def __init__(self, *args, organization=None, can_create_activity=False, **kwargs):
@@ -575,10 +577,11 @@ class ActivityAttachmentForm(forms.Form):
 class TaskReturnForm(forms.Form):
     """Devolução: motivo sempre obrigatório (Regras 02 §36)."""
 
-    to_sector = forms.ModelChoiceField(queryset=Sector.objects.none(), label="Devolver para")
-    reason = forms.ModelChoiceField(queryset=ReturnReason.objects.none(), label="Motivo")
+    to_sector = forms.ModelChoiceField(queryset=Sector.objects.none(), label="Setor que receberá a devolução")
+    reason = forms.ModelChoiceField(queryset=ReturnReason.objects.none(), label="Por que a tarefa precisa voltar?")
     observation = forms.CharField(
-        label="Observação", required=False, widget=forms.Textarea(attrs={"rows": 3, "data-mention": "1"})
+        label="O que precisa ser corrigido?", required=False, widget=forms.Textarea(attrs={"rows": 3, "data-mention": "1"}),
+        help_text="Explique o ajuste necessário para que o setor saiba como continuar.",
     )
 
     def __init__(self, *args, organization=None, task=None, **kwargs):
@@ -602,9 +605,9 @@ class TaskReturnForm(forms.Form):
 class AssignmentRejectForm(forms.Form):
     """Recusa de atribuição: motivo sempre obrigatório, mesmo princípio da devolução."""
 
-    reason = forms.ModelChoiceField(queryset=ReturnReason.objects.none(), label="Motivo")
+    reason = forms.ModelChoiceField(queryset=ReturnReason.objects.none(), label="Por que você não pode aceitar?")
     observation = forms.CharField(
-        label="Observação", required=False, widget=forms.Textarea(attrs={"rows": 3, "data-mention": "1"})
+        label="Explique o motivo, se necessário", required=False, widget=forms.Textarea(attrs={"rows": 3, "data-mention": "1"})
     )
 
     def __init__(self, *args, organization=None, **kwargs):
@@ -615,15 +618,17 @@ class AssignmentRejectForm(forms.Form):
 
 
 class TaskBlockForm(forms.Form):
-    reason = forms.CharField(label="Motivo do bloqueio", max_length=255)
+    reason = forms.CharField(label="O que impede a tarefa de continuar?", max_length=255,
+                            help_text="Ex.: Aguardando a aprovação do cliente.")
     observation = forms.CharField(
-        label="Observação", required=False, widget=forms.Textarea(attrs={"rows": 3, "data-mention": "1"})
+        label="O que falta para liberar a tarefa?", required=False, widget=forms.Textarea(attrs={"rows": 3, "data-mention": "1"})
     )
 
 
 class MoveSectorForm(forms.Form):
     to_sector = forms.ModelChoiceField(queryset=Sector.objects.none(), label="Enviar para o setor")
-    note = forms.CharField(label="Observação", required=False, max_length=255)
+    note = forms.CharField(label="Orientação para o próximo setor", required=False, max_length=255,
+                          help_text="Explique o que a equipe precisa fazer ao receber a tarefa.")
 
     def __init__(self, *args, organization=None, task=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -635,7 +640,7 @@ class MoveSectorForm(forms.Form):
 
 class ExecutorForm(forms.Form):
     user = forms.ModelChoiceField(
-        queryset=User.objects.none(), label="Participante", widget=PersonPickerWidget()
+        queryset=User.objects.none(), label="Quem vai ajudar nesta tarefa?", widget=PersonPickerWidget()
     )
 
     def __init__(self, *args, organization=None, can_create_person=False, **kwargs):
@@ -651,7 +656,8 @@ class ExecutorForm(forms.Form):
 
 class TaskChangeResponsavelForm(forms.Form):
     new_responsavel = forms.ModelChoiceField(
-        queryset=User.objects.none(), label="Novo responsável", widget=PersonPickerWidget()
+        queryset=User.objects.none(), label="Quem será o novo responsável?", widget=PersonPickerWidget(),
+        help_text="Escolha a pessoa que acompanhará a tarefa até a conclusão.",
     )
 
     def __init__(self, *args, organization=None, can_create_person=False, **kwargs):
@@ -666,21 +672,23 @@ class TaskChangeResponsavelForm(forms.Form):
 
 
 class DeadlineProposalForm(forms.Form):
-    proposed_deadline = forms.DateTimeField(label="Novo prazo", widget=DateTimeLocalInput())
+    proposed_deadline = forms.DateTimeField(label="Quando você consegue entregar?", widget=DateTimeLocalInput(),
+                                          help_text="Informe a data e o horário propostos. O responsável pela atividade receberá a proposta para decidir.")
 
 
 class ConflictResolutionForm(forms.Form):
     resolution_note = forms.CharField(
-        label="Decisão", widget=forms.Textarea(attrs={"rows": 3, "data-mention": "1"}),
-        help_text="Registre o que foi decidido — o conflito precisa terminar em decisão (Regras 03 §66).",
+        label="O que foi combinado para resolver o prazo?", widget=forms.Textarea(attrs={"rows": 3, "data-mention": "1"}),
+        help_text="Explique a decisão e o próximo passo para as pessoas envolvidas.",
     )
 
 
 class ManualTimeForm(forms.Form):
     """Apropriação posterior de tempo (Regras 04 §110-113)."""
 
-    started_at = forms.DateTimeField(label="Início", widget=DateTimeLocalInput())
-    ended_at = forms.DateTimeField(label="Fim", widget=DateTimeLocalInput())
+    started_at = forms.DateTimeField(label="Quando você começou a trabalhar?", widget=DateTimeLocalInput())
+    ended_at = forms.DateTimeField(label="Quando você parou?", widget=DateTimeLocalInput(),
+                                   help_text="Informe um período já trabalhado. O sistema calcula a duração entre o início e o fim.")
 
 
 class MessageForm(forms.Form):
@@ -716,11 +724,11 @@ class ActivityFinalizeForm(forms.Form):
 
     outcome = forms.ChoiceField(
         choices=Activity.CompletionOutcome.choices,
-        label="Resultado da finalização",
+        label="Como esta atividade terminou?",
         widget=forms.RadioSelect,
     )
     comment = forms.CharField(
-        label="Comentário de finalização",
+        label="Explique o resultado",
         widget=forms.Textarea(
             attrs={
                 "rows": 4,
@@ -743,7 +751,7 @@ class ActivityPendingForm(forms.Form):
     obrigatório e, só para os motivos que pedem aprovação do gestor, um
     prazo obrigatório para essa decisão."""
 
-    reason = forms.ChoiceField(choices=ActivityPendency.Reason.choices, label="Motivo da pendência")
+    reason = forms.ChoiceField(choices=ActivityPendency.Reason.choices, label="O que está impedindo a entrega?")
     comment = forms.CharField(
         label="Comentário",
         widget=forms.Textarea(
@@ -756,7 +764,7 @@ class ActivityPendingForm(forms.Form):
         ),
     )
     decision_deadline = forms.DateTimeField(
-        label="Prazo para decisão do gestor", required=False, widget=DateTimeLocalInput
+        label="Até quando o gestor precisa decidir?", required=False, widget=DateTimeLocalInput
     )
     notify_client = forms.BooleanField(
         label="Enviar e-mail para o cliente solicitando as informações pendentes", required=False
@@ -793,3 +801,149 @@ class ActivityApprovePendencyForm(forms.Form):
             }
         ),
     )
+
+
+class ProcessApplyForm(forms.Form):
+    """Aplicar um processo publicado a uma atividade (Regras 12 §20).
+
+    Um único formulário, em quatro passos na tela: processo → responsáveis →
+    inputs iniciais → confirmação. Os campos de responsável (`responsavel_<etapa>`)
+    e de input (`input_<id>`, `input_received_<id>`) existem para todas as
+    versões elegíveis; só os da versão escolhida contam (a tela desabilita os
+    das demais). Toda regra de negócio fica em `ProcessApplicationService`;
+    aqui só a validação de formato e o desenho do formulário.
+    """
+
+    process_version = forms.ModelChoiceField(
+        queryset=None,
+        label="Processo",
+        empty_label=None,
+        error_messages={
+            "required": "Escolha o processo que será aplicado.",
+            "invalid_choice": "Este processo não está disponível para esta atividade.",
+        },
+    )
+
+    def __init__(self, *args, activity, versions, **kwargs):
+        from processes.models import ProcessInput, ProcessStep, ProcessVersion
+
+        super().__init__(*args, **kwargs)
+        self.activity = activity
+        self.versions = list(versions)
+        version_ids = [version.pk for version in self.versions]
+        self.fields["process_version"].queryset = ProcessVersion.objects.filter(pk__in=version_ids)
+
+        people = User.objects.filter(profile__organization_id=activity.organization_id, is_active=True)
+        steps = list(
+            ProcessStep.objects.filter(version_id__in=version_ids)
+            .select_related("sector", "default_responsavel")
+            .order_by("order", "pk")
+        )
+        inputs = list(ProcessInput.objects.filter(version_id__in=version_ids).order_by("order", "pk"))
+        self._steps = {pk: [] for pk in version_ids}
+        self._inputs = {pk: [] for pk in version_ids}
+        for step in steps:
+            self._steps[step.version_id].append(step)
+            self.fields[f"responsavel_{step.pk}"] = forms.ModelChoiceField(
+                queryset=people,
+                required=False,
+                error_messages={"invalid_choice": "Escolha uma pessoa ativa da organização."},
+            )
+        for item in inputs:
+            self._inputs[item.version_id].append(item)
+            self.fields[f"input_{item.pk}"] = forms.CharField(required=False, max_length=5000)
+            self.fields[f"input_received_{item.pk}"] = forms.BooleanField(required=False)
+
+    def clean(self):
+        from .process_application import normalize_input_value
+        from .services import ActivityError
+
+        cleaned = super().clean()
+        version = cleaned.get("process_version")
+        if version is None:
+            return cleaned
+
+        responsible_by_step = {}
+        for step in self._steps.get(version.pk, []):
+            name = f"responsavel_{step.pk}"
+            person = cleaned.get(name)
+            if person is not None:
+                responsible_by_step[step.pk] = person
+            elif name not in self.errors and step.default_responsavel_id is None:
+                self.add_error(name, "Escolha o responsável desta etapa.")
+
+        input_values = {}
+        for item in self._inputs.get(version.pk, []):
+            value = (cleaned.get(f"input_{item.pk}") or "").strip()
+            received = bool(cleaned.get(f"input_received_{item.pk}"))
+            if not value and not received:
+                continue
+            try:
+                normalize_input_value(item, value, received)
+            except ActivityError as exc:
+                self.add_error(f"input_{item.pk}", str(exc))
+                continue
+            input_values[item.pk] = {"value": value, "is_received": received}
+
+        cleaned["responsible_by_step"] = responsible_by_step
+        cleaned["input_values"] = input_values
+        return cleaned
+
+    def panels(self):
+        """Dados prontos para desenhar, por versão elegível, os passos 2 e 3.
+
+        Em cada etapa, as pessoas do setor vêm primeiro e as demais logo
+        depois; o responsável padrão (ou o valor reenviado, se o formulário
+        voltou com erro) já vem selecionado.
+        """
+        from .process_application import ProcessApplicationService
+
+        all_steps = [step for steps in self._steps.values() for step in steps]
+        people, members = ProcessApplicationService.people_for_steps(self.activity.organization, all_steps)
+
+        widgets = {
+            "TEXTO": "text",
+            "DATA": "date",
+            "NUMERO": "number",
+            "LINK": "url",
+            "ARQUIVO": "confirm",
+            "SELECAO": "confirm",
+        }
+        panels = []
+        for version in self.versions:
+            step_rows = []
+            for step in self._steps[version.pk]:
+                field_name = f"responsavel_{step.pk}"
+                if self.is_bound:
+                    selected = self.data.get(field_name, "")
+                else:
+                    selected = step.default_responsavel_id or ""
+                sector_members = members.get(step.sector_id, set())
+                step_rows.append(
+                    {
+                        "step": step,
+                        "field_name": field_name,
+                        "selected": str(selected),
+                        "has_default": step.default_responsavel_id is not None,
+                        "sector_people": [person for person in people if person.pk in sector_members],
+                        "other_people": [person for person in people if person.pk not in sector_members],
+                        "errors": self.errors.get(field_name, []),
+                    }
+                )
+            input_rows = []
+            for item in self._inputs[version.pk]:
+                value_name = f"input_{item.pk}"
+                received_name = f"input_received_{item.pk}"
+                input_rows.append(
+                    {
+                        "input": item,
+                        "widget": widgets.get(item.input_type, "text"),
+                        "value_name": value_name,
+                        "received_name": received_name,
+                        "value": self.data.get(value_name, "") if self.is_bound else "",
+                        "received": bool(self.data.get(received_name)) if self.is_bound else False,
+                        "errors": self.errors.get(value_name, []),
+                    }
+                )
+            panels.append({"version": version, "steps": step_rows, "inputs": input_rows})
+        return panels

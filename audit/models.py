@@ -32,6 +32,13 @@ class AuditLog(models.Model):
         CANCEL = "CANCEL", "Cancelada"
         PENDENCY_OPENED = "PENDENCY_OPENED", "Marcada como pendente"
         PENDENCY_APPROVED = "PENDENCY_APPROVED", "Pendência aprovada"
+        # Processos aplicados a atividades (Regras 12 §34). Eventos próprios em
+        # vez de UPDATE + field_name: o histórico precisa dizer "aplicou o
+        # processo X v3" e "liberou a tarefa", não "alterou um campo".
+        PROCESS_APPLIED = "PROCESS_APPLIED", "Processo aplicado"
+        INPUT_UPDATED = "INPUT_UPDATED", "Input atualizado"
+        CRITERION_UPDATED = "CRITERION_UPDATED", "Critério de aceite atualizado"
+        TASK_RELEASED = "TASK_RELEASED", "Tarefa liberada para a fila"
         # Segurança: toda mudança no que alguém pode fazer deixa rastro
         # (Regras 05 §41, doc 08 §30).
         PROFILE_CREATED = "PROFILE_CREATED", "Perfil criado"

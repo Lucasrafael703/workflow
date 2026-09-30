@@ -9,7 +9,7 @@
                 <h2>Alterar responsável da tarefa</h2>
                 <div class="sub">{{ task.title }}</div>
             </div>
-            <a href="{% url 'task-detail' task.pk %}" class="modal__close" title="Fechar">&times;</a>
+            <a href="{% url 'task-detail' task.pk %}" class="modal__close" title="Fechar sem alterar" aria-label="Fechar sem alterar">&times;</a>
         </div>
 
         <form method="post">
@@ -17,13 +17,13 @@
             <div class="modal__body">
                 <p class="muted">
                     Responsável atual: <strong>{{ task.responsavel.get_username }}</strong>.
-                    A tarefa continua com um único responsável; a troca fica registrada no histórico.
+                    Escolha quem vai acompanhar a tarefa daqui em diante. A troca fica registrada no histórico.
                 </p>
                 {% include "activities/_form_fields.html" %}
             </div>
             <div class="modal__foot">
-                <a href="{% url 'task-detail' task.pk %}" class="btn">Voltar</a>
-                <button type="submit" class="btn btn--primary">Transferir tarefa</button>
+                <a href="{% url 'task-detail' task.pk %}" class="btn">Cancelar</a>
+                <button type="submit" class="btn btn--primary">Salvar novo responsável</button>
             </div>
         </form>
     </div>

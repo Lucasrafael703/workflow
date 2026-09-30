@@ -928,3 +928,77 @@ O módulo está funcional no D0 quando for possível:
 | Versão | Descrição |
 |---|---|
 | 1.0 | Definição inicial consolidada de Processos, Inputs, Outputs, Critérios de Aceite, fluxo padrão, versionamento, aplicação em atividades e experiência de cadastro |
+| 1.1 | Acrescenta o §41: decisões fechadas ao implementar a aplicação do processo a uma atividade (30/09/2026) |
+
+---
+
+# 41. Aplicação do processo na prática — decisões fechadas na implementação
+
+> Complementa os §10, §14, §16, §20 e §33. Onde as demais Regras eram omissas ou
+> se contradiziam, esta seção registra o que o D0 passou a fazer. Implementação
+> em `activities/process_application.py` (ver `docs/06_ATIVIDADES_E_TAREFAS.md` §3).
+
+## 41.1 Quando e por quem
+
+Aplicar processo é uma ação da **ficha de uma atividade já criada** (ação
+`processo.aplicar`, verificada contra a atividade). O §20 descreve a aplicação
+"ao criar" a atividade; as demais Regras (`05`, `10`) falam em "aplicar em uma
+atividade". Foram conciliadas assim: a atividade pode nascer simples e receber o
+processo depois; a aplicação é sempre única e permanente.
+
+Não existe trocar, reaplicar, atualizar para a versão nova nem remover o processo
+de uma atividade — essas operações apagariam ou corromperiam o histórico (§19).
+
+## 41.2 Empresa
+
+Processo e atividade precisam ser da **mesma empresa** (`08` §2380). Uma atividade
+sem empresa não recebe processo até a empresa ser definida (as Regras `08` §1204
+tornam a empresa obrigatória na atividade; o código ainda a aceita vazia).
+
+## 41.3 Responsável de cada tarefa
+
+Toda tarefa precisa de responsável. Cada etapa do fluxo pode trazer um
+**responsável padrão**, opcional, da mesma organização — não precisa participar do
+setor da etapa. Sem padrão, quem aplica escolhe antes de aplicar. O responsável
+padrão só muda em rascunho; a nova versão o herda.
+
+## 41.4 Fluxo, dependência e fila
+
+- A etapa sem dependência entra na fila do seu setor ao aplicar.
+- A etapa que depende da anterior é criada e ligada, mas **fica fora da fila**
+  ("Aguardando etapa anterior") até a tarefa anterior ser **concluída**. Só a
+  conclusão libera; cancelar, bloquear ou devolver a anterior não libera.
+- Não se inicia nem se conclui uma tarefa cuja anterior não terminou.
+- Quem tem `processo.aplicar` pode criar as tarefas de **todos** os setores do
+  fluxo publicado sem precisar de `tarefa.criar` em cada um (usar o fluxo padrão
+  não exige poder alterá-lo — `05` §2057). `tarefa.criar` continua sendo exigido
+  para tarefas avulsas.
+
+## 41.5 Inputs
+
+Input obrigatório faltante **não impede aplicar o processo** nem criar a atividade
+(§10), mas **impede o início do fluxo**: as tarefas geradas pelo processo não podem
+ser iniciadas nem concluídas enquanto houver input obrigatório não recebido. O
+sistema diz quais faltam. Tarefas criadas à mão na mesma atividade não são
+afetadas.
+
+Cada tipo de input é registrado assim: texto, data, número e link são validados;
+**arquivo e seleção registram só a confirmação de recebimento**, com observação
+livre, até haver vínculo com anexos e lista de opções no molde.
+
+## 41.6 Critérios e finalização
+
+- **Sucesso** exige todos os critérios **obrigatórios** atendidos; a recusa lista
+  os que faltam.
+- **Concluído com pendências** é permitido com critérios obrigatórios em aberto,
+  sempre com comentário; os critérios que ficaram de fora são registrados na
+  auditoria e na conversa da atividade — a conclusão nunca é silenciosa (`02` §1223).
+- **Declinado** e **Cancelado** não olham critérios.
+- Critérios opcionais nunca bloqueiam.
+
+## 41.7 Ainda não especificado
+
+Onde guardar a evidência do output (arquivo, link, checklist, confirmação): a
+entrega esperada e o tipo de evidência aparecem na atividade, mas o registro da
+evidência e a conferência "output registrado" na conclusão (§32) ficam para uma
+próxima entrega.

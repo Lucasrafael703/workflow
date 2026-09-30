@@ -8,7 +8,7 @@
             <a href="{% url 'user-list' %}">Usuários</a><span>›</span>{{ target.get_username }}<span>›</span>Acessos
         </div>
         <h1>Acessos de {{ target.get_full_name|default:target.get_username }}</h1>
-        <p class="sub">Quem pode o quê, onde, e por qual origem.</p>
+        <p class="sub">Escolha o que esta pessoa pode fazer e em quais trabalhos. Comece atribuindo um perfil abaixo.</p>
     </div>
     <div class="page-head__actions">
         <a href="{% url 'user-edit' target.pk %}" class="btn">Dados e setores</a>
@@ -19,8 +19,8 @@
     <div>
         <div class="card card--flush">
             <div class="card__head">
-                <h2>Perfis atribuídos</h2>
-                <span class="muted small">Cada atribuição vale dentro de um escopo</span>
+                <h2>Perfis desta pessoa</h2>
+                <span class="muted small">O perfil define as ações; “Onde vale” define os trabalhos permitidos.</span>
             </div>
             {% if assignments %}
             <div class="table-wrap">
@@ -45,15 +45,16 @@
             </div>
             {% else %}
             <div class="card__body">
-                <p class="muted" style="margin:0">Nenhum perfil atribuído. Sem concessão válida, tudo é negado.</p>
+                <p class="muted" style="margin:0">Esta pessoa ainda não tem um perfil. Escolha um abaixo para liberar as ações necessárias.</p>
             </div>
             {% endif %}
 
             <div class="card__foot">
                 <form method="post">
                     {% csrf_token %}
-                    <h3>Atribuir perfil</h3>
-                    {% include "activities/_form_fields.html" %}
+                    <h3>Adicionar um perfil para esta pessoa</h3>
+                    <p class="muted small">Selecione o perfil, escolha onde ele vale e confirme em “Atribuir perfil”.</p>
+                    {% include "core/_access_fields.html" %}
                     <button type="submit" class="btn btn--primary">Atribuir perfil</button>
                 </form>
             </div>
@@ -61,8 +62,8 @@
 
         <div class="card card--flush">
             <div class="card__head">
-                <h2>Concessões diretas</h2>
-                <span class="muted small">Exceções pontuais</span>
+                <h2>Permissões adicionais</h2>
+                <span class="muted small">Use para liberar uma ação que não faz parte dos perfis acima.</span>
             </div>
             {% if direct_grants %}
             <div class="table-wrap">
@@ -73,7 +74,6 @@
                     <tr>
                         <td data-label="Ação">
                             <span class="title">{{ grant.action.name }}</span>
-                            <div class="muted small"><code>{{ grant.action.key }}</code></div>
                         </td>
                         <td data-label="Onde vale">{{ grant.scope.label }}</td>
                         <td data-label="Ações" class="col-actions">
@@ -89,16 +89,16 @@
             </div>
             {% else %}
             <div class="card__body">
-                <p class="muted" style="margin:0">Nenhuma concessão direta. O caminho normal é o perfil.</p>
+                <p class="muted" style="margin:0">Nenhuma permissão adicional. Os perfis acima continuam valendo.</p>
             </div>
             {% endif %}
 
             <div class="card__foot">
                 <form method="post" action="{% url 'user-grant' target.pk %}">
                     {% csrf_token %}
-                    <h3>Conceder ação avulsa</h3>
-                    {% include "activities/_form_fields.html" with form=grant_form %}
-                    <button type="submit" class="btn">Conceder ação</button>
+                    <h3>Liberar uma ação específica</h3>
+                    {% include "core/_access_fields.html" with form=grant_form %}
+                    <button type="submit" class="btn">Adicionar permissão</button>
                 </form>
             </div>
         </div>
@@ -106,7 +106,7 @@
 
     <div>
         <div class="card card--flush">
-            <div class="card__head"><h2>Acesso efetivo</h2></div>
+            <div class="card__head"><h2>O que a pessoa pode fazer hoje</h2></div>
             <div class="card__body">
                 <p class="muted small">O que esta pessoa pode fazer hoje, e de onde vem cada permissão.</p>
 
@@ -129,12 +129,25 @@
                 {% else %}
                 <div class="empty-state" style="padding:26px 10px">
                     <div class="empty-state__icon">{% include "_icon.html" with name="shield" %}</div>
-                    <h3>Nenhuma permissão efetiva</h3>
-                    <p style="margin-bottom:0">Tudo negado por padrão. Atribua um perfil para liberar o acesso.</p>
+                    <h3>Nenhuma permissão cadastrada</h3>
+                    <p style="margin-bottom:0">Atribua um perfil para liberar as ações de trabalho.</p>
                 </div>
                 {% endif %}
             </div>
         </div>
     </div>
 </div>
+<script>
+document.querySelectorAll('[data-access-fields]').forEach(function (group) {
+    var selector = group.querySelector('[name="scope_type"]');
+    if (!selector) return;
+    function showScope() {
+        group.querySelectorAll('[data-scope-field]').forEach(function (row) {
+            row.hidden = row.getAttribute('data-scope-field') !== selector.value;
+        });
+    }
+    selector.addEventListener('change', showScope);
+    showScope();
+});
+</script>
 {% endblock %}

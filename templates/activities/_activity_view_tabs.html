@@ -2,14 +2,14 @@
 activity_list.html, activity_kanban.html e activity_calendar.html. Preserva
 a querystring de filtros (tab/status/.../q) ao trocar de visão, via
 `filter_querystring` (montada em activity_filter_context).{% endcomment %}
-<nav class="tabs task-view-tabs">
-    <a href="{% url 'activity-list' %}?{{ filter_querystring }}" class="{% if view_mode == 'lista' %}is-active{% endif %}">
+<nav class="tabs task-view-tabs" aria-label="Como visualizar as atividades">
+    <a href="{% url 'activity-list' %}?{{ filter_querystring }}" class="{% if view_mode == 'lista' %}is-active{% endif %}"{% if view_mode == 'lista' %} aria-current="page"{% endif %}>
         {% include "_icon.html" with name="menu" %} Lista
     </a>
-    <a href="{% url 'activity-kanban' %}?{{ filter_querystring }}" class="{% if view_mode == 'kanban' %}is-active{% endif %}">
-        {% include "_icon.html" with name="queue" %} Kanban
+    <a href="{% url 'activity-kanban' %}?{{ filter_querystring }}" class="{% if view_mode == 'kanban' %}is-active{% endif %}"{% if view_mode == 'kanban' %} aria-current="page"{% endif %}>
+        {% include "_icon.html" with name="queue" %} Quadro por etapas
     </a>
-    <a href="{% url 'activity-calendar' %}?{{ filter_querystring }}" class="{% if view_mode == 'calendario' %}is-active{% endif %}">
-        {% include "_icon.html" with name="clock" %} Calendário
+    <a href="{% url 'activity-calendar' %}?{{ filter_querystring }}" class="{% if view_mode == 'calendario' %}is-active{% endif %}"{% if view_mode == 'calendario' %} aria-current="page"{% endif %}>
+        {% include "_icon.html" with name="clock" %} Calendário de prazos
     </a>
 </nav>

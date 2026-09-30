@@ -222,36 +222,69 @@
                     <span class="proc-section__chevron">{% include "_icon.html" with name="chevron-down" %}</span>
                 </summary>
                 <div class="proc-section__body">
-                    {% for item in steps %}
+                    {% for row in step_rows %}
+                    {% with item=row.step %}
                     <div class="proc-row">
                         <span class="proc-row__grip">{% include "_icon.html" with name="grip" %}</span>
                         <div class="proc-row__main">
                             <div class="proc-row__title">{{ item.order }}. {{ item.name }}</div>
-                            <div class="proc-row__meta">{{ item.sector.name }}{% if item.depends_on_previous and not forloop.first %} · depende da etapa anterior{% endif %}</div>
+                            <div class="proc-row__meta">
+                                {{ item.sector.name }}{% if item.depends_on_previous and not forloop.first %} · depende da etapa anterior{% endif %}
+                                · Responsável padrão:
+                                {% if item.default_responsavel %}<strong>{{ item.default_responsavel.get_full_name|default:item.default_responsavel.get_username }}</strong>{% else %}<span class="muted">quem aplicar escolhe</span>{% endif %}
+                            </div>
                         </div>
                         {% if can_edit %}
+                        <form method="post" action="{% url 'process-step-responsavel' process.pk item.pk %}" class="proc-row__resp">
+                            {% csrf_token %}
+                            <select name="default_responsavel" aria-label="Responsável padrão de {{ item.name }}" onchange="this.form.submit()">
+                                <option value="">Sem responsável padrão</option>
+                                {% if row.sector_people %}
+                                <optgroup label="Do setor {{ item.sector.name }}">
+                                    {% for person in row.sector_people %}<option value="{{ person.pk }}" {% if item.default_responsavel_id == person.pk %}selected{% endif %}>{{ person.get_full_name|default:person.get_username }}</option>{% endfor %}
+                                </optgroup>
+                                {% endif %}
+                                {% if row.other_people %}
+                                <optgroup label="Outras pessoas">
+                                    {% for person in row.other_people %}<option value="{{ person.pk }}" {% if item.default_responsavel_id == person.pk %}selected{% endif %}>{{ person.get_full_name|default:person.get_username }}</option>{% endfor %}
+                                </optgroup>
+                                {% endif %}
+                            </select>
+                            <noscript><button type="submit" class="btn btn--sm">Salvar</button></noscript>
+                        </form>
                         <form method="post" action="{% url 'process-step-remove' process.pk item.pk %}" class="proc-row__remove">
                             {% csrf_token %}
                             <button type="submit" class="btn btn--icon" title="Remover">{% include "_icon.html" with name="trash" %}</button>
                         </form>
                         {% endif %}
                     </div>
+                    {% endwith %}
                     {% empty %}
                     <p class="muted">Nenhuma etapa definida ainda. Publicar exige ao menos uma.</p>
                     {% endfor %}
 
                     {% if can_edit %}
-                    <form method="post" action="{% url 'process-step-add' process.pk %}" class="proc-add-form">
+                    <form method="post" action="{% url 'process-step-add' process.pk %}" class="proc-add-form" data-step-form>
                         {% csrf_token %}
                         <div class="field"><label>Nome da tarefa</label><input type="text" name="name" placeholder="Ex.: Realizar cotação" required></div>
                         <div class="field">
                             <label>Setor responsável</label>
-                            <select name="sector" required>
+                            <select name="sector" required data-step-sector>
                                 <option value="">Selecione…</option>
                                 {% for sector in sectors %}
                                 <option value="{{ sector.pk }}">{{ sector.name }}</option>
                                 {% endfor %}
                             </select>
+                        </div>
+                        <div class="field">
+                            <label>Responsável padrão <span class="muted small">(opcional)</span></label>
+                            <select name="default_responsavel" data-step-responsavel>
+                                <option value="">Quem aplicar escolhe</option>
+                                {% for person in people %}
+                                <option value="{{ person.pk }}" data-sectors="{{ person.sector_ids_csv }}">{{ person.get_full_name|default:person.get_username }}</option>
+                                {% endfor %}
+                            </select>
+                            <label class="small muted" style="display:flex; gap:6px; align-items:center; margin-top:4px"><input type="checkbox" data-step-show-all> Mostrar pessoas de outros setores</label>
                         </div>
                         <label class="field field--check"><input type="checkbox" name="depends_on_previous" checked> Depende da anterior</label>
                         <button type="submit" class="btn">{% include "_icon.html" with name="plus" %} Adicionar etapa</button>
@@ -280,4 +313,9 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{% load static %}
+<script src="{% static 'js/process-editor.js' %}?v=20260930a"></script>
 {% endblock %}

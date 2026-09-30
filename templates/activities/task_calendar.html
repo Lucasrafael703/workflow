@@ -5,11 +5,12 @@
 {% include "activities/_task_page_head.html" %}
 
 {% include "activities/_task_view_filters.html" %}
+<p class="muted small">Cada tarefa aparece no dia do prazo combinado ou, se ainda não houver, do prazo solicitado. Clique no nome para abrir.</p>
 
 <div class="calendar-nav">
-    <a class="btn btn--sm" href="?ano={{ prev_year }}&mes={{ prev_month }}&{{ filter_querystring }}">&larr; Anterior</a>
+    <a class="btn btn--sm" href="?ano={{ prev_year }}&mes={{ prev_month }}&{{ filter_querystring }}">&larr; Mês anterior</a>
     <span class="calendar-nav__title">{{ month_date|date:"F Y"|capfirst }}</span>
-    <a class="btn btn--sm" href="?ano={{ next_year }}&mes={{ next_month }}&{{ filter_querystring }}">Próximo &rarr;</a>
+    <a class="btn btn--sm" href="?ano={{ next_year }}&mes={{ next_month }}&{{ filter_querystring }}">Próximo mês &rarr;</a>
 </div>
 
 <div class="calendar-grid">
@@ -29,7 +30,7 @@
             <a href="{% url 'task-detail' task.pk %}" class="calendar-day__task tag" style="--tag-bg: {{ task.status_color }}1A; --tag-fg: {{ task.status_color }};">{{ task.title }}</a>
             {% endfor %}
             {% if day.tasks|length > 3 %}
-            <div class="calendar-day__more muted small">+{{ day.tasks|length|add:"-3" }} mais</div>
+            <details class="calendar-day__more muted small"><summary>Ver mais {{ day.tasks|length|add:"-3" }} tarefa{{ day.tasks|length|add:"-3"|pluralize }}</summary>{% for task in day.tasks|slice:"3:" %}<a href="{% url 'task-detail' task.pk %}" class="calendar-day__task tag" style="--tag-bg: {{ task.status_color }}1A; --tag-fg: {{ task.status_color }};">{{ task.title }}</a>{% endfor %}</details>
             {% endif %}
         </div>
         {% endfor %}

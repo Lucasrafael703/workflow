@@ -19,16 +19,14 @@ from core.mixins import ActionRequiredMixin, OrganizationRequiredMixin, user_sec
 from core.models import ActivityStage, Client, CostCenter, Sector, TaskStage
 from notifications.models import Notification
 from notifications.services import NotificationService
+from processes.models import ActivityCriterionCheck, ActivityInputValue
 
 from .forms import (
     ActivityApprovePendencyForm,
     ActivityAttachmentForm,
     ActivityDeadlineChangeForm,
-    ActivityEditForm,
     ActivityFinalizeForm,
-    ActivityMiniCreateForm,
     ActivityPendingForm,
-    ActivityWizardStep1Form,
     ActivityWizardStep2Form,
     ActivityWizardStep3Form,
     AssignmentRejectForm,
@@ -40,6 +38,7 @@ from .forms import (
     ManualTimeForm,
     MessageForm,
     MoveSectorForm,
+    ProcessApplyForm,
     ReorderForm,
     TaskBlockForm,
     TaskChangeResponsavelForm,
@@ -62,6 +61,10 @@ from .models import (
     TaskExecutor,
     TaskReturn,
 )
+from .activity_editor import ActivityCreateView, ActivityEditView, ActivityMiniCreateView
+from .navigation import activity_return_url
+from . import process_state
+from .process_application import ActivityProcessService, ProcessApplicationService
 from .services import (
     ActivityAttachmentService,
     ActivityError,
@@ -86,6 +89,12 @@ OPEN_TASK_STATUSES = [
     Task.Status.EM_EXECUCAO,
     Task.Status.BLOQUEADA,
 ]
+
+#: Etapa criada por um processo que ainda espera a anterior: `DISPONIVEL`, fora
+#: da fila, com predecessora não concluída. Não é "próxima tarefa" de ninguém.
+WAITING_ON_DEPENDENCY = Q(status=Task.Status.DISPONIVEL, depends_on__isnull=False) & ~Q(
+    depends_on__status=Task.Status.CONCLUIDA
+)
 
 
 def filtered_tasks_queryset(request, organization):
@@ -151,7 +160,14 @@ def filtered_tasks_queryset(request, organization):
 
     return (
         queryset.select_related(
-            "activity", "activity__client", "activity__site", "activity__cost_center", "sector", "stage", "responsavel"
+            "activity",
+            "activity__client",
+            "activity__site",
+            "activity__cost_center",
+            "sector",
+            "stage",
+            "responsavel",
+            "depends_on",
         )
         .prefetch_related(
             Prefetch(
@@ -366,6 +382,7 @@ class HomeView(OrganizationRequiredMixin, TemplateView):
                 activity__organization=org,
                 status__in=[Task.Status.DISPONIVEL, Task.Status.EM_FILA],
             )
+            .exclude(WAITING_ON_DEPENDENCY)
             .filter(
                 Q(responsavel=user)
                 | Q(executors__user=user, executors__removed_at__isnull=True)
@@ -450,27 +467,31 @@ def filtered_activities_queryset(request, organization, *, order=True):
     diferentes."""
     user = request.user
     tab = request.GET.get("tab", "minhas")
-    queryset = Activity.objects.filter(organization=organization).exclude(status=Activity.Status.RASCUNHO)
+    queryset = Activity.objects.filter(organization=organization)
 
     if tab == "grupo":
-        queryset = queryset.filter(sector__in=user_sectors(user))
+        queryset = queryset.exclude(status=Activity.Status.RASCUNHO).filter(sector__in=user_sectors(user))
     elif tab == "participando":
-        queryset = queryset.filter(
+        queryset = queryset.exclude(status=Activity.Status.RASCUNHO).filter(
             Q(tasks__responsavel=user)
             | Q(tasks__executors__user=user, tasks__executors__removed_at__isnull=True)
         ).exclude(owner=user)
     elif tab == "concluidas":
-        queryset = queryset.filter(
+        queryset = queryset.exclude(status=Activity.Status.RASCUNHO).filter(
             Q(owner=user)
             | Q(tasks__responsavel=user)
             | Q(tasks__executors__user=user, tasks__executors__removed_at__isnull=True),
             status__in=[Activity.Status.CONCLUIDA, Activity.Status.CANCELADA],
         )
     elif tab == "todas":
+        queryset = queryset.exclude(status=Activity.Status.RASCUNHO)
         if not can(user, catalog.ATIVIDADE_VISUALIZAR_TODAS):
             queryset = queryset.filter(owner=user)
     else:
-        queryset = queryset.filter(owner=user)
+        # Rascunho ainda pode não ter dono definido (só `created_by` é
+        # garantido desde a etapa 1 do wizard) — sem isso, um rascunho salvo
+        # e retomado depois fica sem nenhuma tela que o encontre de volta.
+        queryset = queryset.filter(Q(owner=user) | Q(created_by=user, status=Activity.Status.RASCUNHO))
 
     search = request.GET.get("q", "").strip()
     if search:
@@ -684,6 +705,10 @@ class ActivityListView(OrganizationRequiredMixin, ListView):
                 Activity.Status.CONCLUIDA,
                 Activity.Status.CANCELADA,
             ) and can(user, catalog.ATIVIDADE_CANCELAR, activity)
+            # Só concluída reabre (cancelada não): o serviço recusaria o resto.
+            activity.can_reopen = activity.status == Activity.Status.CONCLUIDA and can(
+                user, catalog.ATIVIDADE_REABRIR, activity
+            )
         return context
 
 
@@ -838,76 +863,17 @@ class ActivityCalendarView(OrganizationRequiredMixin, TemplateView):
         return context
 
 
-class ActivityWizardStep1View(OrganizationRequiredMixin, FormView):
-    """Etapa 1 (Essencial) do wizard de nova atividade. Sem `?pk=` cria um
-    rascunho novo a cada POST válido; com `?pk=` retoma um rascunho já
-    existente (ver `get_draft`). Título/dono continuam podendo ficar vazios
-    aqui — só `publish_draft` (etapa 3) exige os dois preenchidos."""
-
-    template_name = "activities/activity_wizard_step1.html"
-    form_class = ActivityWizardStep1Form
-
-    def get_draft(self):
-        pk = self.request.GET.get("pk") or self.request.POST.get("pk")
-        if not pk:
-            return None
-        return get_object_or_404(
-            Activity,
-            pk=pk,
-            organization=self.organization,
-            status=Activity.Status.RASCUNHO,
-            created_by=self.request.user,
-        )
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs["organization"] = self.organization
-        kwargs["user"] = self.request.user
-        kwargs["can_create_person"] = can(self.request.user, catalog.USUARIO_CRIAR)
-        kwargs["can_create_client"] = can(self.request.user, catalog.CLIENTE_GERIR)
-        kwargs["can_create_sector"] = can(self.request.user, catalog.SETOR_EDITAR)
-        kwargs["can_create_site"] = can(self.request.user, catalog.OBRA_GERIR)
-        draft = self.get_draft()
-        if draft is not None:
-            kwargs["instance"] = draft
-        return kwargs
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["draft"] = self.get_draft()
-        return context
-
-    def form_valid(self, form):
-        data = form.cleaned_data
-        try:
-            activity = ActivityService.save_draft(
-                organization=self.organization,
-                created_by=self.request.user,
-                activity=self.get_draft(),
-                title=data.get("title"),
-                client=data.get("client"),
-                site=data.get("site"),
-                sector=data.get("sector"),
-                owner=data.get("owner"),
-                requested_deadline=data.get("requested_deadline"),
-                urgency=data.get("urgency") or Activity.Urgency.MEDIA,
-            )
-        except ActivityError as exc:
-            form.add_error(None, str(exc))
-            return self.form_invalid(form)
-
-        if self.request.POST.get("acao") == "sair":
-            messages.success(self.request, "Rascunho salvo. Você pode retomar quando quiser.")
-            return redirect("activity-list")
-        return redirect("activity-wizard-contexto", pk=activity.pk)
-
-
 class ActivityWizardStep2View(OrganizationRequiredMixin, FormView):
     """Etapa 2 (Contexto) do wizard — Organização/Empresa, Centro de custo,
     Solicitante, Endereço complementar, Marcadores. Tudo opcional."""
 
     template_name = "activities/activity_wizard_step2.html"
     form_class = ActivityWizardStep2Form
+
+    def get(self, request, *args, **kwargs):
+        # Old bookmarks resolve to the unified editor; legacy POSTs remain valid.
+        draft = self.get_draft()
+        return redirect(f"{reverse('activity-create')}?pk={draft.pk}")
 
     def get_draft(self):
         return get_object_or_404(
@@ -948,6 +914,11 @@ class ActivityWizardStep3View(OrganizationRequiredMixin, FormView):
 
     template_name = "activities/activity_wizard_step3.html"
     form_class = ActivityWizardStep3Form
+
+    def get(self, request, *args, **kwargs):
+        # Old bookmarks resolve to the unified editor; legacy POSTs remain valid.
+        draft = self.get_draft()
+        return redirect(f"{reverse('activity-create')}?pk={draft.pk}")
 
     def get_draft(self):
         return get_object_or_404(
@@ -1031,35 +1002,6 @@ class ActivitySearchView(OrganizationRequiredMixin, View):
         return JsonResponse({"results": results})
 
 
-class ActivityMiniCreateView(OrganizationRequiredMixin, FormView):
-    """Criação mínima de atividade, usada só dentro do popup aninhado do
-    "+ Nova tarefa": título e pronto, dono = quem está criando. Sempre cria
-    uma atividade completa (nunca um rascunho) — quem quiser os demais campos
-    (cliente, urgência, prazo…) edita a atividade depois, ou usa o wizard de
-    3 etapas (`ActivityWizardStep1View`) para o formulário completo."""
-
-    template_name = "activities/activity_mini_form.html"
-    form_class = ActivityMiniCreateForm
-
-    def form_valid(self, form):
-        try:
-            activity = ActivityService.create_activity(
-                organization=self.organization,
-                title=form.cleaned_data["title"],
-                owner=self.request.user,
-                created_by=self.request.user,
-            )
-        except ActivityError as exc:
-            form.add_error(None, str(exc))
-            return self.form_invalid(form)
-        return JsonResponse({"id": activity.pk, "name": f"{activity.code} — {activity.title}"})
-
-    def form_invalid(self, form):
-        if _is_ajax(self.request):
-            return JsonResponse({"errors": form.errors}, status=400)
-        return super().form_invalid(form)
-
-
 class ActivityDetailView(OrganizationRequiredMixin, DetailView):
     """Centro de comando da atividade: situação atual, tarefas e conversa
     na frente; dados cadastrais e histórico do sistema atrás — não uma tela
@@ -1084,11 +1026,12 @@ class ActivityDetailView(OrganizationRequiredMixin, DetailView):
             "site",
             "cost_center",
             "completed_by",
-            "process_version__process",
+            "process_version__process__company",
         )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        context["return_url"] = activity_return_url(self.request)
         activity = self.object
         user = self.request.user
 
@@ -1098,7 +1041,7 @@ class ActivityDetailView(OrganizationRequiredMixin, DetailView):
         open_conflicts = DeadlineConflict.objects.filter(task=OuterRef("pk"), status=DeadlineConflict.Status.ABERTO)
 
         tasks = list(
-            activity.tasks.select_related("sector", "depends_on")
+            activity.tasks.select_related("sector", "depends_on", "responsavel", "process_step")
             .prefetch_related(
                 Prefetch(
                     "executors",
@@ -1113,7 +1056,7 @@ class ActivityDetailView(OrganizationRequiredMixin, DetailView):
             .order_by("order", "created_at")
         )
 
-        status_counts = {"done": 0, "in_progress": 0, "waiting": 0, "blocked": 0}
+        status_counts = {"done": 0, "in_progress": 0, "waiting": 0, "blocked": 0, "dependency_waiting": 0}
         for task in tasks:
             task.queue_info = queue_position(task)
             if task.status == Task.Status.CONCLUIDA:
@@ -1122,6 +1065,9 @@ class ActivityDetailView(OrganizationRequiredMixin, DetailView):
                 status_counts["in_progress"] += 1
             elif task.status == Task.Status.BLOQUEADA:
                 status_counts["blocked"] += 1
+            elif task.status == Task.Status.DISPONIVEL and task.waiting_for is not None:
+                # Etapa que espera a anterior: existe, mas não está na fila.
+                status_counts["dependency_waiting"] += 1
             elif task.status in (Task.Status.DISPONIVEL, Task.Status.EM_FILA):
                 status_counts["waiting"] += 1
 
@@ -1142,7 +1088,9 @@ class ActivityDetailView(OrganizationRequiredMixin, DetailView):
         is_open = activity.status not in (Activity.Status.CONCLUIDA, Activity.Status.CANCELADA)
         can_edit = can(user, catalog.ATIVIDADE_EDITAR, activity)
         can_change_owner = can(user, catalog.ATIVIDADE_ALTERAR_DONO, activity)
-        can_reopen = can(user, catalog.ATIVIDADE_REABRIR, activity)
+        # Só atividade concluída reabre; cancelada não (o serviço recusa), então
+        # nem o botão nem o item de menu aparecem para ela.
+        can_reopen = activity.status == Activity.Status.CONCLUIDA and can(user, catalog.ATIVIDADE_REABRIR, activity)
         can_mark_pending = activity.status in (
             Activity.Status.ABERTA,
             Activity.Status.EM_ANDAMENTO,
@@ -1151,8 +1099,16 @@ class ActivityDetailView(OrganizationRequiredMixin, DetailView):
             user, catalog.ATIVIDADE_CANCELAR, activity
         )
 
+        # Painel do processo aplicado (Regras 12 §28): reaproveita as tarefas já
+        # carregadas acima em vez de consultá-las de novo.
+        process_panel = process_state.process_panel(activity, tasks=tasks)
+        unmet_required_criteria = process_panel["unmet_required_criteria"] if process_panel else []
+
         context.update(
             {
+                "process_panel": process_panel,
+                "can_apply_process": ProcessApplicationService.can_offer(user, activity),
+                "can_update_process": bool(process_panel) and ActivityProcessService.can_update(user, activity),
                 "tasks": tasks,
                 "tasks_done": done,
                 "tasks_total": len(tasks),
@@ -1164,7 +1120,10 @@ class ActivityDetailView(OrganizationRequiredMixin, DetailView):
                 "overdue_days": overdue_days,
                 "has_blocked_task": status_counts["blocked"] > 0,
                 "is_negotiating_deadline": any(t.has_pending_proposal or t.has_open_conflict for t in tasks),
-                "is_ready_to_complete": len(tasks) > 0 and not open_tasks,
+                "is_ready_to_complete": len(tasks) > 0 and not open_tasks and not unmet_required_criteria,
+                # Tarefas terminadas, mas ainda faltam critérios obrigatórios: a
+                # atividade não está pronta para "Sucesso" (Regras 12 §14, §31).
+                "is_blocked_by_criteria": len(tasks) > 0 and not open_tasks and bool(unmet_required_criteria),
                 "conversation": activity.messages.select_related("author").order_by("-created_at")[:100],
                 "attachments": activity.attachments.select_related("uploaded_by").order_by("-uploaded_at"),
                 "history_entries": activity.audit_entries.select_related("user", "task").order_by("-timestamp")[
@@ -1214,47 +1173,11 @@ class ActivityDetailView(OrganizationRequiredMixin, DetailView):
         return context
 
 
-class ActivityDrawerView(ActivityDetailView):
-    """Mesmo contexto de `ActivityDetailView`, num fragmento estreito o
-    suficiente para o painel lateral — sem navegar para fora da lista.
-    Reaproveita o contexto por herança em vez de duplicar as queries de
-    tarefas/prazo/autorização já montadas ali."""
+class ActivityDrawerView(OrganizationRequiredMixin, View):
+    """Compatibility route: activities always open their complete workspace."""
 
-    template_name = "activities/_activity_drawer.html"
-
-
-class ActivityEditView(OrganizationRequiredMixin, FormView):
-    template_name = "activities/activity_form.html"
-    form_class = ActivityEditForm
-
-    def get_activity(self):
-        return get_object_or_404(Activity, pk=self.kwargs["pk"], organization=self.organization)
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs["organization"] = self.organization
-        kwargs["instance"] = self.get_activity()
-        kwargs["can_create_person"] = can(self.request.user, catalog.USUARIO_CRIAR)
-        kwargs["can_create_client"] = can(self.request.user, catalog.CLIENTE_GERIR)
-        kwargs["can_create_sector"] = can(self.request.user, catalog.SETOR_EDITAR)
-        kwargs["can_create_company"] = can(self.request.user, catalog.EMPRESA_GERIR)
-        kwargs["can_create_site"] = can(self.request.user, catalog.OBRA_GERIR)
-        kwargs["can_create_cost_center"] = can(self.request.user, catalog.CENTRO_CUSTO_GERIR)
-        return kwargs
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["activity"] = self.get_activity()
-        return context
-
-    def form_valid(self, form):
-        activity = self.get_activity()
-        try:
-            ActivityService.update_activity(activity, self.request.user, **form.cleaned_data)
-        except ActivityError as exc:
-            form.add_error(None, str(exc))
-            return self.form_invalid(form)
-        messages.success(self.request, "Atividade atualizada.")
+    def get(self, request, pk):
+        activity = get_object_or_404(Activity, pk=pk, organization=self.organization)
         return redirect("activity-detail", pk=activity.pk)
 
 
@@ -1271,6 +1194,10 @@ class ActivityCompleteView(ServiceActionView):
 class ActivityCancelView(OrganizationRequiredMixin, FormView):
     template_name = "activities/activity_cancel.html"
     form_class = CancelForm
+
+    def get(self, request, pk):
+        get_object_or_404(Activity, pk=pk, organization=self.organization)
+        return redirect(reverse("activity-finalize", args=[pk]) + "?outcome=CANCELADO")
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1290,7 +1217,22 @@ class ActivityCancelView(OrganizationRequiredMixin, FormView):
         return redirect("activity-detail", pk=activity.pk)
 
 
-class ActivityReopenView(OrganizationRequiredMixin, FormView):
+class ActivityActionResponseMixin:
+    """Same action form works as a page or as a dialog over its caller."""
+
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        if _is_ajax(request) and response.status_code == 302:
+            return JsonResponse({"redirect_url": response.url})
+        return response
+
+    def form_invalid(self, form):
+        if _is_ajax(self.request):
+            return JsonResponse({"errors": form.errors}, status=400)
+        return super().form_invalid(form)
+
+
+class ActivityReopenView(ActivityActionResponseMixin, OrganizationRequiredMixin, FormView):
     template_name = "activities/activity_reopen.html"
     form_class = CancelForm
 
@@ -1312,7 +1254,7 @@ class ActivityReopenView(OrganizationRequiredMixin, FormView):
         return redirect("activity-detail", pk=activity.pk)
 
 
-class ActivityChangeOwnerView(OrganizationRequiredMixin, FormView):
+class ActivityChangeOwnerView(ActivityActionResponseMixin, OrganizationRequiredMixin, FormView):
     template_name = "activities/activity_change_owner.html"
     form_class = ChangeOwnerForm
 
@@ -1340,7 +1282,7 @@ class ActivityChangeOwnerView(OrganizationRequiredMixin, FormView):
         return redirect("activity-detail", pk=activity.pk)
 
 
-class ActivityChangeDeadlineView(OrganizationRequiredMixin, FormView):
+class ActivityChangeDeadlineView(ActivityActionResponseMixin, OrganizationRequiredMixin, FormView):
     template_name = "activities/activity_change_deadline.html"
     form_class = ActivityDeadlineChangeForm
 
@@ -1390,7 +1332,11 @@ class ActivityFinalizeView(OrganizationRequiredMixin, FormView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["activity"] = self.get_activity()
+        activity = self.get_activity()
+        context["activity"] = activity
+        # Critérios obrigatórios em aberto: o popup avisa antes de a pessoa
+        # tentar "Sucesso" (Regras 12 §32 — sem mensagem genérica).
+        context["unmet_required_criteria"] = process_state.unmet_required_criterion_names(activity)
         return context
 
     def form_valid(self, form):
@@ -1411,6 +1357,113 @@ class ActivityFinalizeView(OrganizationRequiredMixin, FormView):
         if _is_ajax(self.request):
             return JsonResponse({"errors": form.errors}, status=400)
         return super().form_invalid(form)
+
+
+class ActivityProcessApplyView(OrganizationRequiredMixin, FormView):
+    """Popup "Aplicar processo" da ficha da atividade (Regras 12 §20).
+
+    View fina: mostra os processos elegíveis, valida o formato do formulário
+    e entrega tudo a `ProcessApplicationService.apply`, que autoriza, valida
+    as regras e grava numa única transação.
+    """
+
+    template_name = "activities/activity_process_apply.html"
+    form_class = ProcessApplyForm
+
+    def get_activity(self):
+        return get_object_or_404(
+            Activity.objects.select_related("organization", "company", "owner"),
+            pk=self.kwargs["pk"],
+            organization=self.organization,
+        )
+
+    def get(self, request, *args, **kwargs):
+        activity = self.get_activity()
+        if activity.process_version_id is not None:
+            messages.info(request, "Esta atividade já tem um processo aplicado.")
+            return redirect("activity-detail", pk=activity.pk)
+        if not AuthorizationService.can(request.user, catalog.PROCESSO_APLICAR, activity):
+            raise PermissionDenied
+        return super().get(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        activity = self.get_activity()
+        kwargs["activity"] = activity
+        kwargs["versions"] = ProcessApplicationService.eligible_versions(activity)
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        activity = self.get_activity()
+        form = context["form"]
+        context.update(
+            {
+                "activity": activity,
+                "panels": form.panels(),
+                "no_company": activity.company_id is None,
+            }
+        )
+        return context
+
+    def form_valid(self, form):
+        activity = self.get_activity()
+        data = form.cleaned_data
+        try:
+            ProcessApplicationService.apply(
+                self.request.user,
+                activity,
+                data["process_version"],
+                responsible_by_step=data["responsible_by_step"],
+                input_values=data["input_values"],
+            )
+        except ActivityError as exc:
+            form.add_error(None, str(exc))
+            return self.form_invalid(form)
+        redirect_url = reverse("activity-detail", args=[activity.pk]) + "#processo"
+        if _is_ajax(self.request):
+            return JsonResponse({"redirect_url": redirect_url})
+        messages.success(self.request, "Processo aplicado. As tarefas da atividade foram criadas.")
+        return redirect(redirect_url)
+
+    def form_invalid(self, form):
+        if _is_ajax(self.request):
+            return JsonResponse({"errors": form.errors}, status=400)
+        return super().form_invalid(form)
+
+
+class ActivityInputUpdateView(ServiceActionView):
+    """Registra, corrige ou reabre um input do processo aplicado."""
+
+    def perform(self, request, pk, input_pk):
+        activity = get_object_or_404(Activity, pk=pk, organization=self.organization)
+        input_value = get_object_or_404(ActivityInputValue, pk=input_pk, activity=activity)
+        if request.POST.get("clear"):
+            ActivityProcessService.update_input(request.user, input_value, value="", is_received=False)
+            messages.success(request, "Input marcado como não recebido.")
+            return
+        ActivityProcessService.update_input(
+            request.user,
+            input_value,
+            value=request.POST.get("value", ""),
+            is_received=bool(request.POST.get("is_received")),
+        )
+        messages.success(request, "Input atualizado.")
+
+    def redirect_to(self):
+        return reverse("activity-detail", args=[self.kwargs["pk"]]) + "#processo"
+
+
+class ActivityCriterionUpdateView(ServiceActionView):
+    """Marca ou desmarca um critério de aceite da atividade."""
+
+    def perform(self, request, pk, check_pk):
+        activity = get_object_or_404(Activity, pk=pk, organization=self.organization)
+        check = get_object_or_404(ActivityCriterionCheck, pk=check_pk, activity=activity)
+        ActivityProcessService.set_criterion(request.user, check, is_met=bool(request.POST.get("is_met")))
+
+    def redirect_to(self):
+        return reverse("activity-detail", args=[self.kwargs["pk"]]) + "#processo"
 
 
 class ActivityMarkPendingView(OrganizationRequiredMixin, FormView):
@@ -1594,6 +1647,10 @@ class TaskListView(OrganizationRequiredMixin, ListView):
                 task.effective_deadline
                 and task.effective_deadline < now
                 and task.status not in (Task.Status.CONCLUIDA, Task.Status.CANCELADA)
+            )
+            # Só as concluídas oferecem "Reabrir" (a permissão é por tarefa/setor).
+            task.can_reopen = task.status == Task.Status.CONCLUIDA and can(
+                self.request.user, catalog.TAREFA_REABRIR, task
             )
 
         if context["view_mode"] == "atividade":
@@ -1810,6 +1867,7 @@ class TaskDetailView(OrganizationRequiredMixin, DetailView):
                 "can_block": can(user, catalog.TAREFA_BLOQUEAR, task),
                 "can_move": can(user, catalog.TAREFA_MOVER_SETOR, task),
                 "can_cancel_task": can(user, catalog.TAREFA_CANCELAR, task),
+                "can_reopen_task": task.status == Task.Status.CONCLUIDA and can(user, catalog.TAREFA_REABRIR, task),
                 "can_edit_task": can(user, catalog.TAREFA_EDITAR, task),
                 "can_log_time": can(user, catalog.TEMPO_LANCAR_MANUAL, task),
                 "can_propose": can(user, catalog.PRAZO_PROPOR, task),
@@ -1827,6 +1885,12 @@ class TaskDetailView(OrganizationRequiredMixin, DetailView):
                 "dependency_blocking": (
                     task.depends_on is not None
                     and task.depends_on.status != Task.Status.CONCLUIDA
+                ),
+                # Tarefa de processo com input obrigatório ainda não recebido:
+                # a tela explica o que falta em vez de oferecer um "Iniciar"
+                # que o serviço recusaria (Regras 12 §10).
+                "missing_process_inputs": (
+                    process_state.missing_required_input_names(task.activity) if task.process_step_id else []
                 ),
             }
         )
@@ -2048,6 +2112,17 @@ class ActivityAttachmentUploadView(ServiceActionView):
 
 
 class ActivityAttachmentDeleteView(ServiceActionView):
+    def post(self, request, pk, attachment_pk):
+        if not _is_ajax(request):
+            return super().post(request, pk=pk, attachment_pk=attachment_pk)
+        activity = get_object_or_404(Activity, pk=pk, organization=self.organization)
+        attachment = get_object_or_404(ActivityAttachment, pk=attachment_pk, activity=activity)
+        try:
+            ActivityAttachmentService.remove(attachment, removed_by=request.user)
+        except ActivityError as exc:
+            return JsonResponse({"error": str(exc)}, status=400)
+        return JsonResponse({"removed": attachment_pk})
+
     def perform(self, request, pk, attachment_pk):
         activity = get_object_or_404(Activity, pk=pk, organization=self.organization)
         attachment = get_object_or_404(ActivityAttachment, pk=attachment_pk, activity=activity)
@@ -2251,6 +2326,20 @@ class TaskCancelView(TaskFormActionView):
         messages.success(self.request, "Tarefa cancelada.")
 
 
+class TaskReopenView(ActivityActionResponseMixin, TaskFormActionView):
+    """Popup "Reabrir tarefa" (motivo obrigatório). Mesmo formulário serve de
+    janela sobre a ficha/painel/lista (JSON) ou de página, sem JavaScript."""
+
+    form_class = CancelForm
+    required_action = catalog.TAREFA_REABRIR
+    title = "Reabrir tarefa"
+    submit_label = "Reabrir tarefa"
+
+    def run(self, task, data):
+        TaskService.reopen(task, self.request.user, data["reason"])
+        messages.success(self.request, "Tarefa reaberta.")
+
+
 class TaskExecutorAddView(ServiceActionView):
     def perform(self, request, pk):
         task = get_object_or_404(Task, pk=pk, activity__organization=self.organization)
@@ -2431,6 +2520,9 @@ class DeadlineDecisionView(OrganizationRequiredMixin, View):
                 event_type=Notification.EventType.DEADLINE_PROPOSED,
                 task_id=proposal.task_id, created_at__gte=proposal.proposed_at,
             )
+            related_proposal = NotificationService.deadline_proposal(notification)
+            if related_proposal is None or related_proposal.pk != proposal.pk:
+                raise Http404
         note = request.POST.get("note", "")
         try:
             if self.decision == "accept":

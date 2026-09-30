@@ -57,6 +57,7 @@ _NAV_BY_URL_NAME = {
     "task-kanban": "tasks",
     "task-calendar": "tasks",
     "task-detail": "tasks",
+    "task-reopen": "tasks",
     "task-quick-create": "tasks",
     "task-quick-create-standalone": "tasks",
     "task-edit": "tasks",

@@ -61,6 +61,7 @@ EVENT_CATEGORY = {
     Notification.EventType.ACTIVITY_APPROVAL_NEEDED: DELEGACAO,
     Notification.EventType.ACTIVITY_APPROVED: DELEGACAO,
     Notification.EventType.OWNER_CHANGED: DELEGACAO,
+    Notification.EventType.PROCESS_APPLIED: INFORMATIVO,
     Notification.EventType.MESSAGE_POSTED: INFORMATIVO,
     Notification.EventType.MENTIONED: MENCAO,
 }
@@ -119,9 +120,8 @@ def _still_needs_action(notification):
         return activity.status == "PENDENTE" and activity.pendencies.filter(status="ABERTA").exists()
 
     if event == Notification.EventType.DEADLINE_PROPOSED:
-        if task is None:
-            return False
-        return task.deadline_proposals.filter(status="PENDENTE").exists()
+        proposal = NotificationService.deadline_proposal(notification)
+        return proposal is not None and proposal.status == "PENDENTE"
 
     if event == Notification.EventType.DEADLINE_CONFLICT:
         if task is None:
@@ -153,11 +153,9 @@ def _still_needs_action(notification):
     return event in ACTION_REQUIRED_EVENTS
 
 
-def _pending_proposal_id(task):
-    if task is None:
-        return None
-    proposal = task.deadline_proposals.filter(status="PENDENTE").order_by("-proposed_at").first()
-    return proposal.pk if proposal else None
+def _pending_proposal_id(notification):
+    proposal = NotificationService.deadline_proposal(notification)
+    return proposal.pk if proposal and proposal.status == "PENDENTE" else None
 
 
 def _open_conflict_id(task):
@@ -214,7 +212,7 @@ def _decorate(notification):
     notification.pending_proposal_id = None
     notification.open_conflict_id = None
     if notification.event_type == Notification.EventType.DEADLINE_PROPOSED and notification.needs_action:
-        notification.pending_proposal_id = _pending_proposal_id(task)
+        notification.pending_proposal_id = _pending_proposal_id(notification)
     if notification.event_type == Notification.EventType.DEADLINE_CONFLICT and notification.needs_action:
         notification.open_conflict_id = _open_conflict_id(task)
 
@@ -387,6 +385,12 @@ class NotificationListView(LoginRequiredMixin, ListView):
     template_name = "notifications/notification_list.html"
     context_object_name = "notifications"
     paginate_by = 30
+
+    def paginate_queryset(self, queryset, page_size):
+        # Reading the last unread notice on a page may remove that page.
+        paginator = self.get_paginator(queryset, page_size, allow_empty_first_page=True)
+        page = paginator.get_page(self.request.GET.get(self.page_kwarg, 1))
+        return paginator, page, page.object_list, page.has_other_pages()
 
     def get_base_queryset(self):
         return Notification.objects.filter(recipient=self.request.user).select_related(

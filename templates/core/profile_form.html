@@ -6,10 +6,10 @@
     <div class="modal">
         <div class="modal__head">
             <div>
-                <h2>Perfil de acesso</h2>
-                <div class="sub">Um perfil responde: o que esta pessoa pode fazer?</div>
+                <h2>{% if instance %}Editar perfil de acesso{% else %}Criar perfil de acesso{% endif %}</h2>
+                <div class="sub">Um perfil reúne as permissões de uma função, como Colaborador ou Gestor.</div>
             </div>
-            <a href="{% url 'permissions' %}" class="modal__close" title="Fechar">&times;</a>
+            <a href="{% url 'permissions' %}" class="modal__close" title="Fechar" aria-label="Fechar e voltar aos perfis">&times;</a>
         </div>
 
         <form method="post">
@@ -17,8 +17,8 @@
             <div class="modal__body">
                 {% include "activities/_form_fields.html" %}
                 <p class="muted small" style="margin:0">
-                    <strong>Onde</strong> ela pode fazer é definido ao atribuir o perfil a alguém,
-                    na tela de acessos do usuário.
+                    Depois de salvar, marque as ações permitidas na tela de permissões.
+                    Para usar o perfil, abra Usuários → Acessos e escolha a pessoa e onde ele vale.
                 </p>
             </div>
             <div class="modal__foot">

@@ -13,6 +13,11 @@ class ProfileForm(forms.ModelForm):
     class Meta:
         model = Profile
         fields = ["phone", "main_sector"]
+        labels = {"phone": "Seu telefone", "main_sector": "Seu setor principal"}
+        help_texts = {
+            "phone": "Inclua o DDD. Ex.: (11) 99999-9999.",
+            "main_sector": "Selecione o setor em que você trabalha principalmente.",
+        }
 
 
 class EmailAuthenticationForm(AuthenticationForm):
@@ -26,7 +31,7 @@ class SignUpForm(forms.Form):
     """Cria a conta (Telas/09_02_CRIAR_CONTA.md) — só a identidade da pessoa,
     sem organização/setor/perfil, que pertencem a outro fluxo (§21)."""
 
-    display_name = forms.CharField(label="Nome de exibição", max_length=150)
+    display_name = forms.CharField(label="Seu nome", max_length=150)
     email = forms.EmailField(label="E-mail")
     password1 = forms.CharField(label="Senha", widget=forms.PasswordInput, strip=False)
     password2 = forms.CharField(label="Confirmar senha", widget=forms.PasswordInput, strip=False)

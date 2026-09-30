@@ -12,6 +12,16 @@ logger = logging.getLogger(__name__)
 
 class NotificationService:
     @staticmethod
+    def deadline_proposal(notification):
+        if notification.event_type != Notification.EventType.DEADLINE_PROPOSED or not notification.task_id:
+            return None
+        # Legacy notifications have no proposal FK. Resolve the proposal that
+        # existed when this notice was issued, never a newer proposal.
+        return notification.task.deadline_proposals.filter(
+            proposed_at__lte=notification.created_at
+        ).order_by("-proposed_at", "-pk").first()
+
+    @staticmethod
     def notify(users, event_type, title, message, activity=None, task=None, url="", actor=None):
         """Cria uma notificação in-app para cada usuário em `users`.
 

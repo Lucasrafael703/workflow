@@ -9,17 +9,18 @@
                 <h2>Resolver conflito de prazo</h2>
                 <div class="sub">{{ conflict.task.title }}</div>
             </div>
-            <a href="{% url 'task-detail' conflict.task.pk %}" class="modal__close" title="Fechar">&times;</a>
+            <a href="{% url 'task-detail' conflict.task.pk %}" class="modal__close" title="Fechar sem salvar" aria-label="Fechar sem salvar">&times;</a>
         </div>
 
         <form method="post">
             {% csrf_token %}
             <div class="modal__body">
+                <p class="muted">A proposta de prazo foi recusada. Registre a decisão combinada com as pessoas envolvidas para encerrar este conflito.</p>
                 <div class="attention attention--danger">
                     <div class="attention__title">
                         Prazo proposto: {{ conflict.proposal.proposed_deadline|date:"d/m/Y H:i" }}
                     </div>
-                    <div class="muted small">Recusado pelo dono da atividade.</div>
+                    <div class="muted small">Recusado pelo responsável pela atividade.</div>
                     {% if conflict.proposal.decision_note %}
                     <div class="muted small">Motivo da recusa: {{ conflict.proposal.decision_note }}</div>
                     {% endif %}
@@ -29,8 +30,8 @@
                 {% include "activities/_form_fields.html" %}
             </div>
             <div class="modal__foot">
-                <a href="{% url 'task-detail' conflict.task.pk %}" class="btn">Voltar</a>
-                <button type="submit" class="btn btn--primary">Registrar decisão</button>
+                <a href="{% url 'task-detail' conflict.task.pk %}" class="btn">Cancelar</a>
+                <button type="submit" class="btn btn--primary">Salvar decisão e encerrar conflito</button>
             </div>
         </form>
     </div>

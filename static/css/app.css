@@ -4321,3 +4321,134 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
         min-width: 280px;
     }
 }
+
+/* ==========================================================================
+   Processo aplicado à atividade (Regras 12 §20, §28-31)
+   Reaproveita as variáveis, cards, tags e modais da LPS; só o que é novo.
+   ========================================================================== */
+
+.proc-row__resp { flex: 0 0 auto; }
+.proc-row__resp select { max-width: 210px; font-size: 12px; padding: 4px 6px; }
+
+.task-table__flag--neutral { color: var(--muted); font-weight: 600; }
+
+/* CTA quando a atividade ainda não tem processo */
+.proc-cta { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.proc-cta__title { margin: 0; font-size: 15px; }
+
+/* Painel "Processo" da ficha */
+.proc-panel .card__body { display: flex; flex-direction: column; gap: 14px; }
+.proc-panel__name { font-size: 15px; font-weight: 700; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.proc-panel__output {
+    background: var(--primary-soft); border: 1px solid #cfe1f8; border-radius: var(--radius-sm); padding: 10px 14px;
+}
+.proc-panel__output .k { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--primary); }
+.proc-panel__output .v { font-weight: 600; margin-top: 2px; }
+
+.proc-block { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
+.proc-block > summary {
+    list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; padding: 10px 14px;
+}
+.proc-block > summary::-webkit-details-marker { display: none; }
+.proc-block > summary h3 { margin: 0; font-size: 13.5px; }
+.proc-block[open] > summary { border-bottom: 1px solid var(--border); }
+.proc-block__count { font-size: 12px; font-weight: 700; color: var(--text-2); background: var(--neutral-soft); border-radius: 999px; padding: 2px 10px; }
+.proc-block__count.is-alert { color: var(--danger); background: var(--danger-soft); }
+.proc-block__hint { margin: 0; padding: 10px 14px; font-size: 12.5px; color: var(--warning); background: var(--warning-soft); }
+
+.proc-list { list-style: none; margin: 0; padding: 0; }
+.proc-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.proc-item:last-child { border-bottom: none; }
+.proc-item__mark {
+    flex: 0 0 20px; height: 20px; margin-top: 1px; border: 2px solid var(--border-strong); border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center; color: #fff;
+}
+.proc-item__mark svg { width: 12px; height: 12px; }
+.proc-item.is-done .proc-item__mark { background: var(--success); border-color: var(--success); }
+.proc-item__main { flex: 1 1 auto; min-width: 0; }
+.proc-item__title { font-weight: 600; font-size: 13.5px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.proc-item__value { margin-top: 3px; font-size: 13px; overflow-wrap: anywhere; }
+
+.proc-edit { margin-top: 6px; }
+.proc-edit > summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--primary); list-style: none; }
+.proc-edit > summary::-webkit-details-marker { display: none; }
+.proc-edit__form { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; max-width: 420px; }
+.proc-edit__form input[type="text"], .proc-edit__form input[type="date"], .proc-edit__form input[type="url"] {
+    width: 100%; padding: 7px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font: inherit;
+}
+.proc-edit__check { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
+.proc-edit__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.proc-steps { list-style: none; margin: 0; padding: 0; }
+.proc-step { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.proc-step:last-child { border-bottom: none; }
+.proc-step__num {
+    flex: 0 0 26px; height: 26px; border-radius: 50%; background: var(--neutral-soft); color: var(--text-2);
+    font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center;
+}
+.proc-step__num svg { width: 14px; height: 14px; }
+.proc-step--concluida .proc-step__num { background: var(--success); color: #fff; }
+.proc-step--em_execucao .proc-step__num { background: var(--primary); color: #fff; }
+.proc-step--bloqueada .proc-step__num { background: var(--danger); color: #fff; }
+.proc-step__main { flex: 1 1 auto; min-width: 0; }
+.proc-step__title { font-weight: 600; font-size: 13.5px; color: var(--text); text-decoration: none; }
+.proc-step__title:hover { color: var(--primary); text-decoration: underline; }
+.proc-step__state { flex: 0 0 auto; font-size: 12px; font-weight: 700; color: var(--text-2); white-space: nowrap; }
+.proc-step--concluida .proc-step__state { color: var(--success); }
+.proc-step--em_execucao .proc-step__state { color: var(--primary); }
+.proc-step--bloqueada .proc-step__state { color: var(--danger); }
+.proc-step--aguardando .proc-step__state { color: var(--muted); }
+
+.proc-criterion { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; width: 100%; }
+.proc-criterion__label { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.proc-criterion__label input { width: 16px; height: 16px; }
+.proc-item.is-done .proc-criterion__label span { color: var(--text-2); }
+
+/* Popup "Aplicar processo" */
+.proc-apply .modal__body { min-height: 300px; }
+.apply-stepper { list-style: none; display: flex; gap: 6px; margin: 0 0 16px; padding: 0; }
+.apply-stepper__item {
+    flex: 1 1 0; text-align: center; font-size: 12px; font-weight: 600; color: var(--muted);
+    padding: 8px 4px; border-bottom: 3px solid var(--border);
+}
+.apply-stepper__item span {
+    display: inline-flex; width: 20px; height: 20px; border-radius: 50%; background: var(--neutral-soft);
+    align-items: center; justify-content: center; margin-right: 4px; font-size: 11px;
+}
+.apply-stepper__item.is-active { color: var(--primary); border-bottom-color: var(--primary); }
+.apply-stepper__item.is-active span { background: var(--primary); color: #fff; }
+.apply-stepper__item.is-done { color: var(--success); border-bottom-color: var(--success); }
+.apply-stepper__item.is-done span { background: var(--success); color: #fff; }
+
+.btn[hidden], .apply-pane[hidden], .apply-version[hidden] { display: none !important; }
+.apply-choices { display: flex; flex-direction: column; gap: 10px; }
+.apply-choice {
+    display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; cursor: pointer;
+    border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface);
+}
+.apply-choice:hover { border-color: var(--primary); }
+.apply-choice:has(input:checked) { border-color: var(--primary); background: var(--primary-soft); }
+.apply-choice input { margin-top: 3px; }
+.apply-choice__body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.apply-choice__title { font-weight: 700; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.apply-choice__output { font-size: 13px; }
+
+.apply-step-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.apply-step-row__what { display: flex; align-items: center; gap: 10px; min-width: 200px; flex: 1 1 220px; }
+.apply-step-row__num {
+    flex: 0 0 26px; height: 26px; border-radius: 50%; background: var(--neutral-soft); font-size: 12px; font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center;
+}
+.apply-step-row__name { font-weight: 600; }
+.apply-step-row__who { flex: 1 1 220px; display: flex; flex-direction: column; gap: 3px; }
+.apply-step-row__who select { width: 100%; }
+.apply-input__check { display: inline-flex; gap: 6px; align-items: center; margin: 4px 0; font-weight: 500; }
+.apply-summary__steps { list-style: none; margin: 4px 0 10px; padding: 0; }
+.apply-summary__steps li { padding: 2px 0; }
+.proc-apply .summary-panel { position: static; }
+
+@media (max-width: 640px) {
+    .apply-stepper__item { font-size: 11px; }
+    .proc-step { flex-wrap: wrap; }
+}

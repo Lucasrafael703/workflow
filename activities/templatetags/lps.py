@@ -31,6 +31,10 @@ ACTION_PHRASES = {
     AuditLog.Action.CANCEL: "cancelou",
     AuditLog.Action.PENDENCY_OPENED: "marcou como pendente: {new}",
     AuditLog.Action.PENDENCY_APPROVED: "aprovou a pendência e devolveu a atividade",
+    AuditLog.Action.PROCESS_APPLIED: "aplicou o processo {new}",
+    AuditLog.Action.INPUT_UPDATED: "atualizou o input “{field}”: {new}",
+    AuditLog.Action.CRITERION_UPDATED: "marcou o critério “{field}” como {new}",
+    AuditLog.Action.TASK_RELEASED: "liberou a tarefa para a fila de {new}",
 }
 
 FIELD_LABELS = {
@@ -42,6 +46,7 @@ FIELD_LABELS = {
     "cost_center": "o centro de custo",
     "order": "a ordem",
     "depends_on": "a dependência",
+    "status": "a situação",
 }
 
 

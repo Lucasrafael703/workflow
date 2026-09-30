@@ -26,6 +26,7 @@ class Notification(models.Model):
         ACTIVITY_APPROVAL_NEEDED = "ACTIVITY_APPROVAL_NEEDED", "Pendência aguardando aprovação"
         ACTIVITY_APPROVED = "ACTIVITY_APPROVED", "Pendência aprovada"
         OWNER_CHANGED = "OWNER_CHANGED", "Dono alterado"
+        PROCESS_APPLIED = "PROCESS_APPLIED", "Processo aplicado"
         MESSAGE_POSTED = "MESSAGE_POSTED", "Nova mensagem"
         MENTIONED = "MENTIONED", "Você foi mencionado"
 

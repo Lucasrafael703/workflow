@@ -1,10 +1,10 @@
 <div class="activities-head">
     <div>
         <h1 id="activities-title">Atividades</h1>
-        <p>Os resultados que precisam acontecer.</p>
+        <p>Acompanhe cada entrega e abra uma atividade para ver suas tarefas, prazos e conversas.</p>
     </div>
-    <a href="{% url 'activity-create' %}" class="btn btn--primary activities-create">
-        {% include "_icon.html" with name="plus" %} Nova atividade
+    <a href="{% url 'activity-create' %}?next={{ request.get_full_path|urlencode }}" class="btn btn--primary activities-create">
+        {% include "_icon.html" with name="plus" %} Criar atividade
     </a>
 </div>
 

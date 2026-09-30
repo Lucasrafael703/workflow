@@ -7,13 +7,14 @@
     {% include "activities/_task_page_head.html" %}
 
     {% include "activities/_task_view_filters.html" %}
+    <p class="muted small">Clique no nome de uma tarefa para trabalhar nela. Para organizar o quadro, arraste o cartão para outra coluna.</p>
 
     <div class="tasks-kanban-scroll">
         <div class="kanban-board tasks-kanban-board">
             <div class="kanban-column" data-stage-id="">
                 <div class="kanban-column__head" style="--stage-color: #94A3B8;">
                     <span class="kanban-column__grip">{% include "_icon.html" with name="grip" %}</span>
-                    <span class="kanban-column__title">Sem estágio</span>
+                    <span class="kanban-column__title">Sem coluna definida</span>
                     <span class="kanban-column__count">{{ unassigned_column.tasks|length }}</span>
                 </div>
                 <div class="kanban-column__body" data-drop-zone>
@@ -58,7 +59,7 @@
                 <div class="empty-state">
                     <div class="empty-state__icon">{% include "_icon.html" with name="folder" %}</div>
                     <h3>Nenhum estágio cadastrado</h3>
-                    <p>Configure as colunas do Kanban em Cadastros > Estágios de tarefa.</p>
+                    <p>Crie colunas para organizar as tarefas, por exemplo: A fazer, Em revisão e Pronto.</p>
                     <a href="{% url 'cadastros' %}?tab=estagios-de-tarefa" class="btn btn--primary">Configurar estágios</a>
                 </div>
             </div>
@@ -66,8 +67,8 @@
 
             <a href="{% url 'taskstage-create' %}" class="kanban-new-stage js-taskstage-modal">
                 <span>{% include "_icon.html" with name="plus" %}</span>
-                <strong>Novo estágio</strong>
-                <small>Adicione um estágio para organizar melhor suas tarefas.</small>
+                <strong>Adicionar coluna</strong>
+                <small>Crie uma etapa para organizar suas tarefas.</small>
             </a>
         </div>
     </div>

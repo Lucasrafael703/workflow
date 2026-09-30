@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Alterar dono — LPS{% endblock %}
+{% block title %}Transferir responsável — LPS{% endblock %}
 
 {% block content %}
 <div class="modal-backdrop">
     <div class="modal">
         <div class="modal__head">
             <div>
-                <h2>Alterar dono da atividade</h2>
+                <h2>Transferir responsável da atividade</h2>
                 <div class="sub">{{ activity.title }}</div>
             </div>
             <a href="{% url 'activity-detail' activity.pk %}" class="modal__close" title="Fechar">&times;</a>
@@ -16,14 +16,14 @@
             {% csrf_token %}
             <div class="modal__body">
                 <p class="muted">
-                    Dono atual: <strong>{{ activity.owner.get_username }}</strong>.
+                    Responsável atual: <strong>{{ activity.owner.get_username }}</strong>.
                     A atividade continua com um único dono; a troca fica registrada no histórico.
                 </p>
                 {% include "activities/_form_fields.html" %}
             </div>
             <div class="modal__foot">
                 <a href="{% url 'activity-detail' activity.pk %}" class="btn">Voltar</a>
-                <button type="submit" class="btn btn--primary">Transferir atividade</button>
+                <button type="submit" class="btn btn--primary">Salvar responsável</button>
             </div>
         </form>
     </div>

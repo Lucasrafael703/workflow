@@ -7,9 +7,9 @@
         <div class="modal__head">
             <div>
                 <h2>{% if instance %}Editar {{ title|lower }}{% else %}Novo: {{ title|lower }}{% endif %}</h2>
-                <div class="sub">Cadastros › {{ title }}</div>
+                <div class="sub">Preencha os dados abaixo. Os campos opcionais podem ficar para depois.</div>
             </div>
-            <a href="{{ return_url|default:'' }}{% if not return_url %}{% url 'cadastros' %}?tab={{ tab }}{% endif %}" class="modal__close" title="Fechar">&times;</a>
+            <a href="{{ return_url|default:'' }}{% if not return_url %}{% url 'cadastros' %}?tab={{ tab }}{% endif %}" class="modal__close" title="Fechar" aria-label="Fechar cadastro e voltar">&times;</a>
         </div>
 
         <form method="post">

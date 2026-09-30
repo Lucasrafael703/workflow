@@ -172,6 +172,7 @@ class UserFormAjaxTests(TestCase):
 
     def _payload(self, **overrides):
         data = {
+            "organization": self.org.pk,
             "first_name": "Nova Pessoa",
             "email": "nova@example.com",
             "username": "novapessoa",

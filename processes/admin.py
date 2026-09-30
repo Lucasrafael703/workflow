@@ -32,6 +32,7 @@ class ProcessCriterionInline(admin.TabularInline):
 class ProcessStepInline(admin.TabularInline):
     model = ProcessStep
     extra = 0
+    raw_id_fields = ("default_responsavel",)
 
 
 @admin.register(ProcessVersion)

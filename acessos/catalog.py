@@ -36,6 +36,7 @@ TAREFA_RETOMAR = "tarefa.retomar"
 TAREFA_DEVOLVER = "tarefa.devolver"
 TAREFA_CONCLUIR = "tarefa.concluir"
 TAREFA_CANCELAR = "tarefa.cancelar"
+TAREFA_REABRIR = "tarefa.reabrir"
 TAREFA_BLOQUEAR = "tarefa.bloquear"
 TAREFA_MOVER_SETOR = "tarefa.mover_setor"
 TEMPO_LANCAR_MANUAL = "tempo.lancar_manual"
@@ -127,6 +128,7 @@ GROUPS = [
             (TAREFA_DEVOLVER, "Devolver tarefa", "Permite devolver a tarefa a um setor anterior, com motivo obrigatório.", False),
             (TAREFA_CONCLUIR, "Concluir tarefa", "Permite concluir a execução da tarefa.", False),
             (TAREFA_CANCELAR, "Cancelar tarefa", "Permite cancelar uma tarefa registrando o motivo.", True),
+            (TAREFA_REABRIR, "Reabrir tarefa", "Permite reabrir uma tarefa concluída: ela volta ao fim da fila do setor, com motivo obrigatório e registro no histórico.", True),
             (TAREFA_BLOQUEAR, "Bloquear e desbloquear tarefa", "Permite registrar e resolver impedimentos.", False),
             (TAREFA_MOVER_SETOR, "Enviar tarefa para outro setor", "Permite movimentar a tarefa no fluxo entre setores.", False),
             (TEMPO_LANCAR_MANUAL, "Lançar tempo manualmente", "Permite apropriar tempo trabalhado fora do cronômetro.", True),
@@ -186,7 +188,7 @@ GROUPS = [
             (PROCESSO_PUBLICAR, "Publicar versão de processo", "Permite tornar uma versão do processo disponível para uso — depois disso ela não é mais alterada.", True),
             (PROCESSO_CRIAR_VERSAO, "Criar nova versão de processo", "Permite abrir uma nova versão a partir da publicada, sem alterar atividades já em andamento.", False),
             (PROCESSO_INATIVAR, "Inativar processo", "Permite impedir novas aplicações do processo, preservando o histórico.", True),
-            (PROCESSO_APLICAR, "Aplicar processo em atividade", "Permite selecionar um processo publicado ao criar uma atividade.", False),
+            (PROCESSO_APLICAR, "Aplicar processo em atividade", "Permite aplicar a versão publicada de um processo a uma atividade: ela recebe as entradas, os critérios de aceite e as tarefas do fluxo, em todos os setores do processo.", False),
         ],
     ),
     (
@@ -261,6 +263,7 @@ SUGGESTED_PROFILES = {
         TAREFA_DEVOLVER,
         TAREFA_BLOQUEAR,
         TAREFA_MOVER_SETOR,
+        TAREFA_REABRIR,
         TEMPO_LANCAR_MANUAL,
         FILA_VISUALIZAR_POSICAO_PROPRIA,
         FILA_VISUALIZAR_COMPLETA,

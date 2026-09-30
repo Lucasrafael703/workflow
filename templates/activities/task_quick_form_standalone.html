@@ -9,47 +9,16 @@
                 <h2>Nova tarefa</h2>
                 <div class="sub">Toda tarefa pertence a uma atividade — escolha uma existente ou crie uma nova.</div>
             </div>
-            <button type="button" class="modal__close" title="Fechar">&times;</button>
+            <a href="{% url 'task-list' %}" class="modal__close" title="Fechar sem salvar" aria-label="Fechar sem salvar">&times;</a>
         </div>
 
         <form method="post">
             {% csrf_token %}
             <div class="modal__body">
-                {% if form.non_field_errors %}
-                <ul class="messages">
-                    {% for error in form.non_field_errors %}<li class="message message--error">{{ error }}</li>{% endfor %}
-                </ul>
-                {% endif %}
-
-                {% for field in form %}
-                    {% if field.name == "activity" or field.name == "title" or field.name == "sector" or field.name == "responsavel" or field.name == "participantes" or field.name == "requested_deadline" %}
-                    <div class="form-row">
-                        <label for="{{ field.id_for_label }}">
-                            {{ field.label }}{% if field.field.required %} <span class="req">*</span>{% endif %}
-                        </label>
-                        {{ field }}
-                        {% if field.errors %}<ul class="errorlist">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
-                    </div>
-                    {% elif field.is_hidden %}
-                        {{ field }}
-                    {% endif %}
-                {% endfor %}
-
-                <details class="disclosure disclosure--mini">
-                    <summary>Descrição e marcadores (opcional)</summary>
-                    <div class="disclosure__body">
-                        <div class="form-row">
-                            <label for="{{ form.tags.id_for_label }}">{{ form.tags.label }}</label>
-                            {{ form.tags }}
-                            {% if form.tags.errors %}<ul class="errorlist">{% for e in form.tags.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
-                        </div>
-                        {{ form.description }}
-                        {% if form.description.errors %}<ul class="errorlist">{% for e in form.description.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
-                    </div>
-                </details>
+                {% include "activities/_task_quick_fields.html" %}
             </div>
             <div class="modal__foot">
-                <a href="#" class="btn">Cancelar</a>
+                <a href="{% url 'task-list' %}" class="btn">Cancelar</a>
                 <button type="submit" class="btn btn--primary">Adicionar tarefa</button>
             </div>
         </form>
