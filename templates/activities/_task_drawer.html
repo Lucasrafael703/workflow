@@ -64,6 +64,9 @@ passou" etc.) continua só na ficha completa.{% endcomment %}
                 {% elif is_participant or is_responsavel %}
                 <p class="muted small">Ao iniciar, o sistema começa a contar seu tempo de trabalho.</p>
                 <button type="button" class="btn btn--primary btn--block js-task-ajax" data-url="{% url 'task-start-ajax' task.pk %}">Iniciar tarefa</button>
+                {% if can_retroactive %}
+                <a href="{% url 'task-retroactive' task.pk %}" data-activity-action class="btn btn--block" style="margin-top:8px">{% include "_icon.html" with name="clock" %} Já realizei este trabalho</a>
+                {% endif %}
                 {% elif can_assume %}
                 <p class="muted small">Esta tarefa está disponível. Assuma para começar a trabalhar nela.</p>
                 <a href="{% url 'task-assume' task.pk %}" class="btn btn--primary btn--block">Assumir esta tarefa</a>

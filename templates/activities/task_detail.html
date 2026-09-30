@@ -115,10 +115,20 @@
                         <div style="margin-top:10px"><a href="{% url 'activity-detail' activity.pk %}#processo" class="btn btn--sm">Ir para o processo da atividade</a></div>
                     </div>
                 {% elif is_participant or is_responsavel %}
-                    <p class="muted">Ao iniciar, o sistema começa a contar seu tempo de trabalho. Você pode pausar quando precisar.</p>
-                    <form method="post" action="{% url 'task-start' task.pk %}">
-                        {% csrf_token %}<button type="submit" class="btn btn--primary btn--lg">Iniciar tarefa</button>
-                    </form>
+                    <div class="task-next">
+                        <span class="task-next__icon" aria-hidden="true">{% include "_icon.html" with name="info" %}</span>
+                        <div class="task-next__body">
+                            <p class="muted">Ao iniciar, o sistema começa a contar seu tempo de trabalho. Você pode pausar quando precisar.</p>
+                            <div class="actions-row">
+                                <form method="post" action="{% url 'task-start' task.pk %}">
+                                    {% csrf_token %}<button type="submit" class="btn btn--primary btn--lg">Iniciar tarefa</button>
+                                </form>
+                                {% if can_retroactive %}
+                                <a href="{% url 'task-retroactive' task.pk %}" data-activity-action class="btn btn--lg">{% include "_icon.html" with name="clock" %} Já realizei este trabalho</a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
                 {% elif can_assume %}
                     <p class="muted">Esta tarefa está disponível. Assuma para começar a trabalhar nela.</p>
                     <form method="post" action="{% url 'task-assume' task.pk %}">
@@ -129,20 +139,31 @@
                 {% endif %}
 
                 {% if task.status != "CONCLUIDA" and task.status != "CANCELADA" %}
-                <details class="disclosure" style="margin-top:16px">
-                    <summary>Editar, mudar prazo ou encaminhar tarefa</summary>
-                    <div class="disclosure__body">
-                        <div class="actions-row">
-                            <a href="{% url 'task-return' task.pk %}" class="btn btn--sm">Devolver para correção</a>
-                            <a href="{% url 'task-move' task.pk %}" class="btn btn--sm">Enviar para outro setor</a>
-                            {% if not open_block %}<a href="{% url 'task-block' task.pk %}" class="btn btn--sm">Registrar bloqueio</a>{% endif %}
-                            <a href="{% url 'deadline-propose' task.pk %}" class="btn btn--sm">Propor novo prazo</a>
-                            <a href="{% url 'task-manual-time' task.pk %}" class="btn btn--sm">Registrar tempo já trabalhado</a>
-                            <a href="{% url 'task-edit' task.pk %}" class="btn btn--sm">Editar tarefa</a>
-                            <a href="{% url 'task-cancel' task.pk %}" class="btn btn--sm btn--danger">Cancelar tarefa</a>
+                {% if can_edit_task or can_return or can_move or can_block and not open_block or can_propose or can_log_time or can_cancel_task %}
+                {# Ações da tarefa: Editar à vista; o resto em "Mais ações", cada item só para quem pode. #}
+                <div class="task-actions-bar">
+                    <span class="task-actions-bar__label">{% include "_icon.html" with name="settings" %} Ações da tarefa</span>
+                    {% if can_edit_task %}
+                    <a href="{% url 'task-edit' task.pk %}" class="btn task-actions-bar__edit">{% include "_icon.html" with name="task" %} Editar tarefa</a>
+                    {% endif %}
+                    {% if can_return or can_move or can_block and not open_block or can_propose or can_log_time or can_cancel_task %}
+                    <details class="menu-more">
+                        <summary class="btn btn--ghost" aria-haspopup="menu">{% include "_icon.html" with name="more" %} Mais ações {% include "_icon.html" with name="chevron-down" %}</summary>
+                        <div class="menu-more__popup" role="menu">
+                            {% if can_return %}<a href="{% url 'task-return' task.pk %}" role="menuitem">Devolver para correção</a>{% endif %}
+                            {% if can_move %}<a href="{% url 'task-move' task.pk %}" role="menuitem">Enviar para outro setor</a>{% endif %}
+                            {% if can_block and not open_block %}<a href="{% url 'task-block' task.pk %}" role="menuitem">Registrar bloqueio</a>{% endif %}
+                            {% if can_propose %}<a href="{% url 'deadline-propose' task.pk %}" role="menuitem">Propor novo prazo</a>{% endif %}
+                            {% if can_log_time %}<a href="{% url 'task-manual-time' task.pk %}" role="menuitem">Adicionar tempo trabalhado</a>{% endif %}
+                            {% if can_cancel_task %}
+                            <div class="menu-more__divider"></div>
+                            <a href="{% url 'task-cancel' task.pk %}" role="menuitem" class="menu-more__danger">Cancelar tarefa</a>
+                            {% endif %}
                         </div>
-                    </div>
-                </details>
+                    </details>
+                    {% endif %}
+                </div>
+                {% endif %}
                 {% endif %}
             </div>
         </div>
@@ -274,7 +295,7 @@
                             <option value="{{ value }}">{{ label }}</option>
                             {% endfor %}
                         </select>
-                        <a href="{% url 'deadline-propose' task.pk %}" class="btn">Propor novo prazo</a>
+                        {% if can_propose %}<a href="{% url 'deadline-propose' task.pk %}" class="btn">Propor novo prazo</a>{% endif %}
                         <button type="submit" class="btn btn--primary">Enviar comentário</button>
                     </div>
                 </form>
@@ -340,6 +361,11 @@
             <div class="card__head"><h2>Tempo registrado</h2></div>
             <div class="card__body">
                 {% if sessions %}
+                {# Cronometrado × informado pela pessoa (Regras 04 §113): o gestor enxerga a diferença. #}
+                <div class="time-split">
+                    <div><span class="muted small">Cronometrado</span><strong>{{ timer_hours|duration_hm }}</strong></div>
+                    <div><span class="muted small">Informado pela pessoa</span><strong>{{ informed_hours|duration_hm }}</strong></div>
+                </div>
                 <ul class="list-rows">
                     {% for session in sessions %}
                     <li>
@@ -347,7 +373,15 @@
                         <span class="muted small">
                             {{ session.started_at|date:"d/m H:i" }}–{% if session.ended_at %}{{ session.ended_at|date:"H:i" }}{% else %}em andamento{% endif %}
                         </span>
-                        <div class="muted small">{{ session.user.get_username }}{% if session.is_manual %} · Lançado manualmente{% endif %}</div>
+                        <div class="muted small">
+                            {{ session.user.get_username }}
+                            {% if session.is_manual %}
+                            · {% if session.logged_at %}Informado em {{ session.logged_at|date:"d/m H:i" }}{% else %}Lançado manualmente{% endif %}
+                            {% if session.get_manual_reason_display %}· {{ session.get_manual_reason_display }}{% endif %}
+                            {% if session.is_past_day %}<span class="tag tag--past-day" title="O trabalho foi feito em um dia anterior ao do registro">Dia anterior</span>{% endif %}
+                            {% endif %}
+                        </div>
+                        {% if session.note %}<div class="muted small">“{{ session.note }}”</div>{% endif %}
                     </li>
                     {% endfor %}
                 </ul>
@@ -389,5 +423,19 @@
         {% endif %}
     </div>
 </div>
+
+<script>
+(function () {
+    // "Mais ações" é um <details>: fecha ao clicar fora ou apertar Esc.
+    var menu = document.querySelector(".menu-more");
+    if (!menu) return;
+    document.addEventListener("click", function (event) {
+        if (!menu.contains(event.target)) menu.removeAttribute("open");
+    });
+    document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") menu.removeAttribute("open");
+    });
+})();
+</script>
 {% endblock %}
 

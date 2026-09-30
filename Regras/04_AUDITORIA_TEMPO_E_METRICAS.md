@@ -2143,6 +2143,50 @@ Mas precisa ficar auditado como:
 lançamento manual posterior
 ```
 
+## 112.1 Trabalho informado depois — D0
+
+Decisão do D0 para a pessoa que fez a tarefa e **esqueceu de iniciá-la**
+(fecha o que o item 280 deixava em aberto sobre “regra de lançamento
+retroativo”).
+
+**Princípio:** *registrar trabalho realizado* cria o período real de trabalho e
+conclui a tarefa **agora**. Nunca reescreve o passado operacional da fila.
+
+Duas verdades, ambas preservadas:
+
+| Verdade | Campo | Exemplo (registrado às 14:00) |
+|---|---|---|
+| Quando o trabalho aconteceu | início e fim da sessão (informados pela pessoa) | 09:00 → 10:30 |
+| Quando o sistema soube | conclusão da tarefa, saída da fila, liberação da sucessora, primeira ação, `logged_at` da sessão | 14:00 |
+
+A conclusão não recebe o fim informado: senão a tarefa apareceria “concluída às
+10h” tendo ficado na fila até as 14h, com a sucessora liberada às 14h — uma
+história impossível. Se um dia for preciso medir “quando a pessoa diz que
+terminou”, será um conceito explícito à parte.
+
+Quem pode: quem executa a tarefa (responsável ou participante) com permissão
+para concluí-la. Não exige a permissão de lançar tempo manual, que continua
+valendo só para acrescentar tempo sem concluir.
+
+Informação pedida (sem jargão na tela): data (padrão hoje), “comecei às”,
+“terminei às”, **motivo** — *Esqueci de iniciar*, *Trabalhei fora da LPS*,
+*Ajuste do período*, *Outro* — e comentário, obrigatório apenas para *Outro*.
+
+Governança leve, **sem aprovação** (aprovar tudo vira burocracia e ninguém usa):
+
+- **mesmo dia:** livre;
+- **dias anteriores:** permitido, mas **destacado** no histórico da tarefa;
+- **período muito antigo** (início há mais de 7 dias): exige justificativa no
+  comentário, qualquer que seja o motivo;
+- sempre: fim depois do início, nada no futuro, fim não anterior à criação da
+  tarefa; sobreposição com outras sessões da pessoa continua permitida (§115).
+
+Distinção de confiabilidade (§113): o cartão de tempo da tarefa separa **tempo
+cronometrado** de **tempo informado pela pessoa**; a auditoria registra o evento
+“Trabalho informado depois” com o período, o momento do registro, o motivo e o
+comentário. O indicador “% do tempo informado manualmente, por motivo” (§119)
+fica para a gestão em etapa posterior.
+
 ---
 
 # 113. Tempo automático x tempo manual
@@ -4587,7 +4631,7 @@ Precisam ser detalhadas posteriormente:
 - definição formal de primeira ação;
 - calendário útil no D0 ou D1;
 - comportamento exato de pausas curtas;
-- regra de lançamento retroativo;
+- regra de lançamento retroativo (definida para o D0 em 112.1; falta o indicador por motivo e a política de correção de tempo já registrado);
 - necessidade de aprovação de correção de tempo;
 - classificação completa de bloqueios;
 - definição de retrabalho;

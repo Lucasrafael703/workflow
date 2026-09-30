@@ -39,6 +39,9 @@ class AuditLog(models.Model):
         INPUT_UPDATED = "INPUT_UPDATED", "Input atualizado"
         CRITERION_UPDATED = "CRITERION_UPDATED", "Critério de aceite atualizado"
         TASK_RELEASED = "TASK_RELEASED", "Tarefa liberada para a fila"
+        # Trabalho informado depois de feito ("Já realizei este trabalho"): o
+        # período real fica em `new_value`; quando o sistema soube, no timestamp.
+        RETROACTIVE_LOGGED = "RETROACTIVE_LOGGED", "Trabalho informado depois"
         # Segurança: toda mudança no que alguém pode fazer deixa rastro
         # (Regras 05 §41, doc 08 §30).
         PROFILE_CREATED = "PROFILE_CREATED", "Perfil criado"

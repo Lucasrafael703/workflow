@@ -29,6 +29,13 @@ $env:NODE_PATH = Join-Path $env:TEMP 'lps-checklist-test-deps\node_modules'
 node --test tests/process-apply.test.cjs
 ```
 
+Popup "Já realizei este trabalho" (`static/js/retroactive-work.js`), também com o
+template real e o `RetroactiveWorkForm` real (sem banco):
+
+```powershell
+node --test tests/retroactive-work.test.cjs
+```
+
 O jsdom não valida layout nem o envio implícito por Enter do navegador. Conferir
 também no navegador: botão Adicionar e Enter, página e painel lateral, largura
 de celular e desktop, quebra de textos longos e foco por teclado.

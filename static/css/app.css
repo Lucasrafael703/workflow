@@ -880,6 +880,64 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .disclosure[open] > summary::after { content: "−"; }
 .disclosure__body { padding: 16px; }
 
+/* Ficha da tarefa: "O que fazer agora" com aviso e "Ações da tarefa" com menu.
+   O cartão precisa deixar o menu "Mais ações" passar da borda. */
+#fazer-agora { overflow: visible; }
+.task-next {
+    display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px;
+    background: var(--info-soft); border: 1px solid #c9ddf8; border-radius: var(--radius);
+}
+.task-next__icon { flex: 0 0 auto; display: inline-flex; margin-top: 2px; color: var(--info); }
+.task-next__icon svg { width: 20px; height: 20px; }
+.task-next__body { flex: 1 1 auto; min-width: 0; }
+.task-next__body > p { margin: 0 0 12px; }
+
+.task-actions-bar {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    margin-top: 18px; padding: 10px 12px;
+    background: var(--surface-alt); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.task-actions-bar__label {
+    display: inline-flex; align-items: center; gap: 7px; margin-right: auto;
+    font-size: 13px; font-weight: 700; color: var(--text-2);
+}
+.task-actions-bar__label svg { width: 16px; height: 16px; }
+.menu-more { position: relative; }
+.menu-more > summary { list-style: none; }
+.menu-more > summary::-webkit-details-marker { display: none; }
+.menu-more[open] > summary { background: var(--surface); border-color: var(--border-strong); }
+.menu-more__popup {
+    position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; min-width: 240px; padding: 6px;
+    display: flex; flex-direction: column;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-lg);
+}
+.menu-more__popup a { padding: 8px 10px; border-radius: var(--radius-sm); color: var(--text); font-size: 13px; }
+.menu-more__popup a:hover { background: var(--surface-alt); text-decoration: none; }
+.menu-more__popup .menu-more__danger { color: var(--danger); }
+.menu-more__popup .menu-more__danger:hover { background: var(--danger-soft); }
+.menu-more__divider { height: 1px; margin: 4px 2px; background: var(--border); }
+
+/* Cartão "Tempo registrado": cronometrado × informado pela pessoa. */
+.time-split { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.time-split > div {
+    display: flex; flex-direction: column; gap: 2px; padding: 9px 12px;
+    background: var(--surface-alt); border-radius: var(--radius-sm);
+}
+.time-split strong { font-size: 16px; }
+.tag--past-day { margin-left: 4px; background: var(--warning-soft); color: var(--warning); }
+
+/* Janela "Já realizei este trabalho" */
+.retro-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 560px) { .retro-grid { grid-template-columns: 1fr; } }
+.retro-reasons { display: grid; gap: 8px; }
+.retro-reason {
+    display: flex; align-items: center; gap: 10px; padding: 9px 12px; cursor: pointer;
+    border: 1px solid var(--border); border-radius: var(--radius-sm); font-weight: 500;
+}
+.retro-reason input { width: auto; margin: 0; }
+.retro-reason:has(input:checked) { border-color: var(--primary); background: var(--info-soft); }
+[data-retroactive-form] [hidden] { display: none !important; }
+
 /* Rodapé de formulário: Cancelar + ação primária que descreve o resultado */
 .form-foot {
     display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap;
@@ -1027,14 +1085,16 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
    posicionado no viewport (no cursor de um textarea/contenteditable
    qualquer), não relativo a um wrapper local como o person-picker. */
 .mention-popup {
-    position: absolute; z-index: 80; width: 240px;
+    position: absolute; z-index: 95; width: 240px; /* acima de modal (90) e painel (85) */
     top: 0; left: 0; /* sobrescrito via JS a cada abertura */
 }
 
 /* Modal via JS (fetch + injeta HTML): abre por cima da tela atual sem navegar,
    ao contrário do .modal-backdrop de página cheia usado em Cadastros. */
 .js-modal-backdrop {
-    position: fixed; inset: 0; background: rgba(16, 28, 44, .45); z-index: 80;
+    /* Acima do painel lateral (.drawer-backdrop, 85): uma ação aberta de dentro
+       do painel (Reabrir, Já realizei este trabalho) não pode ficar escondida. */
+    position: fixed; inset: 0; background: rgba(16, 28, 44, .45); z-index: 90;
     display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto;
 }
 .js-modal-backdrop .modal { animation: js-modal-in .12s ease-out; }
@@ -1223,6 +1283,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     margin-bottom: 14px; font-size: 12.5px;
     display: flex; gap: 8px; align-items: center;
 }
+.context-banner svg { width: 16px; height: 16px; flex: 0 0 auto; }
 
 /* Blocos de atenção (Home / Gestão) */
 .attention {

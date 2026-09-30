@@ -230,8 +230,10 @@ atividade (`tarefas/nova-rapida/`).
 - `pause` (`tarefa.pausar`): fecha a sessão da pessoa; se não restar nenhuma
   sessão aberta, volta a `EM_FILA`.
 - `resume` (`tarefa.retomar`): delega para `start`.
-- `log_manual_time` (`tempo.lancar_manual`): cria `WorkSession` com
-  `is_manual=True`; sem datas futuras ou invertidas.
+- `log_manual_time` (`tempo.lancar_manual`, “Adicionar tempo trabalhado”): cria
+  `WorkSession` com `is_manual=True` e `logged_at` = agora; sem datas futuras
+  ou invertidas. Só acrescenta tempo — não conclui a tarefa (para isso, ver
+  §2.10.1, “Já realizei este trabalho”).
 - O cronômetro da barra superior lista as sessões abertas do usuário
   (context processor `my_active_sessions`).
 
@@ -292,6 +294,55 @@ Precisa ser agendado externamente (não há Celery/worker).
 Mesma ideia das atividades: colunas = `TaskStage` da organização, mover
 altera só `stage`. A ordem das colunas é arrastável em Cadastros → Estágios
 (`TaskStageReorderView`).
+
+### 2.10.1 “Já realizei este trabalho”
+
+`TaskService.register_completed_work(task, user, started_at, ended_at, reason, note="")`
+— para a tarefa que foi feita mas **ninguém iniciou**. Registra o período
+trabalhado e **conclui a tarefa agora**.
+
+> **Princípio:** a pessoa informa *quando trabalhou*; o sistema registra
+> *quando soube*. Nunca se reescreve o passado operacional da fila.
+
+| Verdade | Onde fica | Exemplo (registrado às 14:00) |
+|---|---|---|
+| Quando o trabalho aconteceu | `WorkSession.started_at/ended_at` (informado) | 09:00 → 10:30 |
+| Quando o sistema soube | `Task.completed_at`, `QueueEntry.left_at`, liberação da sucessora, `first_action_at` e `WorkSession.logged_at` = **agora** | 14:00 |
+
+Por isso `completed_at` **não** recebe o “terminei às” informado: não existe o
+histórico impossível “concluída às 10h, mas na fila até as 14h, com a sucessora
+liberada às 14h”.
+
+| Aspecto | Regra |
+|---|---|
+| Quem pode | responsável ou participante com `tarefa.concluir` (o Colaborador já tem). **Não** exige `tempo.lancar_manual`, que continua valendo só para “Adicionar tempo trabalhado” |
+| Status | só `EM_FILA` ou `DISPONIVEL` (ainda não iniciada). `EM_EXECUCAO` → “use Concluir tarefa”; bloqueada, devolvida, concluída e cancelada são recusadas |
+| Travas de `complete` | mesmas: etapa anterior concluída (`_assert_dependency_satisfied`) e inputs obrigatórios do processo recebidos (`_assert_process_inputs_ready`) |
+| Período | fim depois do início; nada no futuro; o fim não pode ser anterior à criação da tarefa. Sobreposição com outras sessões da pessoa é permitida (Regras 04 §115) |
+| Motivo | obrigatório: **Esqueci de iniciar** (padrão), **Trabalhei fora da LPS**, **Ajuste do período**, **Outro** |
+| Comentário | até 255 caracteres; obrigatório para **Outro** e quando o início foi há mais de `RETROACTIVE_JUSTIFICATION_DAYS` (**7**, constante em `activities/services.py`) dias |
+| Governança | sem aprovação: mesmo dia é livre; dia anterior é permitido e **destacado** na ficha (“Dia anterior”); período antigo exige justificativa |
+| Auditoria | `RETROACTIVE_LOGGED` (“Trabalho informado depois”): `new_value` = período, `reason` = “Informado em … · motivo · comentário”; depois o `COMPLETE` normal |
+| Atomicidade | sessão, primeira ação, auditoria e conclusão na mesma transação; se a conclusão falhar, nada fica para trás |
+
+A conclusão é `TaskService.complete`, sem alteração: saída da fila e
+renumeração, `TASK_COMPLETED` e `_release_dependents` acontecem no instante do
+registro.
+
+Na ficha, o cartão **Tempo registrado** separa **Cronometrado** (`is_manual`
+falso) de **Informado pela pessoa** (`is_manual` verdadeiro) — o total da equipe
+continua sendo a soma — e mostra, em cada período informado, quem informou,
+quando, o motivo e o comentário. “Adicionar tempo trabalhado”
+(`TaskService.log_manual_time`, antes “Registrar tempo já trabalhado”) só
+acrescenta tempo, não conclui a tarefa e também grava `logged_at`.
+
+**Ações da tarefa** (ficha): barra com **Editar tarefa** à vista e o menu
+**Mais ações** — Devolver para correção, Enviar para outro setor, Registrar
+bloqueio, Propor novo prazo, Adicionar tempo trabalhado e, separado e em
+vermelho, Cancelar tarefa. Cada item só aparece para quem tem a ação
+(`can_return`, `can_move`, `can_block`, `can_propose`, `can_log_time`,
+`can_cancel_task`); se nada é permitido a barra some. Continuam páginas
+comuns (não popup).
 
 ### 2.11 Reabrir tarefa concluída
 

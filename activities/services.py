@@ -47,6 +47,12 @@ class ActivityError(Exception):
     Views capturam esta exceção e exibem a mensagem via django.contrib.messages."""
 
 
+#: "Já realizei este trabalho": mesmo dia é livre; dias anteriores são permitidos
+#: e destacados; se o trabalho começou há mais de N dias, o comentário (a
+#: justificativa) passa a ser obrigatório. Sem aprovação: burocracia demais.
+RETROACTIVE_JUSTIFICATION_DAYS = 7
+
+
 def require_action(user, action_key, resource=None):
     """Exige uma ação do catálogo dentro do escopo do recurso.
 
@@ -1219,7 +1225,8 @@ class TaskService:
             raise ActivityError("Só é possível lançar tempo para o responsável ou um participante da tarefa.")
 
         session = WorkSession.objects.create(
-            task=task, user=user, started_at=started_at, ended_at=ended_at, is_manual=True
+            task=task, user=user, started_at=started_at, ended_at=ended_at, is_manual=True,
+            logged_at=timezone.now(),
         )
         ActivityService._register_first_action(task)
         ActivityService._register_first_action(task.activity)
@@ -1233,6 +1240,92 @@ class TaskService:
             reason="Lançamento manual de tempo",
         )
         return session
+
+    @staticmethod
+    @transaction.atomic
+    def register_completed_work(task, user, started_at, ended_at, reason, note=""):
+        """"Já realizei este trabalho": a pessoa esqueceu de iniciar, já fez, e
+        informa quando fez. Registra o período trabalhado **e conclui a tarefa
+        agora**.
+
+        Duas verdades separadas (Regras 04 §214):
+
+        - *quando o trabalho aconteceu* fica na `WorkSession` (início/fim
+          informados);
+        - *quando o sistema soube* — conclusão, saída da fila, liberação da
+          sucessora, primeira ação, `logged_at` — é sempre **agora**. Nunca se
+          reescreve o passado operacional da fila: uma tarefa não aparece
+          "concluída às 10h" se ficou na fila até as 14h.
+
+        Quem pode: quem executa a tarefa (responsável ou participante) com
+        `tarefa.concluir` — não exige `tempo.lancar_manual`, que continua
+        valendo para "Adicionar tempo trabalhado". A governança é leve e sem
+        aprovação: o tempo fica marcado como informado (não cronometrado), com
+        motivo; dia anterior é permitido (e destacado nas telas); início há mais
+        de `RETROACTIVE_JUSTIFICATION_DAYS` dias exige justificativa.
+        """
+        task = Task.objects.select_for_update(of=("self",)).select_related("activity", "sector").get(pk=task.pk)
+        require_action(user, catalog.TAREFA_CONCLUIR, task)
+        if not TaskService._is_responsavel_or_participant(task, user):
+            raise ActivityError("Só o responsável ou um participante da tarefa pode informar o trabalho feito.")
+        if task.status == Task.Status.EM_EXECUCAO:
+            raise ActivityError("Esta tarefa já está em execução. Use “Concluir tarefa”.")
+        if task.status not in (Task.Status.EM_FILA, Task.Status.DISPONIVEL):
+            raise ActivityError("Só dá para informar o trabalho de uma tarefa que ainda não foi iniciada.")
+        TaskService._assert_dependency_satisfied(task)
+        TaskService._assert_process_inputs_ready(task)
+
+        now = timezone.now()
+        if started_at is None or ended_at is None:
+            raise ActivityError("Informe a hora em que você começou e a hora em que terminou.")
+        if ended_at <= started_at:
+            raise ActivityError("A hora em que você terminou precisa ser depois da hora em que começou.")
+        if ended_at > now:
+            raise ActivityError("O trabalho não pode terminar no futuro.")
+        if ended_at < task.created_at:
+            created = timezone.localtime(task.created_at)
+            raise ActivityError(
+                f"Esta tarefa só foi criada em {created:%d/%m/%Y às %H:%M}; o trabalho não pode ter terminado antes disso."
+            )
+        if reason not in WorkSession.ManualReason.values:
+            raise ActivityError("Escolha o motivo.")
+        note = (note or "").strip()
+        if reason == WorkSession.ManualReason.OUTRO and not note:
+            raise ActivityError("Explique o motivo no comentário.")
+        days_ago = (timezone.localdate(now) - timezone.localdate(started_at)).days
+        if days_ago > RETROACTIVE_JUSTIFICATION_DAYS and not note:
+            raise ActivityError(
+                f"O trabalho foi há mais de {RETROACTIVE_JUSTIFICATION_DAYS} dias: escreva uma justificativa no comentário."
+            )
+        max_note = WorkSession._meta.get_field("note").max_length
+        if len(note) > max_note:
+            raise ActivityError(f"O comentário deve ter no máximo {max_note} caracteres.")
+
+        WorkSession.objects.create(
+            task=task, user=user, started_at=started_at, ended_at=ended_at, is_manual=True,
+            logged_at=now, manual_reason=reason, note=note,
+        )
+        ActivityService._register_first_action(task)
+        ActivityService._register_first_action(task.activity)
+
+        local_start, local_end = timezone.localtime(started_at), timezone.localtime(ended_at)
+        period = (
+            f"{local_start:%d/%m/%Y %H:%M}–{local_end:%H:%M}"
+            if local_start.date() == local_end.date()
+            else f"{local_start:%d/%m/%Y %H:%M} – {local_end:%d/%m/%Y %H:%M}"
+        )
+        audit_reason = f"Informado em {timezone.localtime(now):%d/%m/%Y %H:%M} · {WorkSession.ManualReason(reason).label}"
+        if note:
+            audit_reason += f" · {note}"
+        AuditService.log(
+            user=user,
+            action=AuditLog.Action.RETROACTIVE_LOGGED,
+            activity=task.activity,
+            task=task,
+            new_value=period,
+            reason=audit_reason,
+        )
+        return TaskService.complete(task, user)
 
     @staticmethod
     @transaction.atomic

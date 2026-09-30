@@ -40,6 +40,7 @@ from .forms import (
     MoveSectorForm,
     ProcessApplyForm,
     ReorderForm,
+    RetroactiveWorkForm,
     TaskBlockForm,
     TaskChangeResponsavelForm,
     TaskForm,
@@ -66,6 +67,7 @@ from .navigation import activity_return_url
 from . import process_state
 from .process_application import ActivityProcessService, ProcessApplicationService
 from .services import (
+    RETROACTIVE_JUSTIFICATION_DAYS,
     ActivityAttachmentService,
     ActivityError,
     ActivityService,
@@ -1817,10 +1819,32 @@ class TaskDetailView(OrganizationRequiredMixin, DetailView):
         sessions = task.work_sessions.select_related("user").order_by("-started_at")
         closed = [s for s in sessions if s.ended_at]
         man_hours = sum((s.duration for s in closed), timedelta())
+        # Tempo cronometrado × tempo informado pela pessoa (Regras 04 §113): o
+        # gestor enxerga a diferença no próprio cartão "Tempo registrado".
+        timer_hours = sum((s.duration for s in closed if not s.is_manual), timedelta())
+        informed_hours = sum((s.duration for s in closed if s.is_manual), timedelta())
+        for session in closed:
+            # Trabalho de um dia anterior ao do registro: destacado na tela.
+            session.is_past_day = bool(
+                session.is_manual
+                and session.logged_at
+                and timezone.localdate(session.started_at) < timezone.localdate(session.logged_at)
+            )
 
         my_open_session = task.work_sessions.filter(user=user, ended_at__isnull=True).first()
         is_participant = executors.filter(user=user).exists()
         is_responsavel = task.responsavel_id == user.id
+        dependency_blocking = task.depends_on is not None and task.depends_on.status != Task.Status.CONCLUIDA
+        missing_process_inputs = process_state.missing_required_input_names(task.activity) if task.process_step_id else []
+        # "Já realizei este trabalho": tarefa ainda não iniciada, que a pessoa
+        # executa e pode concluir agora, sem nada a esperar (dependência/inputs).
+        can_retroactive = bool(
+            task.status in (Task.Status.EM_FILA, Task.Status.DISPONIVEL)
+            and (is_participant or is_responsavel)
+            and not dependency_blocking
+            and not missing_process_inputs
+            and can(user, catalog.TAREFA_CONCLUIR, task)
+        )
         open_block = task.blocks.filter(ended_at__isnull=True).order_by("-started_at").first()
         pending_proposal = task.deadline_proposals.filter(
             status=DeadlineProposal.Status.PENDENTE
@@ -1840,6 +1864,9 @@ class TaskDetailView(OrganizationRequiredMixin, DetailView):
                 "my_open_session": my_open_session,
                 "sessions": sessions,
                 "man_hours": man_hours,
+                "timer_hours": timer_hours,
+                "informed_hours": informed_hours,
+                "can_retroactive": can_retroactive,
                 "queue_info": queue_position(task),
                 "open_block": open_block,
                 "checklist_items": task.checklist_items.select_related("created_by", "done_by"),
@@ -1882,16 +1909,11 @@ class TaskDetailView(OrganizationRequiredMixin, DetailView):
                 "return_form": TaskReturnForm(organization=self.organization, task=task),
                 "block_form": TaskBlockForm(),
                 "move_form": MoveSectorForm(organization=self.organization, task=task),
-                "dependency_blocking": (
-                    task.depends_on is not None
-                    and task.depends_on.status != Task.Status.CONCLUIDA
-                ),
+                "dependency_blocking": dependency_blocking,
                 # Tarefa de processo com input obrigatório ainda não recebido:
                 # a tela explica o que falta em vez de oferecer um "Iniciar"
                 # que o serviço recusaria (Regras 12 §10).
-                "missing_process_inputs": (
-                    process_state.missing_required_input_names(task.activity) if task.process_step_id else []
-                ),
+                "missing_process_inputs": missing_process_inputs,
             }
         )
         return context
@@ -2338,6 +2360,35 @@ class TaskReopenView(ActivityActionResponseMixin, TaskFormActionView):
     def run(self, task, data):
         TaskService.reopen(task, self.request.user, data["reason"])
         messages.success(self.request, "Tarefa reaberta.")
+
+
+class TaskRetroactiveView(ActivityActionResponseMixin, TaskFormActionView):
+    """Popup "Já realizei este trabalho": a pessoa informa quando fez o
+    trabalho e a tarefa é concluída agora (`TaskService.register_completed_work`).
+    Janela (JSON) sobre a ficha/painel, ou página sem JavaScript."""
+
+    template_name = "activities/task_retroactive_form.html"
+    form_class = RetroactiveWorkForm
+    required_action = catalog.TAREFA_CONCLUIR
+    title = "Já realizei este trabalho"
+    submit_label = "Registrar e concluir"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["justify_days"] = RETROACTIVE_JUSTIFICATION_DAYS
+        context["today"] = timezone.localdate()
+        return context
+
+    def run(self, task, data):
+        TaskService.register_completed_work(
+            task,
+            self.request.user,
+            data["started_at"],
+            data["ended_at"],
+            data["reason"],
+            note=data.get("note") or "",
+        )
+        messages.success(self.request, "Trabalho registrado e tarefa concluída.")
 
 
 class TaskExecutorAddView(ServiceActionView):

@@ -4,6 +4,7 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.forms.utils import from_current_timezone, to_current_timezone
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.html import format_html
 
 from core.models import Client, Company, CostCenter, Sector, Site, Tag
@@ -21,7 +22,7 @@ from core.widgets import (
     TagPickerWidget,
 )
 
-from .models import Activity, ActivityPendency, MessageKind, ReturnReason, Task
+from .models import Activity, ActivityPendency, MessageKind, ReturnReason, Task, WorkSession
 
 User = get_user_model()
 
@@ -689,6 +690,58 @@ class ManualTimeForm(forms.Form):
     started_at = forms.DateTimeField(label="Quando você começou a trabalhar?", widget=DateTimeLocalInput())
     ended_at = forms.DateTimeField(label="Quando você parou?", widget=DateTimeLocalInput(),
                                    help_text="Informe um período já trabalhado. O sistema calcula a duração entre o início e o fim.")
+
+
+class RetroactiveWorkForm(forms.Form):
+    """"Já realizei este trabalho": a pessoa esqueceu de iniciar a tarefa, já a
+    fez, e informa quando (data + hora de início e de fim). Sem jargão na tela.
+
+    O formulário só valida o formato e monta `started_at`/`ended_at` no fuso
+    do usuário; quem decide (permissão, status, limites, justificativa) é
+    `TaskService.register_completed_work`.
+    """
+
+    date = forms.DateField(
+        label="Data",
+        initial=timezone.localdate,
+        widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+    )
+    start_time = forms.TimeField(
+        label="Comecei às", widget=forms.TimeInput(attrs={"type": "time"}, format="%H:%M")
+    )
+    end_time = forms.TimeField(
+        label="Terminei às",
+        initial=lambda: timezone.localtime().time().replace(second=0, microsecond=0),
+        widget=forms.TimeInput(attrs={"type": "time"}, format="%H:%M"),
+    )
+    reason = forms.ChoiceField(
+        label="Motivo",
+        choices=WorkSession.ManualReason.choices,
+        initial=WorkSession.ManualReason.ESQUECI_INICIAR,
+        widget=forms.RadioSelect,
+    )
+    note = forms.CharField(
+        label="Comentário",
+        required=False,
+        max_length=255,
+        widget=forms.Textarea(attrs={"rows": 2, "maxlength": 255, "data-mention": "1"}),
+    )
+
+    def clean(self):
+        cleaned = super().clean()
+        day, start, end = cleaned.get("date"), cleaned.get("start_time"), cleaned.get("end_time")
+        if day and day > timezone.localdate():
+            self.add_error("date", "A data não pode ser futura.")
+        elif day and start and end:
+            if end <= start:
+                self.add_error("end_time", "A hora em que você terminou precisa ser depois da hora em que começou.")
+            else:
+                zone = timezone.get_current_timezone()
+                cleaned["started_at"] = timezone.make_aware(datetime.datetime.combine(day, start), zone)
+                cleaned["ended_at"] = timezone.make_aware(datetime.datetime.combine(day, end), zone)
+        if cleaned.get("reason") == WorkSession.ManualReason.OUTRO and not (cleaned.get("note") or "").strip():
+            self.add_error("note", "Explique o motivo.")
+        return cleaned
 
 
 class MessageForm(forms.Form):

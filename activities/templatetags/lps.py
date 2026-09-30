@@ -35,6 +35,7 @@ ACTION_PHRASES = {
     AuditLog.Action.INPUT_UPDATED: "atualizou o input “{field}”: {new}",
     AuditLog.Action.CRITERION_UPDATED: "marcou o critério “{field}” como {new}",
     AuditLog.Action.TASK_RELEASED: "liberou a tarefa para a fila de {new}",
+    AuditLog.Action.RETROACTIVE_LOGGED: "informou que o trabalho foi feito em {new}",
 }
 
 FIELD_LABELS = {

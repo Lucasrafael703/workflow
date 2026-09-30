@@ -306,7 +306,9 @@ class TaskAuthorizationTests(ViewTestCase):
 
     def test_stranger_cannot_reach_other_task_actions(self):
         self.client.force_login(self.requester)
-        for name in ("task-return", "task-move", "task-cancel", "task-reopen", "task-manual-time"):
+        for name in (
+            "task-return", "task-move", "task-cancel", "task-reopen", "task-manual-time", "task-retroactive",
+        ):
             self.assertEqual(
                 self.client.get(reverse(name, args=[self.task.pk])).status_code, 403, msg=name
             )

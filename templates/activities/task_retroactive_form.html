@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Já realizei este trabalho — LPS{% endblock %}
+
+{% comment %}
+Janela "Já realizei este trabalho": a pessoa esqueceu de iniciar a tarefa, já a
+fez, e informa quando. O período trabalhado é registrado e a tarefa é
+concluída AGORA. Sem JavaScript continua sendo uma página normal com POST; com
+JavaScript (static/js/retroactive-work.js) o comentário só aparece quando é
+preciso e o aviso de "dia anterior" acompanha a data.
+{% endcomment %}
+
+{% block content %}
+<div class="modal-backdrop">
+    <div class="modal" data-retroactive-form data-justify-days="{{ justify_days }}" data-today="{{ today|date:'Y-m-d' }}">
+        <div class="modal__head">
+            <div>
+                <h2>Já realizei este trabalho</h2>
+                <div class="sub">{{ task.title }}</div>
+            </div>
+            <a href="{% url 'task-detail' task.pk %}" class="modal__close" title="Fechar sem salvar" aria-label="Fechar sem salvar">&times;</a>
+        </div>
+
+        <form method="post">
+            {% csrf_token %}
+            <div class="modal__body">
+                <div class="page-guide"><p>Informe quando você fez o trabalho. A tarefa será concluída agora.</p></div>
+                <p class="muted small">Campos com <span class="req">*</span> são obrigatórios.</p>
+
+                {% if form.non_field_errors %}
+                <ul class="messages">
+                    {% for error in form.non_field_errors %}<li class="message message--error">{{ error }}</li>{% endfor %}
+                </ul>
+                {% endif %}
+
+                <div class="retro-grid">
+                    <div class="form-row">
+                        <label for="{{ form.date.id_for_label }}">{{ form.date.label }} <span class="req">*</span></label>
+                        {{ form.date }}
+                        {% if form.date.errors %}<ul class="errorlist">{% for e in form.date.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                    </div>
+                    <div class="form-row">
+                        <label for="{{ form.start_time.id_for_label }}">{{ form.start_time.label }} <span class="req">*</span></label>
+                        {{ form.start_time }}
+                        {% if form.start_time.errors %}<ul class="errorlist">{% for e in form.start_time.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                    </div>
+                    <div class="form-row">
+                        <label for="{{ form.end_time.id_for_label }}">{{ form.end_time.label }} <span class="req">*</span></label>
+                        {{ form.end_time }}
+                        {% if form.end_time.errors %}<ul class="errorlist">{% for e in form.end_time.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                    </div>
+                </div>
+
+                <div class="message message--info" data-past-day-warning hidden>
+                    Você está informando um dia anterior. Isso fica destacado no histórico da tarefa.
+                </div>
+
+                <div class="form-row">
+                    <label>{{ form.reason.label }} <span class="req">*</span></label>
+                    <div class="retro-reasons">
+                        {% for radio in form.reason %}
+                        <label class="retro-reason">{{ radio.tag }} <span>{{ radio.choice_label }}</span></label>
+                        {% endfor %}
+                    </div>
+                    {% if form.reason.errors %}<ul class="errorlist">{% for e in form.reason.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                </div>
+
+                <div class="form-row" data-note-row>
+                    <label for="{{ form.note.id_for_label }}">{{ form.note.label }} <span class="req" data-note-required hidden>*</span></label>
+                    {{ form.note }}
+                    <div class="helptext" data-note-hint>Explique o motivo quando escolher “Outro” ou quando o trabalho foi há mais de {{ justify_days }} dias.</div>
+                    {% if form.note.errors %}<ul class="errorlist">{% for e in form.note.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                </div>
+            </div>
+
+            <div class="modal__foot">
+                <a href="{% url 'task-detail' task.pk %}" class="btn">Cancelar</a>
+                <button type="submit" class="btn btn--primary">{% include "_icon.html" with name="check" %} Registrar e concluir</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

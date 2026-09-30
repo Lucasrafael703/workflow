@@ -139,7 +139,8 @@
 | `tarefas/<pk>/executores/`, `executores/<user_pk>/remover/` | Participantes |
 | `tarefas/<pk>/alterar-responsavel/` | Responsável |
 | `tarefas/<pk>/atribuicoes/<assignment_pk>/aceitar/`, `.../recusar/` | Responder atribuição |
-| `tarefas/<pk>/tempo/` | Lançamento manual de tempo |
+| `tarefas/<pk>/ja-realizei/` (`task-retroactive`) | “Já realizei este trabalho”: informa data, início, fim e motivo; registra o período e conclui a tarefa agora (`tarefa.concluir` na view; além disso só responsável ou participante no serviço). Popup (JSON no Ajax) ou página; 403 sem a ação |
+| `tarefas/<pk>/tempo/` | “Adicionar tempo trabalhado” (`tempo.lancar_manual`): só acrescenta tempo, não conclui |
 | `tarefas/<pk>/mensagem/` | Mensagem |
 | `tarefas/<pk>/mover-estagio/` | Mudar coluna do Kanban (só `stage`) |
 | `tarefas/<pk>/checklist/`, `checklist/<pk>/alternar/`, `checklist/<pk>/remover/` | Checklist |

@@ -21,6 +21,7 @@ Testes do Django ficam em cada app (`tests.py` e, em `activities`, também
 | `activities/test_process_application.py` | 99 | Aplicação de processo: materialização (inputs, critérios, tarefas), validações que não gravam nada, dependências e liberação, inputs e critérios, trava de inputs obrigatórios, atomicidade, reaplicação, versões, isolamento entre organizações, finalização e o cenário de aceite completo |
 | `activities/test_process_views.py` | 55 | Telas do processo: botão e popup "Aplicar processo", painel da ficha, progresso, atualização de inputs/critérios, finalização, tarefas que aguardam |
 | `activities/test_reopen.py` | 44 | Reabrir tarefa e atividade concluídas: fila, histórico preservado, permissão por setor, motivo, tarefas seguintes, atividade concluída/cancelada, atomicidade, botões e popup |
+| `activities/test_task_actions.py` | 88 | “Já realizei este trabalho”: período informado × conclusão agora, fila e sucessoras, auditoria, permissões (responsável/participante, sem exigir tempo manual), status, limites de data e justificativa, travas de dependência e de inputs do processo, atomicidade; botão, barra “Ações da tarefa” filtrada por permissão, popup (JSON), cartão de tempo cronometrado × informado |
 | `accounts`, `audit` | 0 | `tests.py` vazio |
 
 Base compartilhada dos testes de processo: `activities/testing.py`
@@ -29,8 +30,9 @@ em sequência, três inputs e quatro critérios) e `processes/testing.py`
 (`build_process`, que monta e publica um molde direto pelo ORM).
 
 Além disso, `tests/checklist.test.cjs` testa o componente JavaScript do
-checklist e `tests/process-apply.test.cjs`, o assistente de 4 passos do popup
-"Aplicar processo" (seção 4).
+checklist, `tests/process-apply.test.cjs`, o assistente de 4 passos do popup
+"Aplicar processo", e `tests/retroactive-work.test.cjs`, o popup "Já realizei este
+trabalho" (aviso de dia anterior e comentário só quando necessário) (seção 4).
 
 ---
 

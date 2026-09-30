@@ -777,6 +777,16 @@ class TaskResponsavelChangeLog(models.Model):
 class WorkSession(models.Model):
     """Sessão de trabalho de um executor em uma tarefa (Regras 04 §26-32)."""
 
+    class ManualReason(models.TextChoices):
+        """Por que o tempo foi informado em vez de cronometrado. Vira dado de
+        produto ("quanto do tempo é informado porque as pessoas esquecem de
+        iniciar?") e só existe em sessões informadas pela pessoa."""
+
+        ESQUECI_INICIAR = "ESQUECI_INICIAR", "Esqueci de iniciar"
+        FORA_DA_LPS = "FORA_DA_LPS", "Trabalhei fora da LPS"
+        AJUSTE_PERIODO = "AJUSTE_PERIODO", "Ajuste do período"
+        OUTRO = "OUTRO", "Outro"
+
     task = models.ForeignKey(Task, verbose_name="tarefa", on_delete=models.CASCADE, related_name="work_sessions")
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, verbose_name="executor", on_delete=models.PROTECT, related_name="work_sessions"
@@ -786,6 +796,17 @@ class WorkSession(models.Model):
     is_manual = models.BooleanField(
         "lançamento manual", default=False, help_text="Diferencia tempo capturado pelo timer de apropriação posterior (Regras 04 §113)."
     )
+    logged_at = models.DateTimeField(
+        "informado em",
+        null=True,
+        blank=True,
+        help_text=(
+            "Quando o sistema soube do período (hora do servidor). `started_at`/`ended_at` dizem quando o "
+            "trabalho aconteceu; este campo, quando foi informado (Regras 04 §214)."
+        ),
+    )
+    manual_reason = models.CharField("motivo", max_length=16, choices=ManualReason.choices, blank=True)
+    note = models.CharField("comentário", max_length=255, blank=True)
 
     class Meta:
         verbose_name = "sessão de trabalho"

@@ -58,6 +58,7 @@ _NAV_BY_URL_NAME = {
     "task-calendar": "tasks",
     "task-detail": "tasks",
     "task-reopen": "tasks",
+    "task-retroactive": "tasks",
     "task-quick-create": "tasks",
     "task-quick-create-standalone": "tasks",
     "task-edit": "tasks",

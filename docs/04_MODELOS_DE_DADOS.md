@@ -125,11 +125,11 @@ Enums:
 
 | Model | Campos relevantes |
 |---|---|
-| `Task` | `activity` (CASCADE, `tasks`), `sector` (PROTECT), `stage` → `TaskStage`, `responsavel` (PROTECT, obrigatório desde a migration `0015`), `depends_on` → `Task` (`dependents`), `process_step` → `processes.ProcessStep` (null, PROTECT, `tasks`), `order`, `title`, `description`, `status`, `requested_deadline`, `committed_deadline`, `first_action_at`, `completed_at`, `cancelled_at`, `overdue_notified_at`, `tags` |
+| `Task` | `activity` (CASCADE, `tasks`), `sector` (PROTECT), `stage` → `TaskStage`, `responsavel` (PROTECT, obrigatório desde a migration `0015`), `depends_on` → `Task` (`dependents`), `process_step` → `processes.ProcessStep` (null, PROTECT, `tasks`), `order`, `title`, `description`, `status`, `requested_deadline`, `committed_deadline`, `first_action_at`, `completed_at`, `completed_by` (SET_NULL, null; quem concluiu — limpo ao reabrir), `cancelled_at`, `overdue_notified_at`, `tags` |
 | `TaskExecutor` (participante) | `task` (`executors`), `user` (`tasks_executed`), `added_by`, `removed_at` (remoção lógica) |
 | `TaskAssignment` | `task` (`assignments`), `user`, `assigned_by`, `status` (`PENDENTE`, `ACEITA`, `RECUSADA`), `reason` → `ReturnReason`, `observation` |
 | `TaskResponsavelChangeLog` | `task` (`responsavel_changes`), `previous_responsavel`, `new_responsavel`, `changed_by` |
-| `WorkSession` | `task`, `user`, `started_at`, `ended_at`, `is_manual` — propriedade `duration` |
+| `WorkSession` | `task`, `user`, `started_at`, `ended_at` (**quando o trabalho aconteceu**), `is_manual` (período informado pela pessoa, não cronometrado), `logged_at` (**quando o sistema soube**; nulo no cronômetro e nas sessões antigas), `manual_reason` (`WorkSession.ManualReason`: `ESQUECI_INICIAR`, `FORA_DA_LPS`, `AJUSTE_PERIODO`, `OUTRO`; vazio no cronômetro e em “Adicionar tempo trabalhado”), `note` (até 255 caracteres) — propriedade `duration` |
 | `TaskBlock` | `task` (`blocks`), `reason`, `observation`, `started_by/at`, `ended_by/at` |
 | `SectorTransfer` | `task`, `from_sector`, `to_sector`, `moved_by`, `note` |
 | `TaskReturn` | `task`, `from_sector`, `to_sector`, `reason` → `ReturnReason`, `observation`, `returned_by` |

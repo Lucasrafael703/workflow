@@ -44,6 +44,7 @@ E-mails são **síncronos** (enviados durante a requisição) via
 | Iniciar / retomar / tempo manual | `SESSION_STARTED` | — | — |
 | Pausar | `SESSION_PAUSED` | — | — |
 | Concluir tarefa | `COMPLETE` | `TASK_COMPLETED` → dono da atividade, responsável | — |
+| “Já realizei este trabalho” | `RETROACTIVE_LOGGED` (`new_value` = período trabalhado; `reason` = “Informado em … · motivo · comentário”) e em seguida o `COMPLETE` normal; `TASK_RELEASED` nas sucessoras liberadas | `TASK_COMPLETED` → dono da atividade, responsável; `TASK_ASSIGNED` (“Tarefa liberada para a fila”) nas sucessoras | — |
 | Cancelar tarefa | `CANCEL` | — | — |
 | Reabrir tarefa concluída | `REOPEN` da tarefa (`old_value=CONCLUIDA`, `new_value=EM_FILA` ou `DISPONIVEL`, motivo); `REOPEN` da atividade junto, se ela estava concluída; `UPDATE` de `status` (`EM_FILA`→`DISPONIVEL`) em cada tarefa seguinte que voltou a esperar | `TASK_ASSIGNED` ("Tarefa reaberta") → setor, responsável e dono da atividade; `ACTIVITY_REOPENED` → dono, se a atividade reabriu junto | — |
 | Bloquear / desbloquear | `BLOCK` / `UNBLOCK` | `TASK_BLOCKED` / `TASK_UNBLOCKED` → dono da atividade | — |
