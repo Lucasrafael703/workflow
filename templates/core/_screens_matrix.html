@@ -1,0 +1,36 @@
+{% comment %}
+Matriz de telas: uma linha por tela, com Sem acesso / Ver / Editar.
+Usada na tela de usuário (com "ajuste individual") e na de grupos.
+{% endcomment %}
+{% for section in screen_sections %}
+<div class="screens-block" data-section>
+    <div class="screens-block__head">
+        <strong>{{ section.name }}</strong>
+        <span class="screens-block__quick">
+            <button type="button" data-set-all="0">Nenhuma</button>
+            {% if section.has_view %}<button type="button" data-set-all="1">Todas: ver</button>
+            <button type="button" data-set-all="2">Todas: editar</button>{% else %}<button type="button" data-set-all="2">Todas</button>{% endif %}
+        </span>
+    </div>
+    {% for row in section.rows %}
+    <div class="screen-row" data-screen="{{ row.screen.key }}" data-override="0">
+        <div class="screen-row__text">
+            <div class="screen-row__name">
+                {{ row.screen.name }}
+                {% if row.partial %}<span class="pill pill--partial" title="Este grupo tem só parte das ações desta tela (ajuste fino). Se você não mudar o nível, fica como está.">Personalizado</span>{% endif %}
+                {% if with_overrides %}
+                <span class="pill pill--own only-override">Ajuste individual</span>
+                <button type="button" class="icon-button only-override" data-reset title="Voltar ao que o grupo dá">desfazer</button>
+                {% endif %}
+            </div>
+            <div class="screen-row__desc">{{ row.screen.description }}{% if row.screen.edit_hint %} <span class="muted">· {{ row.screen.edit_label }}: {{ row.screen.edit_hint|lower }}</span>{% endif %}</div>
+        </div>
+        <div class="seg" role="radiogroup" aria-label="{{ row.screen.name }}">
+            {% for opt in row.field %}
+            <label class="seg__opt"><input type="radio" name="{{ row.field.html_name }}" value="{{ opt.data.value }}"{% if opt.data.selected %} checked{% endif %}><span>{{ opt.choice_label }}</span></label>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endfor %}

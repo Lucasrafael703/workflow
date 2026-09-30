@@ -1,4 +1,4 @@
-from . import catalog
+from . import catalog, screens
 from .services import AuthorizationService
 
 
@@ -20,19 +20,25 @@ def navigation(request):
     profile = getattr(user, "profile", None)
     organization = getattr(profile, "organization", None)
 
+    # Uma passada só: quais telas a pessoa enxerga, a partir das ações que
+    # ela tem em qualquer escopo (acessos/screens.py).
+    visible = screens.visible_screens(AuthorizationService.action_keys_anywhere(user))
+    cadastro_keys = ("empresas", "setores", "clientes", "obras", "centros_custo")
+    has_cadastros = any(visible[key] for key in cadastro_keys)
+
     return {
+        "lps_screens": visible,
         "lps_nav": {
             "management": AuthorizationService.can_anywhere(user, catalog.METRICAS_VISUALIZAR),
-            "cadastros": (
-                can(user, catalog.SETOR_EDITAR)
-                or can(user, catalog.EMPRESA_GERIR)
-                or can(user, catalog.MOTIVO_DEVOLUCAO_GERIR)
-                or can(user, catalog.ESTAGIO_TAREFA_GERIR)
-                or can(user, catalog.TAG_GERIR)
-                or AuthorizationService.can_anywhere(user, catalog.PROCESSO_VISUALIZAR)
-            ),
+            "processos": visible["processos"],
+            "cadastros": has_cadastros,
+            "config": visible["configuracoes"],
             "users": can(user, catalog.USUARIO_VISUALIZAR),
             "security": can(user, catalog.SEGURANCA_GERIR_PERFIS),
+            "admin_section": has_cadastros
+            or visible["configuracoes"]
+            or visible["usuarios"]
+            or visible["grupos"],
         },
         "lps_org": organization,
         "lps_open_tasks": _open_task_count(user),
@@ -88,6 +94,9 @@ _NAV_BY_URL_NAME = {
     "user-edit": "users",
     "user-access": "users",
     "permissions": "permissions",
+    "group-list": "permissions",
+    "group-create": "permissions",
+    "group-edit": "permissions",
     "profile-create": "permissions",
     "profile-edit": "permissions",
     "settings": "settings",

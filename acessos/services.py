@@ -14,6 +14,7 @@ from django.db import transaction
 
 from audit.models import AuditLog
 
+from . import screens
 from .models import Action, Profile, Scope, UserAction, UserProfile
 
 
@@ -443,6 +444,34 @@ class AuthorizationService:
         return accessible
 
     @staticmethod
+    def action_keys_anywhere(user):
+        """Chaves de todas as ações que a pessoa tem em algum escopo.
+
+        Serve para montar o menu por tela com duas consultas, em vez de
+        perguntar ao motor ação por ação. Não substitui `can()`: o menu só
+        mostra o caminho; quem decide é a view, com o escopo do recurso.
+        """
+        if not getattr(user, "is_authenticated", False) or not user.is_active:
+            return set()
+        if AuthorizationService.is_platform_admin(user):
+            return set(Action.objects.filter(is_active=True).values_list("key", flat=True))
+
+        from_profiles = Action.objects.filter(
+            is_active=True,
+            profile_actions__profile__is_active=True,
+            profile_actions__profile__assignments__user=user,
+            profile_actions__profile__assignments__is_active=True,
+            profile_actions__profile__assignments__scope__is_active=True,
+        ).values_list("key", flat=True)
+        from_direct = Action.objects.filter(
+            is_active=True,
+            direct_grants__user=user,
+            direct_grants__is_active=True,
+            direct_grants__scope__is_active=True,
+        ).values_list("key", flat=True)
+        return set(from_profiles) | set(from_direct)
+
+    @staticmethod
     def _scopes_granting(user, action_key):
         """Escopos ativos que concedem a ação, por perfil ou concessão direta."""
         from_profiles = Scope.objects.filter(
@@ -713,6 +742,174 @@ class AccessService:
             description="Setores do usuário atualizados",
             after=", ".join(sorted(s.name for s in selected)),
         )
+
+
+class ScreenAccessService:
+    """Acesso por tela: a forma simples de administrar grupos e pessoas.
+
+    Por baixo continua tudo em ações, perfis e escopos — o motor não muda.
+    Esta camada só traduz "Tarefas: Editar" para as ações correspondentes e
+    guarda como perfil (grupo) ou concessão direta (ajuste individual).
+    """
+
+    # Escopos que a tela de usuário administra. Concessões em outros escopos
+    # (obra, centro de custo, setor específico...) vêm da tela avançada de
+    # acessos e são preservadas.
+    SCOPE_ORGANIZACAO = "organizacao"
+    SCOPE_MINHAS_EQUIPES = "minhas_equipes"
+
+    @staticmethod
+    def profile_keys(profile):
+        if profile is None:
+            return set()
+        return set(
+            profile.profile_actions.filter(action__is_active=True).values_list("action__key", flat=True)
+        )
+
+    @staticmethod
+    def profile_levels(profile):
+        return screens.levels_from_actions(ScreenAccessService.profile_keys(profile))
+
+    @staticmethod
+    @transaction.atomic
+    def set_profile_screens(profile, levels, changed_by):
+        """Grava os níveis de tela de um grupo."""
+        current = ScreenAccessService.profile_keys(profile)
+        wanted = screens.merge_levels(current, levels)
+        all_ids = list(Action.objects.filter(is_active=True).values_list("id", flat=True))
+        wanted_ids = set(Action.objects.filter(key__in=wanted, is_active=True).values_list("id", flat=True))
+        AccessService.set_profile_actions(profile, granted_ids=wanted_ids, visible_ids=all_ids, changed_by=changed_by)
+        return profile
+
+    @staticmethod
+    def standard_scope(organization, choice):
+        if choice == ScreenAccessService.SCOPE_MINHAS_EQUIPES:
+            return ScopeService.relation_scope(organization, Scope.Relation.MEUS_SETORES)
+        return ScopeService.organization_scope(organization)
+
+    @staticmethod
+    def _managed_scope_ids(organization, extra=()):
+        ids = {
+            ScreenAccessService.standard_scope(organization, ScreenAccessService.SCOPE_ORGANIZACAO).id,
+            ScreenAccessService.standard_scope(organization, ScreenAccessService.SCOPE_MINHAS_EQUIPES).id,
+        }
+        ids.update(scope_id for scope_id in extra if scope_id)
+        return ids
+
+    @staticmethod
+    def user_summary(user):
+        """Tudo o que a tela de usuário precisa saber sobre o acesso atual."""
+        organization = user.profile.organization
+        assignments = list(
+            UserProfile.objects.filter(user=user, is_active=True, profile__is_active=True)
+            .select_related("profile", "scope")
+            .order_by("created_at")
+        )
+        primary = assignments[0] if assignments else None
+        managed = ScreenAccessService._managed_scope_ids(organization, [primary.scope_id if primary else None])
+
+        direct = list(
+            UserAction.objects.filter(user=user, is_active=True, action__is_active=True).select_related(
+                "action", "scope"
+            )
+        )
+        direct_keys = {grant.action.key for grant in direct if grant.scope_id in managed}
+        other_direct = [grant for grant in direct if grant.scope_id not in managed]
+
+        group_keys = ScreenAccessService.profile_keys(primary.profile) if primary else set()
+        extra_group_keys = set()
+        for assignment in assignments[1:]:
+            extra_group_keys |= ScreenAccessService.profile_keys(assignment.profile)
+
+        return {
+            "primary": primary,
+            "extra_assignments": assignments[1:],
+            "group_keys": group_keys,
+            "direct_keys": direct_keys,
+            "other_direct": other_direct,
+            "group_levels": screens.levels_from_actions(group_keys),
+            "levels": screens.levels_from_actions(group_keys | direct_keys),
+            "effective_levels": screens.levels_from_actions(group_keys | direct_keys | extra_group_keys),
+        }
+
+    @staticmethod
+    @transaction.atomic
+    def save_user_access(user, profile, scope, levels, changed_by):
+        """Grupo + onde vale + ajustes individuais de uma pessoa.
+
+        - Troca as atribuições de perfil ativas pelo grupo escolhido (um só).
+        - Ajuste individual só **acrescenta** (a LPS não tem "negar"): o que o
+          grupo já dá não pode ser tirado de uma pessoa — para isso, escolha
+          um grupo mais restrito.
+        """
+        organization = user.profile.organization
+        summary = ScreenAccessService.user_summary(user)
+        previous_scope_id = summary["primary"].scope_id if summary["primary"] else None
+
+        # 1) Grupo
+        for assignment in UserProfile.objects.filter(user=user, is_active=True):
+            if profile is not None and assignment.profile_id == profile.pk and assignment.scope_id == scope.pk:
+                continue
+            AccessService.revoke_profile(assignment, changed_by=changed_by)
+
+        if profile is not None:
+            if profile.organization_id != organization.id:
+                from core.services import CadastroError
+
+                raise CadastroError("Grupo de outra organização.")
+            assignment, created = UserProfile.objects.get_or_create(
+                user=user,
+                profile=profile,
+                scope=scope,
+                is_active=True,
+                defaults={"organization": organization, "created_by": changed_by},
+            )
+            if created:
+                AccessService._audit(
+                    changed_by,
+                    AuditLog.Action.PROFILE_ASSIGNED,
+                    target_user=user,
+                    description=f"Perfil {profile.name} atribuído em {scope.label}",
+                    after=f"{profile.name} / {scope.label}",
+                )
+
+        # 2) Ajustes individuais
+        group_keys = ScreenAccessService.profile_keys(profile)
+        current_effective = summary["group_keys"] | summary["direct_keys"]
+        if profile is None or summary["primary"] is None or summary["primary"].profile_id != profile.pk:
+            # Grupo mudou: o ponto de partida passa a ser o grupo novo.
+            current_effective = group_keys | summary["direct_keys"]
+        wanted_effective = screens.merge_levels(current_effective, levels or {})
+        wanted_direct = wanted_effective - group_keys
+
+        managed = ScreenAccessService._managed_scope_ids(organization, [previous_scope_id, scope.pk])
+        existing = UserAction.objects.filter(user=user, is_active=True, scope_id__in=managed).select_related(
+            "action", "scope"
+        )
+        kept = set()
+        for grant in existing:
+            if grant.scope_id == scope.pk and grant.action.key in wanted_direct:
+                kept.add(grant.action.key)
+                continue
+            AccessService.revoke_action(grant, changed_by=changed_by)
+
+        for action in Action.objects.filter(key__in=wanted_direct - kept, is_active=True):
+            grant, created = UserAction.objects.get_or_create(
+                user=user,
+                action=action,
+                scope=scope,
+                is_active=True,
+                defaults={"organization": organization, "created_by": changed_by},
+            )
+            if created:
+                AccessService._audit(
+                    changed_by,
+                    AuditLog.Action.ACTION_GRANTED,
+                    target_user=user,
+                    description=f"Ajuste individual {action.key} em {scope.label}",
+                    after=f"{action.key} / {scope.label}",
+                )
+        return ScreenAccessService.user_summary(user)
 
 
 class ScopeService:

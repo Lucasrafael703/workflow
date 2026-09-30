@@ -461,3 +461,251 @@ class SectorMembershipIsNotAuthorizationTests(AuthorizationTestCase):
 
         self.assertTrue(AuthorizationService.can(self.paulo, catalog.FILA_REORDENAR, self.comercial))
         self.assertFalse(AuthorizationService.can(self.ryan, catalog.FILA_REORDENAR, self.comercial))
+
+
+# ---------------------------------------------------------------------------
+# Acesso por tela (acessos/screens.py) e as telas de usuário/grupos
+# ---------------------------------------------------------------------------
+
+from django.contrib.auth import get_user_model as _get_user_model  # noqa: E402
+from django.core import mail as _mail  # noqa: E402
+from django.test import TestCase as _TestCase  # noqa: E402
+from django.urls import reverse as _reverse  # noqa: E402
+
+from acessos import catalog as _catalog  # noqa: E402
+from acessos import screens as _screens  # noqa: E402
+from acessos.models import Action as _Action  # noqa: E402
+from acessos.models import UserAction as _UserAction  # noqa: E402
+from acessos.models import UserProfile as _UserProfile  # noqa: E402
+from acessos.services import AuthorizationService as _Auth  # noqa: E402
+from acessos.services import ScreenAccessService as _Screens  # noqa: E402
+from acessos.testing import ensure_catalog as _ensure_catalog  # noqa: E402
+from acessos.testing import grant_actions as _grant_actions  # noqa: E402
+from acessos.testing import make_profile as _make_profile  # noqa: E402
+from core.models import Organization as _Organization  # noqa: E402
+from core.models import Sector as _Sector  # noqa: E402
+
+
+class ScreenCatalogTests(_TestCase):
+    def test_every_catalog_action_belongs_to_some_screen(self):
+        catalog_keys = {key for _, _, actions in _catalog.GROUPS for key, _, _, _ in actions}
+        self.assertEqual(catalog_keys - _screens.all_screen_actions(), set())
+
+    def test_screen_actions_exist_in_catalog(self):
+        catalog_keys = {key for _, _, actions in _catalog.GROUPS for key, _, _, _ in actions}
+        self.assertEqual(_screens.all_screen_actions() - catalog_keys, set())
+
+    def test_levels_round_trip(self):
+        levels = {"tarefas": _screens.EDITAR, "fila": _screens.VER, "clientes": _screens.EDITAR}
+        derived = _screens.levels_from_actions(_screens.actions_for_levels(levels))
+        for key, value in derived.items():
+            self.assertEqual(value, levels.get(key, 0), key)
+
+    def test_merge_keeps_fine_tuning_when_level_does_not_change(self):
+        # Grupo com "Ver" de tarefas + uma ação avulsa de edição (ajuste fino).
+        keys = {_catalog.TAREFA_VISUALIZAR, _catalog.TAREFA_INICIAR}
+        merged = _screens.merge_levels(keys, {"tarefas": _screens.VER, "fila": _screens.VER})
+        self.assertIn(_catalog.TAREFA_INICIAR, merged)
+        self.assertIn(_catalog.FILA_VISUALIZAR_COMPLETA, merged)
+
+    def test_merge_replaces_screen_actions_when_level_changes(self):
+        keys = {_catalog.TAREFA_VISUALIZAR, _catalog.TAREFA_INICIAR}
+        merged = _screens.merge_levels(keys, {"tarefas": _screens.SEM_ACESSO})
+        self.assertFalse(merged & set(_screens.SCREENS_BY_KEY["tarefas"].all_actions))
+
+
+class ScreenAccessServiceTests(_TestCase):
+    def setUp(self):
+        _ensure_catalog()
+        User = _get_user_model()
+        self.org = _Organization.objects.create(name="Org")
+        self.admin = User.objects.create_user("admin", password="x")
+        self.person = User.objects.create_user("pessoa", password="x")
+        for user in (self.admin, self.person):
+            user.profile.organization = self.org
+            user.profile.save(update_fields=["organization"])
+        self.colab = _make_profile(
+            self.org, "Colaborador", _screens.actions_for_levels({"tarefas": 2, "atividades": 2})
+        )
+        self.scope = _Screens.standard_scope(self.org, _Screens.SCOPE_ORGANIZACAO)
+
+    def test_group_and_individual_adjustment(self):
+        levels = dict(_Screens.profile_levels(self.colab), clientes=_screens.EDITAR)
+        summary = _Screens.save_user_access(self.person, self.colab, self.scope, levels, changed_by=self.admin)
+        self.assertEqual(summary["levels"]["tarefas"], _screens.EDITAR)
+        self.assertEqual(summary["levels"]["clientes"], _screens.EDITAR)
+        self.assertEqual(summary["group_levels"]["clientes"], _screens.SEM_ACESSO)
+        self.assertTrue(_Auth.can(self.person, _catalog.CLIENTE_GERIR))
+        # O ajuste é concessão direta, não mexe no grupo.
+        self.assertEqual(
+            list(_UserAction.objects.filter(user=self.person, is_active=True).values_list("action__key", flat=True)),
+            [_catalog.CLIENTE_GERIR],
+        )
+
+    def test_cannot_remove_what_the_group_gives(self):
+        levels = dict(_Screens.profile_levels(self.colab), tarefas=_screens.SEM_ACESSO)
+        summary = _Screens.save_user_access(self.person, self.colab, self.scope, levels, changed_by=self.admin)
+        self.assertEqual(summary["levels"]["tarefas"], _screens.EDITAR)
+
+    def test_removing_adjustment_revokes_direct_grant(self):
+        levels = dict(_Screens.profile_levels(self.colab), clientes=_screens.EDITAR)
+        _Screens.save_user_access(self.person, self.colab, self.scope, levels, changed_by=self.admin)
+        levels["clientes"] = _screens.SEM_ACESSO
+        _Screens.save_user_access(self.person, self.colab, self.scope, levels, changed_by=self.admin)
+        self.assertFalse(_Auth.can(self.person, _catalog.CLIENTE_GERIR))
+
+    def test_changing_group_replaces_assignment(self):
+        consulta = _make_profile(self.org, "Consulta", _screens.actions_for_levels({"tarefas": 1}))
+        _Screens.save_user_access(self.person, self.colab, self.scope, {}, changed_by=self.admin)
+        _Screens.save_user_access(
+            self.person, consulta, self.scope, _Screens.profile_levels(consulta), changed_by=self.admin
+        )
+        active = _UserProfile.objects.filter(user=self.person, is_active=True)
+        self.assertEqual([a.profile_id for a in active], [consulta.pk])
+        self.assertFalse(_Auth.can(self.person, _catalog.TAREFA_CRIAR))
+
+    def test_set_profile_screens(self):
+        _Screens.set_profile_screens(self.colab, {"fila": _screens.EDITAR, "tarefas": _screens.VER}, self.admin)
+        levels = _Screens.profile_levels(self.colab)
+        self.assertEqual(levels["fila"], _screens.EDITAR)
+        self.assertEqual(levels["tarefas"], _screens.VER)
+        self.assertEqual(levels["atividades"], _screens.EDITAR)  # não enviado: intacto
+
+    def test_menu_visibility(self):
+        _Screens.save_user_access(self.person, self.colab, self.scope, {}, changed_by=self.admin)
+        visible = _screens.visible_screens(_Auth.action_keys_anywhere(self.person))
+        self.assertTrue(visible["tarefas"])
+        self.assertFalse(visible["usuarios"])
+
+
+class UserAndGroupScreensTests(_TestCase):
+    def setUp(self):
+        _ensure_catalog()
+        User = _get_user_model()
+        self.org = _Organization.objects.create(name="Org")
+        self.sector = _Sector.objects.create(organization=self.org, name="Projetos")
+        self.admin = User.objects.create_user("admin", password="x")
+        self.admin.profile.organization = self.org
+        self.admin.profile.save(update_fields=["organization"])
+        _grant_actions(
+            self.admin,
+            [
+                _catalog.USUARIO_VISUALIZAR,
+                _catalog.USUARIO_EDITAR,
+                _catalog.SEGURANCA_GERIR_PERFIS,
+                _catalog.SEGURANCA_GERIR_AUTORIZACOES,
+            ],
+            organization=self.org,
+        )
+        self.colab = _make_profile(self.org, "Colaborador", _screens.actions_for_levels({"tarefas": 2}))
+        self.client.force_login(self.admin)
+
+    def _payload(self, **extra):
+        data = {
+            "first_name": "Maria Oliveira",
+            "email": "maria@example.com",
+            "username": "maria",
+            "first_access": "senha",
+            "password1": "senha-segura-123",
+            "password2": "senha-segura-123",
+            "sectors": [self.sector.pk],
+            "managed_sectors": [self.sector.pk],
+            "main_sector": self.sector.pk,
+            "access_group": self.colab.pk,
+            "access_scope": "organizacao",
+        }
+        for screen in _screens.SCREENS:
+            data[f"screen_{screen.key}"] = _Screens.profile_levels(self.colab)[screen.key]
+        data.update(extra)
+        return data
+
+    def test_pages_render(self):
+        for name in ("user-list", "user-create", "group-list"):
+            response = self.client.get(_reverse(name), follow=True)
+            self.assertEqual(response.status_code, 200, name)
+        response = self.client.get(_reverse("group-list") + "?comparar=1")
+        self.assertContains(response, "Colaborador")
+
+    def test_create_user_with_team_group_and_extra_screen(self):
+        response = self.client.post(_reverse("user-create"), self._payload(screen_obras=2))
+        self.assertRedirects(response, _reverse("user-list"))
+        maria = _get_user_model().objects.get(username="maria")
+        self.assertEqual(maria.profile.main_sector, self.sector)
+        self.assertTrue(_Auth.can(maria, _catalog.TAREFA_CRIAR))
+        self.assertTrue(_Auth.can(maria, _catalog.OBRA_GERIR))
+        self.assertFalse(_Auth.can(maria, _catalog.USUARIO_VISUALIZAR))
+        page = self.client.get(_reverse("user-edit", args=[maria.pk]))
+        self.assertContains(page, "Ajuste individual")
+
+    def test_invite_sends_link_instead_of_password(self):
+        response = self.client.post(
+            _reverse("user-create"), self._payload(first_access="convite", password1="", password2="")
+        )
+        self.assertRedirects(response, _reverse("user-list"))
+        maria = _get_user_model().objects.get(username="maria")
+        self.assertFalse(maria.has_usable_password())
+        self.assertEqual(len(_mail.outbox), 1)
+        self.assertIn(maria.username, _mail.outbox[0].body)
+
+    def test_password_required_without_invite(self):
+        response = self.client.post(_reverse("user-create"), self._payload(password1="", password2=""))
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(_get_user_model().objects.filter(username="maria").exists())
+
+    def test_user_manager_without_security_cannot_change_access(self):
+        User = _get_user_model()
+        clerk = User.objects.create_user("clerk", password="x")
+        clerk.profile.organization = self.org
+        clerk.profile.save(update_fields=["organization"])
+        _grant_actions(clerk, [_catalog.USUARIO_VISUALIZAR, _catalog.USUARIO_EDITAR], organization=self.org)
+        self.client.force_login(clerk)
+        self.client.post(_reverse("user-create"), self._payload(screen_usuarios=2))
+        maria = User.objects.get(username="maria")
+        self.assertFalse(_Auth.can(maria, _catalog.USUARIO_EDITAR))
+        self.assertFalse(_Auth.can(maria, _catalog.TAREFA_CRIAR))
+
+    def test_create_group_from_template(self):
+        data = {"name": "Obras", "description": "Campo"}
+        for screen in _screens.SCREENS:
+            data[f"screen_{screen.key}"] = 0
+        data["screen_obras"] = 2
+        data["screen_tarefas"] = 1
+        response = self.client.post(_reverse("group-create"), data)
+        group = self.org.profiles.get(name="Obras")
+        self.assertRedirects(response, _reverse("group-edit", args=[group.pk]))
+        levels = _Screens.profile_levels(group)
+        self.assertEqual(levels["obras"], 2)
+        self.assertEqual(levels["tarefas"], 1)
+        self.assertEqual(_screens.count_screens(levels), 2)
+
+    def test_sidebar_hides_screens_without_access(self):
+        User = _get_user_model()
+        person = User.objects.create_user("p", password="x")
+        person.profile.organization = self.org
+        person.profile.save(update_fields=["organization"])
+        _Screens.save_user_access(
+            person, self.colab, _Screens.standard_scope(self.org, "organizacao"), {}, changed_by=self.admin
+        )
+        self.client.force_login(person)
+        page = self.client.get(_reverse("home"))
+        self.assertContains(page, _reverse("task-list"))
+        self.assertNotContains(page, _reverse("activity-list") + "?tab=minhas")
+        self.assertNotContains(page, _reverse("group-list"))
+
+    def test_seed_examples_command(self):
+        from django.core.management import call_command
+
+        self.admin.is_superuser = True
+        self.admin.save(update_fields=["is_superuser"])
+        call_command("seed_exemplos_acesso", verbosity=0)
+        call_command("seed_exemplos_acesso", verbosity=0)  # idempotente
+        User = _get_user_model()
+        self.assertEqual(User.objects.filter(email__endswith="@exemplo.com").count(), 7)
+        bruno = User.objects.get(username="bruno.rocha")
+        self.assertTrue(_Auth.can(bruno, _catalog.CLIENTE_GERIR))
+        self.assertFalse(_Auth.can(bruno, _catalog.USUARIO_VISUALIZAR))
+        response = self.client.get(_reverse("user-list") + "?situacao=todos")
+        self.assertContains(response, "Bruno Rocha")
+        self.assertContains(response, "Convite pendente")
+        call_command("seed_exemplos_acesso", remover=True, verbosity=0)
+        self.assertFalse(User.objects.filter(username="bruno.rocha", is_active=True).exists())

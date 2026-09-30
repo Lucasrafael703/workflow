@@ -107,15 +107,30 @@ class TagForm(forms.Form):
 
 
 class UserForm(forms.Form):
-    """Cadastro de usuário (doc 05 §7, §37).
+    """Cadastro de usuário numa tela só: quem é, em qual equipe trabalha e o
+    que pode acessar (grupo + telas).
 
-    "Setores em que atua" descreve onde a pessoa trabalha; o que ela pode fazer
-    é definido na tela de acessos, sempre dentro de um escopo (doc 05 §8, §45).
+    "Equipes" continua sendo participação em setor — onde a pessoa trabalha.
+    O que ela pode fazer vem do grupo de acesso e dos ajustes por tela, que
+    por baixo viram perfil e concessões do motor de autorização.
     """
 
-    first_name = forms.CharField(label="Nome", max_length=150)
+    FIRST_ACCESS_PASSWORD = "senha"
+    FIRST_ACCESS_INVITE = "convite"
+
+    first_name = forms.CharField(label="Nome completo", max_length=150)
     email = forms.EmailField(label="E-mail")
-    username = forms.CharField(label="Usuário", max_length=150)
+    username = forms.CharField(label="Usuário (login)", max_length=150)
+    first_access = forms.ChoiceField(
+        label="Primeiro acesso",
+        choices=[
+            (FIRST_ACCESS_PASSWORD, "Definir uma senha agora"),
+            (FIRST_ACCESS_INVITE, "Enviar link por e-mail para a pessoa criar a senha"),
+        ],
+        initial=FIRST_ACCESS_PASSWORD,
+        required=False,
+        widget=forms.RadioSelect,
+    )
     password1 = forms.CharField(
         label="Senha",
         required=False,
@@ -127,36 +142,97 @@ class UserForm(forms.Form):
         widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}),
     )
     sectors = forms.ModelMultipleChoiceField(
-        label="Setores em que atua",
+        label="Equipes em que trabalha",
         queryset=Sector.objects.none(),
         required=False,
         widget=forms.CheckboxSelectMultiple,
     )
     managed_sectors = forms.ModelMultipleChoiceField(
-        label="Setores que gerencia",
+        label="Equipes que gerencia",
         queryset=Sector.objects.none(),
         required=False,
         widget=forms.CheckboxSelectMultiple,
         help_text="Ser gestor é um vínculo estrutural: não concede autorização por si só.",
     )
+    main_sector = forms.ModelChoiceField(
+        label="Equipe principal",
+        queryset=Sector.objects.none(),
+        required=False,
+    )
     is_active = forms.BooleanField(label="Ativo", required=False, initial=True)
 
-    def __init__(self, *args, organization=None, instance=None, **kwargs):
+    access_group = forms.ModelChoiceField(
+        label="Grupo de acesso",
+        queryset=AccessProfile.objects.none(),
+        required=False,
+        empty_label="Sem grupo",
+        widget=forms.RadioSelect,
+    )
+    access_scope = forms.ChoiceField(label="Vale para", required=False)
+
+    def __init__(self, *args, organization=None, instance=None, access_summary=None, **kwargs):
+        from acessos import screens
+        from acessos.services import ScreenAccessService
+
         super().__init__(*args, **kwargs)
         self.instance = instance
+        self.organization = organization
+        self.access_summary = access_summary
         sectors = Sector.objects.filter(organization=organization, is_active=True)
         self.fields["sectors"].queryset = sectors
         self.fields["managed_sectors"].queryset = sectors
+        self.fields["main_sector"].queryset = sectors
+        self.fields["access_group"].queryset = AccessProfile.objects.filter(
+            organization=organization, is_active=True
+        ).order_by("name")
+
+        scope_choices = [
+            (ScreenAccessService.SCOPE_ORGANIZACAO, "Toda a organização (recomendado)"),
+            (ScreenAccessService.SCOPE_MINHAS_EQUIPES, "Só nas equipes da pessoa"),
+        ]
+        primary = (access_summary or {}).get("primary")
+        standard_ids = {
+            ScreenAccessService.standard_scope(organization, choice).id for choice, _ in scope_choices
+        } if organization is not None else set()
+        if primary is not None and primary.scope_id not in standard_ids:
+            scope_choices.append((f"escopo:{primary.scope_id}", f"Como está hoje: {primary.scope.label}"))
+        self.fields["access_scope"].choices = scope_choices
+        self.fields["access_scope"].initial = ScreenAccessService.SCOPE_ORGANIZACAO
+
+        for screen in screens.SCREENS:
+            choices = [(screens.SEM_ACESSO, "Sem acesso")]
+            if screen.has_view_level:
+                choices.append((screens.VER, "Ver"))
+            choices.append((screens.EDITAR, screen.edit_label))
+            self.fields[f"screen_{screen.key}"] = forms.TypedChoiceField(
+                label=screen.name,
+                choices=choices,
+                coerce=int,
+                required=False,
+                empty_value=screens.SEM_ACESSO,
+                widget=forms.RadioSelect,
+                initial=screens.SEM_ACESSO,
+            )
 
         if instance is None:
-            # Cadastrar exige senha na hora — não existe fluxo de convite por
-            # e-mail nesta versão, então a pessoa não teria como entrar.
-            self.fields["password1"].required = True
-            self.fields["password2"].required = True
             self.fields["password1"].help_text = "A pessoa poderá alterá-la depois, em Perfil."
         else:
             self.fields["password1"].help_text = "Deixe em branco para manter a senha atual."
             self.fields["password2"].help_text = "Repita a nova senha, se estiver redefinindo."
+
+        if access_summary is not None and not self.is_bound:
+            if primary is not None:
+                self.fields["access_group"].initial = primary.profile_id
+                if primary.scope_id in standard_ids:
+                    self.fields["access_scope"].initial = (
+                        ScreenAccessService.SCOPE_MINHAS_EQUIPES
+                        if primary.scope.type == Scope.Type.RELACIONAL
+                        else ScreenAccessService.SCOPE_ORGANIZACAO
+                    )
+                else:
+                    self.fields["access_scope"].initial = f"escopo:{primary.scope_id}"
+            for key, level in access_summary["levels"].items():
+                self.fields[f"screen_{key}"].initial = level
 
         if instance is not None and not self.is_bound:
             from accounts.models import UserSector
@@ -170,6 +246,41 @@ class UserForm(forms.Form):
             self.fields["managed_sectors"].initial = [
                 m.sector_id for m in memberships if m.role == UserSector.Role.GESTOR
             ]
+            profile = getattr(instance, "profile", None)
+            self.fields["main_sector"].initial = getattr(profile, "main_sector_id", None)
+
+    # -- telas -------------------------------------------------------------
+
+    def screen_fields(self):
+        """Campos de tela agrupados por seção, para o template."""
+        from acessos import screens
+
+        sections = []
+        for section in screens.SECTIONS:
+            rows = []
+            for screen in section.screens:
+                rows.append({"screen": screen, "field": self[f"screen_{screen.key}"]})
+            sections.append(
+                {"name": section.name, "rows": rows, "has_view": any(r["screen"].has_view_level for r in rows)}
+            )
+        return sections
+
+    def screen_levels(self):
+        from acessos import screens
+
+        return {
+            screen.key: int(self.cleaned_data.get(f"screen_{screen.key}") or 0) for screen in screens.SCREENS
+        }
+
+    def resolve_scope(self):
+        from acessos.services import ScreenAccessService
+
+        choice = self.cleaned_data.get("access_scope") or ScreenAccessService.SCOPE_ORGANIZACAO
+        if choice.startswith("escopo:"):
+            return Scope.objects.get(pk=int(choice.split(":", 1)[1]), organization=self.organization)
+        return ScreenAccessService.standard_scope(self.organization, choice)
+
+    # -- validação ---------------------------------------------------------
 
     def clean_username(self):
         username = self.cleaned_data["username"].strip()
@@ -187,11 +298,18 @@ class UserForm(forms.Form):
         if not managed <= sectors:
             self.add_error(
                 "managed_sectors",
-                "Só é possível gerenciar um setor do qual a pessoa participa.",
+                "Só é possível gerenciar uma equipe da qual a pessoa participa.",
             )
+        main = cleaned.get("main_sector")
+        if main is not None and main not in sectors:
+            self.add_error("main_sector", "A equipe principal precisa estar entre as equipes marcadas.")
 
+        invite = cleaned.get("first_access") == self.FIRST_ACCESS_INVITE and self.instance is None
+        cleaned["send_invite"] = invite
         password1 = cleaned.get("password1")
         password2 = cleaned.get("password2")
+        if self.instance is None and not invite and not password1:
+            self.add_error("password1", "Informe uma senha ou escolha enviar o link por e-mail.")
         if password1 or password2:
             if password1 != password2:
                 self.add_error("password2", "As senhas não coincidem.")
@@ -200,7 +318,62 @@ class UserForm(forms.Form):
                     password_validation.validate_password(password1, user=self.instance)
                 except forms.ValidationError as exc:
                     self.add_error("password1", exc)
+
+        access_scope = cleaned.get("access_scope") or ""
+        if access_scope.startswith("escopo:"):
+            try:
+                self.resolve_scope()
+            except (Scope.DoesNotExist, ValueError):
+                self.add_error("access_scope", "Escopo inválido.")
         return cleaned
+
+
+class AccessGroupForm(forms.Form):
+    """Grupo de acesso = um perfil, editado por tela."""
+
+    name = forms.CharField(label="Nome do grupo", max_length=120)
+    description = forms.CharField(label="Descrição", max_length=255, required=False)
+
+    def __init__(self, *args, levels=None, **kwargs):
+        from acessos import screens
+
+        super().__init__(*args, **kwargs)
+        levels = levels or {}
+        for screen in screens.SCREENS:
+            choices = [(screens.SEM_ACESSO, "Sem acesso")]
+            if screen.has_view_level:
+                choices.append((screens.VER, "Ver"))
+            choices.append((screens.EDITAR, screen.edit_label))
+            self.fields[f"screen_{screen.key}"] = forms.TypedChoiceField(
+                label=screen.name,
+                choices=choices,
+                coerce=int,
+                required=False,
+                empty_value=screens.SEM_ACESSO,
+                widget=forms.RadioSelect,
+                initial=levels.get(screen.key, screens.SEM_ACESSO),
+            )
+
+    def screen_fields(self, partial=()):
+        from acessos import screens
+
+        sections = []
+        for section in screens.SECTIONS:
+            rows = [
+                {"screen": screen, "field": self[f"screen_{screen.key}"], "partial": screen.key in partial}
+                for screen in section.screens
+            ]
+            sections.append(
+                {"name": section.name, "rows": rows, "has_view": any(r["screen"].has_view_level for r in rows)}
+            )
+        return sections
+
+    def screen_levels(self):
+        from acessos import screens
+
+        return {
+            screen.key: int(self.cleaned_data.get(f"screen_{screen.key}") or 0) for screen in screens.SCREENS
+        }
 
 
 class AccessProfileForm(forms.Form):
