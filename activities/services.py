@@ -15,7 +15,8 @@ from notifications.models import Notification
 from notifications.recipients import resolve_sector_and_admins, resolve_sector_managers
 from notifications.services import EmailService, NotificationService
 
-from . import process_state
+from . import policies, process_state
+from .errors import ActivityError  # noqa: F401  (reexportado: `from .services import ActivityError`)
 from .models import (
     Activity,
     ActivityAttachment,
@@ -38,14 +39,10 @@ from .models import (
     TaskReturn,
     WorkSession,
 )
+from .policies import ActivityTransitionPolicy, TaskTransitionPolicy, open_pendency
 
 
 User = get_user_model()
-
-
-class ActivityError(Exception):
-    """Levantado para qualquer transição/ação inválida do núcleo de atividades.
-    Views capturam esta exceção e exibem a mensagem via django.contrib.messages."""
 
 
 #: "Já realizei este trabalho": mesmo dia é livre; dias anteriores são permitidos
@@ -312,8 +309,7 @@ class ActivityService:
     @transaction.atomic
     def change_owner(activity, new_owner, changed_by):
         require_action(changed_by, catalog.ATIVIDADE_ALTERAR_DONO, activity)
-        if activity.status in (Activity.Status.CONCLUIDA, Activity.Status.CANCELADA):
-            raise ActivityError("Não é possível alterar o dono de uma atividade concluída ou cancelada.")
+        ActivityTransitionPolicy.assert_allowed(activity, "change_owner", changed_by)
         if new_owner.id == activity.owner_id:
             raise ActivityError("Este usuário já é o dono da atividade.")
 
@@ -349,8 +345,7 @@ class ActivityService:
         transferir para qualquer um — só para o que já está endereçado ao
         setor dela (Regra 6, tela de fila)."""
         require_action(user, catalog.ATIVIDADE_ASSUMIR, activity)
-        if activity.status in (Activity.Status.CONCLUIDA, Activity.Status.CANCELADA):
-            raise ActivityError("Não é possível assumir uma atividade concluída ou cancelada.")
+        ActivityTransitionPolicy.assert_allowed(activity, "claim", user)
         if activity.sector_id is None:
             raise ActivityError("Esta atividade não possui um grupo designado para ser assumida pela fila.")
         if user.id == activity.owner_id:
@@ -389,8 +384,7 @@ class ActivityService:
         Dono, conclusão e cancelamento possuem serviços próprios e não passam por aqui.
         """
         require_action(user, catalog.ATIVIDADE_EDITAR, activity)
-        if activity.status in (Activity.Status.CONCLUIDA, Activity.Status.CANCELADA):
-            raise ActivityError("Não é possível editar uma atividade concluída ou cancelada.")
+        ActivityTransitionPolicy.assert_allowed(activity, "edit", user)
 
         editable = {
             "title",
@@ -450,6 +444,45 @@ class ActivityService:
             activity_or_task.save(update_fields=["first_action_at"])
 
     @staticmethod
+    def _mark_in_progress(activity, user):
+        """Quando o trabalho numa tarefa começa, a atividade deixa de estar só
+        "Aberta" e passa a "Em andamento" (auditado). Só age sobre `ABERTA`; o
+        `UPDATE ... WHERE status = ABERTA` evita mexer numa atividade que outra
+        pessoa acabou de marcar pendente ou finalizar."""
+        changed = Activity.objects.filter(pk=activity.pk, status=Activity.Status.ABERTA).update(
+            status=Activity.Status.EM_ANDAMENTO
+        )
+        if not changed:
+            return False
+        activity.status = Activity.Status.EM_ANDAMENTO
+        AuditService.log(
+            user=user,
+            action=AuditLog.Action.UPDATE,
+            activity=activity,
+            field_name="status",
+            old_value=Activity.Status.ABERTA,
+            new_value=Activity.Status.EM_ANDAMENTO,
+            reason="O trabalho na primeira tarefa começou.",
+        )
+        return True
+
+    @staticmethod
+    @transaction.atomic
+    def change_sector(activity, sector, user):
+        """Troca o setor responsável (o "grupo designado"). Recusa enquanto houver
+        pendência aguardando aprovação: o setor define quem aprova e o dono já foi
+        trocado para o gestor."""
+        require_action(user, catalog.ATIVIDADE_EDITAR, activity)
+        ActivityTransitionPolicy.assert_allowed(activity, "change_sector", user)
+        if sector is None:
+            raise ActivityError("Escolha o setor responsável.")
+        if not _same_organization(activity, sector):
+            raise ActivityError("O setor informado pertence a outra organização.")
+        if sector.pk == activity.sector_id:
+            raise ActivityError("Esta atividade já está neste setor.")
+        return ActivityService.update_activity(activity, user, sector=sector)
+
+    @staticmethod
     def _unmet_criteria_message(names):
         return (
             "Não é possível concluir com sucesso ainda. Falta atender: "
@@ -461,13 +494,7 @@ class ActivityService:
     @transaction.atomic
     def complete_activity(activity, user):
         require_action(user, catalog.ATIVIDADE_CONCLUIR, activity)
-        if activity.status in (Activity.Status.CONCLUIDA, Activity.Status.CANCELADA):
-            raise ActivityError("Esta atividade já está concluída ou cancelada.")
-        open_tasks = activity.tasks.exclude(
-            status__in=[Task.Status.CONCLUIDA, Task.Status.CANCELADA]
-        )
-        if open_tasks.exists():
-            raise ActivityError("Existem tarefas ainda não concluídas ou canceladas nesta atividade.")
+        ActivityTransitionPolicy.assert_allowed(activity, "complete", user)
         # Caminho antigo de conclusão = "sucesso": mesma regra do finalize,
         # senão seria uma porta lateral para fechar sem os critérios.
         unmet_criteria = process_state.unmet_required_criterion_names(activity)
@@ -497,8 +524,7 @@ class ActivityService:
     @transaction.atomic
     def cancel_activity(activity, user, reason):
         require_action(user, catalog.ATIVIDADE_CANCELAR, activity)
-        if activity.status in (Activity.Status.CONCLUIDA, Activity.Status.CANCELADA):
-            raise ActivityError("Esta atividade já está concluída ou cancelada.")
+        ActivityTransitionPolicy.assert_allowed(activity, "cancel", user)
         if not reason:
             raise ActivityError("Informe o motivo do cancelamento.")
 
@@ -531,8 +557,7 @@ class ActivityService:
     @transaction.atomic
     def reopen_activity(activity, user, reason):
         require_action(user, catalog.ATIVIDADE_REABRIR, activity)
-        if activity.status != Activity.Status.CONCLUIDA:
-            raise ActivityError("Somente atividades concluídas podem ser reabertas.")
+        ActivityTransitionPolicy.assert_allowed(activity, "reopen", user)
         if not reason:
             raise ActivityError("Informe o motivo da reabertura.")
 
@@ -593,9 +618,7 @@ class ActivityService:
 
         unmet_criteria = []
         if as_concluded:
-            open_tasks = activity.tasks.exclude(status__in=[Task.Status.CONCLUIDA, Task.Status.CANCELADA])
-            if open_tasks.exists():
-                raise ActivityError("Existem tarefas ainda não concluídas ou canceladas nesta atividade.")
+            ActivityTransitionPolicy.assert_allowed(activity, "complete", user)
             unmet_criteria = process_state.unmet_required_criterion_names(activity)
             if unmet_criteria and outcome == Activity.CompletionOutcome.SUCESSO:
                 raise ActivityError(ActivityService._unmet_criteria_message(unmet_criteria))
@@ -670,8 +693,7 @@ class ActivityService:
         fica visível como pendente, sem trocar de dono.
         """
         require_action(user, catalog.ATIVIDADE_MARCAR_PENDENTE, activity)
-        if activity.status not in (Activity.Status.ABERTA, Activity.Status.EM_ANDAMENTO):
-            raise ActivityError("Só é possível marcar como pendente uma atividade aberta ou em andamento.")
+        ActivityTransitionPolicy.assert_allowed(activity, "mark_pending", user)
         if reason not in ActivityPendency.Reason.values:
             raise ActivityError("Selecione um motivo de pendência válido.")
         comment = (comment or "").strip()
@@ -780,14 +802,8 @@ class ActivityService:
         designou (ou segue com o gestor, se não houver a quem devolver),
         com status "Em andamento" (Regra pedida — item 4)."""
         require_action(user, catalog.ATIVIDADE_APROVAR_PENDENCIA, activity)
-        if activity.status != Activity.Status.PENDENTE:
-            raise ActivityError("Esta atividade não está pendente de aprovação.")
-
-        pendency = (
-            activity.pendencies.filter(status=ActivityPendency.Status.ABERTA).order_by("-opened_at").first()
-        )
-        if pendency is None or not pendency.requires_approval:
-            raise ActivityError("Não há uma pendência aguardando aprovação nesta atividade.")
+        ActivityTransitionPolicy.assert_allowed(activity, "approve_pendency", user)
+        pendency = open_pendency(activity, requires_approval=True)
 
         comment = (comment or "").strip()
         now = timezone.now()
@@ -832,6 +848,54 @@ class ActivityService:
             activity=activity,
             actor=user,
         )
+        notify_mentions(comment, user, activity, activity=activity)
+        return pendency
+
+    @staticmethod
+    @transaction.atomic
+    def resolve_pendency(activity, user, comment=""):
+        """Encerra uma pendência que só **avisava** (material ou informações do
+        cliente): não há gestor para aprovar, então quem pode marcar pendência
+        também a resolve. A atividade volta a "Em andamento" (se o trabalho já
+        começou) ou "Aberta"; a pendência fica `ENCERRADA`."""
+        require_action(user, catalog.ATIVIDADE_MARCAR_PENDENTE, activity)
+        ActivityTransitionPolicy.assert_allowed(activity, "resolve_pendency", user)
+        pendency = open_pendency(activity, requires_approval=False)
+
+        comment = (comment or "").strip()
+        now = timezone.now()
+        pendency.status = ActivityPendency.Status.ENCERRADA
+        pendency.resolved_by = user
+        pendency.resolved_at = now
+        pendency.resolution_comment = comment
+        pendency.save(update_fields=["status", "resolved_by", "resolved_at", "resolution_comment"])
+
+        old_status = activity.status
+        activity.status = Activity.Status.EM_ANDAMENTO if activity.first_action_at else Activity.Status.ABERTA
+        activity.save(update_fields=["status"])
+
+        AuditService.log(
+            user=user,
+            action=AuditLog.Action.PENDENCY_RESOLVED,
+            activity=activity,
+            old_value=old_status,
+            new_value=activity.status,
+            reason=f"{pendency.get_reason_display()}{': ' + comment if comment else ''}",
+        )
+        ActivityMessage.objects.create(
+            activity=activity,
+            author=user,
+            body=f"Pendência resolvida ({pendency.get_reason_display()}).{' ' + comment if comment else ''}",
+        )
+        if user.id != activity.owner_id:
+            NotificationService.notify(
+                users={activity.owner},
+                event_type=Notification.EventType.ACTIVITY_APPROVED,
+                title="Pendência resolvida",
+                message=f"A pendência de '{activity.title}' foi resolvida.",
+                activity=activity,
+                actor=user,
+            )
         notify_mentions(comment, user, activity, activity=activity)
         return pendency
 
@@ -1071,20 +1135,13 @@ class TaskService:
         Só `CONCLUIDA` satisfaz a dependência: predecessora cancelada,
         bloqueada ou devolvida continua segurando a sucessora.
         """
-        if task.depends_on_id is None:
-            return None
-        # Consulta o estado atual em vez de confiar em `task.depends_on`, que
-        # pode estar em cache com o status de antes da conclusão.
-        dependency = Task.objects.filter(pk=task.depends_on_id).only("id", "title", "status").first()
-        if dependency is not None and dependency.status != Task.Status.CONCLUIDA:
-            return dependency
-        return None
+        return policies.pending_dependency(task)
 
     @staticmethod
     def _assert_dependency_satisfied(task):
-        dependency = TaskService.pending_dependency(task)
-        if dependency is not None:
-            raise ActivityError(f"Esta tarefa depende da conclusão de «{dependency.title}».")
+        message = policies.dependency_message(task)
+        if message:
+            raise ActivityError(message)
 
     @staticmethod
     def _assert_process_inputs_ready(task):
@@ -1095,19 +1152,13 @@ class TaskService:
         primeira tarefa não deve começar como se a informação existisse.
         Tarefa manual (sem `process_step`) não é afetada.
         """
-        if task.process_step_id is None:
-            return
-        missing = process_state.missing_required_input_names(task.activity)
-        if missing:
-            raise ActivityError(
-                "Antes de trabalhar nesta tarefa, registre o recebimento dos inputs obrigatórios do processo: "
-                + "; ".join(missing)
-                + "."
-            )
+        message = policies.process_inputs_message(task)
+        if message:
+            raise ActivityError(message)
 
     @staticmethod
     def _has_active_queue_entry(task):
-        return task.queue_entries.filter(left_at__isnull=True).exists()
+        return policies.has_active_queue_entry(task)
 
     @staticmethod
     def _release_task(task, user, reason):
@@ -1162,8 +1213,7 @@ class TaskService:
         serviços próprios e não passam por aqui.
         """
         require_action(user, catalog.TAREFA_EDITAR, task)
-        if task.status in (Task.Status.CONCLUIDA, Task.Status.CANCELADA):
-            raise ActivityError("Não é possível editar uma tarefa concluída ou cancelada.")
+        TaskTransitionPolicy.assert_allowed(task, "edit", user)
 
         editable = {"title", "description", "requested_deadline", "order"}
         changed = []
@@ -1448,6 +1498,7 @@ class TaskService:
         )
         ActivityService._register_first_action(task)
         ActivityService._register_first_action(task.activity)
+        ActivityService._mark_in_progress(task.activity, user)
 
         audit_reason = "Lançamento manual de tempo"
         if reason:
@@ -1489,14 +1540,7 @@ class TaskService:
         """
         task = Task.objects.select_for_update(of=("self",)).select_related("activity", "sector").get(pk=task.pk)
         require_action(user, catalog.TAREFA_CONCLUIR, task)
-        if not TaskService._is_responsavel_or_participant(task, user):
-            raise ActivityError("Só o responsável ou um participante da tarefa pode informar o trabalho feito.")
-        if task.status == Task.Status.EM_EXECUCAO:
-            raise ActivityError("Esta tarefa já está em execução. Use “Concluir tarefa”.")
-        if task.status not in (Task.Status.EM_FILA, Task.Status.DISPONIVEL):
-            raise ActivityError("Só dá para informar o trabalho de uma tarefa que ainda não foi iniciada.")
-        TaskService._assert_dependency_satisfied(task)
-        TaskService._assert_process_inputs_ready(task)
+        TaskTransitionPolicy.assert_allowed(task, "retroactive", user)
 
         now = timezone.now()
         if started_at is None or ended_at is None:
@@ -1518,6 +1562,7 @@ class TaskService:
         )
         ActivityService._register_first_action(task)
         ActivityService._register_first_action(task.activity)
+        ActivityService._mark_in_progress(task.activity, user)
 
         local_start, local_end = timezone.localtime(started_at), timezone.localtime(ended_at)
         period = (
@@ -1684,8 +1729,7 @@ class TaskService:
     @transaction.atomic
     def change_responsavel(task, new_responsavel, changed_by):
         require_action(changed_by, catalog.TAREFA_ALTERAR_RESPONSAVEL, task)
-        if task.status in (Task.Status.CONCLUIDA, Task.Status.CANCELADA):
-            raise ActivityError("Não é possível alterar o responsável de uma tarefa concluída ou cancelada.")
+        TaskTransitionPolicy.assert_allowed(task, "change_responsavel", changed_by)
         if new_responsavel.id == task.responsavel_id:
             raise ActivityError("Este usuário já é o responsável desta tarefa.")
         if TaskService._is_active_participant(task, new_responsavel):
@@ -1722,27 +1766,17 @@ class TaskService:
 
     @staticmethod
     def _is_active_participant(task, user):
-        return TaskExecutor.objects.filter(task=task, user=user, removed_at__isnull=True).exists()
+        return policies.is_active_participant(task, user)
 
     @staticmethod
     def _is_responsavel_or_participant(task, user):
-        return task.responsavel_id == user.id or TaskService._is_active_participant(task, user)
+        return policies.is_responsavel_or_participant(task, user)
 
     @staticmethod
     @transaction.atomic
     def start(task, user):
         require_action(user, catalog.TAREFA_INICIAR, task)
-        if not TaskService._is_responsavel_or_participant(task, user):
-            raise ActivityError("Somente o responsável ou participantes atribuídos podem iniciar a tarefa.")
-        if task.status not in (
-            Task.Status.DISPONIVEL,
-            Task.Status.EM_FILA,
-            Task.Status.DEVOLVIDA,
-            Task.Status.EM_EXECUCAO,
-        ):
-            raise ActivityError("Esta tarefa não pode ser iniciada no status atual.")
-        TaskService._assert_dependency_satisfied(task)
-        TaskService._assert_process_inputs_ready(task)
+        TaskTransitionPolicy.assert_allowed(task, "start", user)
 
         # Regra 04 §115 (revista): a pessoa pode ter sessões de trabalho
         # simultâneas em tarefas diferentes — cada uma é independente e
@@ -1756,6 +1790,7 @@ class TaskService:
         task.save(update_fields=["status"])
         ActivityService._register_first_action(task)
         ActivityService._register_first_action(task.activity)
+        ActivityService._mark_in_progress(task.activity, user)
 
         AuditService.log(
             user=user, action=AuditLog.Action.SESSION_STARTED, activity=task.activity, task=task, old_value=old_status, new_value=task.status
@@ -1766,9 +1801,8 @@ class TaskService:
     @transaction.atomic
     def pause(task, user):
         require_action(user, catalog.TAREFA_PAUSAR, task)
+        TaskTransitionPolicy.assert_allowed(task, "pause", user)
         session = WorkSession.objects.filter(task=task, user=user, ended_at__isnull=True).first()
-        if session is None:
-            raise ActivityError("Você não possui uma sessão de trabalho ativa nesta tarefa.")
 
         session.ended_at = timezone.now()
         session.save(update_fields=["ended_at"])
@@ -1792,12 +1826,7 @@ class TaskService:
     @transaction.atomic
     def complete(task, user):
         require_action(user, catalog.TAREFA_CONCLUIR, task)
-        if task.status not in (Task.Status.EM_EXECUCAO, Task.Status.EM_FILA, Task.Status.DISPONIVEL):
-            raise ActivityError("Esta tarefa não pode ser concluída no status atual.")
-        # Concluir também é "andar": sem isto, uma etapa que aguarda a anterior
-        # (DISPONIVEL, fora da fila) poderia ser concluída fora de ordem.
-        TaskService._assert_dependency_satisfied(task)
-        TaskService._assert_process_inputs_ready(task)
+        TaskTransitionPolicy.assert_allowed(task, "complete", user)
 
         now = timezone.now()
         open_sessions = WorkSession.objects.filter(task=task, ended_at__isnull=True)
@@ -1841,8 +1870,7 @@ class TaskService:
     @transaction.atomic
     def cancel(task, user, reason):
         require_action(user, catalog.TAREFA_CANCELAR, task)
-        if task.status in (Task.Status.CONCLUIDA, Task.Status.CANCELADA):
-            raise ActivityError("Esta tarefa já está concluída ou cancelada.")
+        TaskTransitionPolicy.assert_allowed(task, "cancel", user)
         if not reason:
             raise ActivityError("Informe o motivo do cancelamento.")
 
@@ -1888,8 +1916,7 @@ class TaskService:
             .get(pk=task.pk)
         )
         require_action(user, catalog.TAREFA_REABRIR, task)
-        if task.status != Task.Status.CONCLUIDA:
-            raise ActivityError("Somente tarefas concluídas podem ser reabertas.")
+        TaskTransitionPolicy.assert_allowed(task, "reopen", user)
         reason = (reason or "").strip()
         if not reason:
             raise ActivityError("Informe o motivo da reabertura.")
@@ -1992,10 +2019,7 @@ class TaskService:
         require_action(user, catalog.TAREFA_BLOQUEAR, task)
         if not reason:
             raise ActivityError("Informe o motivo do bloqueio.")
-        if task.status == Task.Status.BLOQUEADA:
-            raise ActivityError("Esta tarefa já está bloqueada.")
-        if task.status in (Task.Status.CONCLUIDA, Task.Status.CANCELADA):
-            raise ActivityError("Não é possível bloquear uma tarefa concluída ou cancelada.")
+        TaskTransitionPolicy.assert_allowed(task, "block", user)
 
         old_status = task.status
         TaskBlock.objects.create(task=task, reason=reason, observation=observation, started_by=user)
@@ -2021,8 +2045,7 @@ class TaskService:
     @transaction.atomic
     def unblock(task, user, resume_status=None):
         require_action(user, catalog.TAREFA_BLOQUEAR, task)
-        if task.status != Task.Status.BLOQUEADA:
-            raise ActivityError("Esta tarefa não está bloqueada.")
+        TaskTransitionPolicy.assert_allowed(task, "unblock", user)
 
         open_block = task.blocks.filter(ended_at__isnull=True).order_by("-started_at").first()
         if open_block:
@@ -2058,13 +2081,26 @@ class TaskService:
 
     @staticmethod
     @transaction.atomic
-    def move_to_sector(task, new_sector, user, note=""):
+    def move_to_sector(task, new_sector, user, note="", keep_status=False):
+        """Envia a tarefa para a fila de outro setor.
+
+        `keep_status=True` (devolução) mantém `DEVOLVIDA` na fila do setor que
+        recebeu em vez de `EM_FILA`: o status diz a verdade até alguém agir e a
+        notificação de "ação necessária" continua valendo.
+        """
         require_action(user, catalog.TAREFA_MOVER_SETOR, task)
+        TaskTransitionPolicy.assert_allowed(task, "move_sector", user)
         if not _same_organization(task.activity, new_sector):
             raise ActivityError("O setor informado pertence a outra organização.")
 
         old_sector = task.sector
         now = timezone.now()
+
+        # Quem estava trabalhando deixa de estar: o cronômetro não segue
+        # rodando numa tarefa que agora pertence a outro setor.
+        for session in WorkSession.objects.filter(task=task, ended_at__isnull=True):
+            session.ended_at = now
+            session.save(update_fields=["ended_at"])
 
         active_entry = task.queue_entries.filter(left_at__isnull=True).first()
         if active_entry:
@@ -2076,12 +2112,13 @@ class TaskService:
         # Etapa que ainda espera a anterior muda de setor sem entrar na fila do
         # novo setor: ela só entra quando a predecessora for concluída.
         waiting = TaskService.pending_dependency(task) is not None and active_entry is None
-        task.status = Task.Status.DISPONIVEL if waiting else Task.Status.EM_FILA
+        queued_status = Task.Status.DEVOLVIDA if keep_status else Task.Status.EM_FILA
+        task.status = Task.Status.DISPONIVEL if waiting else queued_status
         task.save(update_fields=["sector", "status"])
 
         SectorTransfer.objects.create(task=task, from_sector=old_sector, to_sector=new_sector, moved_by=user, note=note)
         if not waiting:
-            QueueService.enqueue(task, new_sector, user=user)
+            QueueService.enqueue(task, new_sector, user=user, status=queued_status)
 
         AuditService.log(
             user=user,
@@ -2112,10 +2149,7 @@ class TaskService:
             raise ActivityError("Toda devolução precisa de um motivo.")
         if not _same_organization(task.activity, to_sector, reason):
             raise ActivityError("Dados informados pertencem a outra organização.")
-        if TaskService.pending_dependency(task) is not None and not TaskService._has_active_queue_entry(task):
-            raise ActivityError(
-                "Esta tarefa ainda aguarda a etapa anterior e não chegou a ser trabalhada; não há o que devolver."
-            )
+        TaskTransitionPolicy.assert_allowed(task, "return", user)
 
         old_sector = task.sector
         TaskReturn.objects.create(
@@ -2136,7 +2170,7 @@ class TaskService:
             reason=reason.name,
         )
 
-        TaskService.move_to_sector(task, to_sector, user, note=f"Devolução: {reason.name}")
+        TaskService.move_to_sector(task, to_sector, user, note=f"Devolução: {reason.name}", keep_status=True)
 
         recipients = resolve_sector_and_admins(to_sector) | resolve_sector_and_admins(old_sector)
         NotificationService.notify(
@@ -2208,7 +2242,10 @@ class TaskService:
         overdue_tasks = Task.objects.filter(
             committed_deadline__lt=now,
             overdue_notified_at__isnull=True,
-            status__in=[Task.Status.DISPONIVEL, Task.Status.EM_FILA, Task.Status.EM_EXECUCAO, Task.Status.BLOQUEADA],
+            status__in=[
+                Task.Status.DISPONIVEL, Task.Status.EM_FILA, Task.Status.DEVOLVIDA,
+                Task.Status.EM_EXECUCAO, Task.Status.BLOQUEADA,
+            ],
         )
 
         count = 0
@@ -2286,8 +2323,11 @@ class WorkTimeService:
 class QueueService:
     @staticmethod
     @transaction.atomic
-    def enqueue(task, sector, user=None):
-        """Insere a tarefa no final da fila ativa do setor (Regras 03 §6-8)."""
+    def enqueue(task, sector, user=None, status=Task.Status.EM_FILA):
+        """Insere a tarefa no final da fila ativa do setor (Regras 03 §6-8).
+
+        `status` é o que a tarefa passa a ter na fila: `EM_FILA`, ou `DEVOLVIDA`
+        quando chega por devolução."""
         active_entries = QueueEntry.objects.filter(sector=sector, left_at__isnull=True).order_by("position")
         new_total = active_entries.count() + 1
         position = new_total
@@ -2295,7 +2335,7 @@ class QueueService:
         entry = QueueEntry.objects.create(
             task=task, sector=sector, position=position, queue_size_at_entry=new_total
         )
-        task.status = Task.Status.EM_FILA
+        task.status = status
         task.save(update_fields=["status"])
         return entry
 

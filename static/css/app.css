@@ -12,6 +12,10 @@
     --brand-navy-deep: #12294a;
     --brand-blue: #1b62c4;
     --brand-blue-light: #61a5f2;
+    --brand-green: #18B981;
+    --brand-green-hover: #0f9f72;
+    --brand-green-soft: #e7f8f1;
+    --brand-green-border: #a7e6cf;
 
     /* Superfícies */
     --bg: #f4f7fb;
@@ -43,8 +47,9 @@
     --danger-soft: #fdecee;
     --warning: #b8770f;
     --warning-soft: #fdf3e0;
-    --success: #1b8a52;
-    --success-soft: #e5f5eb;
+    /* O tom oficial fica nos acentos; o tom escuro preserva contraste em texto. */
+    --success: #0f7a52;
+    --success-soft: var(--brand-green-soft);
     --info: var(--brand-blue);
     --info-soft: #e8f1fd;
     --neutral-soft: #eef2f7;
@@ -518,7 +523,7 @@ html.sidebar--collapsed .nav-group .nav-subitem { margin: 0; }
     padding: 10px 12px; font-size: 13px; font-weight: 600; color: var(--muted);
     background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer;
 }
-.side-tabs__tab.is-active { color: var(--primary); border-bottom-color: var(--primary); }
+.side-tabs__tab.is-active { color: var(--brand-green-hover); border-bottom-color: var(--brand-green); }
 .side-tabs__panel { display: none; }
 .side-tabs__panel.is-active { display: block; }
 
@@ -667,7 +672,7 @@ thead th {
     color: var(--muted); font-weight: 700; font-size: 11px;
     text-transform: uppercase; letter-spacing: .05em;
     background: var(--surface-alt);
-    border-bottom: 1px solid var(--border);
+    border-bottom: 2px solid var(--brand-green-border);
 }
 tbody tr:last-child td { border-bottom: none; }
 
@@ -785,7 +790,7 @@ td .title:hover { color: var(--primary); }
     border-bottom: 2px solid transparent; margin-bottom: -1px;
 }
 .tabs a:hover { color: var(--text); text-decoration: none; }
-.tabs a.is-active { color: var(--primary); border-bottom-color: var(--primary); }
+.tabs a.is-active { color: var(--brand-green-hover); border-bottom-color: var(--brand-green); }
 .tabs .count { color: var(--muted); font-weight: 600; }
 
 /* Estado vazio: sempre ensina o próximo passo (Benchmark §4.1) */
@@ -1208,7 +1213,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     grid-template-columns: minmax(0, 2.8fr) minmax(0, .9fr) minmax(0, 1.1fr) minmax(0, 1fr) auto minmax(0, .6fr);
     gap: 12px; align-items: center; padding: 10px 4px;
 }
-.task-table__head { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .02em; border-bottom: 1px solid var(--border); }
+.task-table__head { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .02em; border-bottom: 2px solid var(--brand-green-border); }
 .task-table__row {
     border-bottom: 1px solid var(--border); color: inherit; text-decoration: none;
 }
@@ -2269,14 +2274,17 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .kanban-column__head {
     display: flex; align-items: center; justify-content: space-between;
     padding: 12px 14px; border-bottom: 1px solid var(--border);
-    border-top: 3px solid var(--stage-color, transparent);
+    border-top: 3px solid var(--brand-green);
     border-top-left-radius: var(--radius); border-top-right-radius: var(--radius);
     font-weight: 700; font-size: 13.5px;
 }
 .kanban-column__count {
-    background: var(--neutral-soft); color: var(--text-2);
+    background: var(--brand-green-soft); color: var(--success);
     border-radius: 999px; padding: 1px 9px; font-size: 12px; font-weight: 700;
 }
+.kanban-column:hover,
+.kanban-column:focus-within { border-color: var(--brand-green-border); }
+.kanban-column:focus-within .kanban-column__count { background: var(--brand-green); color: #fff; }
 .kanban-column__body { padding: 10px; overflow-y: auto; flex: 1; min-height: 60px; }
 .kanban-card {
     background: var(--surface); border: 1px solid var(--border);
@@ -2316,10 +2324,10 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     color: var(--text-2); font-size: 14px; font-weight: 600;
 }
 .activities-tabs a:hover { color: var(--primary); text-decoration: none; }
-.activities-tabs a.is-active { color: var(--primary); }
+.activities-tabs a.is-active { color: var(--brand-green-hover); }
 .activities-tabs a.is-active::after {
     content: ""; position: absolute; left: 0; right: 0; bottom: -1px;
-    height: 2px; border-radius: 2px 2px 0 0; background: var(--primary);
+    height: 2px; border-radius: 2px 2px 0 0; background: var(--brand-green);
 }
 
 .activities-filters { margin-bottom: 12px; }
@@ -2407,7 +2415,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .activity-progress-count strong { color: var(--text); }
 .activity-progress-count > span { color: var(--muted); }
 .activity-progress-track { height: 4px; margin-top: 8px; border-radius: 99px; background: var(--neutral-soft); overflow: hidden; }
-.activity-progress-track span { display: block; height: 100%; border-radius: inherit; background: var(--primary); }
+.activity-progress-track span { display: block; height: 100%; border-radius: inherit; background: var(--brand-green); }
 .activity-state {
     display: inline-flex; align-items: center; gap: 7px; color: var(--text-2);
     font-size: 12.5px; font-weight: 600; white-space: nowrap;
@@ -2722,9 +2730,10 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     background: transparent;
 }
 .tasks-kanban-page .tabs:nth-of-type(2) a.is-active {
-    background: #dbeafe;
-    border-color: #bfdbfe;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, .08);
+    background: var(--brand-green-soft);
+    border-color: var(--brand-green-border);
+    color: var(--success);
+    box-shadow: 0 4px 12px rgba(24, 185, 129, .08);
 }
 .tasks-kanban-page form {
     margin-bottom: 14px;
@@ -2789,7 +2798,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     display: flex;
     align-items: center;
     gap: 8px;
-    border-top: 5px solid var(--stage-color, #94a3b8);
+    border-top: 5px solid var(--brand-green);
     border-bottom: 1px solid var(--border);
     background: #f8fafc;
 }
@@ -2820,8 +2829,8 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     align-items: center;
     justify-content: center;
     border-radius: 999px;
-    background: #eef2f7;
-    color: #475569;
+    background: var(--brand-green-soft);
+    color: var(--success);
     font-size: 12px;
     font-weight: 800;
 }
@@ -3175,7 +3184,8 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 }
 .tasks-kanban-page .tabs:nth-of-type(2) a.is-active {
     background: transparent;
-    border-color: var(--primary);
+    border-color: var(--brand-green);
+    color: var(--brand-green-hover);
     box-shadow: none;
 }
 .tasks-kanban-page form {
@@ -3940,7 +3950,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     height: 44px;
     padding: 0 12px;
     background: #f8fafc;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 2px solid var(--brand-green-border);
     color: var(--text-2);
     text-align: left;
     font-size: 11px;
@@ -4125,6 +4135,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     display: flex;
     align-items: center;
     gap: 10px;
+    border-top: 3px solid var(--brand-green);
     border-bottom: 1px solid var(--border);
 }
 
@@ -4149,8 +4160,14 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     align-items: center;
     justify-content: center;
     border-radius: 999px;
-    background: #eef2f7;
+    background: var(--brand-green-soft);
+    color: var(--success);
     font-weight: 800;
+}
+.activities-kanban-column:hover,
+.activities-kanban-column:focus-within { border-color: var(--brand-green-border); }
+.activities-kanban-column:focus-within .activities-kanban-column__head > span:last-child {
+    background: var(--brand-green); color: #fff;
 }
 
 .activities-kanban-column__body {
