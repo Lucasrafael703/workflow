@@ -22,7 +22,7 @@
 | `notificacoes/` | | `notifications.urls` |
 | `processos/` | | `processes.urls` |
 | `painel/` | | `painel.urls` |
-| `entrada/` | | `intake.urls` |
+| `entrada/` | | `intake.urls` (só com `INTAKE_ENABLED`; desligado, 404 em todas as rotas) |
 | `` | | `core.urls`, depois `activities.urls` |
 | `media/<path>` | | `static.serve` de `MEDIA_ROOT` (sem login) |
 | `demanda-arquivos/<path>` | | `static.serve` de `ACTIVITY_FILES_ROOT` (sem login) |
@@ -171,6 +171,10 @@ o responsável padrão de uma etapa do rascunho, `process-step-responsavel`),
 | `mark-all-read/` | | Marca todas |
 
 ## 6.1 `intake` (`/entrada/`) — Caixa de Entrada
+
+**Inativa por padrão:** com `INTAKE_ENABLED` desligado (ver [03_CONFIGURACAO.md](03_CONFIGURACAO.md)) toda rota abaixo
+responde 404 (o decorador `only_when_enabled`, em `intake/urls.py`, olha a chave a cada pedido) e o item "Entrada" não
+aparece no menu.
 
 Nomes de rota são globais (o projeto não usa `app_name`), por isso o prefixo `intake-`. Todas
 exigem login e organização; item de outra organização dá 404, sem a ação dá 403 (seção 4.2 de

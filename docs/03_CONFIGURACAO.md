@@ -38,6 +38,7 @@ sozinho usaria dev.
 | `SECRET_KEY` | — **obrigatória** | `base.py` | Sem ela o Django não inicia. |
 | `ALLOWED_HOSTS` | `[]` | `base.py` | Lista separada por vírgula. Em dev com `DEBUG=True`, `localhost` já é aceito. |
 | `ACTIVITY_FILES_ROOT` | `<projeto>/atividade_arquivos` | `base.py` | Pasta dos anexos das demandas (seção 4). O nome `atividade_arquivos` não mudou com a troca para "Demanda": é local de armazenamento, não endereço. |
+| `INTAKE_ENABLED` | `false` | `base.py` | Liga a Caixa de Entrada (`/entrada/`). Desligada, o item "Entrada" some do menu e todas as rotas dela dão 404; o código, as tabelas e as permissões `entrada.*` continuam. Para reativar: `INTAKE_ENABLED=true` (no Render, em Environment do serviço web; não está no `render.yaml` para um novo deploy não desfazer o valor do painel). |
 | `EMAIL_HOST` | `""` | `base.py` | |
 | `EMAIL_PORT` | `587` | `base.py` | |
 | `EMAIL_HOST_USER` | `""` | `base.py` | |

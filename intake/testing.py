@@ -8,7 +8,7 @@ setor, quem não tem nada e quem é de outra organização.
 
 import datetime
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from acessos import catalog
@@ -35,6 +35,8 @@ EMAIL_TEXT = (
 )
 
 
+# A Caixa de Entrada vem desligada (`INTAKE_ENABLED`); os testes do app a ligam, e `test_inativa.py` desliga de novo.
+@override_settings(INTAKE_ENABLED=True)
 class IntakeTestCase(TestCase):
     def setUp(self):
         self.org = Organization.objects.create(name="Biasi")

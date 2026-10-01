@@ -111,6 +111,11 @@ MEDIA_ROOT = BASE_DIR / "media"
 ACTIVITY_FILES_ROOT = env.path("ACTIVITY_FILES_ROOT", default=str(BASE_DIR / "atividade_arquivos"))()
 ACTIVITY_FILES_URL = "/demanda-arquivos/"
 
+# Caixa de Entrada (app `intake`, rotas `/entrada/`): inativa por enquanto. Desligada, o item some do menu e as
+# rotas respondem 404; o código, as tabelas e as permissões `entrada.*` continuam como estão. Para reativar,
+# defina INTAKE_ENABLED=true no ambiente (no Render: Environment do serviço web).
+INTAKE_ENABLED = env.bool("INTAKE_ENABLED", default=False)
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Login é feito por e-mail (Telas/09_01_LOGIN.md), não por username.

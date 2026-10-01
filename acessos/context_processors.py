@@ -1,3 +1,5 @@
+from django.conf import settings
+
 from . import catalog
 from .services import AuthorizationService
 
@@ -207,7 +209,12 @@ def _intake_nav(user, organization):
     O contador só conta o que está novo e a pessoa enxerga — é o que espera
     uma decisão dela. Roda a cada página, então é uma avaliação e um COUNT, e
     só quando a pessoa pode ver a Caixa de Entrada.
+
+    Com a Caixa de Entrada inativa (`settings.INTAKE_ENABLED` desligado) o item
+    não aparece e nada disso é consultado.
     """
+    if not settings.INTAKE_ENABLED:
+        return {"visible": False, "can_view": False, "new": 0}
     can_view = AuthorizationService.can_anywhere(user, catalog.ENTRADA_VISUALIZAR)
     visible = can_view or AuthorizationService.can_anywhere(user, catalog.ENTRADA_REGISTRAR)
     new = 0
