@@ -156,8 +156,9 @@ class TaskTransitionPolicy(_Policy):
     START_STATES = (Task.Status.DISPONIVEL, Task.Status.EM_FILA, Task.Status.DEVOLVIDA, Task.Status.EM_EXECUCAO)
     #: Onde pode ser concluída direto.
     COMPLETE_STATES = (Task.Status.EM_EXECUCAO, Task.Status.EM_FILA, Task.Status.DISPONIVEL, Task.Status.DEVOLVIDA)
-    #: Ainda não iniciada: serve para "Já realizei este trabalho".
-    NOT_STARTED_STATES = (Task.Status.EM_FILA, Task.Status.DISPONIVEL, Task.Status.DEVOLVIDA)
+    #: Ainda não iniciada: serve para "Já realizei este trabalho". A devolvida fica de fora (docs/06 §2.10.1):
+    #: ela volta para a fila de outro setor e precisa ser assumida ali antes de qualquer registro.
+    NOT_STARTED_STATES = (Task.Status.EM_FILA, Task.Status.DISPONIVEL)
 
     @staticmethod
     def _check_start(task, user):

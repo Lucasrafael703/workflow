@@ -57,6 +57,14 @@
                 <span class="nav-item__label">Início</span>
             </a>
 
+            {% if lps_nav.intake %}
+            <a href="{% if lps_nav.intake_can_view %}{% url 'intake-list' %}{% else %}{% url 'intake-capture' %}{% endif %}" class="nav-item {% if nav_active == 'intake' %}is-active{% endif %}" data-tooltip="Entrada">
+                <span class="nav-item__icon">{% include "_icon.html" with name="inbox" %}</span>
+                <span class="nav-item__label">Entrada</span>
+                {% if lps_intake_new %}<span class="nav-count">{{ lps_intake_new }}</span>{% endif %}
+            </a>
+            {% endif %}
+
             <details class="nav-group {% if nav_active == 'activities' %}has-active{% endif %}"
                       {% if nav_active == 'activities' %}open{% endif %}>
                 <summary data-tooltip="Demandas">
