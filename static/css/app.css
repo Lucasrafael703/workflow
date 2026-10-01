@@ -1011,6 +1011,9 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     margin: auto;
 }
 .modal--wide { max-width: 860px; }
+.modal--s { max-width: 380px; }
+.modal--m { max-width: 620px; }
+.modal--l { max-width: 980px; }
 .modal--xl {
     max-width: 1180px;
     width: 90%;
@@ -1176,6 +1179,30 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 /* Painel da tarefa no mesmo padrão das janelas Nova/Editar tarefa. */
 .drawer__facts { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
 .drawer .fold__body .form-row:last-child { margin-bottom: 0; }
+
+/* Valores que podem ser manipulados usam uma linguagem visual única. */
+.actionable-value {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 28px;
+    padding: 2px 6px;
+    border-radius: 6px;
+    color: inherit;
+    text-decoration: none;
+    transition: background-color .12s ease, box-shadow .12s ease;
+}
+.actionable-value:hover,
+.actionable-value:focus-visible {
+    background: color-mix(in srgb, #18B981 12%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, #18B981 28%, transparent);
+    outline: none;
+}
+.actionable-value__arrow { color: #18B981; font-size: 1.05em; line-height: 1; }
+.actionable-value--compact { min-height: 24px; padding-inline: 4px; }
+.actionable-value--static { padding-inline: 0; }
+.lps-row-updated { animation: lps-row-updated 1.8s ease-out; }
+@keyframes lps-row-updated { 0% { background: color-mix(in srgb, #18B981 20%, transparent); } 100% { background: transparent; } }
 .drawer__head { flex-direction: column-reverse; align-items: stretch; gap: 10px; }  /* botões em cima, título com a largura toda */
 .drawer__head-actions { flex-wrap: wrap; justify-content: flex-end; }
 .timer-hero--drawer { padding: 10px 0 18px; }
@@ -1250,6 +1277,19 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .message--error { background: var(--danger-soft); color: #9d2f38; border-color: #f5c9cc; }
 .message--warning { background: var(--warning-soft); color: #8a5a0f; border-color: #f0dcb4; }
 .message--info { background: var(--info-soft); color: #1d508f; border-color: #c9ddf8; }
+
+.lps-toast-region {
+    position: fixed; right: 20px; bottom: 20px; z-index: 120;
+    display: grid; gap: 8px; width: min(360px, calc(100vw - 40px));
+    pointer-events: none;
+}
+.lps-toast {
+    padding: 11px 15px; border: 1px solid var(--brand-green-border);
+    border-left: 3px solid var(--brand-green); border-radius: var(--radius-sm);
+    background: var(--surface); color: var(--text); box-shadow: var(--shadow-lg);
+    font-weight: 600; animation: lps-toast-in .16s ease-out;
+}
+@keyframes lps-toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
 /* Linha do tempo em linguagem humana (doc 09 §124) */
 .timeline { list-style: none; padding: 0; margin: 0; }
@@ -3835,37 +3875,101 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 
 .activities-filters {
     margin: 16px 0 18px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
 }
 
 .activities-toolbar {
-    display: grid;
-    grid-template-columns: minmax(320px, 1fr) auto auto auto auto auto auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
     gap: 12px;
 }
 
 .activities-search {
+    display: block;
+    flex: 1 1 350px;
+    min-width: 300px;
     max-width: none;
+}
+
+.filter-field-label {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--text-2);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.activities-search__control {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.activities-search__control > svg {
+    position: absolute;
+    left: 13px;
+    width: 17px;
+    height: 17px;
+    color: var(--muted);
+    pointer-events: none;
 }
 
 .activities-search input,
 .activities-select select,
 .activities-filter-chip {
-    height: 46px;
+    height: 40px;
     border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(15, 39, 71, .035);
+    box-shadow: none;
 }
 
-.activities-filter-chip {
+.activities-search input {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    padding: 8px 12px 8px 40px;
     border: 1px solid var(--border-strong);
-    background: #fff;
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    font-size: 13px;
+}
+
+.activities-search__submit {
+    flex: 0 0 auto;
+    min-height: 40px;
+    gap: 6px;
+    padding-inline: 13px;
+}
+
+.activities-search__submit svg { width: 16px; height: 16px; }
+
+.activities-filter-chip {
+    flex: 0 0 auto;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
     color: var(--text);
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
-    padding: 0 16px;
+    padding: 0 13px;
     font: inherit;
     font-weight: 700;
-    cursor: pointer;
+    white-space: nowrap;
+}
+
+.activities-filter-chip:hover,
+.activities-filter-chip:focus-visible {
+    border-color: var(--primary);
+    color: var(--primary);
+    text-decoration: none;
 }
 
 .activities-filter-chip--danger {
@@ -3874,19 +3978,49 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     border-color: #f3bec5;
 }
 
+.activities-filter-chip--danger:hover,
+.activities-filter-chip--danger:focus-visible,
+.activities-filter-chip--danger.activities-filter-chip--active {
+    color: var(--danger);
+    background: var(--danger-soft);
+    border-color: var(--danger);
+}
+
 .activities-filter-chip--active {
     color: var(--primary);
     background: var(--primary-soft);
     border-color: #bfdbfe;
 }
 
-.activities-select select {
-    min-width: 136px;
-    font-weight: 600;
+.activities-select {
+    flex: 1 1 136px;
+    min-width: 124px;
 }
 
-.activities-order select {
-    min-width: 150px;
+.activities-select select {
+    width: 100%;
+    min-width: 0;
+    padding: 8px 32px 8px 12px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+}
+
+.activities-search input:focus,
+.activities-select select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.activities-filter-footer {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 12px;
 }
 
 .activities-table-card {
@@ -3915,35 +4049,27 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .activities-col-status { width: 116px; }
 .activities-col-actions { width: 48px; }
 
-.activities-page--list .activities-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+@media (max-width: 1180px) {
+    .activities-page .activities-search {
+        flex-basis: 100%;
+        min-width: 0;
+    }
+
+    .activities-page .activities-filter-chip,
+    .activities-page .activities-select {
+        flex: 1 1 150px;
+        min-width: 0;
+    }
 }
 
-.activities-page--list .activities-search {
-    flex: 1 1 260px;
-    min-width: 220px;
-}
-
-.activities-page--list .activities-select { flex: 0 1 120px; min-width: 0; }
-.activities-page--list .activities-order { flex-basis: 140px; }
-.activities-page--list .activities-select select { width: 100%; min-width: 0; }
-.activities-page--list .activities-filter-chip { display: inline-flex; padding-inline: 12px; white-space: nowrap; }
-.activities-page--list .activities-search input,
-.activities-page--list .activities-select select,
-.activities-page--list .activities-filter-chip { height: 40px; box-shadow: none; }
-
-@container activity-list (max-width: 1300px) {
-    .activities-page--list .activities-toolbar { display: grid; grid-template-columns: minmax(220px, 1fr) repeat(3, minmax(0, 1fr)); }
-    .activities-page--list .activities-search { min-width: 0; }
-    .activities-page--list .activities-filter-chip { justify-content: center; }
-}
-
-@container activity-list (max-width: 600px) {
-    .activities-page--list .activities-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .activities-page--list .activities-search,
-    .activities-page--list .activities-order { grid-column: 1 / -1; }
+@media (max-width: 620px) {
+    .activities-page .activities-filters { padding: 12px; }
+    .activities-page .activities-toolbar { gap: 10px; }
+    .activities-page .activities-filter-chip,
+    .activities-page .activities-select { flex-basis: calc(50% - 5px); }
+    .activities-page .activities-search__control { align-items: stretch; flex-wrap: wrap; }
+    .activities-page .activities-search input { flex-basis: 100%; }
+    .activities-page .activities-search__submit { width: 100%; justify-content: center; }
 }
 
 .activities-table th {
@@ -4056,6 +4182,23 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     align-items: center;
     color: var(--text-2);
 }
+
+.activity-deadline-icon { width: 17px; height: 17px; display: inline-flex; align-items: center; justify-content: center; }
+.activity-deadline-icon svg { width: 16px; height: 16px; }
+.activity-deadline-copy { min-width: 0; display: block; }
+.activity-deadline-copy strong,
+.activity-deadline-copy small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.activity-deadline-action {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 5px;
+    color: inherit;
+    text-decoration: none;
+}
+.activity-deadline-action:hover { text-decoration: none; }
+.activity-deadline-arrow { grid-column: 2; grid-row: 1; white-space: nowrap; }
 
 .activity-deadline-inline small {
     grid-column: 2;
@@ -4418,17 +4561,6 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 
 .activities-undated a span {
     color: var(--muted);
-}
-
-@media (max-width: 1180px) {
-    .activities-toolbar {
-        grid-template-columns: minmax(280px, 1fr) repeat(3, auto);
-    }
-
-    .activities-filter-chip {
-        display: none;
-    }
-
 }
 
 @media (max-width: 760px) {

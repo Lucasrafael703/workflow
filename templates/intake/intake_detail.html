@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Solicitação — Caixa de Entrada — LPS{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div class="page-head__text">
+        <div class="breadcrumb"><a href="{% url 'intake-list' %}">Caixa de Entrada</a><span>/</span>Solicitação</div>
+        <h1>{% if item.subject %}{{ item.subject }}{% elif item.suggested_title %}{{ item.suggested_title }}{% else %}Solicitação sem assunto{% endif %}</h1>
+        <p class="sub">
+            {{ item.get_source_display }}{% if item.sender_name or item.sender_email %} · {{ item.sender_display }}{% if item.sender_name and item.sender_email %} ({{ item.sender_email }}){% endif %}{% endif %}
+            · recebida {{ item.received_at|date:"d/m/Y H:i" }}
+            · <span class="tag tag--{{ item.status }}">{{ item.get_status_display }}</span>
+        </p>
+    </div>
+    <div class="page-head__actions">{% include "intake/_actions.html" %}</div>
+</div>
+
+{% if item.activity %}
+<div class="message message--success">Esta solicitação virou a atividade <a href="{% url 'activity-detail' item.activity.pk %}">{{ item.activity.code }} — {{ item.activity.title }}</a>.</div>
+{% elif item.status == "IGNORADO" %}
+<div class="message message--info">Solicitação ignorada{% if item.resolved_by %} por {{ item.resolved_by.get_full_name|default:item.resolved_by.get_username }}{% endif %}{% if item.resolution_note %}: {{ item.resolution_note }}{% endif %}.</div>
+{% endif %}
+
+<div class="intake-detail">
+    <section class="card intake-panel">
+        <h2 class="intake-panel__title">Texto recebido</h2>
+        <pre class="intake-raw">{{ item.raw_content }}</pre>
+    </section>
+
+    <aside class="intake-detail__side">
+        <section class="card intake-panel">
+            <h2 class="intake-panel__title">O que a LPS entendeu <span class="intake-confidence intake-confidence--{{ item.confidence_level|lower }}">Confiança {{ item.confidence_label|lower }}</span></h2>
+            {% if item.suggested_title %}<p class="intake-item__subject">{{ item.suggested_title }}</p>{% endif %}
+            {% include "intake/_facts.html" %}
+        </section>
+
+        <section class="card intake-panel">
+            <h2 class="intake-panel__title">Histórico</h2>
+            <ol class="intake-timeline">
+                {% for event in events %}
+                <li>
+                    <div><strong>{{ event.get_kind_display }}</strong>{% if event.user %} · {{ event.user.get_full_name|default:event.user.get_username }}{% endif %}</div>
+                    <time class="muted small" datetime="{{ event.created_at|date:'c' }}">{{ event.created_at|date:"d/m/Y H:i" }}</time>
+                    {% if event.note %}<p class="intake-timeline__note">{{ event.note|linebreaksbr }}</p>{% endif %}
+                </li>
+                {% endfor %}
+            </ol>
+        </section>
+    </aside>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/intake.js' %}?v=20261001a"></script>
+{% endblock %}

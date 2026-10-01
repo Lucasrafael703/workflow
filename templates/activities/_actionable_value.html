@@ -1,0 +1,14 @@
+{% comment %}
+Universal interaction vocabulary. The server remains the authority: this
+fragment only exposes a permitted action as a keyboard-accessible control.
+{% endcomment %}
+{% if url %}
+<a class="actionable-value{% if compact %} actionable-value--compact{% endif %}"
+   href="{{ url }}"{% if modal_size %} data-modal-size="{{ modal_size }}"{% endif %}
+   {% if ajax %}data-activity-action{% endif %}
+   aria-label="{{ aria_label|default:label }}">
+    <span>{{ label }}</span><span class="actionable-value__arrow" aria-hidden="true">›</span>
+</a>
+{% else %}
+<span class="actionable-value actionable-value--static">{{ label }}</span>
+{% endif %}

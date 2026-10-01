@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Registrar solicitação — LPS{% endblock %}
+
+{% block content %}
+<div class="modal-backdrop activity-modal-overlay">
+    <div class="modal activity-modal intake-modal">
+        {% include "intake/_modal_head.html" with modal_icon="inbox" modal_title="Registrar solicitação" modal_subtitle="Cole o pedido que chegou. Nada vira atividade ainda: ele fica na Caixa de Entrada até alguém decidir." %}
+
+        <form method="post" class="activity-modal-form" novalidate>
+            {% csrf_token %}
+            <div class="activity-modal-body">
+                {% include "intake/_form_errors.html" %}
+                <div class="activity-form-grid">
+                    {% include "activities/_activity_modal_field.html" with field=form.source required=True %}
+                    {% include "activities/_activity_modal_field.html" with field=form.received_at %}
+                    {% include "activities/_activity_modal_field.html" with field=form.sender_name icon="user" %}
+                    {% include "activities/_activity_modal_field.html" with field=form.sender_email icon="mail" %}
+                    {% include "activities/_activity_modal_field.html" with field=form.subject icon="file-text" full=True %}
+                    {% include "activities/_activity_modal_field.html" with field=form.raw_content full=True required=True %}
+                </div>
+            </div>
+            {% include "intake/_modal_foot.html" with submit_label="Registrar solicitação" %}
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/intake.js' %}?v=20261001a"></script>
+{% endblock %}

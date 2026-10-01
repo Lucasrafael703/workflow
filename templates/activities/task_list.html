@@ -109,7 +109,7 @@
             </thead>
             <tbody>
                 {% for task in tasks %}
-                <tr class="js-task-row" data-drawer-url="{% url 'task-drawer' task.pk %}">
+                <tr id="task-{{ task.pk }}" class="js-task-row" data-drawer-url="{% url 'task-drawer' task.pk %}">
                     <td data-label="" class="col-check"><input type="checkbox" class="js-row-check" aria-label="Selecionar {{ task.title }}"></td>
                     <td data-label="Tarefa">
                         <a href="{% url 'task-detail' task.pk %}" class="title">{{ task.title }}</a>
@@ -117,13 +117,12 @@
                     <td data-label="Atividade"><a href="{% url 'activity-detail' task.activity.pk %}">{{ task.activity.title }}</a></td>
                     <td data-label="Cliente">{% if task.activity.client %}{{ task.activity.client.name }}{% else %}<span class="muted">—</span>{% endif %}</td>
                     <td data-label="Obra">{% if task.activity.site %}{{ task.activity.site.name }}{% else %}<span class="muted">—</span>{% endif %}</td>
-                    <td data-label="Setor"><span class="tag">{{ task.sector.name }}</span></td>
+                    <td data-label="Setor">
+                        {% if task.can_move_sector %}<a class="actionable-value" href="{% url 'task-move' task.pk %}" data-activity-action><span class="tag">{{ task.sector.name }}</span><span class="actionable-value__arrow" aria-hidden="true">›</span></a>{% else %}<span class="tag">{{ task.sector.name }}</span>{% endif %}
+                    </td>
                     <td data-label="Responsável">
                         {% if task.responsavel %}
-                        <span class="responsible-cell">
-                            <span class="avatar avatar--{{ task.responsavel|avatar_color }}">{{ task.responsavel.get_username|slice:":2"|upper }}</span>
-                            <span class="small">{{ task.responsavel.get_username }}</span>
-                        </span>
+                        {% if task.can_change_responsavel %}<a class="actionable-value" href="{% url 'task-change-responsavel' task.pk %}" data-activity-action><span class="responsible-cell"><span class="avatar avatar--{{ task.responsavel|avatar_color }}">{{ task.responsavel.get_username|slice:":2"|upper }}</span><span class="small">{{ task.responsavel.get_username }}</span></span><span class="actionable-value__arrow" aria-hidden="true">›</span></a>{% else %}<span class="responsible-cell"><span class="avatar avatar--{{ task.responsavel|avatar_color }}">{{ task.responsavel.get_username|slice:":2"|upper }}</span><span class="small">{{ task.responsavel.get_username }}</span></span>{% endif %}
                         {% if task.active_executors %}
                         <span class="participants-popover">
                             <button type="button" class="participants-popover__trigger">+{{ task.active_executors|length }}</button>
@@ -147,7 +146,7 @@
                             {% else %}
                                 {% include "_icon.html" with name="clock" %}
                             {% endif %}
-                            {{ task.effective_deadline|date:"d/m/Y H:i" }}
+                            {% if task.can_propose_deadline %}<a class="actionable-value" href="{% url 'deadline-propose' task.pk %}" data-activity-action>{{ task.effective_deadline|date:"d/m/Y H:i" }}<span class="actionable-value__arrow" aria-hidden="true">›</span></a>{% else %}{{ task.effective_deadline|date:"d/m/Y H:i" }}{% endif %}
                         </span>
                         {% else %}<span class="muted">—</span>{% endif %}
                     </td>
@@ -299,12 +298,36 @@
                             button.disabled = false;
                             return;
                         }
-                        window.location.reload();
+                        if (result.data && window.LPSAjax) {
+                            window.LPSAjax.applyResult(result.data);
+                            window.LPSAjax.announce(result.data.message);
+                            var updated = document.getElementById("task-" + (result.data.target || "").replace("task-", ""));
+                            if (updated) updated.classList.add("lps-row-updated");
+                        } else {
+                            window.location.reload();
+                        }
                     })
                     .catch(function () { button.disabled = false; });
             });
         });
     });
+
+    // Delegated fallback keeps menus in rows returned by a partial refresh usable.
+    document.addEventListener("click", function (event) {
+        var button = event.target.closest && event.target.closest(".js-menu-ajax");
+        if (!button || button.dataset.partialBound) return;
+        button.dataset.partialBound = "true";
+        event.preventDefault();
+        event.stopPropagation();
+        button.disabled = true;
+        fetch(button.dataset.url, {method: "POST", headers: {"X-Requested-With": "XMLHttpRequest", "X-CSRFToken": csrfToken()}})
+            .then(function (response) { return response.json().then(function (data) { return {ok: response.ok, data: data}; }); })
+            .then(function (result) {
+                if (!result.ok) { alert(result.data.error || "Não foi possível concluir a ação."); button.disabled = false; return; }
+                if (window.LPSAjax) { window.LPSAjax.applyResult(result.data); window.LPSAjax.announce(result.data.message); }
+            })
+            .catch(function () { button.disabled = false; });
+    }, true);
 
     // Checkbox "selecionar todas" (visual, sem ação em lote ainda).
     var checkAll = document.querySelector(".js-check-all");

@@ -1,0 +1,14 @@
+{% comment %}
+Ações de uma solicitação. `item.ui` já junta o estado dela com as permissões da
+pessoa: o que não aparece aqui não está disponível agora.
+{% endcomment %}
+{% if item.ui.convert %}<a class="btn btn--primary" href="{% url 'intake-convert' item.pk %}" data-intake-action>Criar demanda</a>{% endif %}
+{% if item.ui.edit %}<a class="btn" href="{% url 'intake-edit' item.pk %}" data-intake-action>Editar</a>{% endif %}
+{% if item.ui.ignore %}<a class="btn btn--ghost" href="{% url 'intake-ignore' item.pk %}" data-intake-action>Ignorar</a>{% endif %}
+{% if item.ui.restore %}
+<form method="post" action="{% url 'intake-restore' item.pk %}" data-intake-restore>
+    {% csrf_token %}
+    <button type="submit" class="btn">Restaurar</button>
+</form>
+{% endif %}
+{% if item.activity %}<a class="btn" href="{% url 'activity-detail' item.activity.pk %}">Abrir {{ item.activity.code }}</a>{% endif %}

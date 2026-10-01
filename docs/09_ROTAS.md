@@ -22,6 +22,7 @@
 | `notificacoes/` | | `notifications.urls` |
 | `processos/` | | `processes.urls` |
 | `painel/` | | `painel.urls` |
+| `entrada/` | | `intake.urls` |
 | `` | | `core.urls`, depois `activities.urls` |
 | `media/<path>` | | `static.serve` de `MEDIA_ROOT` (sem login) |
 | `atividade-arquivos/<path>` | | `static.serve` de `ACTIVITY_FILES_ROOT` (sem login) |
@@ -127,7 +128,7 @@
 | Caminho | Função |
 |---|---|
 | `tarefas/` (`task-list`), `tarefas/kanban/`, `tarefas/calendario/` | Lista, Kanban, calendário |
-| `tarefas/nova-rapida/` | Nova tarefa com seletor de atividade |
+| `tarefas/nova-rapida/` | Nova tarefa com seletor de atividade (a busca `atividades/busca/`, `activity-search`, devolve também `summary`: título e "Cliente • Setor • N tarefas", que a janela mostra como cartão) |
 | `tarefas/<pk>/` (`task-detail`), `tarefas/<pk>/painel/` | Ficha, painel lateral |
 | `tarefas/<pk>/editar/` (`task-edit`) | Editor único: dados, prazo pedido, marcadores, responsável e participantes (`tarefa.editar` na view, já no GET; responsável e participantes exigem as suas ações no serviço). Janela (JSON no Ajax) ou página |
 | `tarefas/<pk>/dependencia/` (`task-dependency`) | Gerenciar dependência (`tarefa.editar` na view). Janela (JSON no Ajax) ou página |
@@ -165,6 +166,29 @@ o responsável padrão de uma etapa do rascunho, `process-step-responsavel`),
 | `` | `notification-list` | Caixa com abas (`?filter=`), busca e paginação |
 | `<pk>/read/` | `notification-mark-read` | Marca lida e redireciona para um destino interno validado |
 | `mark-all-read/` | | Marca todas |
+
+## 6.1 `intake` (`/entrada/`) — Caixa de Entrada
+
+Nomes de rota são globais (o projeto não usa `app_name`), por isso o prefixo `intake-`. Todas
+exigem login e organização; item de outra organização dá 404, sem a ação dá 403 (seção 4.2 de
+[05_AUTORIZACAO.md](05_AUTORIZACAO.md)). As telas de formulário abrem em janela (`LPSModal`) e
+também funcionam como página; com `X-Requested-With: XMLHttpRequest` respondem JSON.
+
+| Caminho | Nome | Método | Ação | Resposta |
+|---|---|---|---|---|
+| `` | `intake-list` | GET | `entrada.visualizar` (em algum lugar) | Abas `?status=novos\|convertidos\|ignorados`, busca `?q=`, `?page=` (25 por página) |
+| `registrar/` | `intake-capture` | GET/POST | `entrada.registrar` (em algum lugar) | Sucesso: `{"message", "redirect_url"}` |
+| `<pk>/` | `intake-detail` | GET | `entrada.visualizar` no item | Texto original, o que a LPS entendeu e histórico |
+| `<pk>/editar/` | `intake-edit` | GET/POST | `entrada.triar` no item | Sucesso: `{"message", "html" (cartão novo), "target": "#intake-item-<pk>"}` |
+| `<pk>/criar-demanda/` | `intake-convert` | GET/POST | `entrada.triar` no item (+ `atividade.criar` no serviço) | Sucesso: `{"message", "redirect_url": atividade}` |
+| `<pk>/ignorar/` | `intake-ignore` | GET/POST | `entrada.triar` no item | Sucesso: `{"message", "remove": "#intake-item-<pk>"}` |
+| `<pk>/restaurar/` | `intake-restore` | só POST | `entrada.triar` no item | Sucesso: `{"message", "remove"}`; erro: `400 {"error"}` |
+
+- Formulário inválido: `400 {"errors": {campo: [mensagens]}}`; erro de regra aparece em `__all__`.
+- Editar, criar demanda e ignorar numa solicitação que já foi tratada redireciona para o detalhe
+  com a mensagem "Esta solicitação já foi tratada.".
+- Todos os nomes `intake-*` estão em `_NAV_BY_URL_NAME` (item "Entrada" ativo no menu); um teste
+  confere.
 
 ## 7. `painel` (`/painel/`)
 

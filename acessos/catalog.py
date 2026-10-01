@@ -20,6 +20,7 @@ ATIVIDADE_CANCELAR = "atividade.cancelar"
 ATIVIDADE_REABRIR = "atividade.reabrir"
 ATIVIDADE_MARCAR_PENDENTE = "atividade.marcar_pendente"
 ATIVIDADE_APROVAR_PENDENCIA = "atividade.aprovar_pendencia"
+ATIVIDADE_MOVER_ESTAGIO = "atividade.mover_estagio"
 
 # Tarefas
 TAREFA_VISUALIZAR = "tarefa.visualizar"
@@ -39,6 +40,7 @@ TAREFA_CANCELAR = "tarefa.cancelar"
 TAREFA_REABRIR = "tarefa.reabrir"
 TAREFA_BLOQUEAR = "tarefa.bloquear"
 TAREFA_MOVER_SETOR = "tarefa.mover_setor"
+TAREFA_MOVER_ESTAGIO = "tarefa.mover_estagio"
 TEMPO_LANCAR_MANUAL = "tempo.lancar_manual"
 
 # Filas
@@ -50,6 +52,7 @@ FILA_REORDENAR = "fila.reordenar"
 PRAZO_PROPOR = "prazo.propor"
 PRAZO_ACEITAR = "prazo.aceitar"
 PRAZO_RECUSAR = "prazo.recusar"
+PRAZO_ALTERAR_SOLICITADO = "prazo.alterar_solicitado"
 ESCALONAMENTO_RESOLVER = "escalonamento.resolver"
 
 # Comunicação
@@ -90,6 +93,11 @@ SEGURANCA_GERIR_AUTORIZACOES = "seguranca.gerir_autorizacoes"
 AUDITORIA_VISUALIZAR = "auditoria.visualizar"
 METRICAS_VISUALIZAR = "metricas.visualizar"
 
+# Caixa de entrada (solicitações que ainda não viraram atividade)
+ENTRADA_VISUALIZAR = "entrada.visualizar"
+ENTRADA_REGISTRAR = "entrada.registrar"
+ENTRADA_TRIAR = "entrada.triar"
+
 
 # (chave, nome, descrição, sensível)
 GROUPS = [
@@ -108,6 +116,7 @@ GROUPS = [
             (ATIVIDADE_REABRIR, "Reabrir atividade", "Permite reabrir uma atividade já concluída.", True),
             (ATIVIDADE_MARCAR_PENDENTE, "Marcar atividade como pendente", "Permite pausar a atividade registrando o motivo da pendência, com comentário obrigatório.", False),
             (ATIVIDADE_APROVAR_PENDENCIA, "Aprovar pendência da atividade", "Permite decidir uma pendência que aguarda aprovação do gestor, devolvendo a atividade para quem a designou.", True),
+            (ATIVIDADE_MOVER_ESTAGIO, "Mover estágio da atividade", "Permite alterar o estágio visual de uma atividade no Kanban.", False),
         ],
     ),
     (
@@ -131,6 +140,7 @@ GROUPS = [
             (TAREFA_REABRIR, "Reabrir tarefa", "Permite reabrir uma tarefa concluída: ela volta ao fim da fila do setor, com motivo obrigatório e registro no histórico.", True),
             (TAREFA_BLOQUEAR, "Bloquear e desbloquear tarefa", "Permite registrar e resolver impedimentos.", False),
             (TAREFA_MOVER_SETOR, "Enviar tarefa para outro setor", "Permite movimentar a tarefa no fluxo entre setores.", False),
+            (TAREFA_MOVER_ESTAGIO, "Mover estágio da tarefa", "Permite alterar o estágio visual de uma tarefa no Kanban.", False),
             (TEMPO_LANCAR_MANUAL, "Lançar tempo manualmente", "Permite apropriar tempo trabalhado fora do cronômetro.", True),
         ],
     ),
@@ -150,6 +160,7 @@ GROUPS = [
             (PRAZO_PROPOR, "Propor prazo", "Permite propor um novo prazo comprometido para a tarefa.", False),
             (PRAZO_ACEITAR, "Aceitar prazo", "Permite aceitar o prazo proposto pelo setor executor.", False),
             (PRAZO_RECUSAR, "Recusar prazo", "Permite recusar o prazo proposto, o que registra um conflito.", False),
+            (PRAZO_ALTERAR_SOLICITADO, "Alterar prazo solicitado", "Permite corrigir ou renegociar o prazo solicitado da tarefa.", False),
             (ESCALONAMENTO_RESOLVER, "Resolver conflito de prazo", "Permite encerrar um conflito registrando a decisão tomada.", True),
         ],
     ),
@@ -211,6 +222,15 @@ GROUPS = [
             (METRICAS_VISUALIZAR, "Visualizar métricas", "Permite acessar a visão do gestor e os indicadores.", False),
         ],
     ),
+    (
+        "entrada",
+        "Caixa de entrada",
+        [
+            (ENTRADA_VISUALIZAR, "Ver a Caixa de Entrada", "Permite consultar as solicitações recebidas que ainda aguardam triagem, dentro do escopo autorizado.", False),
+            (ENTRADA_REGISTRAR, "Registrar solicitação", "Permite colocar na Caixa de Entrada um pedido recebido por e-mail, Teams ou conversa.", False),
+            (ENTRADA_TRIAR, "Triar solicitações", "Permite corrigir as sugestões, criar a demanda a partir da solicitação, ignorá-la ou restaurá-la.", False),
+        ],
+    ),
 ]
 
 
@@ -240,6 +260,8 @@ SUGGESTED_PROFILES = {
         CLIENTE_GERIR,
         ATIVIDADE_ASSUMIR,
         ATIVIDADE_MARCAR_PENDENTE,
+        ATIVIDADE_MOVER_ESTAGIO,
+        ENTRADA_REGISTRAR,
     ],
     "Gestor de Setor": [
         ATIVIDADE_VISUALIZAR,
@@ -263,12 +285,14 @@ SUGGESTED_PROFILES = {
         TAREFA_DEVOLVER,
         TAREFA_BLOQUEAR,
         TAREFA_MOVER_SETOR,
+        TAREFA_MOVER_ESTAGIO,
         TAREFA_REABRIR,
         TEMPO_LANCAR_MANUAL,
         FILA_VISUALIZAR_POSICAO_PROPRIA,
         FILA_VISUALIZAR_COMPLETA,
         FILA_REORDENAR,
         PRAZO_PROPOR,
+        PRAZO_ALTERAR_SOLICITADO,
         PRAZO_ACEITAR,
         PRAZO_RECUSAR,
         ESCALONAMENTO_RESOLVER,
@@ -287,6 +311,9 @@ SUGGESTED_PROFILES = {
         TAG_GERIR,
         COR_STATUS_GERIR,
         COR_PRIORIDADE_GERIR,
+        ENTRADA_VISUALIZAR,
+        ENTRADA_REGISTRAR,
+        ENTRADA_TRIAR,
     ],
     "Administrador": [key for _, _, actions in GROUPS for key, _, _, _ in actions],
 }

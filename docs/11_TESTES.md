@@ -23,9 +23,18 @@ Testes do Django ficam em cada app (`tests.py` e, em `activities`, também
 | `activities/test_reopen.py` | 44 | Reabrir tarefa e atividade concluídas: fila, histórico preservado, permissão por setor, motivo, tarefas seguintes, atividade concluída/cancelada, atomicidade, botões e popup |
 | `activities/test_task_actions.py` | 88 | “Já realizei este trabalho”: período informado × conclusão agora, fila e sucessoras, auditoria, permissões (responsável/participante, sem exigir tempo manual), status, limites de data e justificativa, travas de dependência e de inputs do processo, atomicidade; botão, barra “Ações da tarefa” filtrada por permissão, popup (JSON), cartão de tempo cronometrado × informado |
 | `activities/test_task_editor.py` | 78 | Editor da tarefa (uma transação: dados, marcadores, responsável, participantes e convites pendentes), Gerenciar dependência (ciclo, fila, tarefa já iniciada), motivo no tempo manual, origem do tempo na gestão, ações da tarefa em janela (JSON) e destaque do menu lateral em toda rota de tarefa |
-| `activities/test_task_popups.py` | 24 | Padrão único das janelas e do painel lateral da tarefa (nova, nova fora da atividade, editar e painel): mesma ordem de blocos, mesmas palavras, dois blocos recolhíveis e o estado aberto/fechado, seletor desenhado uma só vez e com rótulo, `VisibleHiddenInput` |
+| `activities/test_task_popups.py` | 48 | Janelas de tarefa (nova dentro da atividade, nova avulsa e editar): uma tela só, quatro seções numeradas na mesma ordem (Participantes antes de Instruções), sem etapas nem blocos recolhíveis, mesmas palavras e rótulos; data e hora do prazo em campos separados (data sem hora = 23:59, hora sem data é erro, valores preservados quando a página volta com erro); cartão da atividade (resumo, sem "Alterar" dentro da atividade e na edição, atividade de outra organização ignorada, resumo na busca sem uma consulta por atividade e na criação rápida); seletor desenhado uma só vez e com rótulo; salvar com `pk` de tarefa ≠ `pk` de atividade. Também confere o painel lateral (blocos recolhíveis, próprio) |
 | `activities/test_activity_modal.py` | 43 | Nova/Editar atividade em 3 etapas: estrutura, nomes e ajudas, obrigatórios, campos que saíram (upload, marcadores, solicitante interno, anotações), Cliente → Obra → Centro de custo (busca e validação), links e caminhos de arquivos, JSON da janela, edição igual à criação |
+| `intake/tests.py` | 75 | Caixa de Entrada, serviços: ações no catálogo e perfis sugeridos, endereço do item para o motor de autorização (setor/obra sugeridos), política de estados, registrar (validações, duplicata em 7 dias, `external_id` único por origem, escopo de setor), corrigir sugestões (só em nova, outra organização, obra × cliente, não perder o acesso), ignorar/restaurar, **converter** (atividade publicada, solicitante interno × externo, descrição com origem e link, HTML escapado, **@menção neutralizada**, rollback total, segunda conversão, `atividade.criar` ainda exigido, escopo de setor), visibilidade e contador |
+| `intake/test_textparse.py` | 36 | Parser sem banco: normalização, assunto, domínio, primeira linha útil e prazo em português (dia da semana, "amanhã", `dia 15`, `15/10`, `15 de outubro`, hora, pista de prazo, datas inválidas e passadas) |
+| `intake/test_suggestions.py` | 27 | Sugestões: cliente por nome e por domínio (desempates, provedores gratuitos), obra limitada ao cliente, setor pelo assunto e pelo histórico, prazo, pontuação e faixas de confiança |
+| `intake/test_views.py` | 62 | Acesso (login, sem organização, 403, 404 entre organizações), lista (abas, busca, paginação, escopo de setor, XSS, **número de consultas não cresce com os cartões**), registrar, detalhe, editar, criar demanda, ignorar, restaurar (contratos JSON, aviso que acompanha a navegação) e menu (item, contador, mapa `_NAV_BY_URL_NAME`) |
 | `accounts`, `audit` | 0 | `tests.py` vazio |
+
+Base compartilhada da Caixa de Entrada: `intake/testing.py` (`IntakeTestCase`, com a Biasi, os
+setores Comercial e Compras, o cliente Convivy com a obra Residencial Aurora e pessoas com cada
+nível de acesso: triagem geral, só registra, gestor de um setor, sem acesso e de outra
+organização; `new_item(**overrides)` cria a solicitação direto no banco).
 
 Base compartilhada dos testes de processo: `activities/testing.py`
 (`ProcessTestCase`, com o cenário Orçamento v3: três setores/pessoas, três etapas
@@ -37,7 +46,12 @@ checklist, `tests/process-apply.test.cjs`, o assistente de 4 passos do popup
 "Aplicar processo", `tests/retroactive-work.test.cjs`, o popup "Já realizei este
 trabalho" (aviso de dia anterior e comentário só quando necessário), e
 `tests/activity-steps.test.cjs`, a janela de atividade em 3 etapas (inclui a integração
-com o `modal.js` real) (seção 4).
+com o `modal.js` real) (seção 4). `tests/task-modal.test.cjs` (8 testes) cobre o cartão da atividade da janela de tarefa (trocar o seletor
+pelo cartão, "Alterar", seleção limpa, início repetido e janela injetada depois), inclusive com o
+`person-picker.js` real. `tests/intake.test.cjs` (12 testes) cobre `static/js/intake.js`
+com o `LPSAjax` real: abrir em janela, teclas modificadoras, queda para a página completa,
+remover/trocar cartão, redirecionar, recarregar e o envio de "Restaurar" (CSRF, envio duplo e
+erros).
 
 ---
 

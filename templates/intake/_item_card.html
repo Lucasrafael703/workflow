@@ -1,0 +1,30 @@
+<li class="intake-item intake-item--{{ item.status|lower }}" id="intake-item-{{ item.pk }}">
+    <div class="intake-item__icon" aria-hidden="true">{% include "intake/_source_icon.html" %}</div>
+
+    <div class="intake-item__body">
+        <div class="intake-item__meta">
+            <span>{{ item.get_source_display }}</span>
+            {% if item.sender_name or item.sender_email %}<span aria-hidden="true">·</span><span>{{ item.sender_display }}</span>{% endif %}
+            <span aria-hidden="true">·</span>
+            {% with ago=item.received_at|timesince %}
+            <time datetime="{{ item.received_at|date:'c' }}" title="{{ item.received_at|date:'d/m/Y H:i' }}">{% if ago|first == "0" %}agora há pouco{% else %}há {{ ago }}{% endif %}</time>
+            {% endwith %}
+            {% if item.status != "NOVO" %}<span class="tag tag--{{ item.status }}">{{ item.get_status_display }}</span>{% endif %}
+            <span class="intake-confidence intake-confidence--{{ item.confidence_level|lower }}" title="Quanto a LPS entendeu do texto">Confiança {{ item.confidence_label|lower }}</span>
+        </div>
+
+        <h2 class="intake-item__headline">
+            <a href="{% url 'intake-detail' item.pk %}">
+                {% if item.suggested_client %}Chegou uma solicitação de {{ item.suggested_client.name }}{% elif item.sender_name or item.sender_email %}Chegou uma solicitação de {{ item.sender_display }}{% else %}Chegou uma solicitação{% endif %}
+            </a>
+        </h2>
+        {% if item.subject %}<p class="intake-item__subject">{{ item.subject }}</p>{% endif %}
+        <p class="intake-item__excerpt">{{ item.excerpt }}</p>
+
+        {% include "intake/_facts.html" %}
+
+        {% if item.status == "IGNORADO" and item.resolution_note %}<p class="intake-item__note">Motivo: {{ item.resolution_note }}</p>{% endif %}
+    </div>
+
+    <div class="intake-item__actions">{% include "intake/_actions.html" %}</div>
+</li>

@@ -2,31 +2,22 @@
 {% block title %}Editar tarefa — LPS{% endblock %}
 
 {% comment %}
-Editar tarefa: a mesma janela de "Nova tarefa" (mesmos campos, mesma ordem,
-mesmos blocos recolhíveis — ver _task_editor_fields.html), com os valores atuais.
-Sem JavaScript continua sendo uma página normal com POST.
+Editar tarefa: a mesma janela de "Nova tarefa" (mesmas quatro seções, na mesma ordem — ver
+_task_editor_fields.html), com os valores atuais. Sem JavaScript continua sendo uma página
+normal com POST.
 {% endcomment %}
 
 {% block content %}
-<div class="modal-backdrop">
-    <div class="modal">
-        <div class="modal__head">
-            <div>
-                <h2>Editar tarefa</h2>
-                <div class="sub">Atividade: {{ activity.title }}</div>
-            </div>
-            <a href="{% url 'task-detail' task.pk %}" class="modal__close" title="Fechar sem salvar" aria-label="Fechar sem salvar">&times;</a>
-        </div>
-
-        <form method="post">
+<div class="modal-backdrop activity-modal-overlay task-modal-overlay">
+    <div class="modal activity-modal task-modal">
+        {% url 'task-detail' task.pk as close_url %}
+        {% include "activities/_task_modal_head.html" with modal_title="Editar tarefa" modal_subtitle="Atualize os dados, o prazo, o responsável e os participantes desta tarefa." %}
+        <form method="post" class="activity-modal-form">
             {% csrf_token %}
-            <div class="modal__body">
+            <div class="activity-modal-body task-modal-body">
                 {% include "activities/_task_editor_fields.html" %}
             </div>
-            <div class="modal__foot">
-                <a href="{% url 'task-detail' task.pk %}" class="btn">Cancelar</a>
-                <button type="submit" class="btn btn--primary">Salvar alterações</button>
-            </div>
+            {% include "activities/_task_modal_foot.html" with submit_label="Salvar alterações" %}
         </form>
     </div>
 </div>

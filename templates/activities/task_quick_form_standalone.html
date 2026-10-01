@@ -1,26 +1,22 @@
 {% extends "base.html" %}
 {% block title %}Nova tarefa — LPS{% endblock %}
 
-{% block content %}
-<div class="modal-backdrop">
-    <div class="modal">
-        <div class="modal__head">
-            <div>
-                <h2>Nova tarefa</h2>
-                <div class="sub">Toda tarefa pertence a uma atividade — escolha uma existente ou crie uma nova.</div>
-            </div>
-            <a href="{% url 'task-list' %}" class="modal__close" title="Fechar sem salvar" aria-label="Fechar sem salvar">&times;</a>
-        </div>
+{% comment %}
+Nova tarefa fora de uma atividade aberta: a atividade é escolhida (ou criada) no próprio
+formulário. Mesmo corpo de "Nova tarefa" dentro da atividade e de "Editar tarefa".
+{% endcomment %}
 
-        <form method="post">
+{% block content %}
+<div class="modal-backdrop activity-modal-overlay task-modal-overlay">
+    <div class="modal activity-modal task-modal">
+        {% url 'task-list' as close_url %}
+        {% include "activities/_task_modal_head.html" with modal_title="Nova tarefa" modal_subtitle="Adicione uma tarefa a uma atividade existente e defina quem será responsável por executá-la." %}
+        <form method="post" class="activity-modal-form">
             {% csrf_token %}
-            <div class="modal__body">
+            <div class="activity-modal-body task-modal-body">
                 {% include "activities/_task_editor_fields.html" %}
             </div>
-            <div class="modal__foot">
-                <a href="{% url 'task-list' %}" class="btn">Cancelar</a>
-                <button type="submit" class="btn btn--primary">Adicionar tarefa</button>
-            </div>
+            {% include "activities/_task_modal_foot.html" with submit_label="Adicionar tarefa" submit_icon="plus" %}
         </form>
     </div>
 </div>

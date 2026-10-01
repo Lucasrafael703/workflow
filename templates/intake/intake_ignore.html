@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Ignorar solicitação — LPS{% endblock %}
+
+{% block content %}
+<div class="modal-backdrop activity-modal-overlay">
+    <div class="modal activity-modal intake-modal">
+        {% include "intake/_modal_head.html" with modal_icon="archive" modal_title="Ignorar solicitação" modal_subtitle="Ela deixa de aparecer entre as novas, mas fica guardada e pode ser restaurada." %}
+
+        <form method="post" class="activity-modal-form" novalidate>
+            {% csrf_token %}
+            <div class="activity-modal-body">
+                {% include "intake/_form_errors.html" %}
+                <p class="intake-modal-hint">
+                    Solicitação de <strong>{{ item.sender_display }}</strong>{% if item.subject %}: “{{ item.subject }}”{% endif %}.
+                </p>
+                <div class="activity-form-grid">
+                    {% include "activities/_activity_modal_field.html" with field=form.reason icon="info" full=True %}
+                </div>
+            </div>
+            {% include "intake/_modal_foot.html" with submit_label="Ignorar solicitação" %}
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/intake.js' %}?v=20261001a"></script>
+{% endblock %}

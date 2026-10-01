@@ -64,16 +64,3 @@
 </section>
 {% endblock %}
 
-{% block scripts %}
-<script>
-(function () {
-    "use strict";
-    var form = document.querySelector("[data-activity-filters]");
-    if (!form) return;
-    form.querySelectorAll("[data-auto-submit]").forEach(function (field) {
-        field.addEventListener("change", function () { form.submit(); });
-    });
-})();
-</script>
-{% endblock %}
-

@@ -7,6 +7,7 @@ from django.db import transaction
 from django.db.models import Avg, Count, Exists, F, OuterRef, Prefetch, Q
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -48,6 +49,7 @@ from .forms import (
     TaskQuickCreateForm,
     TaskQuickCreateStandaloneForm,
     TaskReturnForm,
+    activity_summary,
 )
 from .models import (
     Activity,
@@ -598,6 +600,7 @@ def activity_filter_context(request, organization):
     params.pop("page", None)
     params.pop("ano", None)
     params.pop("mes", None)
+    filter_keys = ("q",) + ACTIVITY_FILTER_KEYS
     return {
         "tab": request.GET.get("tab", "minhas"),
         "filter_querystring": params.urlencode(),
@@ -606,6 +609,7 @@ def activity_filter_context(request, organization):
         "f_stage": request.GET.get("estagio", ""),
         "f_group": request.GET.get("grupo", ""),
         "ordem": request.GET.get("ordem", "prazo"),
+        "has_filters": any(request.GET.get(key) for key in filter_keys),
         "can_view_all": can(request.user, catalog.ATIVIDADE_VISUALIZAR_TODAS),
     }
 
@@ -633,6 +637,47 @@ def decorate_activity_cards(activities, organization):
         activity.stage_name = activity.stage.name if activity.stage else "Sem estagio"
         activity.stage_color = activity.stage.color if activity.stage else "#94A3B8"
     return activities
+
+
+def activity_row_for_request(activity_id, user, organization):
+    """Re-render one activity row after a confirmed contextual action."""
+    activity = (
+        Activity.objects.filter(pk=activity_id, organization=organization)
+        .select_related("client", "site", "cost_center", "sector", "stage", "owner")
+        .annotate(
+            total_tasks=Count("tasks", distinct=True),
+            done_tasks=Count("tasks", filter=Q(tasks__status=Task.Status.CONCLUIDA), distinct=True),
+        )
+        .get()
+    )
+    decorate_activity_cards([activity], organization)
+    actions = [
+        catalog.ATIVIDADE_ASSUMIR,
+        catalog.ATIVIDADE_ALTERAR_DONO,
+        catalog.ATIVIDADE_EDITAR,
+        catalog.ATIVIDADE_CONCLUIR,
+        catalog.ATIVIDADE_CANCELAR,
+        catalog.ATIVIDADE_REABRIR,
+    ]
+    access = AuthorizationService.can_many(user, [(action, activity) for action in actions])
+    activity.can_assumir = (
+        activity.status not in (Activity.Status.CONCLUIDA, Activity.Status.CANCELADA)
+        and access[(catalog.ATIVIDADE_ASSUMIR, activity.pk)]
+    )
+    activity.can_repassar = activity.status not in (Activity.Status.CONCLUIDA, Activity.Status.CANCELADA) and access[
+        (catalog.ATIVIDADE_ALTERAR_DONO, activity.pk)
+    ]
+    activity.can_edit = access[(catalog.ATIVIDADE_EDITAR, activity.pk)]
+    activity.can_complete = activity.status not in (Activity.Status.CONCLUIDA, Activity.Status.CANCELADA) and access[
+        (catalog.ATIVIDADE_CONCLUIR, activity.pk)
+    ]
+    activity.can_cancel = activity.status not in (Activity.Status.CONCLUIDA, Activity.Status.CANCELADA) and access[
+        (catalog.ATIVIDADE_CANCELAR, activity.pk)
+    ]
+    activity.can_reopen = activity.status == Activity.Status.CONCLUIDA and access[
+        (catalog.ATIVIDADE_REABRIR, activity.pk)
+    ]
+    return activity
 
 
 class ActivityListView(OrganizationRequiredMixin, ListView):
@@ -688,31 +733,44 @@ class ActivityListView(OrganizationRequiredMixin, ListView):
         )
 
         decorate_activity_cards(context["activities"], self.organization)
-        for activity in context["activities"]:
+        activities = list(context["activities"])
+        action_keys = [
+            catalog.ATIVIDADE_ASSUMIR,
+            catalog.ATIVIDADE_ALTERAR_DONO,
+            catalog.ATIVIDADE_EDITAR,
+            catalog.ATIVIDADE_CONCLUIR,
+            catalog.ATIVIDADE_CANCELAR,
+            catalog.ATIVIDADE_REABRIR,
+        ]
+        access = AuthorizationService.can_many(
+            user, [(action, activity) for activity in activities for action in action_keys]
+        )
+        for activity in activities:
             activity._urgency_color = urgency_colors.color_for(activity.urgency)
             activity.can_assumir = (
                 activity.sector_id in my_sector_ids
                 and activity.owner_id != user.id
                 and activity.status not in (Activity.Status.CONCLUIDA, Activity.Status.CANCELADA)
-                and can(user, catalog.ATIVIDADE_ASSUMIR, activity)
+                and access[(catalog.ATIVIDADE_ASSUMIR, activity.pk)]
             )
             activity.can_repassar = activity.status not in (
                 Activity.Status.CONCLUIDA,
                 Activity.Status.CANCELADA,
-            ) and can(user, catalog.ATIVIDADE_ALTERAR_DONO, activity)
-            activity.can_edit = can(user, catalog.ATIVIDADE_EDITAR, activity)
+            ) and access[(catalog.ATIVIDADE_ALTERAR_DONO, activity.pk)]
+            activity.can_edit = access[(catalog.ATIVIDADE_EDITAR, activity.pk)]
             activity.can_complete = activity.status not in (
                 Activity.Status.CONCLUIDA,
                 Activity.Status.CANCELADA,
-            ) and can(user, catalog.ATIVIDADE_CONCLUIR, activity)
+            ) and access[(catalog.ATIVIDADE_CONCLUIR, activity.pk)]
             activity.can_cancel = activity.status not in (
                 Activity.Status.CONCLUIDA,
                 Activity.Status.CANCELADA,
-            ) and can(user, catalog.ATIVIDADE_CANCELAR, activity)
+            ) and access[(catalog.ATIVIDADE_CANCELAR, activity.pk)]
             # Só concluída reabre (cancelada não): o serviço recusaria o resto.
-            activity.can_reopen = activity.status == Activity.Status.CONCLUIDA and can(
-                user, catalog.ATIVIDADE_REABRIR, activity
-            )
+            activity.can_reopen = activity.status == Activity.Status.CONCLUIDA and access[
+                (catalog.ATIVIDADE_REABRIR, activity.pk)
+            ]
+        context["activities"] = activities
         return context
 
 
@@ -769,6 +827,8 @@ class ActivityMoveStageView(OrganizationRequiredMixin, View):
 
     def post(self, request, pk):
         activity = get_object_or_404(Activity, pk=pk, organization=self.organization)
+        if not AuthorizationService.can(request.user, catalog.ATIVIDADE_MOVER_ESTAGIO, activity):
+            raise PermissionDenied("Você não possui autorização para mover o estágio desta atividade.")
         stage_id = request.POST.get("stage_id") or None
         stage = None
         if stage_id:
@@ -777,7 +837,15 @@ class ActivityMoveStageView(OrganizationRequiredMixin, View):
         activity.stage_changed_at = timezone.now()
         activity.save(update_fields=["stage", "stage_changed_at"])
         if _is_ajax(request):
-            return JsonResponse({"ok": True, "activity_id": activity.pk, "stage_id": stage.pk if stage else None})
+            activity = activity_row_for_request(activity.pk, request.user, self.organization)
+            return JsonResponse({
+                "success": True,
+                "message": "Estágio da atividade atualizado.",
+                "activity_id": activity.pk,
+                "stage_id": stage.pk if stage else None,
+                "target": f"activity-{activity.pk}",
+                "html": render_to_string("activities/_activity_row.html", {"activity": activity}, request=request),
+            })
         return redirect("activity-kanban")
 
 
@@ -993,14 +1061,24 @@ class ActivitySearchView(OrganizationRequiredMixin, View):
 
     def get(self, request):
         term = request.GET.get("q", "").strip()
-        queryset = Activity.objects.filter(
-            organization=self.organization,
-            status__in=TaskQuickCreateStandaloneForm.OPEN_ACTIVITY_STATUSES,
-        ).order_by("-created_at")
+        queryset = (
+            Activity.objects.filter(
+                organization=self.organization,
+                status__in=TaskQuickCreateStandaloneForm.OPEN_ACTIVITY_STATUSES,
+            )
+            .select_related("client", "sector")
+            .annotate(task_total=Count("tasks"))
+            .order_by("-created_at")
+        )
         if term:
             queryset = queryset.filter(Q(title__icontains=term) | Q(code__icontains=term))
         results = [
-            {"id": activity.pk, "name": f"{activity.code} — {activity.title}" if activity.code else activity.title}
+            {
+                "id": activity.pk,
+                "name": f"{activity.code} — {activity.title}" if activity.code else activity.title,
+                # Alimenta o cartão "atividade escolhida" da janela de tarefa.
+                "summary": activity_summary(activity),
+            }
             for activity in queryset[: self.MAX_RESULTS]
         ]
         return JsonResponse({"results": results})
@@ -1227,12 +1305,19 @@ class ActivityActionResponseMixin:
     def post(self, request, *args, **kwargs):
         response = super().post(request, *args, **kwargs)
         if _is_ajax(request) and response.status_code == 302:
-            return JsonResponse({"redirect_url": response.url})
+            activity = activity_row_for_request(kwargs["pk"], request.user, self.organization)
+            return JsonResponse({
+                "success": True,
+                "message": "Atividade atualizada.",
+                "target": f"activity-{activity.pk}",
+                "html": render_to_string("activities/_activity_row.html", {"activity": activity}, request=request),
+                "redirect_url": response.url,
+            })
         return response
 
     def form_invalid(self, form):
         if _is_ajax(self.request):
-            return JsonResponse({"errors": form.errors}, status=400)
+            return JsonResponse({"success": False, "errors": form.errors}, status=400)
         return super().form_invalid(form)
 
 
@@ -1353,7 +1438,14 @@ class ActivityFinalizeView(OrganizationRequiredMixin, FormView):
             form.add_error(None, str(exc))
             return self.form_invalid(form)
         if _is_ajax(self.request):
-            return JsonResponse({"status": activity.status})
+            activity = activity_row_for_request(activity.pk, self.request.user, self.organization)
+            return JsonResponse({
+                "success": True,
+                "message": "Atividade finalizada.",
+                "status": activity.status,
+                "target": f"activity-{activity.pk}",
+                "html": render_to_string("activities/_activity_row.html", {"activity": activity}, request=self.request),
+            })
         messages.success(self.request, "Atividade finalizada.")
         return redirect("activity-detail", pk=activity.pk)
 
@@ -1644,7 +1736,18 @@ class TaskListView(OrganizationRequiredMixin, ListView):
         status_colors = EnumColorResolver(self.organization, "task_status")
 
         now = timezone.now()
-        for task in context["object_list"]:
+        tasks = list(context["object_list"])
+        list_actions = [
+            catalog.TAREFA_REABRIR,
+            catalog.TAREFA_ALTERAR_RESPONSAVEL,
+            catalog.TAREFA_MOVER_SETOR,
+            catalog.PRAZO_PROPOR,
+        ]
+        list_access = AuthorizationService.can_many(
+            self.request.user,
+            [(action, task) for task in tasks for action in list_actions],
+        )
+        for task in tasks:
             task._status_color = status_colors.color_for(task.status)
             task.effective_deadline = task.committed_deadline or task.requested_deadline
             task.is_overdue = bool(
@@ -1653,9 +1756,13 @@ class TaskListView(OrganizationRequiredMixin, ListView):
                 and task.status not in (Task.Status.CONCLUIDA, Task.Status.CANCELADA)
             )
             # Só as concluídas oferecem "Reabrir" (a permissão é por tarefa/setor).
-            task.can_reopen = task.status == Task.Status.CONCLUIDA and can(
-                self.request.user, catalog.TAREFA_REABRIR, task
-            )
+            task.can_reopen = task.status == Task.Status.CONCLUIDA and list_access[
+                (catalog.TAREFA_REABRIR, task.pk)
+            ]
+            task.can_change_responsavel = list_access[(catalog.TAREFA_ALTERAR_RESPONSAVEL, task.pk)]
+            task.can_move_sector = list_access[(catalog.TAREFA_MOVER_SETOR, task.pk)]
+            task.can_propose_deadline = list_access[(catalog.PRAZO_PROPOR, task.pk)]
+        context["object_list"] = tasks
 
         if context["view_mode"] == "atividade":
             grouped = {}
@@ -1715,6 +1822,8 @@ class TaskMoveStageView(OrganizationRequiredMixin, View):
 
     def post(self, request, pk):
         task = get_object_or_404(Task, pk=pk, activity__organization=self.organization)
+        if not AuthorizationService.can(request.user, catalog.TAREFA_MOVER_ESTAGIO, task):
+            raise PermissionDenied("Você não possui autorização para mover o estágio desta tarefa.")
         stage_id = request.POST.get("stage_id") or None
         stage = None
         if stage_id:
@@ -1723,7 +1832,7 @@ class TaskMoveStageView(OrganizationRequiredMixin, View):
         task.stage_changed_at = timezone.now()
         task.save(update_fields=["stage", "stage_changed_at"])
         if _is_ajax(request):
-            return JsonResponse({"ok": True, "task_id": task.pk, "stage_id": stage.pk if stage else None})
+            return JsonResponse({"success": True, "message": "Estágio da tarefa atualizado.", "task_id": task.pk, "stage_id": stage.pk if stage else None})
         return redirect("task-kanban")
 
 
@@ -1953,6 +2062,11 @@ class TaskAjaxActionView(OrganizationRequiredMixin, View):
 
     def post(self, request, pk):
         task = self.get_task(pk)
+        labels = {
+            "start": "Tarefa iniciada.",
+            "pause": "Tarefa pausada.",
+            "complete": "Tarefa concluída.",
+        }
         try:
             if self.action == "start":
                 TaskService.start(task, request.user)
@@ -1963,9 +2077,35 @@ class TaskAjaxActionView(OrganizationRequiredMixin, View):
             else:
                 raise ActivityError("Ação desconhecida.")
         except ActivityError as exc:
-            return JsonResponse({"error": str(exc)}, status=400)
+            return JsonResponse({"success": False, "error": str(exc), "errors": {"__all__": [str(exc)]}}, status=400)
         task.refresh_from_db()
-        return JsonResponse({"status": task.status})
+        task = Task.objects.select_related(
+            "activity", "activity__client", "activity__site", "sector", "responsavel", "depends_on"
+        ).prefetch_related(Prefetch("executors", queryset=TaskExecutor.objects.filter(removed_at__isnull=True).select_related("user"), to_attr="active_executors")).get(pk=task.pk)
+        from core.colors import EnumColorResolver
+        colors = EnumColorResolver(self.organization, "task_status")
+        task._status_color = colors.color_for(task.status)
+        task._status_label = colors.label_for(task.status, task.get_status_display())
+        task.effective_deadline = task.committed_deadline or task.requested_deadline
+        task.is_overdue = bool(task.effective_deadline and task.effective_deadline < timezone.now() and task.status not in (Task.Status.CONCLUIDA, Task.Status.CANCELADA))
+        access = AuthorizationService.can_many(request.user, [
+            (catalog.TAREFA_ALTERAR_RESPONSAVEL, task),
+            (catalog.TAREFA_MOVER_SETOR, task),
+            (catalog.PRAZO_PROPOR, task),
+            (catalog.TAREFA_REABRIR, task),
+        ])
+        task.can_change_responsavel = access[(catalog.TAREFA_ALTERAR_RESPONSAVEL, task.pk)]
+        task.can_move_sector = access[(catalog.TAREFA_MOVER_SETOR, task.pk)]
+        task.can_propose_deadline = access[(catalog.PRAZO_PROPOR, task.pk)]
+        task.can_reopen = task.status == Task.Status.CONCLUIDA and access[(catalog.TAREFA_REABRIR, task.pk)]
+        html = render_to_string("activities/_task_row.html", {"task": task}, request=request)
+        return JsonResponse({
+            "success": True,
+            "message": labels.get(self.action, "Ação concluída."),
+            "status": task.status,
+            "target": f"task-{task.pk}",
+            "html": html,
+        })
 
 
 class TaskChecklistAddView(OrganizationRequiredMixin, View):
@@ -2031,7 +2171,9 @@ class TaskQuickCreateView(OrganizationRequiredMixin, FormView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["activity"] = self.get_activity()
+        activity = self.get_activity()
+        context["activity"] = activity
+        context["activity_summary"] = activity_summary(activity)
         return context
 
     def form_valid(self, form):
@@ -2083,6 +2225,11 @@ class TaskQuickCreateStandaloneView(OrganizationRequiredMixin, FormView):
         kwargs["organization"] = self.organization
         kwargs["can_create_activity"] = can(self.request.user, catalog.ATIVIDADE_CRIAR)
         return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["activity_summary"] = activity_summary(context["form"].selected_activity)
+        return context
 
     def form_valid(self, form):
         activity = form.cleaned_data["activity"]
@@ -2233,6 +2380,15 @@ class TaskFormActionView(ActivityActionResponseMixin, OrganizationRequiredMixin,
             if not can(request.user, self.required_action, task):
                 raise PermissionDenied("Você não possui acesso a este conteúdo.")
         return super().dispatch(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        # O `pk` da URL aqui é de uma TAREFA. O `post` de `ActivityActionResponseMixin` devolve a linha de uma
+        # ATIVIDADE usando esse mesmo `pk` (erro 500, ou a linha de outra atividade quando os ids coincidem).
+        # Ação de tarefa responde só com o destino, como descrito acima.
+        response = FormView.post(self, request, *args, **kwargs)
+        if _is_ajax(request) and response.status_code == 302:
+            return JsonResponse({"redirect_url": response.url})
+        return response
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -2393,6 +2549,7 @@ class TaskEditView(TaskFormActionView):
         task = context["task"]
         context.update(
             activity=task.activity,
+            activity_summary=activity_summary(task.activity),
             pending_assignments=task.assignments.filter(status=TaskAssignment.Status.PENDENTE).select_related("user"),
             current_responsavel=task.responsavel,
             current_participants=[

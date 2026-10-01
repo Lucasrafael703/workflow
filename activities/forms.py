@@ -2,6 +2,7 @@ import datetime
 
 from django import forms
 from django.contrib.auth import get_user_model
+from django.db.models import Count
 from django.forms.utils import from_current_timezone, to_current_timezone
 from django.urls import reverse
 from django.utils import timezone
@@ -62,26 +63,33 @@ class SplitDateOptionalTimeWidget(forms.SplitDateTimeWidget):
         # O rótulo do campo aponta para a data (o primeiro dos dois inputs).
         return f"{id_}_0" if id_ else id_
 
-    def render(self, name, value, attrs=None, renderer=None):
-        """Data e hora lado a lado, cada uma com o seu ícone (calendário e
-        relógio). Os ids seguem a convenção do `MultiWidget` (`<id>_0`, `<id>_1`)
-        para o rótulo do campo continuar apontando para a data."""
+    def render_parts(self, name, value, attrs=None, renderer=None):
+        """Os dois inputs prontos, data e hora, para quem dá a cada um o seu rótulo.
+        Os ids seguem a convenção do `MultiWidget` (`<id>_0`, `<id>_1`)."""
         if not isinstance(value, (list, tuple)):
             value = self.decompress(value)
         attrs = {**self.attrs, **(attrs or {})}
         base_id = attrs.get("id")
-        cells = []
-        for index, (widget, icon) in enumerate(zip(self.widgets, ("calendar", "clock"))):
+        parts = []
+        for index, widget in enumerate(self.widgets):
             sub_attrs = {**attrs, "class": "activity-input"}
             if base_id:
                 sub_attrs["id"] = f"{base_id}_{index}"
-            cells.append(
-                format_html(
-                    '<div class="activity-input-wrap"><span class="activity-input-icon">{}</span>{}</div>',
-                    sprite_icon(icon),
-                    widget.render(f"{name}_{index}", value[index], sub_attrs, renderer),
-                )
+            parts.append(widget.render(f"{name}_{index}", value[index], sub_attrs, renderer))
+        return parts
+
+    def render(self, name, value, attrs=None, renderer=None):
+        """Data e hora lado a lado, cada uma com o seu ícone (calendário e
+        relógio). O rótulo do campo continua apontando para a data."""
+        parts = self.render_parts(name, value, attrs, renderer)
+        cells = [
+            format_html(
+                '<div class="activity-input-wrap"><span class="activity-input-icon">{}</span>{}</div>',
+                sprite_icon(icon),
+                html,
             )
+            for html, icon in zip(parts, ("calendar", "clock"))
+        ]
         return format_html('<div class="activity-date-time">{}{}</div>', *cells)
 
 
@@ -493,8 +501,8 @@ TASK_LABELS = {
     "sector": "Setor",
     "responsavel": "Responsável",
     "participantes": "Participantes",
-    "requested_deadline": "Prazo pedido pelo solicitante",
-    "description": "Instruções para fazer a tarefa",
+    "requested_deadline": "Data do prazo",
+    "description": "Instruções",
     "tags": "Marcadores",
 }
 TASK_HELP = {
@@ -507,30 +515,64 @@ TASK_HELP = {
     "description": "Explique o que fazer e como saber que o trabalho está pronto.",
     "tags": "Palavras-chave para organizar e encontrar a tarefa depois.",
 }
-TASK_TITLE_PLACEHOLDER = "Ex.: Entrevistar os candidatos"
+TASK_TITLE_PLACEHOLDER = "Ex.: Levantar quantitativo da garagem"
+# O nome da tarefa é o campo principal da janela: mesmo visual dos campos da atividade, com destaque.
+TASK_TITLE_ATTRS = {"autofocus": True, "placeholder": TASK_TITLE_PLACEHOLDER, "class": "activity-input task-title-input"}
+TASK_DESCRIPTION_PLACEHOLDER = (
+    "Descreva as instruções para executar a tarefa, critérios de conclusão e outras informações importantes..."
+)
 
 
-class TaskFoldsMixin:
-    """Quais blocos recolhíveis da janela de tarefa (“Participantes” e “Prazo e
-    detalhes”) já nascem abertos: os que têm conteúdo ou erro para mostrar.
-    Nova tarefa abre com os dois fechados; editar abre o que já foi preenchido."""
+class TaskDeadlineField(SplitDateOptionalTimeField):
+    """Prazo da tarefa em dois campos, “Data do prazo” e “Hora do prazo”.
 
-    def _filled(self, name):
-        if name not in self.fields:
-            return False
-        bound = self[name]
-        return bool(bound.errors or bound.value())
+    Mesma regra do prazo da atividade: sem hora, vale até 23:59 do dia. Uma hora
+    sem data é um erro explícito (a atividade a ignora em silêncio): quem
+    preencheu a hora esperava um prazo, e perder isso sem avisar engana."""
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("widget", SplitDateOptionalTimeWidget(attrs={"class": "activity-input"}))
+        kwargs.setdefault("label", TASK_LABELS["requested_deadline"])
+        kwargs.setdefault("required", False)
+        kwargs.setdefault("help_text", TASK_HELP["requested_deadline"])
+        super().__init__(**kwargs)
+
+    def compress(self, data_list):
+        if data_list and data_list[0] in (None, "") and data_list[1] not in (None, ""):
+            raise forms.ValidationError("Informe a data do prazo.", code="date_required")
+        return super().compress(data_list)
+
+
+class TaskDeadlineInputsMixin:
+    """`form.deadline_inputs`: os inputs de data e de hora do prazo, separados, para o
+    template dar a cada um o seu rótulo ("Data do prazo", "Hora do prazo")."""
 
     @property
-    def participants_open(self):
-        return self._filled("participantes")
+    def deadline_inputs(self):
+        bound = self["requested_deadline"]
+        return bound.field.widget.render_parts(
+            bound.html_name, bound.value(), {"id": bound.auto_id}, self.renderer
+        )
 
-    @property
-    def details_open(self):
-        return any(self._filled(name) for name in ("requested_deadline", "description", "tags"))
+
+def activity_summary(activity):
+    """Resumo da atividade para o cartão da janela de tarefa: título e uma linha
+    “Cliente • Setor: X • N tarefas”. Sem atividade, `None`."""
+    if activity is None:
+        return None
+    total = getattr(activity, "task_total", None)
+    if total is None:
+        total = activity.tasks.count()
+    parts = []
+    if activity.client_id:
+        parts.append(activity.client.name)
+    if activity.sector_id:
+        parts.append(f"Setor: {activity.sector.name}")
+    parts.append("Sem tarefas ainda" if not total else f"{total} tarefa" if total == 1 else f"{total} tarefas")
+    return {"id": activity.pk, "title": activity.title, "meta": " • ".join(parts)}
 
 
-class TaskEditorForm(TaskFoldsMixin, forms.Form):
+class TaskEditorForm(TaskDeadlineInputsMixin, forms.Form):
     """Editor único da tarefa (popup no padrão do editor de atividade): dados,
     prazo pedido, marcadores, responsável e participantes num só lugar.
 
@@ -546,20 +588,15 @@ class TaskEditorForm(TaskFoldsMixin, forms.Form):
         label=TASK_LABELS["title"],
         max_length=200,
         help_text=TASK_HELP["title"],
-        widget=forms.TextInput(attrs={"autofocus": True, "placeholder": TASK_TITLE_PLACEHOLDER}),
+        widget=forms.TextInput(attrs=TASK_TITLE_ATTRS),
     )
     description = forms.CharField(
         label=TASK_LABELS["description"],
         required=False,
         help_text=TASK_HELP["description"],
-        widget=RichTextWidget(),
+        widget=RichTextWidget(placeholder=TASK_DESCRIPTION_PLACEHOLDER),
     )
-    requested_deadline = forms.DateTimeField(
-        label=TASK_LABELS["requested_deadline"],
-        required=False,
-        widget=DateTimeLocalInput(),
-        help_text=TASK_HELP["requested_deadline"],
-    )
+    requested_deadline = TaskDeadlineField()
     tags = forms.ModelMultipleChoiceField(
         queryset=Tag.objects.none(),
         required=False,
@@ -652,14 +689,16 @@ class TaskDependencyForm(forms.Form):
             self.initial["depends_on"] = current.pk
 
 
-class TaskQuickCreateForm(TaskFoldsMixin, OrganizationScopedFormMixin, forms.ModelForm):
-    """Popup "+ Adicionar tarefa" (Regra 12): título e prazo à vista, descrição
-    opcional escondida até a pessoa abrir. O setor vem pré-preenchido com o
-    "Grupo designado" da atividade quando houver, mas continua visível e
-    editável — e a busca de responsável nunca se restringe a um setor, para
-    ter o mesmo comportamento em qualquer ponto de entrada (Regra: um único
-    padrão de tela de "Nova tarefa")."""
+class TaskQuickCreateForm(TaskDeadlineInputsMixin, OrganizationScopedFormMixin, forms.ModelForm):
+    """Popup "+ Adicionar tarefa" (Regra 12): uma ação rápida, numa janela só,
+    com as mesmas quatro seções do editor (Tarefa, Prazo e organização,
+    Participantes, Instruções). O setor vem pré-preenchido com o "Grupo
+    designado" da atividade quando houver, mas continua visível e editável — e
+    a busca de responsável nunca se restringe a um setor, para ter o mesmo
+    comportamento em qualquer ponto de entrada (Regra: um único padrão de tela
+    de "Nova tarefa")."""
 
+    requested_deadline = TaskDeadlineField()
     responsavel = forms.ModelChoiceField(
         queryset=User.objects.none(),
         label=TASK_LABELS["responsavel"],
@@ -684,10 +723,9 @@ class TaskQuickCreateForm(TaskFoldsMixin, OrganizationScopedFormMixin, forms.Mod
         labels = {name: TASK_LABELS[name] for name in fields}
         help_texts = {name: TASK_HELP[name] for name in fields}
         widgets = {
-            "title": forms.TextInput(attrs={"autofocus": True, "placeholder": TASK_TITLE_PLACEHOLDER}),
+            "title": forms.TextInput(attrs=TASK_TITLE_ATTRS),
             "sector": SectorPickerWidget(),
-            "description": RichTextWidget(),
-            "requested_deadline": DateTimeLocalInput(),
+            "description": RichTextWidget(placeholder=TASK_DESCRIPTION_PLACEHOLDER),
             "tags": TagPickerWidget(),
         }
 
@@ -696,7 +734,6 @@ class TaskQuickCreateForm(TaskFoldsMixin, OrganizationScopedFormMixin, forms.Mod
         self.scope_querysets(organization)
         self.order_fields(["title", "sector", "responsavel", "participantes", "requested_deadline", "tags", "description"])
         self.fields["description"].required = False
-        self.fields["requested_deadline"].required = False
         self.fields["tags"].required = False
         self.fields["sector"].required = True
         if activity is not None and activity.sector_id and not self.is_bound:
@@ -752,6 +789,19 @@ class TaskQuickCreateStandaloneForm(TaskQuickCreateForm):
         self.fields["activity"].widget.queryset = queryset
         if can_create_activity:
             self.fields["activity"].widget.create_url = reverse("activity-mini-create")
+
+    @property
+    def selected_activity(self):
+        """A atividade já escolhida (ao reabrir a janela com erro, por exemplo), ou `None`."""
+        value = self["activity"].value()
+        if not value:
+            return None
+        try:
+            return self.fields["activity"].queryset.select_related("client", "sector").annotate(
+                task_total=Count("tasks")
+            ).get(pk=value)
+        except (ValueError, TypeError, Activity.DoesNotExist):
+            return None
 
 
 class ActivityAttachmentForm(forms.Form):

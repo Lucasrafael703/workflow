@@ -1,0 +1,99 @@
+/* Caixa de Entrada. Usa os tokens de app.css; as janelas reaproveitam o casco de
+   activity-workspace.css (.activity-modal*). Estado nunca é só cor: todo selo traz texto. */
+
+/* ---------- Lista ---------- */
+.intake-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.intake-item {
+    display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 14px; align-items: start;
+    padding: 16px 18px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.intake-item--convertido, .intake-item--ignorado { background: var(--surface-alt); }
+.intake-item__icon {
+    width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    background: var(--primary-soft); color: var(--primary);
+}
+.intake-item--ignorado .intake-item__icon { background: var(--neutral-soft); color: var(--muted); }
+.intake-item--convertido .intake-item__icon { background: var(--success-soft); color: var(--success); }
+.intake-item__icon svg { width: 20px; height: 20px; }
+.intake-item__body { min-width: 0; }
+.intake-item__meta {
+    display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center;
+    margin-bottom: 4px; color: var(--muted); font-size: 12px;
+}
+.intake-item__headline { margin: 0 0 2px; font-size: 16px; line-height: 1.3; }
+.intake-item__headline a { color: var(--text); }
+.intake-item__headline a:hover { color: var(--primary); text-decoration: underline; }
+.intake-item__subject { margin: 2px 0; font-weight: 600; overflow-wrap: anywhere; }
+.intake-item__excerpt { margin: 4px 0 12px; color: var(--text-2); overflow-wrap: anywhere; }
+.intake-item__note { margin: 10px 0 0; color: var(--text-2); font-size: 12.5px; }
+.intake-item__actions { display: flex; flex-direction: column; gap: 8px; min-width: 138px; }
+.intake-item__actions .btn { justify-content: center; width: 100%; box-sizing: border-box; }
+.intake-item__actions form { display: contents; }
+
+.intake-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 16px; margin: 0; }
+.intake-fact dt { color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
+.intake-fact dd { margin: 2px 0 0; font-weight: 600; overflow-wrap: anywhere; }
+.intake-fact dd .muted { font-weight: 400; }
+.intake-why { margin-top: 10px; color: var(--text-2); font-size: 12.5px; }
+.intake-why summary { cursor: pointer; color: var(--primary); font-weight: 600; }
+.intake-why ul { margin: 6px 0 0; padding-left: 18px; }
+
+.intake-confidence { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.intake-confidence--alta { background: var(--success-soft); color: var(--success); }
+.intake-confidence--media { background: var(--warning-soft); color: var(--warning); }
+.intake-confidence--baixa { background: var(--neutral-soft); color: var(--text-2); }
+
+.tag--NOVO { background: var(--info-soft); color: var(--info); }
+.tag--CONVERTIDO { background: var(--success-soft); color: var(--success); }
+.tag--IGNORADO { background: var(--neutral-soft); color: var(--muted); }
+
+/* ---------- Detalhe ---------- */
+.intake-detail { display: grid; grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr); gap: 16px; align-items: start; }
+.intake-detail__side { display: grid; gap: 16px; }
+.intake-panel { padding: 18px 20px; }
+.intake-panel__title {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+    margin: 0 0 12px; font-size: 14px;
+}
+.intake-raw {
+    margin: 0; padding: 14px; max-height: 60vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
+    font: inherit; background: var(--surface-alt); border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.intake-panel .intake-item__subject { margin: 0 0 12px; }
+.intake-timeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.intake-timeline li { padding-left: 12px; border-left: 2px solid var(--border); }
+.intake-timeline__note { margin: 4px 0 0; color: var(--text-2); font-size: 12.5px; overflow-wrap: anywhere; }
+
+/* ---------- Janelas ---------- */
+.intake-modal.activity-modal { width: min(680px, calc(100vw - 48px)); }
+.intake-modal .activity-form-grid { row-gap: 18px; }
+.intake-modal .form-row select,
+.intake-modal .form-row input[type="datetime-local"] {
+    width: 100%; box-sizing: border-box; height: 46px; padding: 0 14px;
+    border: 1px solid #c8d6e6; border-radius: 8px; background: var(--surface); color: #1e3554; font-size: 13px;
+}
+.intake-modal .form-row textarea {
+    width: 100%; box-sizing: border-box; min-height: 190px; padding: 12px 14px;
+    border: 1px solid #c8d6e6; border-radius: 8px; background: var(--surface); color: #1e3554;
+    font: inherit; font-size: 13px; line-height: 1.5; resize: vertical;
+}
+.intake-modal .form-row select:focus,
+.intake-modal .form-row textarea:focus,
+.intake-modal .form-row input[type="datetime-local"]:focus {
+    outline: none; border-color: #559ff5; box-shadow: 0 0 0 3px rgba(27, 98, 196, .09);
+}
+.intake-modal-hint { margin: 0 0 16px; color: var(--text-2); font-size: 13px; }
+.intake-more { margin-top: 18px; border-top: 1px solid #e4ebf3; padding-top: 12px; }
+.intake-more > summary { margin-bottom: 14px; cursor: pointer; color: var(--primary); font-weight: 600; font-size: 13px; }
+
+/* ---------- Celular ---------- */
+@media (max-width: 900px) {
+    .intake-detail { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 720px) {
+    .intake-item { grid-template-columns: minmax(0, 1fr); padding: 14px; }
+    .intake-item__icon { display: none; }
+    .intake-item__actions { flex-direction: row; flex-wrap: wrap; min-width: 0; }
+    .intake-item__actions .btn { width: auto; flex: 1 1 auto; }
+}

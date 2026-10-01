@@ -68,7 +68,8 @@
             hidden.value = person.id;
             label.textContent = person.name;
             label.classList.remove("muted");
-            hidden.dispatchEvent(new Event("change", { bubbles: true }));
+            // `detail.item` é a opção escolhida, com o que mais a busca devolveu (ex.: o resumo da atividade).
+            hidden.dispatchEvent(new CustomEvent("change", { bubbles: true, detail: { item: person } }));
             closePopup();
             trigger.focus();
         }

@@ -16,8 +16,7 @@
         var limit = counter ? parseInt(counter.getAttribute("data-limit"), 10) || 0 : 0;
 
         function refreshState() {
-            var text = (body.innerText || body.textContent || "").replace(/
-$/, "");
+            var text = (body.innerText || body.textContent || "").replace(/\n$/, "");
             body.classList.toggle("is-empty", !text.trim() && !body.querySelector("li, img"));
             if (counter) {
                 counter.textContent = text.length + "/" + limit;

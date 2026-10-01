@@ -498,7 +498,8 @@ class EditorViewTestCase(EditorTestCase):
         data = {
             "title": "Entrevistar jovens aprendizes",
             "description": "<p>Conduzir as entrevistas.</p>",
-            "requested_deadline": "2026-12-15T10:00",
+            "requested_deadline_0": "2026-12-15",
+            "requested_deadline_1": "10:00",
             "tags": [self.urgente.pk],
             "responsavel": self.ryan.pk,
             "participantes": [],
@@ -523,9 +524,10 @@ class EditorPopupTests(EditorViewTestCase):
     def test_popup_has_the_editable_fields(self):
         self.login(self.manager)
         response = self.client.get(self.url, **AJAX)
-        for name in ("title", "description", "requested_deadline", "tags", "responsavel", "participantes"):
+        for name in ("title", "description", "requested_deadline_0", "requested_deadline_1", "tags", "responsavel", "participantes"):
             self.assertContains(response, f'name="{name}"')
-        self.assertContains(response, "Prazo pedido pelo solicitante")
+        self.assertContains(response, "Data do prazo")
+        self.assertContains(response, "Hora do prazo")
         self.assertContains(response, "Salvar alterações")
 
     def test_sector_and_dependency_are_not_editable_here(self):

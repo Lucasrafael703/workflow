@@ -1,0 +1,28 @@
+{% comment %}
+O que a LPS entendeu da solicitação. Quando não achou, diz "não identificado" em
+texto — nunca deixa o espaço em branco nem depende só de cor.
+{% endcomment %}
+<dl class="intake-facts">
+    <div class="intake-fact">
+        <dt>Cliente identificado</dt>
+        <dd>{% if item.suggested_client %}{{ item.suggested_client.name }}{% else %}<span class="muted">não identificado</span>{% endif %}</dd>
+    </div>
+    <div class="intake-fact">
+        <dt>Obra identificada</dt>
+        <dd>{% if item.suggested_site %}{{ item.suggested_site.name }}{% else %}<span class="muted">não identificada</span>{% endif %}</dd>
+    </div>
+    <div class="intake-fact">
+        <dt>Prazo identificado</dt>
+        <dd>{% if item.suggested_deadline %}{{ item.suggested_deadline_label }}{% else %}<span class="muted">não identificado</span>{% endif %}</dd>
+    </div>
+    <div class="intake-fact">
+        <dt>Setor sugerido</dt>
+        <dd>{% if item.suggested_sector %}{{ item.suggested_sector.name }}{% else %}<span class="muted">não identificado</span>{% endif %}</dd>
+    </div>
+</dl>
+{% if item.suggestion_reasons %}
+<details class="intake-why">
+    <summary>Por que a LPS sugeriu isso</summary>
+    <ul>{% for reason in item.suggestion_reasons %}<li>{{ reason }}</li>{% endfor %}</ul>
+</details>
+{% endif %}

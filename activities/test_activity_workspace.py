@@ -13,7 +13,7 @@ from django.urls import reverse
 from acessos import catalog
 from acessos.testing import grant_action
 from audit.models import AuditLog
-from core.models import Client
+from core.models import ActivityStage, Client, Site
 from .models import Activity, OwnerChangeLog
 from .test_views import ViewTestCase
 
@@ -148,6 +148,75 @@ class ActivityWorkspaceTests(ViewTestCase):
         response = self.client.get(reverse("activity-list"), {"q": "Material"})
         self.assertNotContains(response, "data-drawer-url")
         self.assertContains(response, reverse("activity-detail", args=[self.activity.pk]) + "?next=")
+        self.assertContains(response, f'id="activity-{self.activity.pk}"')
+        self.assertContains(response, "activity-deadline-inline")
+        self.assertNotContains(response, reverse("activity-change-deadline", args=[self.activity.pk]))
+
+    def test_filter_toolbar_searches_title_client_site_and_code(self):
+        client = Client.objects.create(organization=self.org, name="Cliente Horizonte")
+        site = Site.objects.create(organization=self.org, client=client, name="Obra Vale Azul")
+        self.activity.client = client
+        self.activity.site = site
+        self.activity.save(update_fields=["client", "site"])
+
+        for term in (self.activity.title, client.name, site.name, self.activity.code):
+            response = self.client.get(reverse("activity-list"), {"q": term})
+            self.assertContains(response, f'id="activity-{self.activity.pk}"', msg_prefix=term)
+
+        response = self.client.get(reverse("activity-list"), {"q": "nao-existe"})
+        self.assertNotContains(response, f'id="activity-{self.activity.pk}"')
+
+    def test_quick_filter_links_toggle_the_active_value(self):
+        response = self.client.get(reverse("activity-list"))
+        self.assertContains(response, 'href="?prazo=atrasadas"')
+        self.assertContains(response, 'href="?prazo=hoje"')
+        self.assertContains(response, 'href="?status=BLOQUEADA"')
+
+        response = self.client.get(reverse("activity-list"), {"tab": "minhas", "prazo": "atrasadas"})
+        self.assertContains(response, 'href="?tab=minhas"')
+        self.assertContains(response, 'aria-pressed="true"')
+
+        response = self.client.get(reverse("activity-list"), {"tab": "minhas", "status": "BLOQUEADA"})
+        self.assertContains(response, 'href="?tab=minhas"')
+        self.assertContains(response, 'aria-pressed="true"')
+
+    def test_filter_context_is_preserved_when_switching_views(self):
+        stage = ActivityStage.objects.create(
+            organization=self.org, name="Em análise", order=1, color="#3B82F6", created_by=self.requester
+        )
+        response = self.client.get(
+            reverse("activity-list"),
+            {
+                "tab": "grupo", "q": "Material", "status": "ABERTA",
+                "estagio": stage.pk, "grupo": self.sector.pk, "ordem": "titulo", "page": 1,
+            },
+        )
+        querystring = response.context["filter_querystring"]
+        self.assertIn("tab=grupo", querystring)
+        self.assertIn("q=Material", querystring)
+        self.assertIn("status=ABERTA", querystring)
+        self.assertIn(f"estagio={stage.pk}", querystring)
+        self.assertIn(f"grupo={self.sector.pk}", querystring)
+        self.assertIn("ordem=titulo", querystring)
+        self.assertNotIn("page=", querystring)
+        self.assertNotIn("ano=", querystring)
+        self.assertNotIn("mes=", querystring)
+
+    def test_clear_filters_preserves_calendar_period(self):
+        response = self.client.get(
+            reverse("activity-calendar"),
+            {"tab": "grupo", "q": "Material", "status": "ABERTA", "ano": 2026, "mes": 10},
+        )
+        html = response.content.decode()
+        self.assertIn("ano=2026", html)
+        self.assertIn("mes=10", html)
+        self.assertNotIn("q=Material", html.split("Limpar filtros", 1)[-1].split("</a>", 1)[0])
+        self.assertNotIn("status=ABERTA", html.split("Limpar filtros", 1)[-1].split("</a>", 1)[0])
+
+    def test_filter_changes_do_not_keep_pagination(self):
+        response = self.client.get(reverse("activity-list"), {"q": "Material", "page": 1})
+        self.assertNotContains(response, 'name="page"')
+        self.assertContains(response, 'href="?q=Material&amp;prazo=atrasadas"')
 
     def test_legacy_drawer_redirects_to_full_activity(self):
         self.assertRedirects(self.client.get(reverse("activity-drawer", args=[self.activity.pk])), reverse("activity-detail", args=[self.activity.pk]))
@@ -189,6 +258,9 @@ class ActivityWorkspaceTests(ViewTestCase):
         self.assertIn("new_owner", response.json()["errors"])
         response = self.client.post(url, {"new_owner": self.member.pk}, HTTP_X_REQUESTED_WITH="XMLHttpRequest")
         self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["success"])
+        self.assertEqual(response.json()["target"], f"activity-{self.activity.pk}")
+        self.assertIn('id="activity-', response.json()["html"])
         self.activity.refresh_from_db()
         self.assertEqual(self.activity.owner_id, self.member.pk)
 

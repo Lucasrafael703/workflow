@@ -70,6 +70,8 @@
     function initialize(item) {
         var element = item.element;
         var dialog = element.querySelector(".modal");
+        var size = item.size || element.querySelector("[data-modal-size]")?.getAttribute("data-modal-size");
+        if (size === "S" || size === "M" || size === "L") dialog.classList.add("modal--" + size.toLowerCase());
         dialog.setAttribute("role", "dialog");
         dialog.setAttribute("aria-modal", "true");
         var title = dialog.querySelector("h1, h2");
@@ -126,7 +128,7 @@
             document.body.style.overflow = "hidden";
             document.addEventListener("keydown", onKeydown);
         }
-        var item = {element: element, url: url, opener: opener, onSuccess: options.onSuccess, busy: false};
+        var item = {element: element, url: url, opener: opener, onSuccess: options.onSuccess, size: options.size, busy: false};
         stack.push(item);
         document.body.appendChild(element);
         initialize(item);

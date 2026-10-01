@@ -20,7 +20,7 @@ from acessos import catalog
 from acessos.services import AuthorizationService
 from core.mixins import OrganizationRequiredMixin
 
-from .forms import ActivityEditorForm
+from .forms import ActivityEditorForm, activity_summary
 from .models import Activity
 from .navigation import activity_detail_url, activity_return_url
 from .services import ActivityError, ActivityService
@@ -136,7 +136,9 @@ class ActivityEditorView(OrganizationRequiredMixin, FormView):
 
         return_url = activity_return_url(self.request)
         if self.picker and self.is_ajax():
-            return JsonResponse({"id": activity.pk, "name": f"{activity.code} — {activity.title}"})
+            return JsonResponse(
+                {"id": activity.pk, "name": f"{activity.code} — {activity.title}", "summary": activity_summary(activity)}
+            )
         if save_draft:
             target = reverse("activity-create") + "?" + urlencode({"pk": activity.pk, "next": return_url})
             messages.success(self.request, "Rascunho salvo.")

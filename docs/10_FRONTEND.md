@@ -19,6 +19,7 @@
 | `activities/` | Início, listas, Kanban, calendários, ficha da atividade, ficha da tarefa, wizard, fila, gestão, histórico |
 | `core/` | Cadastros, configurações, usuários, permissões, etapas e status, prioridades |
 | `notifications/` | Caixa de notificações, textos de e-mail em `email/*.txt` |
+| `intake/` | Caixa de Entrada: `intake_list.html`, `intake_detail.html`, as janelas `intake_capture/_edit/_convert/_ignore.html` e os parciais `_item_card`, `_facts`, `_actions`, `_source_icon`, `_modal_head`, `_modal_foot`, `_form_errors`. As janelas reaproveitam o casco `activity-modal` e os campos de `activities/_activity_modal_field.html` |
 | `processes/` | Lista, criação e edição de processo |
 | `painel/em_construcao.html` | Tela em branco dos itens de menu ainda não construídos |
 | `registration/` | Assunto e corpo do e-mail de recuperação de senha |
@@ -46,7 +47,7 @@ Disponíveis em todo template:
 | Processor | Variáveis | Uso |
 |---|---|---|
 | `notifications.context_processors.unread_notifications_count` | contador de não lidas | sino |
-| `acessos.context_processors.navigation` | `lps_nav` (flags `management`, `cadastros`, `users`, `security`), `lps_org`, `lps_open_tasks`, `nav_active`, `nav_active2`, `nav_cadastros_tab` | o que o menu mostra e qual item está ativo — só UX |
+| `acessos.context_processors.navigation` | `lps_nav` (flags `management`, `cadastros`, `users`, `security`, `intake`, `intake_can_view`), `lps_org`, `lps_open_tasks`, `lps_intake_new` (solicitações novas que a pessoa enxerga; uma avaliação de permissão e um `COUNT` por página), `nav_active`, `nav_active2`, `nav_cadastros_tab` | o que o menu mostra e qual item está ativo — só UX |
 | `activities.context_processors.my_active_sessions` | `my_active_sessions`, `my_active_sessions_count` | cronômetro da barra superior |
 
 ---
@@ -87,6 +88,8 @@ Todos são **filtros**, em `activities/templatetags/lps.py`:
 | `process-apply.js` | Popup "Aplicar processo": 4 passos num só formulário (Processo → Responsáveis → Entradas → Confirmar). Mostra/habilita só os campos da versão escolhida; nenhuma regra de negócio (o servidor valida tudo). Registra-se em `window.LPSWidgets` para funcionar dentro do `LPSModal` |
 | `process-editor.js` | Editor de processo: no "Adicionar etapa", sugere primeiro as pessoas do setor escolhido para o responsável padrão (as de outros setores ficam atrás de "Mostrar pessoas de outros setores") |
 | `color-utils.js`, `color-palette-picker.js` | Paleta de 36 cores (espelha `core/colors.py`) e seletor |
+| `task-modal.js` | Janela de tarefa: troca o seletor de atividade pelo cartão da atividade escolhida e liga o botão “Alterar”. Registra-se em `window.LPSWidgets`. Teste: `tests/task-modal.test.cjs` (inclui o `person-picker.js` real) |
+| `intake.js` | Caixa de Entrada: abre as ações (`a[data-intake-action]`) em `LPSModal` e aplica a resposta (`LPSAjax.applyResult`: remove o cartão, troca o cartão, segue `redirect_url` ou recarrega); o formulário `form[data-intake-restore]` envia por `fetch`, com trava de envio duplo. Depende só de `LPSModal.open` e `LPSAjax`; sem eles, ou se a janela falhar, o link abre a página completa. Teste: `tests/intake.test.cjs` |
 | `notifications.js` | Evita que o cache do navegador mostre contador/lista antigos |
 | `auth.js` | Mostrar/ocultar senha nas telas de conta |
 
@@ -99,6 +102,13 @@ Ao mudar a paleta, altere **os dois**: `core/colors.py` e
 
 - `static/css/app.css`: todo o estilo da aplicação.
 - `static/css/auth.css`: telas de conta (login, cadastro, confirmação).
+- `static/css/activity-workspace.css`: janela de atividade e utilitários da área de atividades
+  (classes `activity-*`); a Caixa de Entrada reaproveita o casco e os campos.
+- `static/css/task-modal.css`: janela de tarefa (`.task-*`: seções numeradas, cartão da atividade,
+  grade de prazo, participantes); o casco vem de `activity-workspace.css`.
+- `static/css/intake.css`: Caixa de Entrada (`intake-*`, selos `tag--NOVO|CONVERTIDO|IGNORADO` e
+  `intake-confidence--alta|media|baixa`). Estado nunca é só cor: todo selo traz texto.
+- Ícones novos no sprite (`_icons.html`): `mail` e `chat`.
 - `static/img/`: favicon e logos da LPS (completo, completo escuro, símbolo).
 
 Em produção os arquivos são coletados por `collectstatic` em `staticfiles/` e
@@ -135,21 +145,40 @@ foco ao elemento de origem ao fechar.
 
 “Nova tarefa” (dentro de uma atividade, `task_quick_form.html`, e fora dela,
 `task_quick_form_standalone.html`) e “Editar tarefa” (`task_edit_form.html`)
-incluem o **mesmo corpo**, `activities/_task_editor_fields.html`:
+incluem o **mesmo corpo**, `activities/_task_editor_fields.html`. É uma tela só,
+sem etapas (diferente de “Nova atividade”), em quatro seções numeradas, todas à vista:
 
-    título · setor · responsável
-    ▸ Participantes (opcional)        ← `<details class="fold">`
-    ▸ Prazo e detalhes (opcional)     ← prazo pedido, instruções, marcadores
+    1 Tarefa                 atividade · o que fazer · setor · responsável
+    2 Prazo e organização    data do prazo · hora do prazo · marcadores
+    3 Participantes          (opcional)
+    4 Instruções             (opcional) — editor de texto de `rich-text.js`
+
+O casco (cabeçalho, corpo que rola, rodapé fixo, sobreposição com desfoque) é o da janela de
+atividade (`.activity-modal*`, `_task_modal_head.html` e `_task_modal_foot.html`); os blocos
+próprios são `.task-*` em `static/css/task-modal.css`. Em telas até 520px a janela vira uma
+folha que sobe da base. Cada campo sai de `_task_field.html`, que mantém `.form-row` (é por ela
+que o `modal.js` pendura o erro do servidor).
 
 - **Uma fonte de palavras:** `TASK_LABELS`/`TASK_HELP` em `activities/forms.py`
   alimentam `TaskQuickCreateForm` e `TaskEditorForm`; mudar um rótulo muda nas
-  duas janelas.
+  duas janelas. (O painel lateral tem texto próprio em modo leitura.)
+- **Atividade:** em “Nova tarefa” fora de uma atividade há o seletor; ao escolher, ele dá lugar
+  a um cartão (título e “Cliente • Setor: X • N tarefas”) com o botão **Alterar**, que volta ao
+  seletor já aberto. Dentro de uma atividade e na edição o cartão é só informação (a tarefa já
+  pertence a ela). O resumo vem de `activity_summary()` (`forms.py`): a busca
+  (`ActivitySearchView`) e a criação rápida devolvem `summary` e o `person-picker.js` entrega a
+  opção escolhida em `event.detail.item`; `static/js/task-modal.js` só troca o seletor pelo
+  cartão. Ao reabrir com erro, `TaskQuickCreateStandaloneForm.selected_activity` desenha o cartão
+  pelo servidor.
+- **Prazo:** dois campos, “Data do prazo” e “Hora do prazo” (`TaskDeadlineField`, que usa o
+  `SplitDateOptionalTimeWidget` da atividade; `form.deadline_inputs` entrega os dois `<input>`
+  para o template dar um rótulo a cada). Sem hora vale até 23:59, como no prazo da atividade;
+  hora sem data é erro (“Informe a data do prazo.”), em vez de ser ignorada.
 - **Edição:** o setor e o prazo combinado aparecem como informação
-  (`.field-static`); responsável e participantes também, para quem não tem a
+  (`.field-static` e `.task-note`); responsável e participantes também, para quem não tem a
   ação. O convite pendente fica dentro de “Participantes”.
-- **Blocos recolhíveis:** `TaskFoldsMixin` (`participants_open`, `details_open`)
-  decide quais nascem abertos — os que têm conteúdo ou erro. `modal.js` abre o
-  `<details>` que esconde o campo com erro, então o campo precisa ficar dentro dele.
+- **Nada recolhível:** as seções ficam sempre abertas; um erro de campo aparece onde o campo está.
+  (O painel lateral continua com `<details class="fold">`.)
 - **Rótulo dos seletores:** `PersonPickerWidget`, `ClientPickerWidget`,
   `ActivityPickerWidget` e os seletores simples (setor, empresa, obra, centro de
   custo) herdam de `VisibleHiddenInput` (`core/widgets.py`): guardam o valor num

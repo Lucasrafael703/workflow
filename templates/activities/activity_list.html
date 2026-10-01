@@ -42,7 +42,7 @@
             </thead>
             <tbody>
                 {% for activity in activities %}
-                <tr class="js-activity-row">
+                <tr id="activity-{{ activity.pk }}" class="js-activity-row">
                     <td class="activities-table__activity">
                         <a href="{% url 'activity-detail' activity.pk %}?next={{ request.get_full_path|urlencode }}">
                             {% include "_icon.html" with name="activity" %}
@@ -61,10 +61,10 @@
                     </td>
                     <td>
                         {% if activity.owner %}
-                        <span class="activity-owner">
+                        {% if activity.can_repassar %}<a class="actionable-value" href="{% url 'activity-change-owner' activity.pk %}" data-activity-action>{% endif %}<span class="activity-owner">
                             <span class="avatar avatar--{{ activity.owner|avatar_color }}">{{ activity.owner.get_full_name|default:activity.owner.get_username|slice:":2"|upper }}</span>
                             {{ activity.owner.get_full_name|default:activity.owner.get_username }}
-                        </span>
+                        </span>{% if activity.can_repassar %}<span class="actionable-value__arrow" aria-hidden="true">›</span></a>{% endif %}
                         {% else %}-{% endif %}
                     </td>
                     <td>
@@ -74,17 +74,16 @@
                         </div>
                     </td>
                     <td>
-                        <span class="activity-deadline-inline{% if activity.is_overdue %} is-late{% endif %}">
-                            {% include "_icon.html" with name="clock" %}
-                            {% if activity.is_overdue %}
-                            <strong>Atrasada {{ activity.overdue_days }} dia{{ activity.overdue_days|pluralize }}</strong>
-                            <small>{{ activity.requested_deadline|date:"d/m/Y" }}</small>
-                            {% elif activity.requested_deadline %}
-                            <strong>{{ activity.requested_deadline|date:"d/m/Y" }}</strong>
-                            {% else %}
-                            <strong>Sem prazo</strong>
-                            {% endif %}
-                        </span>
+                        <div class="activity-deadline-inline{% if activity.is_overdue %} is-late{% endif %}">
+                            <span class="activity-deadline-icon" aria-hidden="true">{% include "_icon.html" with name="clock" %}</span>
+                            {% if activity.can_edit %}<a class="activity-deadline-action" href="{% url 'activity-change-deadline' activity.pk %}" data-activity-action>{% endif %}
+                            <span class="activity-deadline-copy">
+                                {% if activity.is_overdue %}<strong>Atrasada {{ activity.overdue_days }} dia{{ activity.overdue_days|pluralize }}</strong><small>{{ activity.requested_deadline|date:"d/m/Y" }}</small>
+                                {% elif activity.requested_deadline %}<strong>{{ activity.requested_deadline|date:"d/m/Y" }}</strong>
+                                {% else %}<strong>Sem prazo</strong>{% endif %}
+                            </span>
+                            {% if activity.can_edit %}<span class="actionable-value__arrow activity-deadline-arrow" aria-hidden="true">›</span></a>{% endif %}
+                        </div>
                     </td>
                     <td><span class="activity-stage-pill" style="--stage-color: {{ activity.stage_color }};">{{ activity.stage_name }}</span></td>
                     <td><span class="activity-status-pill" style="--status-color: {{ activity.status_color }};">{{ activity.status_label }}</span></td>

@@ -1,0 +1,8 @@
+<header class="activity-modal-header">
+    <span class="activity-header-icon" aria-hidden="true">{% include "_icon.html" with name=modal_icon %}</span>
+    <div class="activity-header-content">
+        <h2 class="activity-modal-title">{{ modal_title }}</h2>
+        <p class="activity-modal-subtitle">{{ modal_subtitle }}</p>
+    </div>
+    <a href="{{ cancel_url }}" class="modal__close activity-modal-close" title="Fechar sem salvar" aria-label="Fechar sem salvar">&times;</a>
+</header>

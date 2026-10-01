@@ -53,6 +53,7 @@ O "endereço" de um recurso é montado por `ResourceContext.of(recurso)` em
 | `QueueEntry` | setor da fila + dados da atividade + participantes |
 | `DeadlineProposal`, `DeadlineConflict` | o da tarefa |
 | `Sector`, `Company`, `Site`, `CostCenter` | org + o próprio id |
+| `IntakeItem` (Caixa de Entrada) | org + **setor sugerido** + obra sugerida. Sem setor sugerido só casam escopos de organização |
 | outro model com `organization_id` | só a org |
 | qualquer outra coisa | `unresolved` → **nega** |
 | `None` | vazio: só escopos `ORGANIZACAO` (e relacionais) casam |
@@ -103,6 +104,7 @@ em `UserSector` invalida o cache via signal (`invalidate_sector_cache`).
 | Serviços de `processes` | `_require(...)` com endereço org + empresa; levanta `ProcessError`. |
 | Aplicar processo (`ProcessApplicationService.apply`) | `require_action(user, PROCESSO_APLICAR, atividade)` — o recurso é a **atividade**, então escopos de empresa, setor designado, obra, centro de custo e "minhas atividades" valem. Ver a seção 4.1. |
 | Inputs e critérios do processo aplicado (`ActivityProcessService`) | Sem ação nova: `ActivityProcessService.can_update` aceita quem pode `atividade.editar` na atividade, o dono e quem é responsável/participante de alguma tarefa dela (mesmo critério do checklist da tarefa), sempre dentro da organização e nunca em atividade encerrada. |
+| Caixa de Entrada (`IntakeService`) | `entrada.registrar` e `entrada.visualizar` na **porta** da tela usam `can_anywhere` (`AnywhereActionMixin`, em `intake/views.py`): registrar não tem setor ainda, e `ActionRequiredMixin` só olharia o escopo de organização e negaria quem cuida de um setor. Itens: `entrada.triar` / `entrada.visualizar` sobre o próprio `IntakeItem` (outro tenant = 404, sem a ação = 403). A lista é filtrada por `IntakeService.visible_queryset`. Ver a seção 4.2. |
 | Menu lateral | `acessos.context_processors.navigation` — **só UX**, não protege nada. |
 
 Algumas ações do catálogo ainda não são verificadas em nenhum ponto (ex.:
@@ -131,6 +133,32 @@ elas. As Regras não dizem se aplicar processo dispensa o escopo de setor de
 `tarefa.criar`; a decisão segue `Regras/05` §2057 (usar o fluxo padrão não exige
 poder editar o fluxo) e está registrada em `Regras/12` §41.
 
+### 4.2 Caixa de Entrada: `entrada.*` × `atividade.criar`
+
+| Ação | Permite |
+|---|---|
+| `entrada.visualizar` | Ver a Caixa de Entrada e o texto das solicitações do escopo. |
+| `entrada.registrar` | Colocar uma solicitação na Caixa de Entrada (e-mail, Teams, pedido verbal). |
+| `entrada.triar` | Corrigir as sugestões, **criar a demanda**, ignorar e restaurar. |
+
+- **Criar demanda exige também `atividade.criar`** no contexto final (setor, obra e
+  organização escolhidos). Quem garante é o `ActivityService` (`save_draft` +
+  `publish_draft`), que a `IntakeService.convert` chama; o `intake` não repete a regra. Quem
+  só tem `entrada.triar` recebe a recusa e a solicitação continua nova, sem atividade nem
+  efeito pela metade (tudo roda numa transação).
+- **Visibilidade:** escopo de organização enxerga tudo, inclusive solicitações **sem setor
+  sugerido** (a triagem geral). Escopo de setor enxerga só as do seu setor. Uma solicitação
+  sem setor é invisível para o gestor de setor até alguém com escopo de organização
+  atribuí-la a um.
+- **Editar sem perder o acesso:** ao corrigir o setor sugerido, a `IntakeService` reverifica
+  `entrada.triar` no setor novo; quem gerencia só um setor não consegue mandar o item para um
+  setor que não enxerga (erro claro, em vez de o item sumir da lista).
+- **Limitação conhecida:** a lista usa `accessible_sector_ids`, que só entende escopos de
+  organização e de setor (inclusive `MEUS_SETORES` e `SETORES_GERENCIADOS`). Escopos de
+  empresa, obra e centro de custo não ampliam o que se vê na Caixa de Entrada.
+- **Perfis sugeridos:** Colaborador recebe `entrada.registrar`; Gestor de Setor recebe as três;
+  Administrador, todas.
+
 ---
 
 ## 5. Administração pela interface
@@ -157,8 +185,8 @@ partida — a organização pode renomear e alterar (doc 05 §11).
 
 | Perfil | Resumo |
 |---|---|
-| **Colaborador** | Ver e criar atividades; assumir e marcar pendente; executar tarefas (assumir, aceitar, recusar, iniciar, pausar, retomar, concluir, devolver, bloquear); ver a própria posição na fila; propor/aceitar/recusar prazo; conversar; ver e aplicar processos; gerir clientes. |
-| **Gestor de Setor** | Tudo do Colaborador + ver todas as atividades, editar, aprovar pendência; criar/editar/atribuir tarefas, mover de setor, **reabrir tarefa concluída (`tarefa.reabrir`)**, lançar tempo manual; fila completa e reordenar; resolver conflito de prazo; métricas e auditoria; todas as ações de processo; estágios, tags e cores. |
+| **Colaborador** | Ver e criar atividades; assumir e marcar pendente; executar tarefas (assumir, aceitar, recusar, iniciar, pausar, retomar, concluir, devolver, bloquear); ver a própria posição na fila; propor/aceitar/recusar prazo; conversar; ver e aplicar processos; gerir clientes; registrar solicitações na Caixa de Entrada (`entrada.registrar`). |
+| **Gestor de Setor** | Tudo do Colaborador + ver todas as atividades, editar, aprovar pendência; criar/editar/atribuir tarefas, mover de setor, **reabrir tarefa concluída (`tarefa.reabrir`)**, lançar tempo manual; fila completa e reordenar; resolver conflito de prazo; métricas e auditoria; todas as ações de processo; estágios, tags e cores; ver, registrar e triar a Caixa de Entrada (`entrada.*`). |
 | **Administrador** | Todas as ações do catálogo. |
 
 > **Ação nova em organização já implantada:** `seed_acoes` cria a ação no

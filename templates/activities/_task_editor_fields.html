@@ -1,100 +1,153 @@
 {% comment %}
-Campos da janela de tarefa — o MESMO corpo para "Nova tarefa" (dentro de uma
-atividade e fora dela) e para "Editar tarefa", para que as três janelas se
-leiam igual:
+Corpo da janela de tarefa — o MESMO para "Nova tarefa" (dentro de uma atividade e
+fora dela) e para "Editar tarefa". Uma tela só, sem etapas, em quatro seções:
 
-    título · setor · responsável
-    ▸ Participantes (opcional)
-    ▸ Prazo e detalhes (opcional)
+    1 Tarefa                 atividade · o que fazer · setor · responsável
+    2 Prazo e organização    data do prazo · hora do prazo · marcadores
+    3 Participantes          (opcional)
+    4 Instruções             (opcional)
 
-Na edição (`task` no contexto) o setor é só informação — trocar de setor tem
-janela própria — e o responsável/participantes viram informação para quem não
-tem a ação. Os blocos recolhíveis nascem abertos quando já têm conteúdo ou erro
-(`form.participants_open` / `form.details_open`). O rótulo e a ajuda dos
-seletores vêm de `_activity_field.html`, que mostra o rótulo também dos campos
-cujo valor fica num input escondido.
+Na edição (`task` no contexto) o setor é só informação — trocar de setor tem janela
+própria — e o responsável/participantes viram informação para quem não tem a ação.
+A atividade só pode ser trocada em "Nova tarefa" fora de uma atividade: nos outros
+dois casos ela é o contexto (a tarefa já pertence a ela) e aparece só como resumo.
+`activity_summary` (título + linha de contexto) vem da view.
 {% endcomment %}
 {% if form.non_field_errors %}
-<ul class="messages" role="alert">{% for error in form.non_field_errors %}<li class="message message--error">{{ error }}</li>{% endfor %}</ul>
-{% endif %}
-<p class="muted small">Campos com <span class="req">*</span> são obrigatórios. Você pode completar os detalhes depois.</p>
-
-{% if form.activity %}{% include "activities/_activity_field.html" with field=form.activity %}{% endif %}
-{% include "activities/_activity_field.html" with field=form.title compact=True %}
-
-{% if form.sector %}
-{% include "activities/_activity_field.html" with field=form.sector compact=True %}
-{% elif task %}
-<div class="form-row">
-    <label>Setor</label>
-    <div class="field-static">{% include "_icon.html" with name="users" %}<span>{{ task.sector.name }}</span></div>
-    <div class="helptext">Para mudar de setor, use Mais ações → Enviar para outro setor.</div>
-</div>
+<div class="activity-form-errors" role="alert">{% for error in form.non_field_errors %}<p class="message message--error">{{ error }}</p>{% endfor %}</div>
 {% endif %}
 
-{% if form.responsavel %}
-{% include "activities/_activity_field.html" with field=form.responsavel compact=True %}
-{% elif task %}
-<div class="form-row">
-    <label>Responsável</label>
-    <div class="field-static">{% include "_icon.html" with name="user" %}<span>{{ current_responsavel.get_username }}</span></div>
-    <div class="helptext">Você não tem permissão para trocar o responsável.</div>
-</div>
-{% endif %}
+{# 1 — Tarefa #}
+<section class="task-section" aria-labelledby="task-section-1">
+    <div class="task-section-header">
+        <span class="task-section-number" aria-hidden="true">1</span>
+        <div>
+            <h3 class="task-section-title" id="task-section-1">Tarefa</h3>
+            <p class="task-section-subtitle">Defina a atividade e o que precisa ser feito.</p>
+        </div>
+    </div>
 
-<details class="fold"{% if form.participants_open or pending_assignments %} open{% endif %}>
-    <summary>
-        <span class="fold__icon" aria-hidden="true">{% include "_icon.html" with name="user-plus" %}</span>
-        <span class="fold__text">
-            <span class="fold__title">Participantes <span class="muted">(opcional)</span></span>
-            <span class="fold__sub">Adicione outras pessoas para ajudar na tarefa.</span>
-        </span>
-        <span class="fold__chevron" aria-hidden="true">{% include "_icon.html" with name="chevron-down" %}</span>
-    </summary>
-    <div class="fold__body">
-        {% if form.participantes %}
-        {% include "activities/_activity_field.html" with field=form.participantes hide_label=True %}
+    {% if form.activity %}
+    <div class="task-field form-row{% if form.activity.errors %} has-error{% endif %}" data-field="activity" data-task-activity>
+        <div data-task-activity-picker{% if activity_summary %} hidden{% endif %}>
+            <label class="task-label" for="{{ form.activity.id_for_label }}">{{ form.activity.label }} <span class="task-required" aria-hidden="true">*</span><span class="sr-only">(obrigatório)</span></label>
+            {{ form.activity }}
+        </div>
+        {% include "activities/_task_activity_summary.html" with summary=activity_summary change=True %}
+        {% if form.activity.errors %}<ul class="errorlist" role="alert">{% for error in form.activity.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+    </div>
+    {% elif activity_summary %}
+    <div class="task-field">
+        <span class="task-label">Atividade</span>
+        {% include "activities/_task_activity_summary.html" with summary=activity_summary %}
+    </div>
+    {% endif %}
+
+    <div class="task-field-stack">
+        {% include "activities/_task_field.html" with field=form.title compact=True %}
+        {% if not task %}<p class="task-helper">Atalho: você também pode usar #marcador e @usuario no título.</p>{% endif %}
+    </div>
+
+    <div class="task-two-columns">
+        {% if form.sector %}
+        {% include "activities/_task_field.html" with field=form.sector compact=True %}
         {% elif task %}
-        <div class="form-row">
-            <label>Participantes</label>
-            <div class="field-static">{% include "_icon.html" with name="users" %}<span>{% for person in current_participants %}{{ person.get_username }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="muted">Nenhum participante</span>{% endfor %}</span></div>
-            <div class="helptext">Você não tem permissão para incluir ou remover participantes.</div>
+        <div class="task-field">
+            <span class="task-label">Setor</span>
+            <div class="field-static">{% include "_icon.html" with name="users" %}<span>{{ task.sector.name }}</span></div>
+            <p class="task-helper">Para mudar de setor, use Mais ações → Enviar para outro setor.</p>
         </div>
         {% endif %}
-        {% if pending_assignments %}
-        <div class="edit-pending" aria-label="Convites aguardando aceite">
-            <div class="k">Convites enviados</div>
-            <ul class="list-rows">
-                {% for invite in pending_assignments %}
-                <li>{{ invite.user.get_username }} <span class="tag tag--PENDENTE">aguardando aceite</span></li>
-                {% endfor %}
-            </ul>
-            <div class="muted small">Quem foi convidado só passa a ser participante depois de aceitar.</div>
-        </div>
-        {% endif %}
-    </div>
-</details>
 
-<details class="fold"{% if form.details_open %} open{% endif %}>
-    <summary>
-        <span class="fold__icon" aria-hidden="true">{% include "_icon.html" with name="calendar" %}</span>
-        <span class="fold__text">
-            <span class="fold__title">Prazo e detalhes <span class="muted">(opcional)</span></span>
-            <span class="fold__sub">Defina o prazo, adicione instruções e marcadores.</span>
-        </span>
-        <span class="fold__chevron" aria-hidden="true">{% include "_icon.html" with name="chevron-down" %}</span>
-    </summary>
-    <div class="fold__body">
-        {% include "activities/_activity_field.html" with field=form.requested_deadline %}
-        {% if task %}
-        <div class="form-row">
-            <label>Prazo que a equipe se comprometeu a cumprir</label>
-            <div class="field-static">{% include "_icon.html" with name="clock" %}<span>{% if task.committed_deadline %}{{ task.committed_deadline|date:"d/m/Y H:i" }}{% else %}<span class="muted">Ainda não combinado</span>{% endif %}</span></div>
-            <div class="helptext">Não se edita aqui: é combinado com o responsável pela atividade em Mais ações → Propor novo prazo.</div>
+        {% if form.responsavel %}
+        {% include "activities/_task_field.html" with field=form.responsavel compact=True %}
+        {% elif task %}
+        <div class="task-field">
+            <span class="task-label">Responsável</span>
+            <div class="field-static">{% include "_icon.html" with name="user" %}<span>{{ current_responsavel.get_username }}</span></div>
+            <p class="task-helper">Você não tem permissão para trocar o responsável.</p>
         </div>
         {% endif %}
-        {% include "activities/_activity_field.html" with field=form.description %}
-        {% include "activities/_activity_field.html" with field=form.tags %}
-        {% if not task %}<p class="muted small">Atalho: você também pode usar #marcador e @usuario no título.</p>{% endif %}
     </div>
-</details>
+</section>
+
+{# 2 — Prazo e organização #}
+<section class="task-section" aria-labelledby="task-section-2">
+    <div class="task-section-header">
+        <span class="task-section-number" aria-hidden="true">2</span>
+        <div>
+            <h3 class="task-section-title" id="task-section-2">Prazo e organização</h3>
+            <p class="task-section-subtitle">Defina o prazo e adicione marcadores para facilitar o acompanhamento.</p>
+        </div>
+    </div>
+
+    {% with deadline=form.requested_deadline inputs=form.deadline_inputs %}
+    <div class="task-deadline-grid">
+        <div class="task-field form-row{% if deadline.errors %} has-error{% endif %}" data-field="requested_deadline">
+            <label class="task-label" for="{{ deadline.auto_id }}_0">Data do prazo <span class="task-optional">(opcional)</span></label>
+            <div class="activity-input-wrap"><span class="activity-input-icon" aria-hidden="true">{% include "_icon.html" with name="calendar" %}</span>{{ inputs.0 }}</div>
+        </div>
+        <div class="task-field form-row{% if deadline.errors %} has-error{% endif %}">
+            <label class="task-label" for="{{ deadline.auto_id }}_1">Hora do prazo <span class="task-optional">(opcional)</span></label>
+            <div class="activity-input-wrap"><span class="activity-input-icon" aria-hidden="true">{% include "_icon.html" with name="clock" %}</span>{{ inputs.1 }}</div>
+        </div>
+        {% include "activities/_task_field.html" with field=form.tags show_optional=True compact=True %}
+    </div>
+    {% if deadline.errors %}<ul class="errorlist task-deadline-errors" role="alert">{% for error in deadline.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+    {% endwith %}
+
+    {% if task %}
+    <div class="task-note">
+        <span class="task-note__label">Prazo que a equipe se comprometeu a cumprir</span>
+        <span class="task-note__value">{% include "_icon.html" with name="clock" %}{% if task.committed_deadline %}{{ task.committed_deadline|date:"d/m/Y H:i" }}{% else %}<span class="muted">Ainda não combinado</span>{% endif %}</span>
+        <p class="task-helper">Não se edita aqui: é combinado com o responsável pela atividade em Mais ações → Propor novo prazo.</p>
+    </div>
+    {% else %}
+    <p class="task-helper">É o prazo que quem pediu espera. O prazo que a equipe se compromete a cumprir é combinado depois, em Mais ações → Propor novo prazo. Sem hora, vale até o fim do dia.</p>
+    {% endif %}
+</section>
+
+{# 3 — Participantes #}
+<section class="task-section" aria-labelledby="task-section-3">
+    <div class="task-section-header">
+        <span class="task-section-number" aria-hidden="true">3</span>
+        <div>
+            <h3 class="task-section-title" id="task-section-3">Participantes <span class="task-optional">(opcional)</span></h3>
+            <p class="task-section-subtitle">Adicione outras pessoas para ajudar na execução desta tarefa.</p>
+        </div>
+    </div>
+
+    {% if form.participantes %}
+    {% include "activities/_task_field.html" with field=form.participantes sr_label=True %}
+    {% elif task %}
+    <div class="task-field">
+        <span class="task-label">Participantes</span>
+        <div class="field-static">{% include "_icon.html" with name="users" %}<span>{% for person in current_participants %}{{ person.get_username }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="muted">Nenhum participante</span>{% endfor %}</span></div>
+        <p class="task-helper">Você não tem permissão para incluir ou remover participantes.</p>
+    </div>
+    {% endif %}
+
+    {% if pending_assignments %}
+    <div class="edit-pending" aria-label="Convites aguardando aceite">
+        <div class="k">Convites enviados</div>
+        <ul class="list-rows">
+            {% for invite in pending_assignments %}
+            <li>{{ invite.user.get_username }} <span class="tag tag--PENDENTE">aguardando aceite</span></li>
+            {% endfor %}
+        </ul>
+        <div class="muted small">Quem foi convidado só passa a ser participante depois de aceitar.</div>
+    </div>
+    {% endif %}
+</section>
+
+{# 4 — Instruções #}
+<section class="task-section" aria-labelledby="task-section-4">
+    <div class="task-section-header">
+        <span class="task-section-number" aria-hidden="true">4</span>
+        <div>
+            <h3 class="task-section-title" id="task-section-4">Instruções</h3>
+            <p class="task-section-subtitle">Explique o que fazer e como saber que o trabalho está pronto.</p>
+        </div>
+    </div>
+    {% include "activities/_task_field.html" with field=form.description sr_label=True compact=True %}
+</section>

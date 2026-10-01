@@ -142,12 +142,20 @@ class ResourceContext:
         if model_name == "site":
             return cls(
                 organization_id=resource.organization_id,
-                company_id=resource.company_id,
                 site_id=resource.pk,
             )
 
         if model_name == "costcenter":
             return cls(organization_id=resource.organization_id, cost_center_id=resource.pk)
+
+        if model_name == "intakeitem":
+            # Solicitação na Caixa de Entrada: o endereço é o que a LPS sugeriu.
+            # Sem setor sugerido, só quem tem escopo de organização enxerga.
+            return cls(
+                organization_id=resource.organization_id,
+                sector_id=resource.suggested_sector_id,
+                site_id=resource.suggested_site_id,
+            )
 
         organization_id = getattr(resource, "organization_id", None)
         if organization_id is None:
@@ -319,6 +327,81 @@ class AuthorizationService:
         if AuthorizationService.is_platform_admin(user):
             return True
         return bool(AuthorizationService.grants_for(user, action_key, resource))
+
+    @staticmethod
+    def can_many(user, actions, resources=None):
+        """Avalia várias autorizações preservando a fonte única de regras.
+
+        O formato recomendado é ``can_many(user, [(action, resource), ...])``;
+        o retorno é um dicionário indexado pelo par ``(action, resource_id)``.
+        Também aceita ``can_many(user, actions, resources)`` para telas que
+        precisam da matriz completa. A chave do recurso usa ``pk`` quando
+        disponível e ``None`` para ações sem recurso.
+
+        A consulta de concessões é compartilhada por ação dentro desta chamada;
+        isso evita que cada célula de uma listagem reconstrua a mesma lista de
+        perfis e concessões diretas.
+        """
+        if resources is None:
+            checks = list(actions)
+        else:
+            action_list = [actions] if isinstance(actions, str) else list(actions)
+            resource_list = [resources] if not isinstance(resources, (list, tuple, set)) else list(resources)
+            checks = [(action, resource) for resource in resource_list for action in action_list]
+
+        if not getattr(user, "is_authenticated", False) or not user.is_active:
+            return {(action, getattr(resource, "pk", None)): False for action, resource in checks}
+        if AuthorizationService.is_platform_admin(user):
+            return {(action, getattr(resource, "pk", None)): True for action, resource in checks}
+
+        action_keys = {action for action, _ in checks}
+        organization_id = AuthorizationService._organization_of(user)
+        profile_assignments = list(
+            UserProfile.objects.filter(
+                user=user,
+                is_active=True,
+                organization_id=organization_id,
+                profile__is_active=True,
+                scope__is_active=True,
+                profile__profile_actions__action__key__in=action_keys,
+                profile__profile_actions__action__is_active=True,
+            )
+            .select_related("profile", "scope", "scope__company", "scope__sector", "scope__site", "scope__cost_center")
+            .prefetch_related("profile__profile_actions__action")
+            .distinct()
+        )
+        direct_grants = list(
+            UserAction.objects.filter(
+                user=user,
+                is_active=True,
+                organization_id=organization_id,
+                action__key__in=action_keys,
+                action__is_active=True,
+                scope__is_active=True,
+            ).select_related("action", "scope", "scope__company", "scope__sector", "scope__site", "scope__cost_center")
+        )
+        profile_scopes = {key: [] for key in action_keys}
+        for assignment in profile_assignments:
+            permitted = {
+                row.action.key for row in assignment.profile.profile_actions.all()
+                if row.action.is_active and row.action.key in action_keys
+            }
+            for key in permitted:
+                profile_scopes[key].append(assignment.scope)
+        direct_scopes = {key: [] for key in action_keys}
+        for grant in direct_grants:
+            direct_scopes[grant.action.key].append(grant.scope)
+
+        result = {}
+        for action_key, resource in checks:
+            context = ResourceContext.of(resource)
+            tenant_ok = context.organization_id in (None, organization_id)
+            allowed = tenant_ok and (
+                any(scope_contains(scope, context, user) for scope in profile_scopes.get(action_key, ()))
+                or any(scope_contains(scope, context, user) for scope in direct_scopes.get(action_key, ()))
+            )
+            result[(action_key, getattr(resource, "pk", None))] = allowed
+        return result
 
     @staticmethod
     def require(user, action_key, resource=None, message=None):

@@ -47,6 +47,18 @@ Janela de atividade em 3 etapas (`static/js/activity-steps.js`), com o template 
 node --test tests/activity-steps.test.cjs
 ```
 
+## Caixa de Entrada
+
+```powershell
+.venv/Scripts/python.exe manage.py test intake
+node --test tests/intake.test.cjs
+```
+
+O teste JavaScript usa o `LPSAjax` real (`activity-workspace.js`) e uma janela de mentira:
+confere o que acontece na tela para cada resposta do servidor (remover o cartão, trocar o
+cartão, seguir `redirect_url`, recarregar, restaurar com CSRF e trava de envio duplo). O
+jsdom não navega: um reload aparece como o aviso "Not implemented: navigation".
+
 ## Editor e janelas de atividades
 
 ```powershell

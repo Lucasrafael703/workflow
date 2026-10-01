@@ -1,0 +1,12 @@
+{% comment %}
+Cartão da atividade escolhida. Parâmetros: summary (título e linha de contexto, ou vazio),
+change (mostra "Alterar", só quando a atividade pode ser trocada). Sem `summary` nasce
+escondido: static/js/task-modal.js o preenche quando a pessoa escolhe uma atividade.
+{% endcomment %}<div class="task-selected-activity" data-task-activity-summary{% if not summary %} hidden{% endif %}>
+    <span class="task-selected-activity-icon" aria-hidden="true">{% include "_icon.html" with name="activity" %}</span>
+    <div class="task-selected-activity-content">
+        <div class="task-selected-activity-title" data-summary-title>{{ summary.title }}</div>
+        <div class="task-selected-activity-meta" data-summary-meta>{{ summary.meta }}</div>
+    </div>
+    {% if change %}<button type="button" class="task-change-activity" data-task-activity-change>{% include "_icon.html" with name="swap" %} Alterar</button>{% endif %}
+</div>

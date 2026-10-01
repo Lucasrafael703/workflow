@@ -1,0 +1,1 @@
+{% if item.source == "EMAIL" %}{% include "_icon.html" with name="mail" %}{% elif item.source == "TEAMS" %}{% include "_icon.html" with name="chat" %}{% elif item.source == "FORMULARIO" %}{% include "_icon.html" with name="file-text" %}{% else %}{% include "_icon.html" with name="user" %}{% endif %}

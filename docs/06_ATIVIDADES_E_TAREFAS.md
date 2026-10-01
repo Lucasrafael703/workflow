@@ -403,8 +403,9 @@ Fora do editor, de propósito: o **setor** (texto apontando “Enviar para outro
 setor”) e a **dependência**, que mudam o fluxo. O prazo que a equipe se
 comprometeu a cumprir (`committed_deadline`) também não se edita ali — é
 combinado por “Propor novo prazo”. Na tela os dois prazos têm nomes distintos:
-**Prazo pedido pelo solicitante** × **Prazo que a equipe se comprometeu a
-cumprir**. O prazo pedido continua editável por quem tem `tarefa.editar`
+**Data/Hora do prazo** (o pedido pelo solicitante, em dois campos; sem hora vale até
+23:59) × **Prazo que a equipe se comprometeu a cumprir**. O painel lateral ainda chama o
+primeiro de “Prazo pedido pelo solicitante”. O prazo pedido continua editável por quem tem `tarefa.editar`
 (hoje, o Gestor de Setor): restringi-lo ao dono da atividade é uma decisão em
 aberto (F15).
 

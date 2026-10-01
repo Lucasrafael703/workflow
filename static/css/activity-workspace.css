@@ -238,6 +238,18 @@
     .activity-form-full { grid-column: auto; }
     .activity-urgency { flex-wrap: wrap; }
 }
+
+@media (max-width: 560px) {
+    .activity-modal-header { min-height: 76px; padding: 14px 16px; gap: 10px; }
+    .activity-header-icon { width: 42px; height: 42px; flex-basis: 42px; }
+    .activity-modal-title { font-size: 19px; }
+    .activity-modal-subtitle { font-size: 12px; }
+    .activity-stepper { padding: 16px 10px 14px; }
+    .activity-step-label { max-width: 92px; font-size: 11px; line-height: 1.25; }
+    .activity-modal-footer { align-items: stretch; flex-wrap: wrap; padding: 10px 16px; }
+    .activity-footer-right { margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
+    .activity-btn { min-height: 42px; padding-inline: 14px; }
+}
 @media (max-width: 580px) {
     .activity-modal-overlay { align-items: flex-end; padding: 0; }
     .activity-modal { max-height: 96vh; border-radius: 18px 18px 0 0; }

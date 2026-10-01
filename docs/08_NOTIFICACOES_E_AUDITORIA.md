@@ -90,6 +90,14 @@ usuário.
 `AuditLog.Action.SESSION_RESUMED` existe mas nunca é gravado (`resume` delega
 para `start`, que grava `SESSION_STARTED`).
 
+**Caixa de Entrada (`intake`).** Registrar, corrigir sugestões, ignorar, restaurar e converter
+uma solicitação **não** geram `AuditLog` nem `Notification`: a trilha é o `IntakeEvent` da
+própria solicitação (`AuditLog` só liga a atividade/tarefa, e a solicitação ainda não é
+nenhuma das duas). Converter chama `ActivityService`, então a atividade criada tem os efeitos
+de sempre: `CREATE` e `ACTIVITY_CREATED` (dono e criador). O texto da solicitação vai para a
+descrição com as `@menções` neutralizadas, para um e-mail recebido de fora não notificar
+ninguém da equipe. O aviso de item novo é só o contador do menu (doc 13, F23).
+
 ---
 
 ## 3. Onde aparece

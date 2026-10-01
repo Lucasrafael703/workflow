@@ -1,0 +1,5 @@
+{% comment %}Rodapé fixo da janela de tarefa. Parâmetros: close_url, submit_label, submit_icon (opcional).{% endcomment %}
+<footer class="activity-modal-footer modal__foot task-modal-footer">
+    <a href="{{ close_url }}" class="activity-btn activity-btn-secondary btn">Cancelar</a>
+    <button type="submit" class="activity-btn activity-btn-primary">{% if submit_icon %}{% include "_icon.html" with name=submit_icon %} {% endif %}{{ submit_label }}</button>
+</footer>

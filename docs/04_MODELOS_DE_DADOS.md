@@ -212,6 +212,35 @@ Os valores de `Notification.EventType` e `AuditLog.Action` estão em
 
 ---
 
+## 7.1 `intake` (Caixa de Entrada)
+
+```mermaid
+erDiagram
+    Organization ||--o{ IntakeItem : "intake_items"
+    IntakeItem ||--o{ IntakeEvent : "events"
+    IntakeItem |o--o| Activity : "activity / intake_item"
+    IntakeItem }o--o| Client : "suggested_client"
+    IntakeItem }o--o| Site : "suggested_site"
+    IntakeItem }o--o| Sector : "suggested_sector"
+```
+
+| Model | Campos relevantes |
+|---|---|
+| `IntakeItem` | `organization` (PROTECT, `intake_items`), `source` (`EMAIL`, `TEAMS`, `USUARIO`, `FORMULARIO`), `external_id`, `subject`, `sender_name`, `sender_email` (minúsculas), `raw_content` (**texto puro**, nunca renderizado como HTML; máx. 20.000 caracteres), `content_hash` (sha256 do conteúdo normalizado, anti-duplicata), `received_at`, `status` (`NOVO` padrão, `CONVERTIDO`, `IGNORADO`), `suggested_title`/`suggested_client`/`suggested_site`/`suggested_sector`/`suggested_deadline`, `confidence` (0 a 100), `suggestion_reasons` (JSON: lista de frases), `activity` (1:1, null, SET_NULL, `intake_item`), `created_by`, `created_at`, `resolved_by`/`resolved_at`/`resolution_note` |
+| `IntakeEvent` | `item` (CASCADE, `events`), `user`, `kind` (`REGISTRADA`, `EDITADA`, `CONVERTIDA`, `IGNORADA`, `RESTAURADA`), `note`, `created_at` |
+
+- **Constraints:** `unique_intake_external_id_per_source` — único por (organização, origem,
+  `external_id`) quando `external_id` não é vazio (a mesma mensagem não entra duas vezes por
+  um canal); `intake_confidence_0_100`. Índice `(organization, status, -received_at)`.
+- **Confiança:** `confidence_level` é `ALTA` (≥ 70), `MEDIA` (40–69) ou `BAIXA` (< 40).
+- **`IntakeEvent` em vez de `AuditLog`:** `AuditLog` só liga a `Activity` e `Task`, então o que
+  acontece com a solicitação antes de a atividade existir (e depois) fica em `IntakeEvent`. A
+  atividade criada tem a sua auditoria normal (`CREATE`).
+- **Estados:** `NOVO → CONVERTIDO` (terminal), `NOVO → IGNORADO`, `IGNORADO → NOVO`
+  (`intake/policies.py`).
+
+---
+
 ## 8. Migrations
 
 - Cada app tem suas migrations em `<app>/migrations/`.
@@ -226,5 +255,7 @@ Os valores de `Notification.EventType` e `AuditLog.Action` estão em
     `audit/0007_process_execution_actions` (novos valores de `AuditLog.Action`) e
     `notifications/0006_process_applied_event` (novo `Notification.EventType`). São só
     mudanças de esquema; nada de dados a migrar.
+  - Caixa de Entrada (01/10/2026): `intake/0001_initial`. Só cria tabelas novas; **não** altera
+    `activities`, `audit` nem `notifications`.
 - Depois de mudar um model: `python manage.py makemigrations` e confira com
   `python manage.py makemigrations --check --dry-run` antes de commitar.

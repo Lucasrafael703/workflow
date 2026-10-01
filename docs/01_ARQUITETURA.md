@@ -19,6 +19,7 @@ negócio estão na raiz:
 | `acessos` | Motor de autorização: catálogo de ações, perfis de acesso, escopos, concessões. Responde "quem pode fazer o quê, onde e por quê". Não tem telas próprias (ficam em `core`). | `catalog.py`, `models.py`, `services.py`, `testing.py` |
 | `activities` | Núcleo operacional: atividades, tarefas, fila por setor, negociação de prazo, bloqueios, devoluções, sessões de trabalho, checklist, anexos, mensagens com @menções. | `models.py`, `services.py`, `views.py`, `templatetags/lps.py` |
 | `processes` | Modelos de processo reutilizáveis e versionados (inputs, output, critérios de aceite, fluxo por setor). | `models.py`, `services.py`, `views.py` |
+| `intake` | Caixa de Entrada: solicitações que chegaram (e-mail, Teams, pedido verbal) e ainda não viraram atividade. A pessoa decide **Criar demanda**, **Editar** as sugestões ou **Ignorar**; nada vira atividade sozinho. Sugere título, cliente, obra, setor e prazo com regras locais (sem IA). Ver [06_ATIVIDADES_E_TAREFAS.md](06_ATIVIDADES_E_TAREFAS.md) para o que a atividade criada recebe. | `models.py`, `services.py`, `suggestions.py`, `textparse.py`, `policies.py`, `views.py` |
 | `notifications` | Notificações in-app, caixa de entrada com categorias, e-mails síncronos. | `models.py`, `services.py`, `recipients.py`, `views.py` |
 | `audit` | `AuditLog`: trilha de auditoria somente-inclusão de eventos de negócio e de segurança. | `models.py`, `services.py` |
 | `painel` | Telas "em construção" que mantêm o menu lateral fiel a `Telas/MENU_E_SUBMENUS_LPS.md`, mais duas telas de configuração emprestadas de `core`. | `views.py`, `urls.py` |
@@ -39,6 +40,7 @@ apps:
 | `painel` | `core` |
 | `processes` | `acessos`, `core` |
 | `notifications` | `accounts`; FKs para `activities` |
+| `intake` | `acessos`, `activities` (cria a atividade por `ActivityService.save_draft` + `publish_draft`), `core`. `activities` **não** importa `intake`: a ligação de volta é só o `OneToOneField` `IntakeItem.activity` (`activity.intake_item`). |
 | `acessos` | `accounts`, `activities`, `audit`, `core` |
 | `core` | `accounts`, `acessos`, `activities`, `audit` |
 | `activities` | `acessos`, `audit`, `core`, `notifications`, `processes` (FKs `Activity.process_version` e `Task.process_step`; aplicação do processo em `activities/process_application.py`, que também usa `processes.services.people_with_sector_members`) |
@@ -77,6 +79,7 @@ para o usuário:
 | `ActivityError` | `activities/services.py` |
 | `CadastroError` | `core/services.py` |
 | `ProcessError` | `processes/services.py` |
+| `IntakeError` | `intake/services.py` (a falha de `ActivityService` ao converter vira `IntakeError`) |
 | `AuthorizationError` | `acessos/services.py` (convertida em `ActivityError` por `require_action`) |
 
 ---

@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20260929-usabilidade1">
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20261002-filtros1">
     <script>
     // Aplica o estado recolhido antes do primeiro paint — sem isto, a
     // sidebar apareceria expandida por um instante e "pularia" pro estado
@@ -17,7 +17,9 @@
         document.documentElement.classList.add("sidebar--collapsed");
     }
     </script>
-<link rel="stylesheet" href="{% static 'css/activity-workspace.css' %}?v=20260930b">
+<link rel="stylesheet" href="{% static 'css/activity-workspace.css' %}?v=20261002c">
+<link rel="stylesheet" href="{% static 'css/intake.css' %}?v=20261001a">
+<link rel="stylesheet" href="{% static 'css/task-modal.css' %}?v=20261001a">
 </head>
 <body data-mention-search-url="{% url 'person-search' %}">
 <a class="skip-link" href="#main-content">Ir para o conteúdo</a>
@@ -54,6 +56,14 @@
                 <span class="nav-item__icon">{% include "_icon.html" with name="home" %}</span>
                 <span class="nav-item__label">Início</span>
             </a>
+
+            {% if lps_nav.intake %}
+            <a href="{% if lps_nav.intake_can_view %}{% url 'intake-list' %}{% else %}{% url 'intake-capture' %}{% endif %}" class="nav-item {% if nav_active == 'intake' %}is-active{% endif %}" data-tooltip="Entrada">
+                <span class="nav-item__icon">{% include "_icon.html" with name="inbox" %}</span>
+                <span class="nav-item__label">Entrada</span>
+                {% if lps_intake_new %}<span class="nav-count">{{ lps_intake_new }}</span>{% endif %}
+            </a>
+            {% endif %}
 
             <details class="nav-group {% if nav_active == 'activities' %}has-active{% endif %}"
                       {% if nav_active == 'activities' %}open{% endif %}>
@@ -237,7 +247,8 @@
         <label for="nav-toggle" class="sidebar__toggle" title="Menu">{% include "_icon.html" with name="menu" %}</label>
 
         <span class="workspace-location">
-            {% if nav_active == 'activities' %}Atividades · Entregas
+            {% if nav_active == 'intake' %}Entrada · Solicitações para triar
+            {% elif nav_active == 'activities' %}Atividades · Entregas
             {% elif nav_active == 'tasks' %}Tarefas · Trabalho a fazer
             {% elif nav_active == 'notifications' %}Notificações · Avisos para você
             {% elif nav_active == 'queue' %}Ordem das tarefas
@@ -328,14 +339,15 @@
 
 {% if user.is_authenticated %}
 <script src="{% static 'js/shell.js' %}?v=20260926d"></script>
-<script src="{% static 'js/modal.js' %}?v=20260930a"></script>
+<script src="{% static 'js/modal.js' %}?v=20261001-dinamica1"></script>
 <script src="{% static 'js/process-apply.js' %}?v=20260930a"></script>
 <script src="{% static 'js/retroactive-work.js' %}?v=20261001a"></script>
 <script src="{% static 'js/activity-steps.js' %}?v=20261002a"></script>
+<script src="{% static 'js/task-modal.js' %}?v=20261001a"></script>
 <script src="{% static 'js/person-picker.js' %}?v=20260927a"></script>
 <script src="{% static 'js/person-multi-picker.js' %}?v=20260929a"></script>
 <script src="{% static 'js/tag-picker.js' %}?v=20260926a"></script>
-<script src="{% static 'js/rich-text.js' %}?v=20260919c"></script>
+<script src="{% static 'js/rich-text.js' %}?v=20261001a"></script>
 <script src="{% static 'js/mention.js' %}?v=20260927a"></script>
 <script src="{% static 'js/timer.js' %}?v=20260919c"></script>
 <script src="{% static 'js/checklist.js' %}?v=20260929c"></script>
@@ -343,7 +355,7 @@
 <script src="{% static 'js/color-utils.js' %}?v=20260926a"></script>
 <script src="{% static 'js/color-palette-picker.js' %}?v=20260926a"></script>
 {% endif %}
-{% if user.is_authenticated %}<script src="{% static 'js/activity-workspace.js' %}?v=20260930b"></script>{% endif %}
+{% if user.is_authenticated %}<script src="{% static 'js/activity-workspace.js' %}?v=20261002-filtros1"></script>{% endif %}
 {% block scripts %}{% endblock %}
 </body>
 </html>

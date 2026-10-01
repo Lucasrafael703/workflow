@@ -19,9 +19,12 @@ def navigation(request):
     can = AuthorizationService.can
     profile = getattr(user, "profile", None)
     organization = getattr(profile, "organization", None)
+    intake = _intake_nav(user, organization)
 
     return {
         "lps_nav": {
+            "intake": intake["visible"],
+            "intake_can_view": intake["can_view"],
             "management": AuthorizationService.can_anywhere(user, catalog.METRICAS_VISUALIZAR),
             "cadastros": (
                 can(user, catalog.SETOR_EDITAR)
@@ -36,6 +39,7 @@ def navigation(request):
         },
         "lps_org": organization,
         "lps_open_tasks": _open_task_count(user),
+        "lps_intake_new": intake["new"],
         "nav_active": _active_nav(request),
         "nav_active2": _active_nav2(request),
         "nav_cadastros_tab": _active_cadastros_tab(request),
@@ -53,6 +57,13 @@ _NAV_BY_URL_NAME = {
     "activity-cancel": "activities",
     "activity-reopen": "activities",
     "activity-change-owner": "activities",
+    "intake-list": "intake",
+    "intake-capture": "intake",
+    "intake-detail": "intake",
+    "intake-edit": "intake",
+    "intake-convert": "intake",
+    "intake-ignore": "intake",
+    "intake-restore": "intake",
     "task-list": "tasks",
     "task-kanban": "tasks",
     "task-calendar": "tasks",
@@ -188,6 +199,23 @@ def _active_cadastros_tab(request):
     if match.url_name == "cadastros":
         return request.GET.get("tab", "setores")
     return _CADASTROS_TAB_BY_URL_NAME.get(match.url_name, "")
+
+
+def _intake_nav(user, organization):
+    """Menu "Entrada": aparece para quem pode ver ou registrar solicitações.
+
+    O contador só conta o que está novo e a pessoa enxerga — é o que espera
+    uma decisão dela. Roda a cada página, então é uma avaliação e um COUNT, e
+    só quando a pessoa pode ver a Caixa de Entrada.
+    """
+    can_view = AuthorizationService.can_anywhere(user, catalog.ENTRADA_VISUALIZAR)
+    visible = can_view or AuthorizationService.can_anywhere(user, catalog.ENTRADA_REGISTRAR)
+    new = 0
+    if can_view and organization is not None:
+        from intake.services import IntakeService
+
+        new = IntakeService.new_count(user, organization)
+    return {"visible": visible, "can_view": can_view, "new": new}
 
 
 def _open_task_count(user):

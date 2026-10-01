@@ -40,6 +40,7 @@ urlpatterns = [
     path("notificacoes/", include("notifications.urls")),
     path("processos/", include("processes.urls")),
     path("painel/", include("painel.urls")),
+    path("entrada/", include("intake.urls")),
     path("", include("core.urls")),
     path("", include("activities.urls")),
 ]
