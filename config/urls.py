@@ -5,6 +5,7 @@ from django.urls import include, path, re_path
 from django.views.static import serve
 
 from accounts.forms import EmailAuthenticationForm
+from core.legacy_redirects import MovedActivityFileView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -48,6 +49,8 @@ urlpatterns = [
 # Served directly by Django in every environment: there is no separate nginx/CDN
 # in front of the app (e.g. on Render), unlike STATIC_URL which whitenoise handles.
 urlpatterns += [
+    # Endereço dos anexos antes da troca de "atividade" por "demanda" (01/10/2026).
+    re_path(r"^atividade-arquivos/(?P<rest>.*)$", MovedActivityFileView.as_view(), name="legacy-activity-files"),
     re_path(r"^%s(?P<path>.*)$" % settings.MEDIA_URL.lstrip("/"), serve, {"document_root": settings.MEDIA_ROOT}),
     re_path(
         r"^%s(?P<path>.*)$" % settings.ACTIVITY_FILES_URL.lstrip("/"),

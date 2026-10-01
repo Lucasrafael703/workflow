@@ -330,25 +330,25 @@ def _summary_sentence(n, category, task, activity, is_self):
 
     if n.event_type == Notification.EventType.ACTIVITY_APPROVAL_NEEDED:
         if actor:
-            return f"{actor} marcou esta atividade como pendente e aguarda sua aprovação."
-        return "Esta atividade está pendente e aguarda sua aprovação."
+            return f"{actor} marcou esta demanda como pendente e aguarda sua aprovação."
+        return "Esta demanda está pendente e aguarda sua aprovação."
 
     if n.event_type == Notification.EventType.ACTIVITY_PENDING:
         if actor:
-            return f"{actor} marcou esta atividade como pendente."
-        return "Esta atividade foi marcada como pendente."
+            return f"{actor} marcou esta demanda como pendente."
+        return "Esta demanda foi marcada como pendente."
 
     if n.event_type == Notification.EventType.ACTIVITY_APPROVED:
         if actor:
-            return f"{actor} aprovou a pendência — a atividade voltou para você."
-        return "A pendência foi aprovada e a atividade voltou para você."
+            return f"{actor} aprovou a pendência — a demanda voltou para você."
+        return "A pendência foi aprovada e a demanda voltou para você."
 
     if category == DELEGACAO:
         if is_self:
-            return "Você criou esta atividade."
+            return "Você criou esta demanda."
         if actor:
-            return f"{actor} delegou esta atividade para você e aguarda sua ação."
-        return "Uma nova atividade foi atribuída a você."
+            return f"{actor} delegou esta demanda para você e aguarda sua ação."
+        return "Uma nova demanda foi atribuída a você."
 
     if category == PRAZO:
         if actor:
@@ -370,11 +370,11 @@ def _summary_sentence(n, category, task, activity, is_self):
             return "O prazo proposto foi recusado e precisa de uma decisão."
         if n.event_type == Notification.EventType.TASK_RETURNED:
             return "Esta tarefa foi devolvida e precisa ser retomada."
-        return "Esta atividade exige atenção."
+        return "Esta demanda exige atenção."
 
     if category == CONCLUSAO:
         if actor:
-            return f"{actor} concluiu {'a tarefa' if task else 'a atividade'}."
+            return f"{actor} concluiu {'a tarefa' if task else 'a demanda'}."
         return "Concluída."
 
     return n.message

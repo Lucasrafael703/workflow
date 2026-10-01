@@ -7,7 +7,7 @@ register = template.Library()
 # O histórico precisa ser lido por qualquer pessoa, não parecer log técnico
 # (doc 09 §124). Cada evento vira uma frase em português.
 ACTION_PHRASES = {
-    AuditLog.Action.CREATE: "criou a atividade",
+    AuditLog.Action.CREATE: "criou a demanda",
     AuditLog.Action.UPDATE: "alterou {field}",
     AuditLog.Action.OWNER_CHANGED: "transferiu a responsabilidade de {old} para {new}",
     AuditLog.Action.TASK_CREATED: "criou a tarefa {new}",
@@ -30,7 +30,7 @@ ACTION_PHRASES = {
     AuditLog.Action.REOPEN: "reabriu",
     AuditLog.Action.CANCEL: "cancelou",
     AuditLog.Action.PENDENCY_OPENED: "marcou como pendente: {new}",
-    AuditLog.Action.PENDENCY_APPROVED: "aprovou a pendência e devolveu a atividade",
+    AuditLog.Action.PENDENCY_APPROVED: "aprovou a pendência e devolveu a demanda",
     AuditLog.Action.PROCESS_APPLIED: "aplicou o processo {new}",
     AuditLog.Action.INPUT_UPDATED: "atualizou o input “{field}”: {new}",
     AuditLog.Action.CRITERION_UPDATED: "marcou o critério “{field}” como {new}",

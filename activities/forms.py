@@ -185,11 +185,11 @@ class OrganizationScopedFormMixin:
 
 # Labels compartilhados pelo editor único e pelos POSTs legados de rascunho.
 ACTIVITY_FIELD_LABELS = {
-    "title": "Nome da atividade",
+    "title": "Nome da demanda",
     "client": "Para qual cliente?",
-    "owner": "Quem acompanha esta atividade?",
+    "owner": "Quem acompanha esta demanda?",
     "urgency": "Qual é a urgência?",
-    "sector": "Qual equipe cuida desta atividade?",
+    "sector": "Qual equipe cuida desta demanda?",
     "description": "O que precisa ser entregue?",
     "internal_notes": "Anotações para a equipe",
     "company": "Empresa que presta o serviço",
@@ -212,7 +212,7 @@ ACTIVITY_FIELD_HELP_TEXTS = {
     "requested_by": "Selecione a pessoa da sua equipe que fez o pedido, se houver.",
     "internal_notes": "Espaço para informações de uso interno da equipe.",
     "address": "Acrescente bloco, portaria ou outro detalhe que ajude a encontrar o local.",
-    "tags": "Escolha palavras-chave para encontrar e agrupar esta atividade depois.",
+    "tags": "Escolha palavras-chave para encontrar e agrupar esta demanda depois.",
 }
 
 
@@ -299,16 +299,16 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
         3: ("description", "files_location"),
     }
     STEP_TITLES = {
-        1: ("Informações principais", "Dados básicos da atividade e responsáveis."),
+        1: ("Informações principais", "Dados básicos da demanda e responsáveis."),
         2: ("Informações do cliente", "Dados relacionados ao cliente, obra e centro de custo."),
-        3: ("Descrição e arquivos", "Informações complementares para a execução da atividade."),
+        3: ("Descrição e arquivos", "Informações complementares para a execução da demanda."),
     }
     DESCRIPTION_LIMIT = 2000
 
     requested_deadline = SplitDateOptionalTimeField(
         label="Prazo de vencimento",
         required=False,
-        help_text="Data e horário para conclusão da atividade. Sem horário, vale até o fim do dia.",
+        help_text="Data e horário para conclusão da demanda. Sem horário, vale até o fim do dia.",
     )
 
     class Meta:
@@ -319,7 +319,7 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
             "description", "files_location",
         ]
         labels = {
-            "title": "Nome da atividade",
+            "title": "Nome da demanda",
             "owner": "Atribuído a",
             "sector": "Setor responsável",
             "urgency": "Urgência",
@@ -335,16 +335,16 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
         help_texts = {
             "title": "Descreva a entrega esperada. Ex.: Orçamento do gerador aprovado.",
             "owner": "Essa pessoa será responsável pela entrega e acompanhará as tarefas.",
-            "sector": "Escolha o setor que será responsável por esta atividade.",
-            "urgency": "Indique o quanto esta atividade precisa de atenção.",
+            "sector": "Escolha o setor que será responsável por esta demanda.",
+            "urgency": "Indique o quanto esta demanda precisa de atenção.",
             "company": "Ex.: Comercial, Engenharia, Operações, etc.",
-            "client": "Selecione o cliente relacionado a esta atividade.",
+            "client": "Selecione o cliente relacionado a esta demanda.",
             "site": "Selecione a obra relacionada, se houver.",
-            "cost_center": "Escolha o centro de custo para apropriação desta atividade.",
+            "cost_center": "Escolha o centro de custo para apropriação desta demanda.",
             "external_requester": "Pessoa que solicitou a demanda (cliente, fornecedor, etc.).",
             "address": "Informações adicionais do local, se necessário.",
-            "description": "Inclua todas as informações necessárias para a execução desta atividade.",
-            "files_location": "Você pode colar o link ou o caminho da pasta/arquivo relacionado a esta atividade "
+            "description": "Inclua todas as informações necessárias para a execução desta demanda.",
+            "files_location": "Você pode colar o link ou o caminho da pasta/arquivo relacionado a esta demanda "
             "(Google Drive, OneDrive, Dropbox, etc.), ou um caminho de rede.",
         }
         widgets = {
@@ -363,7 +363,7 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
                 attrs={"class": "activity-input", "placeholder": "Ex.: Rua, número, complemento, bairro, cidade"}
             ),
             "description": RichTextWidget(
-                placeholder="Descreva aqui os detalhes da atividade, orientações, observações e outras informações "
+                placeholder="Descreva aqui os detalhes da demanda, orientações, observações e outras informações "
                 "importantes...",
                 limit=2000,
             ),
@@ -455,9 +455,9 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
         if self.require_essentials:
             title = (cleaned.get("title") or "").strip()
             if not title or title == Activity.DRAFT_TITLE_PLACEHOLDER:
-                self.add_error("title", "Informe o nome da atividade.")
+                self.add_error("title", "Informe o nome da demanda.")
             if not cleaned.get("owner"):
-                self.add_error("owner", "Escolha quem fica com a atividade.")
+                self.add_error("owner", "Escolha quem fica com a demanda.")
             if not cleaned.get("sector"):
                 self.add_error("sector", "Escolha o setor responsável.")
         # Cliente → Obra → Centro de custo: a escolha de baixo precisa pertencer à de cima
@@ -472,7 +472,7 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
 
 class ChangeOwnerForm(forms.Form):
     new_owner = forms.ModelChoiceField(
-        queryset=User.objects.none(), label="Quem vai acompanhar esta atividade?", widget=PersonPickerWidget(),
+        queryset=User.objects.none(), label="Quem vai acompanhar esta demanda?", widget=PersonPickerWidget(),
         help_text="A pessoa escolhida passa a responder pela entrega e pelo acompanhamento das tarefas."
     )
 
@@ -490,7 +490,7 @@ class ChangeOwnerForm(forms.Form):
 class ActivityDeadlineChangeForm(forms.Form):
     requested_deadline = forms.DateTimeField(
         label="Nova data para a entrega", widget=DateTimeLocalInput(), required=False,
-        help_text="Informe até quando a atividade precisa ficar pronta. Deixe em branco para retirar o prazo."
+        help_text="Informe até quando a demanda precisa ficar pronta. Deixe em branco para retirar o prazo."
     )
 
 
@@ -775,8 +775,8 @@ class TaskQuickCreateStandaloneForm(TaskQuickCreateForm):
     ]
 
     activity = forms.ModelChoiceField(
-        queryset=Activity.objects.none(), label="De qual atividade esta tarefa faz parte?", widget=ActivityPickerWidget(),
-        help_text="A atividade é o resultado maior; esta tarefa é um dos passos para chegar lá.",
+        queryset=Activity.objects.none(), label="De qual demanda esta tarefa faz parte?", widget=ActivityPickerWidget(),
+        help_text="A demanda é o resultado maior; esta tarefa é um dos passos para chegar lá.",
     )
 
     def __init__(self, *args, organization=None, can_create_activity=False, **kwargs):
@@ -910,7 +910,7 @@ class TaskChangeResponsavelForm(forms.Form):
 
 class DeadlineProposalForm(forms.Form):
     proposed_deadline = forms.DateTimeField(label="Quando você consegue entregar?", widget=DateTimeLocalInput(),
-                                          help_text="Informe a data e o horário propostos. O responsável pela atividade receberá a proposta para decidir.")
+                                          help_text="Informe a data e o horário propostos. O responsável pela demanda receberá a proposta para decidir.")
 
 
 class ConflictResolutionForm(forms.Form):
@@ -1028,7 +1028,7 @@ class ActivityFinalizeForm(forms.Form):
 
     outcome = forms.ChoiceField(
         choices=Activity.CompletionOutcome.choices,
-        label="Como esta atividade terminou?",
+        label="Como esta demanda terminou?",
         widget=forms.RadioSelect,
     )
     comment = forms.CharField(
@@ -1124,7 +1124,7 @@ class ProcessApplyForm(forms.Form):
         empty_label=None,
         error_messages={
             "required": "Escolha o processo que será aplicado.",
-            "invalid_choice": "Este processo não está disponível para esta atividade.",
+            "invalid_choice": "Este processo não está disponível para esta demanda.",
         },
     )
 

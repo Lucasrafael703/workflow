@@ -1,6 +1,6 @@
 {% load lps %}
 {% if entries %}
-<ul class="history-list">
+<ul class="history-list lps-sheet-list">
     {% for entry in entries %}
     <li class="history-entry{% if entry.action == 'BLOCK' or entry.action == 'PENDENCY_OPENED' or entry.action == 'CONFLICT_OPENED' %} history-entry--key{% endif %}">
         <div class="history-entry__marker" aria-hidden="true"></div>

@@ -229,13 +229,13 @@ class ApplyValidationTests(ProcessTestCase):
 
     def test_process_from_another_company_is_rejected(self):
         activity = self.new_activity(company=self.other_company, title="Outra empresa")
-        with self.assertRaisesMessage(ActivityError, "não é a empresa desta atividade"):
+        with self.assertRaisesMessage(ActivityError, "não é a empresa desta demanda"):
             self.apply(activity=activity)
         self.assertNothingPersisted(activity)
 
     def test_activity_without_company_is_rejected_with_a_clear_message(self):
         activity = self.new_activity(company=None, title="Sem empresa")
-        with self.assertRaisesMessage(ActivityError, "Defina a empresa da atividade"):
+        with self.assertRaisesMessage(ActivityError, "Defina a empresa da demanda"):
             self.apply(activity=activity)
         self.assertNothingPersisted(activity)
 
@@ -990,7 +990,7 @@ class AcceptanceScenarioTests(ProcessTestCase):
     """O exemplo do produto, do começo ao fim."""
 
     def test_orcamento_v3_from_apply_to_success(self):
-        activity = self.new_activity(title="ATV-2026-00123")
+        activity = self.new_activity(title="DEM-2026-00123")
         self.apply(activity=activity)
 
         activity.refresh_from_db()

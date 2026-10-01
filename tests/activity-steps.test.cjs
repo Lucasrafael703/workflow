@@ -29,9 +29,9 @@ source = open(os.path.join('templates', 'activities', 'activity_form.html'), enc
 body = re.search(r'{% block content %}(.*){% endblock %}\\s*$', source, re.S).group(1)
 form = ActivityEditorForm(organization=None, can_change_owner=True)
 context = Context({
-    'form': form, 'steps': form.steps, 'initial_step': 1, 'editor_title': 'Nova atividade',
-    'editor_subtitle': 'Preencha as informações para criar uma nova atividade.', 'submit_label': 'Criar atividade',
-    'cancel_url': '/atividades/', 'return_url': '/atividades/', 'draft': None, 'activity': None, 'attachments': [],
+    'form': form, 'steps': form.steps, 'initial_step': 1, 'editor_title': 'Nova demanda',
+    'editor_subtitle': 'Preencha as informações para criar uma nova demanda.', 'submit_label': 'Criar demanda',
+    'cancel_url': '/demandas/', 'return_url': '/demandas/', 'draft': None, 'activity': None, 'attachments': [],
     'csrf_token': 'test-csrf-token',
 })
 print(json.dumps(Template(body).render(context)))
@@ -42,7 +42,7 @@ const script = readFileSync(path.join(root, "static/js/activity-steps.js"), "utf
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
 function setup(t, {initialStep, withScript = true} = {}) {
-    const dom = new JSDOM("<!doctype html><body>" + fixture + "</body>", {url: "http://localhost/atividades/nova/", runScripts: "outside-only", pretendToBeVisual: true});
+    const dom = new JSDOM("<!doctype html><body>" + fixture + "</body>", {url: "http://localhost/demandas/nova/", runScripts: "outside-only", pretendToBeVisual: true});
     t.after(() => dom.window.close());
     const {window} = dom;
     const {document} = window;
@@ -90,7 +90,7 @@ test("continuar com os obrigatórios vazios fica na etapa 1 e mostra o erro junt
         assert.ok(group.classList.contains("has-error"), group.getAttribute("data-field"));
         assert.ok(group.querySelector(".activity-error"), group.getAttribute("data-field"));
     }
-    assert.match($("[data-field=title] .activity-error").textContent, /nome da atividade/);
+    assert.match($("[data-field=title] .activity-error").textContent, /nome da demanda/);
     assert.match($("[data-field=sector] .activity-error").textContent, /setor/);
 });
 
@@ -138,7 +138,7 @@ test("na etapa 3 o botão final aparece e o Continuar some", t => {
     assert.ok(indicator(1).classList.contains("is-complete"));
     assert.ok(indicator(2).classList.contains("is-complete"));
     assert.ok(indicator(3).classList.contains("is-active"));
-    assert.match($("[data-step-submit]").textContent, /Criar atividade/);
+    assert.match($("[data-step-submit]").textContent, /Criar demanda/);
 });
 
 test("voltar e avançar não apagam nada do que foi preenchido", t => {
@@ -291,7 +291,7 @@ test("registra-se em LPSWidgets e não prepara a mesma janela duas vezes", t => 
 const modalScript = readFileSync(path.join(root, "static/js/modal.js"), "utf8");
 
 function modalSetup(t, answers) {
-    const dom = new JSDOM("<!doctype html><body></body>", {url: "http://localhost/atividades/", runScripts: "outside-only", pretendToBeVisual: true});
+    const dom = new JSDOM("<!doctype html><body></body>", {url: "http://localhost/demandas/", runScripts: "outside-only", pretendToBeVisual: true});
     t.after(() => dom.window.close());
     const {window} = dom;
     const calls = [];
@@ -314,7 +314,7 @@ function modalSetup(t, answers) {
 }
 
 async function openAndFill(ctx, onSuccess) {
-    await ctx.window.LPSModal.open("/atividades/nova/", {onSuccess});
+    await ctx.window.LPSModal.open("/demandas/nova/", {onSuccess});
     ctx.$("[name=title]").value = "Material disponível na obra";
     ctx.$("[name=owner]").value = "1";
     ctx.$("[name=sector]").value = "2";
@@ -324,8 +324,8 @@ async function openAndFill(ctx, onSuccess) {
     ctx.$("[name=files_location]").value = "https://drive.example.com/pasta";
 }
 
-test("LPSModal: a atividade só é enviada no botão final, com as três etapas juntas", async t => {
-    const ctx = modalSetup(t, [{html: fixture}, {json: {redirect_url: "/atividades/9/"}}]);
+test("LPSModal: a demanda só é enviada no botão final, com as três etapas juntas", async t => {
+    const ctx = modalSetup(t, [{html: fixture}, {json: {redirect_url: "/demandas/9/"}}]);
     let result = null;
     await openAndFill(ctx, value => { result = value; });
     assert.equal(ctx.calls.length, 1, "avançar de etapa não envia nada");
@@ -344,13 +344,13 @@ test("LPSModal: a atividade só é enviada no botão final, com as três etapas 
     assert.equal(sent.get("external_requester"), "Maria Silva");
     assert.equal(sent.get("files_location"), "https://drive.example.com/pasta");
     assert.equal(sent.get("acao"), "publicar");
-    assert.deepEqual(result, {redirect_url: "/atividades/9/"});
+    assert.deepEqual(result, {redirect_url: "/demandas/9/"});
     assert.equal(ctx.$(".activity-modal"), null, "a janela fecha ao concluir");
 });
 
 test("LPSModal: Enter nas primeiras etapas não envia o formulário", async t => {
     const ctx = modalSetup(t, [{html: fixture}]);
-    await ctx.window.LPSModal.open("/atividades/nova/", {});
+    await ctx.window.LPSModal.open("/demandas/nova/", {});
     ctx.$("[name=title]").value = "x";
     ctx.$("[name=owner]").value = "1";
     ctx.$("[name=sector]").value = "2";
@@ -399,7 +399,7 @@ test("LPSModal: erro geral do servidor aparece na área de avisos, não debaixo 
 
 test("LPSModal: fechar e abrir de novo começa na etapa 1", async t => {
     const ctx = modalSetup(t, [{html: fixture}, {html: fixture}]);
-    await ctx.window.LPSModal.open("/atividades/nova/", {});
+    await ctx.window.LPSModal.open("/demandas/nova/", {});
     ctx.$("[name=title]").value = "x";
     ctx.$("[name=owner]").value = "1";
     ctx.$("[name=sector]").value = "2";
@@ -407,6 +407,6 @@ test("LPSModal: fechar e abrir de novo começa na etapa 1", async t => {
     assert.deepEqual(ctx.visiblePanels(), ["2"]);
     ctx.window.LPSModal.close();
     assert.equal(ctx.$(".activity-modal"), null);
-    await ctx.window.LPSModal.open("/atividades/nova/", {});
+    await ctx.window.LPSModal.open("/demandas/nova/", {});
     assert.deepEqual(ctx.visiblePanels(), ["1"]);
 });

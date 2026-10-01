@@ -130,7 +130,7 @@ def _pick_sector(organization, client, subject_normalized, reasons):
             sector = next((item for item in sectors if item.pk == ranking[0][0]), None)
             if sector is not None:
                 reasons.append(
-                    f"Setor: as últimas atividades de \"{client.name}\" foram para \"{sector.name}\""
+                    f"Setor: as últimas demandas de \"{client.name}\" foram para \"{sector.name}\""
                 )
                 return sector, POINTS_SECTOR_FROM_HISTORY
     return None, 0

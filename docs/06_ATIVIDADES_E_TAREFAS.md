@@ -87,16 +87,16 @@ e de novo no servidor, em `ActivityEditorForm.clean`).
 
 Rotas e respostas:
 
-- `/atividades/nova/`: publica em uma única submissão, exigindo nome, responsável e setor.
+- `/demandas/nova/`: publica em uma única submissão, exigindo nome, responsável e setor.
   Aberta pelos botões (`data-activity-action data-activity-navigate`), responde JSON:
   sucesso `{redirect_url}` (a tela segue para a ficha), erro `400 {errors}` (a janela abre
   na etapa do primeiro erro). Sem JavaScript é uma página com as três etapas empilhadas.
 - Rascunho antigo (`acao=rascunho`, sem botão na tela): aceita tudo vazio; `?pk=<id>`
   retoma apenas um rascunho da organização criado pela pessoa atual.
-- `/atividades/<pk>/editar/`: mesmo formulário; exige `atividade.editar`.
-  A troca de responsável exige também `atividade.alterar_dono` e passa pelo serviço
+- `/demandas/<pk>/editar/`: mesmo formulário; exige `demanda.editar`.
+  A troca de responsável exige também `demanda.alterar_dono` e passa pelo serviço
   de transferência, com histórico. Sem essa ação, o responsável é somente leitura.
-- `/atividades/nova-rapida/`: mesma janela dentro do seletor de atividades de uma
+- `/demandas/nova-rapida/`: mesma janela dentro do seletor de atividades de uma
   tarefa; retorna `{id, name}` em Ajax. O envio antigo só com título continua válido
   (sem exigir responsável nem setor).
 - Auditoria: `update_activity` registra cada campo alterado (inclusive
@@ -119,11 +119,11 @@ usam janelas sobre a tela atual, com alternativa de página sem JavaScript.
 
 | Operação | Serviço | Ação | Efeitos |
 |---|---|---|---|
-| Trocar dono | `change_owner` | `atividade.alterar_dono` | `OwnerChangeLog`, audita `OWNER_CHANGED`, notifica antigo e novo dono |
-| Assumir do grupo | `claim` | `atividade.assumir` | atividade precisa ter setor designado |
-| Editar | `update_activity` | `atividade.editar` | audita `UPDATE` por campo; bloqueado se concluída/cancelada; nova descrição reprocessa menções |
-| Marcar pendente | `mark_pending` | `atividade.marcar_pendente` | de `ABERTA`/`EM_ANDAMENTO`; motivo e comentário obrigatórios; audita `PENDENCY_OPENED` e gera mensagem |
-| Aprovar pendência | `approve_pendency` | `atividade.aprovar_pendencia` | pendência `APROVADA`, atividade `EM_ANDAMENTO`, dono volta ao anterior, audita `PENDENCY_APPROVED`, notifica `ACTIVITY_APPROVED` |
+| Trocar dono | `change_owner` | `demanda.alterar_dono` | `OwnerChangeLog`, audita `OWNER_CHANGED`, notifica antigo e novo dono |
+| Assumir do grupo | `claim` | `demanda.assumir` | atividade precisa ter setor designado |
+| Editar | `update_activity` | `demanda.editar` | audita `UPDATE` por campo; bloqueado se concluída/cancelada; nova descrição reprocessa menções |
+| Marcar pendente | `mark_pending` | `demanda.marcar_pendente` | de `ABERTA`/`EM_ANDAMENTO`; motivo e comentário obrigatórios; audita `PENDENCY_OPENED` e gera mensagem |
+| Aprovar pendência | `approve_pendency` | `demanda.aprovar_pendencia` | pendência `APROVADA`, atividade `EM_ANDAMENTO`, dono volta ao anterior, audita `PENDENCY_APPROVED`, notifica `ACTIVITY_APPROVED` |
 
 Pendência **com aprovação** (`APROVACAO_GESTOR`, `AJUSTES_REVISOES`): exige
 prazo de decisão e setor designado com gestor. O primeiro gestor do setor
@@ -142,25 +142,25 @@ obrigatório.
 
 | Resultado | Ação | Estado final | Pré-condição |
 |---|---|---|---|
-| `SUCESSO`, `CONCLUIDO_COM_PENDENCIAS` | `atividade.concluir` | `CONCLUIDA` | nenhuma tarefa aberta |
-| `DECLINADO`, `CANCELADO` | `atividade.cancelar` | `CANCELADA` (comentário vira `cancelled_reason`) | — |
+| `SUCESSO`, `CONCLUIDO_COM_PENDENCIAS` | `demanda.concluir` | `CONCLUIDA` | nenhuma tarefa aberta |
+| `DECLINADO`, `CANCELADO` | `demanda.cancelar` | `CANCELADA` (comentário vira `cancelled_reason`) | — |
 
 Se a atividade tem processo aplicado, `SUCESSO` também exige os critérios de
 aceite obrigatórios atendidos (§3.4).
 
 Pendências abertas viram `ENCERRADA`; audita `COMPLETE`/`CANCEL`; notifica o
-dono. `reopen_activity` (`atividade.reabrir`) leva `CONCLUIDA` →
+dono. `reopen_activity` (`demanda.reabrir`) leva `CONCLUIDA` →
 `EM_ANDAMENTO` com motivo obrigatório (`REOPEN`, com o estado anterior em
 `old_value`). Só atividade **concluída** reabre; cancelada não (o serviço recusa
 e a tela não oferece). O botão "Reabrir atividade" aparece no aviso "Concluída
 em…" da ficha (e no menu ⋮ e no menu da lista, aba "concluídas") para quem tem
-`atividade.reabrir` — hoje só o perfil Administrador. Os endpoints antigos
+`demanda.reabrir` — hoje só o perfil Administrador. Os endpoints antigos
 `complete_activity`/`cancel_activity` ainda existem.
 
 ### 1.5 Anexos, mensagens e menções
 
-- **Anexos** (`ActivityAttachmentService`): adicionar exige `atividade.editar`
-  (ou ser o criador do próprio rascunho); remover exige `atividade.editar` e
+- **Anexos** (`ActivityAttachmentService`): adicionar exige `demanda.editar`
+  (ou ser o criador do próprio rascunho); remover exige `demanda.editar` e
   apaga o arquivo. Auditado como `UPDATE` no campo "anexo". Local de gravação
   em [03_CONFIGURACAO.md](03_CONFIGURACAO.md#4-arquivos-estáticos-mídia-e-anexos).
 - **Mensagens** (`MessageService.post_activity_message`): exige
@@ -174,7 +174,7 @@ em…" da ficha (e no menu ⋮ e no menu da lista, aba "concluídas") para quem 
 
 ### 1.6 Kanban e calendário
 
-- Colunas do Kanban (`/atividades/kanban/`) são os `ActivityStage` da
+- Colunas do Kanban (`/demandas/kanban/`) são os `ActivityStage` da
   organização, mais "sem estágio". Mover o card (`mover-estagio/`) altera só
   `stage` e `stage_changed_at` (usado para "dias no estágio") — **não** mexe
   em `status`, não passa por serviço e não é auditado.
@@ -182,7 +182,7 @@ em…" da ficha (e no menu ⋮ e no menu da lista, aba "concluídas") para quem 
   (`filtered_activities_queryset`). Rascunhos nunca aparecem; concluídas e
   canceladas só na aba "concluídas" ou filtrando.
 - Abas da lista: minhas (padrão), grupo, participando, concluídas, todas
-  (esta depende de `atividade.visualizar_todas`).
+  (esta depende de `demanda.visualizar_todas`).
 
 ---
 
@@ -230,7 +230,7 @@ cancelada.
 ### 2.2 Criação
 
 `TaskService.create_task` — usado pela criação rápida dentro da atividade
-(`atividades/<pk>/tarefas/rapida/`) e pela criação avulsa com seletor de
+(`demandas/<pk>/tarefas/rapida/`) e pela criação avulsa com seletor de
 atividade (`tarefas/nova-rapida/`).
 
 - Exige `tarefa.criar` no endereço do **setor da tarefa**.
@@ -437,7 +437,7 @@ tarefa `CONCLUIDA`. As Regras eram omissas; as decisões estão em `Regras/02`
 | Estado | `CONCLUIDA` → `EM_FILA`. Se a **própria** predecessora ainda não terminou, fica `DISPONIVEL` fora da fila ("Aguardando etapa anterior") |
 | Fila | nova passagem (`QueueEntry`) no **fim** da fila do setor; a passagem antiga fica como histórico |
 | Preservado | sessões de trabalho e tempo, checklist, participantes, prazos, `first_action_at` (o histórico é fato); limpa `completed_at`/`completed_by` |
-| Atividade `CONCLUIDA` | é reaberta **junto**, na mesma transação e com o mesmo motivo — exige também `atividade.reabrir`; sem ela a reabertura é recusada e nada é gravado |
+| Atividade `CONCLUIDA` | é reaberta **junto**, na mesma transação e com o mesmo motivo — exige também `demanda.reabrir`; sem ela a reabertura é recusada e nada é gravado |
 | Atividade `CANCELADA` | recusa |
 | Tarefas que dependiam dela | se alguma **já foi trabalhada** (em execução, concluída, bloqueada, devolvida ou com sessão registrada), a reabertura é recusada listando-as; as que só esperam na fila voltam a `DISPONIVEL` (saem da fila, fila renumerada, auditoria `UPDATE` de situação) e são liberadas de novo quando esta for concluída |
 | Auditoria / avisos | `REOPEN` da tarefa (`old_value=CONCLUIDA`, motivo); `TASK_ASSIGNED` "Tarefa reaberta" para setor, responsável e dono da atividade; menções no motivo |

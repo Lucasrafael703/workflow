@@ -6,7 +6,7 @@ from activities.services import TaskService
 class Command(BaseCommand):
     help = (
         "Verifica tarefas com prazo comprometido vencido e ainda não notificadas, "
-        "gerando notificação in-app e e-mail para o setor responsável, o dono da atividade "
+        "gerando notificação in-app e e-mail para o setor responsável, o dono da demanda "
         "e administradores. Deve ser agendado periodicamente (ex.: Task Scheduler/cron)."
     )
 

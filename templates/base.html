@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20261002-filtros1">
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20261002-lista-demandas">
     <script>
     // Aplica o estado recolhido antes do primeiro paint — sem isto, a
     // sidebar apareceria expandida por um instante e "pularia" pro estado
@@ -57,23 +57,15 @@
                 <span class="nav-item__label">Início</span>
             </a>
 
-            {% if lps_nav.intake %}
-            <a href="{% if lps_nav.intake_can_view %}{% url 'intake-list' %}{% else %}{% url 'intake-capture' %}{% endif %}" class="nav-item {% if nav_active == 'intake' %}is-active{% endif %}" data-tooltip="Entrada">
-                <span class="nav-item__icon">{% include "_icon.html" with name="inbox" %}</span>
-                <span class="nav-item__label">Entrada</span>
-                {% if lps_intake_new %}<span class="nav-count">{{ lps_intake_new }}</span>{% endif %}
-            </a>
-            {% endif %}
-
             <details class="nav-group {% if nav_active == 'activities' %}has-active{% endif %}"
                       {% if nav_active == 'activities' %}open{% endif %}>
-                <summary data-tooltip="Atividades">
+                <summary data-tooltip="Demandas">
                     <span class="nav-item__icon">{% include "_icon.html" with name="activity" %}</span>
-                    <span class="nav-item__label">Atividades</span>
+                    <span class="nav-item__label">Demandas</span>
                     <span class="nav-group__chevron">{% include "_icon.html" with name="chevron-down" %}</span>
                 </summary>
                 <div class="nav-group__flyout">
-                    <div class="nav-group__flyout-title">Atividades</div>
+                    <div class="nav-group__flyout-title">Demandas</div>
                     <a href="{% url 'activity-list' %}?tab=minhas" class="nav-subitem">Sob minha responsabilidade</a>
                     <a href="{% url 'activity-list' %}?tab=participando" class="nav-subitem">Participando</a>
                     <a href="{% url 'activity-list' %}?tab=grupo" class="nav-subitem">Do meu setor</a>
@@ -248,7 +240,8 @@
 
         <span class="workspace-location">
             {% if nav_active == 'intake' %}Entrada · Solicitações para triar
-            {% elif nav_active == 'activities' %}Atividades · Entregas
+            {% elif nav_active == 'activities' and request.resolver_match.url_name == 'activity-list' %}Demandas · {% if request.GET.tab == 'grupo' %}Do meu setor{% elif request.GET.tab == 'participando' %}Em que participo{% elif request.GET.tab == 'concluidas' %}Concluídas{% elif request.GET.tab == 'todas' %}Todas as demandas{% else %}Sob minha responsabilidade{% endif %}
+            {% elif nav_active == 'activities' %}Demandas · Entregas
             {% elif nav_active == 'tasks' %}Tarefas · Trabalho a fazer
             {% elif nav_active == 'notifications' %}Notificações · Avisos para você
             {% elif nav_active == 'queue' %}Ordem das tarefas
@@ -263,7 +256,7 @@
             <div class="workspace-help__body">
                 <h2>Por onde começar?</h2>
                 <a href="{% url 'task-list' %}?tab=minhas"><strong>Quero saber o que fazer</strong><span>Abra suas tarefas e escolha uma para trabalhar.</span></a>
-                <a href="{% url 'activity-list' %}?tab=minhas"><strong>Quero acompanhar uma entrega</strong><span>Atividades reúnem as tarefas e mostram o andamento da entrega.</span></a>
+                <a href="{% url 'activity-list' %}?tab=minhas"><strong>Quero acompanhar uma entrega</strong><span>Demandas reúnem as tarefas e mostram o andamento da entrega.</span></a>
                 <a href="{% url 'notification-list' %}"><strong>Quero ver o que precisa de mim</strong><span>Abra os avisos para ver pedidos, decisões e mensagens.</span></a>
             </div>
         </details>
@@ -355,7 +348,7 @@
 <script src="{% static 'js/color-utils.js' %}?v=20260926a"></script>
 <script src="{% static 'js/color-palette-picker.js' %}?v=20260926a"></script>
 {% endif %}
-{% if user.is_authenticated %}<script src="{% static 'js/activity-workspace.js' %}?v=20261002-filtros1"></script>{% endif %}
+{% if user.is_authenticated %}<script src="{% static 'js/activity-workspace.js' %}?v=20261002-filtros2"></script>{% endif %}
 {% block scripts %}{% endblock %}
 </body>
 </html>

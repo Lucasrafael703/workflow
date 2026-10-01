@@ -3,6 +3,7 @@
 {% block title %}Minhas tarefas — LPS{% endblock %}
 
 {% block content %}
+<section class="tasks-page" aria-labelledby="tasks-page-title">
 {% include "activities/_task_page_head.html" %}
 
 {% if view_mode == "lista" %}
@@ -37,13 +38,13 @@
 
 {% include "activities/_task_view_filters.html" %}
 
-{% if view_mode == "atividade" %}
+{% if view_mode == "demanda" %}
     {% if activity_groups %}
     {% for group in activity_groups %}
     <div class="card card--flush">
         <div class="table-wrap">
             <h3 style="padding: 14px 16px 0;"><a href="{% url 'activity-detail' group.activity.pk %}">{{ group.activity.title }}</a></h3>
-            <table class="responsive">
+            <table class="responsive lps-sheet lps-sheet--grouped">
                 <thead><tr><th>Tarefa</th><th>Setor</th><th>Prazo</th><th>Situação</th></tr></thead>
                 <tbody>
                 {% for task in group.tasks %}
@@ -55,7 +56,7 @@
                         {% elif task.requested_deadline %}<span class="muted">{{ task.requested_deadline|date:"d/m/Y H:i" }} (solicitado)</span>
                         {% else %}<span class="muted">Sem prazo</span>{% endif %}
                     </td>
-                    <td data-label="Situação"><span class="tag" style="--tag-bg: {{ task.status_color }}1A; --tag-fg: {{ task.status_color }};">{{ task.status_label }}</span></td>
+                    <td data-label="Situação" class="lps-sheet-status-cell">{% include "_sheet_status.html" with color=task.status_color text_color=task.status_text_color label=task.status_label %}</td>
                 </tr>
                 {% endfor %}
                 </tbody>
@@ -76,18 +77,17 @@
 {% elif tasks %}
 <div class="card card--flush">
     <div class="table-wrap">
-        <table class="responsive">
+        <table class="responsive lps-sheet lps-sheet--task">
             <thead>
                 <tr>
-                    <th class="col-check"><input type="checkbox" class="js-check-all" aria-label="Selecionar todas"></th>
                     <th class="is-sortable{% if current_sort == 'tarefa' %} is-sorted{% if current_dir == 'desc' %} is-sorted-desc{% endif %}{% endif %}">
                         <a href="?{{ filter_querystring }}&sort=tarefa&dir={% if current_sort == 'tarefa' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
                             Tarefa {% include "_icon.html" with name="chevron-down" %}
                         </a>
                     </th>
-                    <th class="is-sortable{% if current_sort == 'atividade' %} is-sorted{% if current_dir == 'desc' %} is-sorted-desc{% endif %}{% endif %}">
-                        <a href="?{{ filter_querystring }}&sort=atividade&dir={% if current_sort == 'atividade' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
-                            Atividade {% include "_icon.html" with name="chevron-down" %}
+                    <th class="is-sortable{% if current_sort == 'demanda' %} is-sorted{% if current_dir == 'desc' %} is-sorted-desc{% endif %}{% endif %}">
+                        <a href="?{{ filter_querystring }}&sort=demanda&dir={% if current_sort == 'demanda' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                            Demanda {% include "_icon.html" with name="chevron-down" %}
                         </a>
                     </th>
                     <th>Cliente</th>
@@ -110,11 +110,10 @@
             <tbody>
                 {% for task in tasks %}
                 <tr id="task-{{ task.pk }}" class="js-task-row" data-drawer-url="{% url 'task-drawer' task.pk %}">
-                    <td data-label="" class="col-check"><input type="checkbox" class="js-row-check" aria-label="Selecionar {{ task.title }}"></td>
                     <td data-label="Tarefa">
                         <a href="{% url 'task-detail' task.pk %}" class="title">{{ task.title }}</a>
                     </td>
-                    <td data-label="Atividade"><a href="{% url 'activity-detail' task.activity.pk %}">{{ task.activity.title }}</a></td>
+                    <td data-label="Demanda"><a href="{% url 'activity-detail' task.activity.pk %}">{{ task.activity.title }}</a></td>
                     <td data-label="Cliente">{% if task.activity.client %}{{ task.activity.client.name }}{% else %}<span class="muted">—</span>{% endif %}</td>
                     <td data-label="Obra">{% if task.activity.site %}{{ task.activity.site.name }}{% else %}<span class="muted">—</span>{% endif %}</td>
                     <td data-label="Setor">
@@ -150,7 +149,7 @@
                         </span>
                         {% else %}<span class="muted">—</span>{% endif %}
                     </td>
-                    <td data-label="Situação"><span class="tag" style="--tag-bg: {{ task.status_color }}1A; --tag-fg: {{ task.status_color }};">{{ task.status_label }}</span></td>
+                    <td data-label="Situação" class="lps-sheet-status-cell">{% include "_sheet_status.html" with color=task.status_color text_color=task.status_text_color label=task.status_label %}</td>
                     <td data-label="" class="col-menu">
                         <div class="menu-dots js-menu-dots">
                             <button type="button" class="menu-dots__trigger" title="Mais ações">{% include "_icon.html" with name="more" %}</button>
@@ -208,10 +207,10 @@
 <div class="card">
     <div class="empty-state">
         <div class="empty-state__icon">{% include "_icon.html" with name="task" %}</div>
-        {% if search or view_filter or selected_sector %}
+        {% if has_filters %}
         <h3>Nenhuma tarefa encontrada</h3>
         <p>Ajuste a busca ou a visão para localizar outra tarefa.</p>
-        <a href="?tab={{ tab }}" class="btn">Limpar filtros</a>
+        <a href="{% querystring q=None status=None filtro=None sector=None sort=None dir=None page=None %}" class="btn">Limpar filtros</a>
         {% else %}
         <h3>Nenhuma tarefa nesta visão</h3>
         <p>Quando uma tarefa for atribuída a você — ou chegar na fila do seu setor — ela aparece aqui.</p>
@@ -250,7 +249,7 @@
         });
     });
 
-    // Menu "⋮" por linha: mesmo JS genérico já usado na Ficha de Atividade,
+    // Menu "⋮" por linha: mesmo JS genérico já usado na Ficha de Demanda,
     // mais o reposicionamento por coordenadas quando o menu vive dentro de
     // uma tabela com overflow-x (o popup vira position:fixed nesse caso,
     // porque overflow-x:auto sempre corta um overflow-y:visible do mesmo
@@ -329,15 +328,7 @@
             .catch(function () { button.disabled = false; });
     }, true);
 
-    // Checkbox "selecionar todas" (visual, sem ação em lote ainda).
-    var checkAll = document.querySelector(".js-check-all");
-    if (checkAll) {
-        checkAll.addEventListener("change", function () {
-            document.querySelectorAll(".js-row-check").forEach(function (box) {
-                box.checked = checkAll.checked;
-            });
-        });
-    }
 })();
 </script>
+</section>
 {% endblock %}

@@ -37,14 +37,14 @@
     <a href="?tab=obras" class="{% if tab == 'obras' %}is-active{% endif %}">Obras</a>
     <a href="?tab=centros-de-custo" class="{% if tab == 'centros-de-custo' %}is-active{% endif %}">Centros de custo</a>
     <a href="?tab=clientes" class="{% if tab == 'clientes' %}is-active{% endif %}">Clientes</a>
-    <a href="?tab=tipos-de-atividade" class="{% if tab == 'tipos-de-atividade' %}is-active{% endif %}">Tipos de atividade</a>
+    <a href="?tab=tipos-de-demanda" class="{% if tab == 'tipos-de-demanda' %}is-active{% endif %}">Tipos de demanda</a>
     <a href="?tab=tipos-de-tarefa" class="{% if tab == 'tipos-de-tarefa' %}is-active{% endif %}">Tipos de tarefa</a>
     <a href="?tab=estagios-de-tarefa" class="{% if tab == 'estagios-de-tarefa' %}is-active{% endif %}">Estágios de tarefa</a>
     <a href="?tab=tags" class="{% if tab == 'tags' %}is-active{% endif %}">Tags</a>
     <a href="?tab=motivos" class="{% if tab == 'motivos' %}is-active{% endif %}">Motivos</a>
 </nav>
 
-{% if tab != "tipos-de-atividade" and tab != "tipos-de-tarefa" %}
+{% if tab != "tipos-de-demanda" and tab != "tipos-de-tarefa" %}
 <form method="get">
     <input type="hidden" name="tab" value="{{ tab }}">
     <div class="toolbar">
@@ -61,7 +61,7 @@
 {% if tab == "empresas" %}
 <div class="card card--flush">
     <div class="table-wrap">
-        <table class="responsive">
+        <table class="responsive lps-sheet lps-sheet--compact">
             <thead><tr><th>Nome</th><th>CNPJ/CPF</th><th>Situação</th><th class="col-actions">Ações</th></tr></thead>
             <tbody>
             {% for item in companies %}
@@ -95,7 +95,7 @@
 {% elif tab == "obras" %}
 <div class="card card--flush">
     <div class="table-wrap">
-        <table class="responsive">
+        <table class="responsive lps-sheet lps-sheet--compact">
             <thead><tr><th>Nome</th><th>Cliente</th><th>Situação</th><th class="col-actions">Ações</th></tr></thead>
             <tbody>
             {% for item in sites %}
@@ -129,7 +129,7 @@
 {% elif tab == "centros-de-custo" %}
 <div class="card card--flush">
     <div class="table-wrap">
-        <table class="responsive">
+        <table class="responsive lps-sheet lps-sheet--compact">
             <thead><tr><th>Nome</th><th>Obra</th><th>Situação</th><th class="col-actions">Ações</th></tr></thead>
             <tbody>
             {% for item in cost_centers %}
@@ -163,7 +163,7 @@
 {% elif tab == "clientes" %}
 <div class="card card--flush">
     <div class="table-wrap">
-        <table class="responsive">
+        <table class="responsive lps-sheet lps-sheet--compact">
             <thead><tr><th>Nome</th><th>CNPJ/CPF</th><th>Telefone</th><th>Situação</th><th class="col-actions">Ações</th></tr></thead>
             <tbody>
             {% for item in clients %}
@@ -185,7 +185,7 @@
                 <div class="empty-state">
                     <div class="empty-state__icon">{% include "_icon.html" with name="folder" %}</div>
                     <h3>Nenhum cliente cadastrado</h3>
-                    <p>O cliente é quem solicita a atividade — pode ser cadastrado aqui ou direto na tela de nova atividade.</p>
+                    <p>O cliente é quem solicita a demanda — pode ser cadastrado aqui ou direto na tela de nova demanda.</p>
                     <a href="{% url 'client-create' %}" class="btn btn--primary js-cadastro-modal">Cadastrar cliente</a>
                 </div>
             </td></tr>
@@ -198,7 +198,7 @@
 {% elif tab == "motivos" %}
 <div class="card card--flush">
     <div class="table-wrap">
-        <table class="responsive">
+        <table class="responsive lps-sheet lps-sheet--compact">
             <thead><tr><th>Motivo</th><th>Situação</th><th class="col-actions">Ações</th></tr></thead>
             <tbody>
             {% for item in return_reasons %}
@@ -293,7 +293,7 @@ document.querySelectorAll(".js-taskstage-modal").forEach(function (link) {
 {% elif tab == "tags" %}
 <div class="card card--flush">
     <div class="table-wrap">
-        <table class="responsive">
+        <table class="responsive lps-sheet lps-sheet--compact">
             <thead><tr><th>Nome</th><th>Cor</th><th>Situação</th><th class="col-actions">Ações</th></tr></thead>
             <tbody>
             {% for item in tags %}
@@ -320,7 +320,7 @@ document.querySelectorAll(".js-taskstage-modal").forEach(function (link) {
                 <div class="empty-state">
                     <div class="empty-state__icon">{% include "_icon.html" with name="folder" %}</div>
                     <h3>Nenhum marcador cadastrado</h3>
-                    <p>Marcadores ajudam a classificar atividades e tarefas livremente, sem afetar nenhuma regra do sistema.</p>
+                    <p>Marcadores ajudam a classificar demandas e tarefas livremente, sem afetar nenhuma regra do sistema.</p>
                     <a href="{% url 'tag-create' %}" class="btn btn--primary js-cadastro-modal">Cadastrar marcador</a>
                 </div>
             </td></tr>
@@ -330,12 +330,12 @@ document.querySelectorAll(".js-taskstage-modal").forEach(function (link) {
     </div>
 </div>
 
-{% elif tab == "tipos-de-atividade" %}
+{% elif tab == "tipos-de-demanda" %}
 <div class="card">
     <div class="empty-state">
         <div class="empty-state__icon">{% include "_icon.html" with name="folder" %}</div>
-        <h3>Tipos de atividade ainda não disponível</h3>
-        <p>Tipo de atividade é a classificação usada para organizar processos (Regras 11 §4).
+        <h3>Tipos de demanda ainda não disponível</h3>
+        <p>Tipo de demanda é a classificação usada para organizar processos (Regras 11 §4).
            Essa tela ainda não foi construída.</p>
     </div>
 </div>
@@ -352,7 +352,7 @@ document.querySelectorAll(".js-taskstage-modal").forEach(function (link) {
 {% else %}
 <div class="card card--flush">
     <div class="table-wrap">
-        <table class="responsive">
+        <table class="responsive lps-sheet lps-sheet--compact">
             <thead><tr><th>Nome</th><th>Descrição</th><th>Tarefas abertas</th><th>Situação</th><th class="col-actions">Ações</th></tr></thead>
             <tbody>
             {% for item in sectors %}

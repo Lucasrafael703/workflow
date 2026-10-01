@@ -25,7 +25,8 @@
 | `entrada/` | | `intake.urls` |
 | `` | | `core.urls`, depois `activities.urls` |
 | `media/<path>` | | `static.serve` de `MEDIA_ROOT` (sem login) |
-| `atividade-arquivos/<path>` | | `static.serve` de `ACTIVITY_FILES_ROOT` (sem login) |
+| `demanda-arquivos/<path>` | | `static.serve` de `ACTIVITY_FILES_ROOT` (sem login) |
+| `atividade-arquivos/<path>` | `legacy-activity-files` | Endereço de antes de 01/10/2026: redireciona (301) para `demanda-arquivos/<path>`; se a pasta do código já foi renomeada, troca `ATV-…` por `DEM-…` |
 
 ## 2. `accounts` (`/accounts/`)
 
@@ -67,7 +68,8 @@
 | Caminho | View | Ação |
 |---|---|---|
 | `configuracoes/` | `SettingsView` (`settings`) — preferências de notificação (guardadas na sessão) | — |
-| `configuracoes/estagios-de-atividade/novo/`, `<pk>/` | `ActivityStageFormView` | `estagio_tarefa.gerir` |
+| `configuracoes/estagios-de-demanda/novo/`, `<pk>/` | `ActivityStageFormView` | `estagio_tarefa.gerir` |
+| `configuracoes/estagios-de-atividade/<resto>` | `legacy-activity-stages` | Endereço antigo: redireciona (301; 308 em POST) para `estagios-de-demanda/<resto>` |
 | `configuracoes/status/<domain>/novo/`, `<pk>/` | `WorkflowStatusFormView` | `cor_status.gerir` |
 | `configuracoes/status/<domain>/<code>/editar/` | `EnumColorLabelFormView` (`enumcolor-label-edit`) | — |
 | `configuracoes/cores/<domain>/salvar/` | `EnumColorSaveView` (`enumcolor-save`) | — |
@@ -100,35 +102,36 @@
 | `gestao/` | `management` | Gestão por exceção (`metricas.visualizar` em algum escopo) |
 | `historico/` | `history` | Histórico de auditoria (`?event=`) |
 
-**Atividades**
+**Demandas** (`Activity`; o endereço era `demandas/…` até 01/10/2026)
 
 | Caminho | Função |
 |---|---|
-| `atividades/` (`activity-list`) | Lista com abas e filtros |
-| `atividades/nova/` (`activity-create`) | Janela de 3 etapas de criação (e rascunho antigo). JSON no Ajax: `{redirect_url}` ou `400 {errors}` |
-| `atividades/<pk>/nova/contexto/`, `.../detalhes/`, `.../descartar/` | GET das etapas antigas redireciona ao editor; POST legado compatível; descartar rascunho |
-| `atividades/nova-rapida/` | Mesmo editor no seletor; resposta JSON em Ajax |
-| `atividades/busca/` | Busca de atividades abertas (JSON) |
-| `atividades/kanban/`, `atividades/calendario/` | Kanban por estágio, calendário por prazo |
-| `atividades/<pk>/` (`activity-detail`) | Ficha da atividade (rascunho redireciona ao editor) |
-| `atividades/<pk>/painel/` | Compatibilidade: redireciona à ficha completa |
-| `atividades/<pk>/editar/`, `prazo/`, `dono/`, `assumir/` | Editar (a mesma janela de 3 etapas), prazo, trocar dono, assumir |
-| `atividades/<pk>/finalizar/`, `concluir/`, `cancelar/`, `reabrir/` | Encerramento e reabertura |
-| `atividades/<pk>/processo/aplicar/` (`activity-process-apply`) | Popup "Aplicar processo" — GET mostra os 4 passos (403 sem `processo.aplicar`; redireciona se a atividade já tem processo); POST aplica (JSON `{"redirect_url"}` ou `{"errors"}` no Ajax; redirect sem JS) |
-| `atividades/<pk>/processo/inputs/<input_pk>/` (`activity-input-update`) | POST: registrar/corrigir (`value`, `is_received`) ou reabrir (`clear`) um input do processo aplicado |
-| `atividades/<pk>/processo/criterios/<check_pk>/` (`activity-criterion-update`) | POST: marcar/desmarcar (`is_met`) um critério de aceite |
-| `atividades/<pk>/pendente/`, `pendencia/aprovar/` | Pendência |
-| `atividades/<pk>/mensagem/`, `continuar/` | Mensagem; comentário + anexo num envio |
-| `atividades/<pk>/anexos/`, `anexos/<attachment_pk>/remover/` | Anexos |
-| `atividades/<pk>/mover-estagio/` | Mudar coluna do Kanban (só `stage`) |
-| `atividades/<activity_pk>/tarefas/rapida/` (`task-quick-create`) | Nova tarefa na atividade (Ajax) |
+| `atividades/<resto>` (`legacy-activities`) | Redireciona (301; **308** em POST, que mantém o método) para `demandas/<resto>`, com a consulta (`?tab=…`). Sem login. Cobre todas as rotas abaixo |
+| `demandas/` (`activity-list`) | Lista com abas e filtros. A busca `?q=` também aceita o código antigo (`ATV-2026-00007` acha `DEM-2026-00007`) |
+| `demandas/nova/` (`activity-create`) | Janela de 3 etapas de criação (e rascunho antigo). JSON no Ajax: `{redirect_url}` ou `400 {errors}` |
+| `demandas/<pk>/nova/contexto/`, `.../detalhes/`, `.../descartar/` | GET das etapas antigas redireciona ao editor; POST legado compatível; descartar rascunho |
+| `demandas/nova-rapida/` | Mesmo editor no seletor; resposta JSON em Ajax |
+| `demandas/busca/` | Busca de atividades abertas (JSON) |
+| `demandas/kanban/`, `demandas/calendario/` | Kanban por estágio, calendário por prazo |
+| `demandas/<pk>/` (`activity-detail`) | Ficha da atividade (rascunho redireciona ao editor) |
+| `demandas/<pk>/painel/` | Compatibilidade: redireciona à ficha completa |
+| `demandas/<pk>/editar/`, `prazo/`, `dono/`, `assumir/` | Editar (a mesma janela de 3 etapas), prazo, trocar dono, assumir |
+| `demandas/<pk>/finalizar/`, `concluir/`, `cancelar/`, `reabrir/` | Encerramento e reabertura |
+| `demandas/<pk>/processo/aplicar/` (`activity-process-apply`) | Popup "Aplicar processo" — GET mostra os 4 passos (403 sem `processo.aplicar`; redireciona se a atividade já tem processo); POST aplica (JSON `{"redirect_url"}` ou `{"errors"}` no Ajax; redirect sem JS) |
+| `demandas/<pk>/processo/inputs/<input_pk>/` (`activity-input-update`) | POST: registrar/corrigir (`value`, `is_received`) ou reabrir (`clear`) um input do processo aplicado |
+| `demandas/<pk>/processo/criterios/<check_pk>/` (`activity-criterion-update`) | POST: marcar/desmarcar (`is_met`) um critério de aceite |
+| `demandas/<pk>/pendente/`, `pendencia/aprovar/` | Pendência |
+| `demandas/<pk>/mensagem/`, `continuar/` | Mensagem; comentário + anexo num envio |
+| `demandas/<pk>/anexos/`, `anexos/<attachment_pk>/remover/` | Anexos |
+| `demandas/<pk>/mover-estagio/` | Mudar coluna do Kanban (só `stage`) |
+| `demandas/<activity_pk>/tarefas/rapida/` (`task-quick-create`) | Nova tarefa na atividade (Ajax) |
 
 **Tarefas**
 
 | Caminho | Função |
 |---|---|
 | `tarefas/` (`task-list`), `tarefas/kanban/`, `tarefas/calendario/` | Lista, Kanban, calendário |
-| `tarefas/nova-rapida/` | Nova tarefa com seletor de atividade (a busca `atividades/busca/`, `activity-search`, devolve também `summary`: título e "Cliente • Setor • N tarefas", que a janela mostra como cartão) |
+| `tarefas/nova-rapida/` | Nova tarefa com seletor de atividade (a busca `demandas/busca/`, `activity-search`, devolve também `summary`: título e "Cliente • Setor • N tarefas", que a janela mostra como cartão) |
 | `tarefas/<pk>/` (`task-detail`), `tarefas/<pk>/painel/` | Ficha, painel lateral |
 | `tarefas/<pk>/editar/` (`task-edit`) | Editor único: dados, prazo pedido, marcadores, responsável e participantes (`tarefa.editar` na view, já no GET; responsável e participantes exigem as suas ações no serviço). Janela (JSON no Ajax) ou página |
 | `tarefas/<pk>/dependencia/` (`task-dependency`) | Gerenciar dependência (`tarefa.editar` na view). Janela (JSON no Ajax) ou página |
@@ -180,7 +183,7 @@ também funcionam como página; com `X-Requested-With: XMLHttpRequest` respondem
 | `registrar/` | `intake-capture` | GET/POST | `entrada.registrar` (em algum lugar) | Sucesso: `{"message", "redirect_url"}` |
 | `<pk>/` | `intake-detail` | GET | `entrada.visualizar` no item | Texto original, o que a LPS entendeu e histórico |
 | `<pk>/editar/` | `intake-edit` | GET/POST | `entrada.triar` no item | Sucesso: `{"message", "html" (cartão novo), "target": "#intake-item-<pk>"}` |
-| `<pk>/criar-demanda/` | `intake-convert` | GET/POST | `entrada.triar` no item (+ `atividade.criar` no serviço) | Sucesso: `{"message", "redirect_url": atividade}` |
+| `<pk>/criar-demanda/` | `intake-convert` | GET/POST | `entrada.triar` no item (+ `demanda.criar` no serviço) | Sucesso: `{"message", "redirect_url": atividade}` |
 | `<pk>/ignorar/` | `intake-ignore` | GET/POST | `entrada.triar` no item | Sucesso: `{"message", "remove": "#intake-item-<pk>"}` |
 | `<pk>/restaurar/` | `intake-restore` | só POST | `entrada.triar` no item | Sucesso: `{"message", "remove"}`; erro: `400 {"error"}` |
 

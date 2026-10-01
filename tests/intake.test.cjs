@@ -115,9 +115,9 @@ test('editing replaces the card with the one the server rendered', t => {
 test('creating the demand follows the redirect the server gave', t => {
     const {w, $, click, reloads, state} = setup(t);
     click($('#criar'));
-    state.onSuccess({message: 'Demanda ATV-2026-00001 criada.', redirect_url: '/entrada/#atividade'});
-    assert.equal(w.location.hash, '#atividade');
-    assert.equal($('[role=status]').textContent, 'Demanda ATV-2026-00001 criada.');
+    state.onSuccess({message: 'Demanda DEM-2026-00001 criada.', redirect_url: '/entrada/#demanda'});
+    assert.equal(w.location.hash, '#demanda');
+    assert.equal($('[role=status]').textContent, 'Demanda DEM-2026-00001 criada.');
     assert.equal(reloads.length, 0);
 });
 

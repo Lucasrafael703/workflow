@@ -358,7 +358,7 @@ class ConvertTests(IntakeTestCase):
         deadline = timezone.now() + datetime.timedelta(days=2)
         activity = self.convert(requested_deadline=deadline, urgency=Activity.Urgency.ALTA)
         self.assertEqual(activity.status, Activity.Status.ABERTA)
-        self.assertTrue(activity.code.startswith("ATV-"))
+        self.assertTrue(activity.code.startswith("DEM-"))
         self.assertEqual(activity.title, "Orçamento do gerador")
         self.assertEqual(activity.owner, self.triador)
         self.assertEqual(activity.created_by, self.triador)
@@ -493,9 +493,9 @@ class ConvertTests(IntakeTestCase):
         self.assertEqual(activity.sector, self.compras)
 
     def test_required_fields(self):
-        with self.assertRaisesMessage(IntakeError, "nome da atividade"):
+        with self.assertRaisesMessage(IntakeError, "nome da demanda"):
             self.convert(title="   ")
-        with self.assertRaisesMessage(IntakeError, "quem fica com a atividade"):
+        with self.assertRaisesMessage(IntakeError, "quem fica com a demanda"):
             self.convert(owner=None)
         with self.assertRaisesMessage(IntakeError, "setor responsável"):
             self.convert(sector=None)

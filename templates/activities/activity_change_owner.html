@@ -6,7 +6,7 @@
     <div class="modal">
         <div class="modal__head">
             <div>
-                <h2>Transferir responsável da atividade</h2>
+                <h2>Transferir responsável da demanda</h2>
                 <div class="sub">{{ activity.title }}</div>
             </div>
             <a href="{% url 'activity-detail' activity.pk %}" class="modal__close" title="Fechar">&times;</a>
@@ -17,7 +17,7 @@
             <div class="modal__body">
                 <p class="muted">
                     Responsável atual: <strong>{{ activity.owner.get_username }}</strong>.
-                    A atividade continua com um único dono; a troca fica registrada no histórico.
+                    A demanda continua com um único dono; a troca fica registrada no histórico.
                 </p>
                 {% include "activities/_form_fields.html" %}
             </div>

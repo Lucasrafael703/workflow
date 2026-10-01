@@ -19,7 +19,7 @@
 <div class="page-head">
     <div class="page-head__text">
         <div class="breadcrumb">
-            <a href="{% url 'activity-list' %}">Atividades</a><span>›</span>
+            <a href="{% url 'activity-list' %}">Demandas</a><span>›</span>
             <a href="{% url 'activity-detail' activity.pk %}">{{ activity.title|truncatechars:38 }}</a><span>›</span>
             {{ task.title|truncatechars:32 }}
         </div>
@@ -30,7 +30,7 @@
             {% if queue_info %} · <span class="position-pill">Na fila: {{ queue_info.position }} de {{ queue_info.total }}</span>{% endif %}
         </div>
     </div>
-    <div class="page-head__actions"><a href="{% url 'activity-detail' activity.pk %}" class="btn">Voltar à atividade</a></div>
+    <div class="page-head__actions"><a href="{% url 'activity-detail' activity.pk %}" class="btn">Voltar à demanda</a></div>
 </div>
 
 <nav class="tabs" aria-label="Seções da tarefa">
@@ -113,7 +113,7 @@
                     <div class="message message--warning" style="margin:0">
                         Antes de começar, registre o recebimento dos inputs obrigatórios do processo:
                         <strong>{{ missing_process_inputs|join:"; " }}</strong>.
-                        <div style="margin-top:10px"><a href="{% url 'activity-detail' activity.pk %}#processo" class="btn btn--sm">Ir para o processo da atividade</a></div>
+                        <div style="margin-top:10px"><a href="{% url 'activity-detail' activity.pk %}#processo" class="btn btn--sm">Ir para o processo da demanda</a></div>
                     </div>
                 {% elif is_participant or is_responsavel %}
                     <div class="task-next">
@@ -203,7 +203,7 @@
                     </div>
                     <div>
                         <div class="k" title="Prazo comprometido pelo setor responsável">Prazo que a equipe se comprometeu a cumprir</div>
-                        <p class="muted small">Combinado com o responsável pela atividade (Propor novo prazo).</p>
+                        <p class="muted small">Combinado com o responsável pela demanda (Propor novo prazo).</p>
                         <div class="v">{% if task.committed_deadline %}{{ task.committed_deadline|date:"d/m/Y H:i" }}{% else %}<span class="muted">Ainda não combinado</span>{% endif %}</div>
                     </div>
                 </div>
@@ -211,7 +211,7 @@
                 {% if pending_proposal %}
                 <div class="message message--warning" style="margin-top:14px">
                     <strong>Novo prazo proposto:</strong> {{ pending_proposal.proposed_deadline|date:"d/m/Y H:i" }}
-                    <div class="small">Por {{ pending_proposal.proposed_by.get_username }} em {{ pending_proposal.proposed_at|date:"d/m/Y H:i" }} — aguardando decisão do responsável pela atividade.</div>
+                    <div class="small">Por {{ pending_proposal.proposed_by.get_username }} em {{ pending_proposal.proposed_at|date:"d/m/Y H:i" }} — aguardando decisão do responsável pela demanda.</div>
                     {% if is_owner %}
                     <div class="actions-row" style="margin-top:10px">
                         <form method="post" action="{% url 'deadline-accept' pending_proposal.pk %}">

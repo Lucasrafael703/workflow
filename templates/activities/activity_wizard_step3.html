@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Nova atividade — Detalhes — LPS{% endblock %}
+{% block title %}Nova demanda — Detalhes — LPS{% endblock %}
 
 {% block content %}
 <div class="wizard-page">
@@ -48,7 +48,7 @@
             </div>
         </div>
         <div class="wizard-summary">
-            <h3 class="wizard-summary__title">Resumo da atividade</h3>
+            <h3 class="wizard-summary__title">Resumo da demanda</h3>
             <div class="wizard-summary__grid">
                 <span class="wizard-summary__label">Problema:</span><span class="wizard-summary__value">{{ draft.title }}</span>
                 <span class="wizard-summary__label">Cliente:</span><span class="wizard-summary__value">{{ draft.client.name|default:"-" }}</span>
@@ -64,7 +64,7 @@
             <div class="actions-row">
                 <button type="submit" name="acao" value="sair" class="btn">Salvar rascunho</button>
                 <button type="submit" name="acao" value="publicar_e_tarefas" class="btn">Criar e adicionar tarefas</button>
-                <button type="submit" name="acao" value="publicar" class="btn btn--primary">Criar atividade</button>
+                <button type="submit" name="acao" value="publicar" class="btn btn--primary">Criar demanda</button>
             </div>
         </div>
     </form>

@@ -90,7 +90,7 @@ class IntakeItem(models.Model):
 
     activity = models.OneToOneField(
         "activities.Activity",
-        verbose_name="atividade criada",
+        verbose_name="demanda criada",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,

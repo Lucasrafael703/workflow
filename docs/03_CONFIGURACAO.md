@@ -37,7 +37,7 @@ sozinho usaria dev.
 |---|---|---|---|
 | `SECRET_KEY` | — **obrigatória** | `base.py` | Sem ela o Django não inicia. |
 | `ALLOWED_HOSTS` | `[]` | `base.py` | Lista separada por vírgula. Em dev com `DEBUG=True`, `localhost` já é aceito. |
-| `ACTIVITY_FILES_ROOT` | `<projeto>/atividade_arquivos` | `base.py` | Pasta dos anexos de atividade (seção 4). |
+| `ACTIVITY_FILES_ROOT` | `<projeto>/atividade_arquivos` | `base.py` | Pasta dos anexos das demandas (seção 4). O nome `atividade_arquivos` não mudou com a troca para "Demanda": é local de armazenamento, não endereço. |
 | `EMAIL_HOST` | `""` | `base.py` | |
 | `EMAIL_PORT` | `587` | `base.py` | |
 | `EMAIL_HOST_USER` | `""` | `base.py` | |
@@ -49,7 +49,7 @@ sozinho usaria dev.
 | `DATABASE_URL` | — **obrigatória em prod** | `prod.py` | Ex.: `postgres://user:senha@host:5432/banco`. |
 | `SECURE_SSL_REDIRECT` | `True` | `prod.py` | Redireciona HTTP → HTTPS. |
 | `SECURE_HSTS_SECONDS` | `3600` | `prod.py` | |
-| `CSRF_TRUSTED_ORIGINS` | `[]` | `prod.py` | Com esquema: `https://*.onrender.com`. |
+| `CSRF_TRUSTED_ORIGINS` | `[]` | `prod.py` | Com esquema: `https://*.onrender.com`; o hostname público do Render também é incluído automaticamente por `RENDER_EXTERNAL_HOSTNAME`. |
 | `DJANGO_SUPERUSER_USERNAME` | — | `ensure_superuser` | |
 | `DJANGO_SUPERUSER_EMAIL` | `""` | `ensure_superuser` | Preencha: o login é por e-mail. |
 | `DJANGO_SUPERUSER_PASSWORD` | — | `ensure_superuser` | |
@@ -82,16 +82,16 @@ Todas estão listadas (as opcionais comentadas) em [`.env.example`](../.env.exam
 | Estáticos do projeto | `static/` (`STATICFILES_DIRS`) | `/static/` | dev: `runserver` · prod: **whitenoise** a partir de `staticfiles/` |
 | Estáticos coletados | `staticfiles/` (`STATIC_ROOT`, gerado por `collectstatic`, ignorado pelo Git) | `/static/` | whitenoise |
 | Mídia | `media/` (`MEDIA_ROOT`) | `/media/` | `django.views.static.serve` |
-| Anexos de atividade | `ACTIVITY_FILES_ROOT` | `/atividade-arquivos/` | `django.views.static.serve` |
+| Anexos das demandas | `ACTIVITY_FILES_ROOT` | `/demanda-arquivos/` | `django.views.static.serve` |
 
 - Em prod, `STORAGES["staticfiles"]` usa
   `whitenoise.storage.CompressedManifestStaticFilesStorage` (nomes com hash e
   compressão). Por isso é preciso rodar `collectstatic` no build. Em dev o
   storage padrão é mantido para não exigir `collectstatic`.
 - Anexos são gravados pelo storage `activity_files_storage()`
-  (`activities/models.py`) no caminho `<empresa>/<código da atividade>/<arquivo>`
+  (`activities/models.py`) no caminho `<empresa>/<código da demanda>/<arquivo>` (`DEM-AAAA-NNNNN`)
   (Regras 12 e 13); sem empresa, vai para `sem-empresa/`.
-- `/media/` e `/atividade-arquivos/` são servidos pelo próprio Django **em
+- `/media/` e `/demanda-arquivos/` são servidos pelo próprio Django **em
   todos os ambientes** (`config/urls.py`), porque no Render não há nginx na
   frente. Essas rotas **não exigem login** — ver
   [13_PENDENCIAS_CONHECIDAS.md](13_PENDENCIAS_CONHECIDAS.md).

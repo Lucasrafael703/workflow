@@ -268,9 +268,9 @@ class DependencyServiceTests(EditorTestCase):
     def test_self_other_activity_and_cancelled_are_refused(self):
         with self.assertRaisesMessage(ActivityError, "dela mesma"):
             TaskService.change_dependency(self.task, self.manager, self.task)
-        other_activity = self.new_activity(title="Outra atividade")
-        foreign = self.queued_task("De outra atividade", activity=other_activity)
-        with self.assertRaisesMessage(ActivityError, "mesma atividade"):
+        other_activity = self.new_activity(title="Outra demanda")
+        foreign = self.queued_task("De outra demanda", activity=other_activity)
+        with self.assertRaisesMessage(ActivityError, "mesma demanda"):
             TaskService.change_dependency(self.task, self.manager, foreign)
         cancelled = self.queued_task("Cancelada", status=Task.Status.CANCELADA)
         with self.assertRaisesMessage(ActivityError, "cancelada"):
@@ -279,8 +279,8 @@ class DependencyServiceTests(EditorTestCase):
     def test_candidates_exclude_itself_its_dependents_and_cancelled_tasks(self):
         t1, t2, t3 = self.chain()
         cancelled = self.queued_task("Cancelada", status=Task.Status.CANCELADA)
-        other_activity = self.new_activity(title="Outra atividade")
-        foreign = self.queued_task("De outra atividade", activity=other_activity)
+        other_activity = self.new_activity(title="Outra demanda")
+        foreign = self.queued_task("De outra demanda", activity=other_activity)
         names = set(TaskService.dependency_candidates(t1).values_list("title", flat=True))
         self.assertNotIn("Primeira", names)
         self.assertNotIn("Segunda", names)  # depende de t1
@@ -461,7 +461,7 @@ class WorkTimeOriginTests(EditorTestCase):
 
     def test_only_the_filtered_activities_count(self):
         self.sessions()
-        other = self.new_activity(title="Outra atividade")
+        other = self.new_activity(title="Outra demanda")
         result = WorkTimeService.origin_breakdown(type(self.activity).objects.filter(pk=other.pk))
         self.assertEqual(result["total"], datetime.timedelta(0))
 

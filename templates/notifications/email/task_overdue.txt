@@ -1,6 +1,6 @@
 Uma tarefa está atrasada.
 
-Atividade: {{ activity.title }}
+Demanda: {{ activity.title }}
 Tarefa: {{ task.title }}
 Setor responsável: {{ task.sector.name }}
 Prazo comprometido: {{ task.committed_deadline|date:"d/m/Y H:i" }}

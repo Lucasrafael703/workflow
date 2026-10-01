@@ -18,11 +18,11 @@ class Notification(models.Model):
         DEADLINE_REJECTED = "DEADLINE_REJECTED", "Prazo recusado"
         DEADLINE_CONFLICT = "DEADLINE_CONFLICT", "Conflito de prazo"
         TASK_OVERDUE = "TASK_OVERDUE", "Tarefa atrasada"
-        ACTIVITY_CREATED = "ACTIVITY_CREATED", "Atividade criada"
-        ACTIVITY_COMPLETED = "ACTIVITY_COMPLETED", "Atividade concluída"
-        ACTIVITY_CANCELLED = "ACTIVITY_CANCELLED", "Atividade cancelada"
-        ACTIVITY_REOPENED = "ACTIVITY_REOPENED", "Atividade reaberta"
-        ACTIVITY_PENDING = "ACTIVITY_PENDING", "Atividade pendente"
+        ACTIVITY_CREATED = "ACTIVITY_CREATED", "Demanda criada"
+        ACTIVITY_COMPLETED = "ACTIVITY_COMPLETED", "Demanda concluída"
+        ACTIVITY_CANCELLED = "ACTIVITY_CANCELLED", "Demanda cancelada"
+        ACTIVITY_REOPENED = "ACTIVITY_REOPENED", "Demanda reaberta"
+        ACTIVITY_PENDING = "ACTIVITY_PENDING", "Demanda pendente"
         ACTIVITY_APPROVAL_NEEDED = "ACTIVITY_APPROVAL_NEEDED", "Pendência aguardando aprovação"
         ACTIVITY_APPROVED = "ACTIVITY_APPROVED", "Pendência aprovada"
         OWNER_CHANGED = "OWNER_CHANGED", "Dono alterado"
@@ -45,7 +45,7 @@ class Notification(models.Model):
     )
     activity = models.ForeignKey(
         "activities.Activity",
-        verbose_name="atividade",
+        verbose_name="demanda",
         null=True,
         blank=True,
         on_delete=models.CASCADE,

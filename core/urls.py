@@ -1,6 +1,7 @@
-from django.urls import path
+from django.urls import path, re_path
 
 from . import views
+from .legacy_redirects import MovedPrefixView
 
 urlpatterns = [
     path("api/pessoas/", views.PersonSearchView.as_view(), name="person-search"),
@@ -23,8 +24,14 @@ urlpatterns = [
     path("cadastros/clientes/<int:pk>/", views.ClientFormView.as_view(), name="client-edit"),
     path("cadastros/motivos/novo/", views.ReturnReasonFormView.as_view(), name="returnreason-create"),
     path("cadastros/motivos/<int:pk>/", views.ReturnReasonFormView.as_view(), name="returnreason-edit"),
-    path("configuracoes/estagios-de-atividade/novo/", views.ActivityStageFormView.as_view(), name="activitystage-create"),
-    path("configuracoes/estagios-de-atividade/<int:pk>/", views.ActivityStageFormView.as_view(), name="activitystage-edit"),
+    # Endereço de antes da troca de "atividade" por "demanda" (01/10/2026).
+    re_path(
+        r"^configuracoes/estagios-de-atividade/(?P<rest>.*)$",
+        MovedPrefixView.as_view(new_prefix="/configuracoes/estagios-de-demanda/"),
+        name="legacy-activity-stages",
+    ),
+    path("configuracoes/estagios-de-demanda/novo/", views.ActivityStageFormView.as_view(), name="activitystage-create"),
+    path("configuracoes/estagios-de-demanda/<int:pk>/", views.ActivityStageFormView.as_view(), name="activitystage-edit"),
     path("cadastros/estagios-de-tarefa/novo/", views.TaskStageFormView.as_view(), name="taskstage-create"),
     path("cadastros/estagios-de-tarefa/<int:pk>/", views.TaskStageFormView.as_view(), name="taskstage-edit"),
     path("configuracoes/status/<str:domain>/novo/", views.WorkflowStatusFormView.as_view(), name="workflowstatus-create"),

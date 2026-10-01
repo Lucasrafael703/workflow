@@ -1,0 +1,8 @@
+{# Progresso compacto e previsível para células de planilha. #}
+<div class="lps-sheet-progress" aria-label="{{ done }} de {{ total }} tarefas concluídas">
+    <span class="lps-sheet-progress__count">{{ done }} de {{ total }}</span>
+    <span class="lps-sheet-progress__track" aria-hidden="true">
+        <span class="lps-sheet-progress__bar" style="width: {{ percent }}%"></span>
+    </span>
+    <span class="lps-sheet-progress__percent">{{ percent }}%</span>
+</div>

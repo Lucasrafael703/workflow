@@ -9,8 +9,8 @@
         <p class="sub">Aqui está o que precisa da sua atenção agora.</p>
     </div>
     <div class="page-head__actions">
-        <a href="{% url 'activity-create' %}" data-activity-action data-activity-navigate class="btn btn--primary">
-            {% include "_icon.html" with name="plus" %} Nova atividade
+        <a href="{% url 'activity-create' %}" data-activity-action data-activity-navigate class="btn btn--primary page-head__primary-action">
+            {% include "_icon.html" with name="plus" %} Nova Demanda
         </a>
     </div>
 </div>
@@ -87,7 +87,7 @@
             </div>
             {% if next_tasks %}
             <div class="table-wrap">
-                <table class="responsive">
+                <table class="responsive lps-sheet lps-sheet--home-tasks">
                     <thead>
                         <tr><th>Tarefa</th><th>Setor</th><th>Prazo</th><th>Situação</th></tr>
                     </thead>
@@ -104,7 +104,7 @@
                                 {% elif task.requested_deadline %}<span class="muted">{{ task.requested_deadline|date:"d/m/Y H:i" }}</span>
                                 {% else %}<span class="muted">Sem prazo</span>{% endif %}
                             </td>
-                            <td data-label="Situação"><span class="tag tag--{{ task.status }}">{{ task.status_label }}</span></td>
+                            <td data-label="Situação" class="lps-sheet-status-cell">{% include "_sheet_status.html" with color=task.status_color text_color=task.status_text_color label=task.status_label %}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -122,34 +122,29 @@
         {# 5. Atividades que acompanho #}
         <div class="card card--flush">
             <div class="card__head">
-                <h2>Atividades que acompanho</h2>
+                <h2>Demandas que acompanho</h2>
                 <a href="{% url 'activity-list' %}">Ver todas</a>
             </div>
             {% if followed_activities %}
             <div class="table-wrap">
-                <table class="responsive">
+                <table class="responsive lps-sheet lps-sheet--home-demands">
                     <thead>
-                        <tr><th>Atividade</th><th>Progresso</th><th>Prazo</th><th>Situação</th></tr>
+                        <tr><th>Demanda</th><th>Progresso</th><th>Prazo</th><th>Situação</th></tr>
                     </thead>
                     <tbody>
                         {% for activity in followed_activities %}
                         <tr>
-                            <td data-label="Atividade">
+                            <td data-label="Demanda">
                                 <a href="{% url 'activity-detail' activity.pk %}" class="title">{{ activity.title }}</a>
                             </td>
                             <td data-label="Progresso">
-                                {{ activity.done_tasks }} de {{ activity.total_tasks }} tarefas
-                                {% if activity.total_tasks %}
-                                <div class="progress">
-                                    <div class="progress__bar" style="width:{% widthratio activity.done_tasks activity.total_tasks 100 %}%"></div>
-                                </div>
-                                {% endif %}
+                                {% include "_sheet_progress.html" with done=activity.done_tasks total=activity.total_tasks percent=activity.progress_percent %}
                             </td>
                             <td data-label="Prazo">
                                 {% if activity.requested_deadline %}{{ activity.requested_deadline|date:"d/m/Y" }}
                                 {% else %}<span class="muted">Sem prazo</span>{% endif %}
                             </td>
-                            <td data-label="Situação"><span class="tag tag--{{ activity.status }}">{{ activity.status_label }}</span></td>
+                            <td data-label="Situação" class="lps-sheet-status-cell">{% include "_sheet_status.html" with color=activity.status_color text_color=activity.status_text_color label=activity.status_label %}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -158,9 +153,9 @@
             {% else %}
             <div class="empty-state">
                 <div class="empty-state__icon">{% include "_icon.html" with name="activity" %}</div>
-                <h3>Você ainda não possui atividades</h3>
-                <p>Uma atividade é o resultado que precisa acontecer. As tarefas são os passos até lá.</p>
-                <a href="{% url 'activity-create' %}" data-activity-action data-activity-navigate class="btn btn--primary">Criar primeira atividade</a>
+                <h3>Você ainda não possui demandas</h3>
+                <p>Uma demanda é o resultado que precisa acontecer. As tarefas são os passos até lá.</p>
+                <a href="{% url 'activity-create' %}" data-activity-action data-activity-navigate class="btn btn--primary">Criar primeira demanda</a>
             </div>
             {% endif %}
         </div>

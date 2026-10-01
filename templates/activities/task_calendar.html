@@ -2,6 +2,7 @@
 {% block title %}Tarefas — Calendário — LPS{% endblock %}
 
 {% block content %}
+<section class="tasks-page tasks-calendar-page" aria-labelledby="tasks-page-title">
 {% include "activities/_task_page_head.html" %}
 
 {% include "activities/_task_view_filters.html" %}
@@ -42,12 +43,12 @@
     <div class="table-wrap">
         <h3 style="padding: 14px 16px 0;">Sem prazo definido</h3>
         <table class="responsive">
-            <thead><tr><th>Tarefa</th><th>Atividade</th><th>Setor</th><th>Situação</th></tr></thead>
+            <thead><tr><th>Tarefa</th><th>Demanda</th><th>Setor</th><th>Situação</th></tr></thead>
             <tbody>
             {% for task in undated_tasks %}
             <tr>
                 <td data-label="Tarefa"><a href="{% url 'task-detail' task.pk %}" class="title">{{ task.title }}</a></td>
-                <td data-label="Atividade"><a href="{% url 'activity-detail' task.activity.pk %}">{{ task.activity.title }}</a></td>
+                <td data-label="Demanda"><a href="{% url 'activity-detail' task.activity.pk %}">{{ task.activity.title }}</a></td>
                 <td data-label="Setor">{{ task.sector.name }}</td>
                 <td data-label="Situação"><span class="tag" style="--tag-bg: {{ task.status_color }}1A; --tag-fg: {{ task.status_color }};">{{ task.status_label }}</span></td>
             </tr>
@@ -71,4 +72,5 @@
     });
 })();
 </script>
+</section>
 {% endblock %}

@@ -64,7 +64,7 @@ class AuditLog(models.Model):
     )
     activity = models.ForeignKey(
         "activities.Activity",
-        verbose_name="atividade",
+        verbose_name="demanda",
         null=True,
         on_delete=models.SET_NULL,
         related_name="audit_entries",
@@ -83,7 +83,7 @@ class AuditLog(models.Model):
         blank=True,
         on_delete=models.SET_NULL,
         related_name="security_audit_entries",
-        help_text="Preenchido em eventos de segurança, que não se referem a uma atividade.",
+        help_text="Preenchido em eventos de segurança, que não se referem a uma demanda.",
     )
     action = models.CharField("ação", max_length=24, choices=Action.choices)
     field_name = models.CharField("campo alterado", max_length=50, blank=True)

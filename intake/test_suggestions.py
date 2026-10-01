@@ -106,7 +106,7 @@ class SuggestTests(IntakeTestCase):
             )
         result = self.suggest(raw_content="A Convivy precisa de nova proposta.")
         self.assertEqual(result.sector, self.comercial)
-        self.assertTrue(any("últimas atividades" in reason for reason in result.reasons))
+        self.assertTrue(any("últimas demandas" in reason for reason in result.reasons))
 
     def test_history_with_a_single_activity_is_not_enough(self):
         ActivityService.create_activity(

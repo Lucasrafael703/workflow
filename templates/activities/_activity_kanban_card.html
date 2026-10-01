@@ -2,7 +2,7 @@
 <article class="activities-kanban-card{% if activity.days_in_stage >= 5 %} activities-kanban-card--stale{% endif %}" draggable="true" data-activity-id="{{ activity.pk }}">
     <div class="activities-kanban-card__top">
         <a href="{% url 'activity-detail' activity.pk %}?next={{ request.get_full_path|urlencode }}">{{ activity.title }}</a>
-        <a href="{% url 'activity-detail' activity.pk %}?next={{ request.get_full_path|urlencode }}" aria-label="Abrir atividade {{ activity.title }}">
+        <a href="{% url 'activity-detail' activity.pk %}?next={{ request.get_full_path|urlencode }}" aria-label="Abrir demanda {{ activity.title }}">
             {% include "_icon.html" with name="more" %}
         </a>
     </div>

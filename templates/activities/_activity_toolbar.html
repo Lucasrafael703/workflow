@@ -7,7 +7,7 @@
     {% endif %}
     <div class="activities-toolbar">
         <div class="activities-search">
-            <label class="filter-field-label" for="activity-search-{{ view_mode }}">Buscar atividade</label>
+            <label class="filter-field-label" for="activity-search-{{ view_mode }}">Buscar demanda</label>
             <div class="activities-search__control">
                 {% include "_icon.html" with name="search" %}
                 <input id="activity-search-{{ view_mode }}" type="search" name="q" value="{{ search }}" placeholder="Digite o nome, cliente ou obra" autocomplete="off" data-activity-search>
@@ -18,10 +18,10 @@
         <a class="activities-filter-chip activities-filter-chip--danger{% if request.GET.prazo == 'atrasadas' %} activities-filter-chip--active{% endif %}" href="{% if request.GET.prazo == 'atrasadas' %}{% querystring prazo=None page=None %}{% else %}{% querystring prazo='atrasadas' page=None %}{% endif %}"{% if request.GET.prazo == 'atrasadas' %} aria-current="page" aria-pressed="true"{% endif %}>
             {% include "_icon.html" with name="clock" %} Atrasadas
         </a>
-        <a class="activities-filter-chip{% if request.GET.prazo == 'hoje' %} activities-filter-chip--active{% endif %}" href="{% if request.GET.prazo == 'hoje' %}{% querystring prazo=None page=None %}{% else %}{% querystring prazo='hoje' page=None %}{% endif %}"{% if request.GET.prazo == 'hoje' %} aria-current="page" aria-pressed="true"{% endif %}>
+        <a class="activities-filter-chip activities-filter-chip--today{% if request.GET.prazo == 'hoje' %} activities-filter-chip--active{% endif %}" href="{% if request.GET.prazo == 'hoje' %}{% querystring prazo=None page=None %}{% else %}{% querystring prazo='hoje' page=None %}{% endif %}"{% if request.GET.prazo == 'hoje' %} aria-current="page" aria-pressed="true"{% endif %}>
             {% include "_icon.html" with name="clock" %} Vencem hoje
         </a>
-        <a class="activities-filter-chip{% if f_status == 'BLOQUEADA' %} activities-filter-chip--active{% endif %}" href="{% if f_status == 'BLOQUEADA' %}{% querystring status=None page=None %}{% else %}{% querystring status='BLOQUEADA' page=None %}{% endif %}"{% if f_status == 'BLOQUEADA' %} aria-current="page" aria-pressed="true"{% endif %}>
+        <a class="activities-filter-chip activities-filter-chip--blocked{% if f_status == 'BLOQUEADA' %} activities-filter-chip--active{% endif %}" href="{% if f_status == 'BLOQUEADA' %}{% querystring status=None page=None %}{% else %}{% querystring status='BLOQUEADA' page=None %}{% endif %}"{% if f_status == 'BLOQUEADA' %} aria-current="page" aria-pressed="true"{% endif %}>
             {% include "_icon.html" with name="lock" %} Bloqueadas
         </a>
 

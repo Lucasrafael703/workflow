@@ -263,7 +263,7 @@ class MentionTests(NotificationsTestCase):
     def test_activity_message_mention_resolves_against_activity_access(self):
         Notification.objects.all().delete()
         MessageService.post_activity_message(
-            self.activity, self.owner, f"@{self.executor.username} dá uma olhada na atividade"
+            self.activity, self.owner, f"@{self.executor.username} dá uma olhada na demanda"
         )
         mention = Notification.objects.filter(
             recipient=self.executor, event_type=Notification.EventType.MENTIONED
@@ -470,7 +470,7 @@ class NotificationNavigationTests(NotificationsTestCase):
                 self.assertContains(response, 'name="mode" value="read"')
                 self.assertNotContains(response, 'href="' + reverse("task-detail", args=[self.task.pk]))
         self.assertContains(response, "Abrir tarefa")
-        self.assertContains(response, "Abrir atividade")
+        self.assertContains(response, "Abrir demanda")
 
 
 class NotificationDeadlineAcceptanceTests(NotificationsTestCase):

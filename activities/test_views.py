@@ -8,7 +8,7 @@ from acessos.models import Scope
 from acessos.testing import grant_action, grant_actions
 from core.models import Organization, Sector
 
-from .models import QueueEntry, ReturnReason, Task
+from .models import Activity, QueueEntry, ReturnReason, Task
 from .services import ActivityService, TaskService
 
 User = get_user_model()
@@ -90,7 +90,7 @@ class QueuePrivacyViewTests(ViewTestCase):
         super().setUp()
         secret_activity = ActivityService.create_activity(
             organization=self.org,
-            title="Atividade do membro",
+            title="Demanda do membro",
             owner=self.member,
             created_by=self.member,
         )
@@ -624,6 +624,104 @@ class ActivityKanbanAndCalendarViewTests(ViewTestCase):
             {"stage_id": self.stage.pk},
         )
         self.assertEqual(response.status_code, 404)
+
+
+class TaskFilterViewTests(ViewTestCase):
+    def test_task_activity_view_uses_shared_task_toolbar(self):
+        self.client.force_login(self.requester)
+        response = self.client.get(
+            reverse("task-list"),
+            {"visao": "demanda", "q": "cotação", "filtro": "em-fila", "sector": self.sector.pk},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'class="activities-filters task-filters"')
+        self.assertContains(response, "Buscar tarefa")
+        self.assertNotContains(response, "Buscar demanda")
+        self.assertContains(response, "activities-search__submit")
+        self.assertContains(response, 'name="filtro"')
+        self.assertContains(response, 'name="sector"')
+
+    def test_old_visao_and_sort_values_still_work(self):
+        """Endereços de antes da troca de "atividade" por "demanda" (favoritos, links) continuam valendo."""
+        self.client.force_login(self.requester)
+        response = self.client.get(reverse("task-list"), {"visao": "atividade", "sort": "atividade"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["view_mode"], "demanda")
+        self.assertEqual(response.context["current_sort"], "demanda")
+
+    def test_sorting_by_demand_uses_the_demand_title(self):
+        self.client.force_login(self.requester)
+        response = self.client.get(reverse("task-list"), {"sort": "demanda"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "sort=demanda")
+        self.assertNotContains(response, "sort=atividade")
+
+    def test_all_task_views_render_the_same_search_label(self):
+        self.client.force_login(self.requester)
+        for url_name, params in (
+            ("task-list", {}),
+            ("task-kanban", {}),
+            ("task-calendar", {"ano": 2026, "mes": 10}),
+        ):
+            with self.subTest(url_name=url_name):
+                response = self.client.get(reverse(url_name), params)
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, "Buscar tarefa")
+                self.assertNotContains(response, "Buscar demanda")
+
+
+class SpreadsheetListViewTests(ViewTestCase):
+    """As listas críticas usam o mesmo markup denso, sem alterar as regras."""
+
+    def test_demand_list_uses_sheet_status_and_progress_components(self):
+        self.client.force_login(self.requester)
+        response = self.client.get(reverse("activity-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'class="activities-table lps-sheet lps-sheet--demand"')
+        self.assertContains(response, 'class="lps-sheet-status"')
+        self.assertContains(response, 'class="lps-sheet-progress"')
+        self.assertContains(response, "Demanda")
+
+    def test_task_list_uses_sheet_markup_without_nonfunctional_selection(self):
+        self.client.force_login(self.requester)
+        response = self.client.get(reverse("task-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'class="responsive lps-sheet lps-sheet--task"')
+        self.assertContains(response, 'class="lps-sheet-status"')
+        self.assertNotContains(response, "js-check-all")
+        self.assertNotContains(response, "js-row-check")
+
+    def test_tasks_grouped_by_demand_use_the_same_sheet_status(self):
+        self.client.force_login(self.requester)
+        response = self.client.get(reverse("task-list"), {"visao": "demanda"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'class="responsive lps-sheet lps-sheet--grouped"')
+        self.assertContains(response, 'class="lps-sheet-status"')
+
+    def test_home_uses_sheet_components_for_tasks_and_demands(self):
+        self.client.force_login(self.requester)
+        response = self.client.get(reverse("home"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'lps-sheet--home-tasks')
+        self.assertContains(response, 'lps-sheet--home-demands')
+        self.assertContains(response, 'class="lps-sheet-progress"')
+
+    def test_custom_status_color_and_label_are_rendered_in_demand_sheet(self):
+        from core.services import EnumColorService
+
+        EnumColorService.set_color(self.org, "activity_status", Activity.Status.ABERTA, "#2563EB", updated_by=self.requester)
+        EnumColorService.set_overrides(
+            self.org, "activity_status", Activity.Status.ABERTA, label="Em análise", updated_by=self.requester
+        )
+        self.client.force_login(self.requester)
+        response = self.client.get(reverse("activity-list"))
+        self.assertContains(response, "Em análise")
+        self.assertContains(response, "--lps-sheet-status-color: #2563EB")
+
+    def test_admin_uses_current_demand_terminology_without_renaming_models(self):
+        self.assertEqual(Activity._meta.verbose_name, "demanda")
+        self.assertEqual(Activity._meta.verbose_name_plural, "demandas")
+        self.assertEqual(Task._meta.get_field("activity").verbose_name, "demanda")
 
 
 class ActivityWizardViewTests(ViewTestCase):

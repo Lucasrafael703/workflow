@@ -1,5 +1,5 @@
 {% load lps %}
-<ul class="list-rows" style="margin:0">
+<ul class="list-rows lps-sheet-list" style="margin:0">
     {% for n in items %}
     <li style="padding:0">
         <div class="notif-row notif-row--{{ n.tone }} {% if not n.is_read %}notif-row--unread{% endif %}">
@@ -73,7 +73,7 @@
                         {% if n.task_id %}
                             {% include "notifications/_open_button.html" with label="Abrir tarefa" button_class="btn btn--primary" %}
                         {% else %}
-                            {% include "notifications/_open_button.html" with label="Abrir atividade" button_class="btn btn--primary" %}
+                            {% include "notifications/_open_button.html" with label="Abrir demanda" button_class="btn btn--primary" %}
                         {% endif %}
                     {% elif n.needs_action %}
                         {% include "notifications/_open_button.html" with label="Analisar" button_class="btn btn--primary" %}

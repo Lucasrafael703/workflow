@@ -292,8 +292,8 @@ class NotificationPreferencesForm(forms.Form):
         label="Mudança de posição nas minhas demandas", required=False, initial=True
     )
     notify_messages = forms.BooleanField(
-        label="Novas mensagens nas minhas atividades", required=False, initial=True
+        label="Novas mensagens nas minhas demandas", required=False, initial=True
     )
     notify_completion = forms.BooleanField(
-        label="Conclusão das minhas atividades", required=False, initial=True
+        label="Conclusão das minhas demandas", required=False, initial=True
     )

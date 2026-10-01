@@ -302,12 +302,12 @@ class ActivitySummaryTests(PopupTestCase):
 
         def queries():
             with CaptureQueriesContext(connection) as context:
-                self.client.get(reverse("activity-search"), {"q": "ATV"}, **AJAX)
+                self.client.get(reverse("activity-search"), {"q": "DEM"}, **AJAX)
             return len(context)
 
         few = queries()
         for index in range(8):
-            self.new_activity(title=f"ATV extra {index}")
+            self.new_activity(title=f"DEM extra {index}")
         self.assertEqual(queries(), few)
 
     def test_quick_create_of_an_activity_inside_the_picker_also_returns_the_summary(self):
@@ -335,7 +335,7 @@ class NoDuplicatedPickersTests(PopupTestCase):
             self.assertRegex(html, r'<label[^>]*for="id_responsavel"', msg=key)
         self.assertEqual(self.html("nova_global").count('name="activity"'), 1)
         self.assertRegex(self.html("nova_global"), r'<label[^>]*for="id_activity"')
-        self.assertIn("De qual atividade esta tarefa faz parte?", self.html("nova_global"))
+        self.assertIn("De qual demanda esta tarefa faz parte?", self.html("nova_global"))
 
     def test_edit_window_renders_the_responsavel_picker_once(self):
         html = self.html("editar")
@@ -507,7 +507,7 @@ class DrawerPatternTests(PopupTestCase):
         self.assertEqual(positions, sorted(positions))
         self.assertEqual(len(self.folds(html)), 2)
         for text in (
-            "Atividade: ", "Prazo pedido pelo solicitante", "Prazo que a equipe se comprometeu a cumprir",
+            "Demanda: ", "Prazo pedido pelo solicitante", "Prazo que a equipe se comprometeu a cumprir",
             "Instruções para fazer a tarefa", "Marcadores", "Adicione outras pessoas para ajudar na tarefa.",
         ):
             self.assertIn(text, html, msg=text)

@@ -396,9 +396,9 @@ class IntakeService:
 
         title = (title or "").strip()
         if not title:
-            raise IntakeError("Informe o nome da atividade.")
+            raise IntakeError("Informe o nome da demanda.")
         if owner is None:
-            raise IntakeError("Escolha quem fica com a atividade.")
+            raise IntakeError("Escolha quem fica com a demanda.")
         if sector is None:
             raise IntakeError("Escolha o setor responsável.")
         if urgency and urgency not in Activity.Urgency.values:
@@ -406,7 +406,7 @@ class IntakeService:
 
         _check_same_organization(item.organization_id, client, site, sector, company)
         if owner.profile.organization_id != item.organization_id or not owner.is_active:
-            raise IntakeError("Escolha quem fica com a atividade entre as pessoas da organização.")
+            raise IntakeError("Escolha quem fica com a demanda entre as pessoas da organização.")
         _check_site_belongs_to_client(client, site)
 
         requested_by, default_external = IntakeService.requester_defaults(item)

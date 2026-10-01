@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Reabrir atividade — LPS{% endblock %}
+{% block title %}Reabrir demanda — LPS{% endblock %}
 
 {% block content %}
 <div class="modal-backdrop">
     <div class="modal">
         <div class="modal__head">
             <div>
-                <h2>Reabrir atividade</h2>
+                <h2>Reabrir demanda</h2>
                 <div class="sub">{{ activity.title }}</div>
             </div>
             <a href="{% url 'activity-detail' activity.pk %}" class="modal__close" title="Fechar">&times;</a>
@@ -20,7 +20,7 @@
             </div>
             <div class="modal__foot">
                 <a href="{% url 'activity-detail' activity.pk %}" class="btn">Voltar</a>
-                <button type="submit" class="btn btn--primary">Reabrir atividade</button>
+                <button type="submit" class="btn btn--primary">Reabrir demanda</button>
             </div>
         </form>
     </div>

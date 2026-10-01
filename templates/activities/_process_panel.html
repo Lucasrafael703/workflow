@@ -16,7 +16,7 @@ O molde é imutável; o que muda aqui são as linhas da atividade.{% endcomment 
             <div class="muted small">
                 {{ version.process.company.name }}
                 {% if version.published_at %} · publicada em {{ version.published_at|date:"d/m/Y" }}{% endif %}
-                · esta atividade fica na versão {{ version.number }}, mesmo que saia uma nova.
+                · esta demanda fica na versão {{ version.number }}, mesmo que saia uma nova.
             </div>
         </div>
 
@@ -74,7 +74,7 @@ O molde é imutável; o que muda aqui são as linhas da atividade.{% endcomment 
                                 {% elif kind == "ARQUIVO" or kind == "SELECAO" %}
                                 <label class="proc-edit__check"><input type="checkbox" name="is_received" {% if row.is_received %}checked{% endif %}> Já recebi</label>
                                 <input type="text" name="value" value="{{ row.value }}" maxlength="500" placeholder="{% if kind == 'ARQUIVO' %}Onde está o arquivo? (opcional){% else %}Opção escolhida (opcional){% endif %}" aria-label="Observação">
-                                {% if kind == "ARQUIVO" %}<div class="muted small">Anexe o arquivo na conversa da atividade e marque como recebido aqui.</div>{% endif %}
+                                {% if kind == "ARQUIVO" %}<div class="muted small">Anexe o arquivo na conversa da demanda e marque como recebido aqui.</div>{% endif %}
                                 {% else %}
                                 <input type="text" name="value" value="{{ row.value }}" maxlength="5000" aria-label="{{ row.process_input.name }}">
                                 {% endif %}

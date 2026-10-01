@@ -31,4 +31,13 @@ SECURE_HSTS_PRELOAD = True
 # without it, SECURE_SSL_REDIRECT causes an infinite redirect loop.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
+# Keep the explicit setting for custom domains and local Render configuration,
+# but also trust the public hostname Render injects into every web service.
+# This prevents a valid HTTPS login form from being rejected when the
+# Blueprint variable was not synchronized with the current service hostname.
 CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
+render_hostname = env("RENDER_EXTERNAL_HOSTNAME", default="").strip()
+if render_hostname:
+    render_origin = f"https://{render_hostname}"
+    if render_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(render_origin)

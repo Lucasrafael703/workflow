@@ -1,10 +1,12 @@
-<div class="activities-head">
-    <div>
-        <h1 id="activities-title">Atividades</h1>
-        <p>Acompanhe cada entrega e abra uma atividade para ver suas tarefas, prazos e conversas.</p>
+<div class="page-head activities-head">
+    <div class="page-head__text">
+        <h1 id="activities-title">Demandas</h1>
+        <p>Acompanhe cada entrega e abra uma demanda para ver suas tarefas, prazos e conversas.</p>
     </div>
-    <a href="{% url 'activity-create' %}?next={{ request.get_full_path|urlencode }}" data-activity-action data-activity-navigate class="btn btn--primary activities-create">
-        {% include "_icon.html" with name="plus" %} Criar atividade
-    </a>
+    <div class="page-head__actions">
+        <a href="{% url 'activity-create' %}?next={{ request.get_full_path|urlencode }}" data-activity-action data-activity-navigate class="btn btn--primary activities-create page-head__primary-action">
+            {% include "_icon.html" with name="plus" %} Nova Demanda
+        </a>
+    </div>
 </div>
 

@@ -66,7 +66,7 @@ panels = [
 source = open(os.path.join('templates', 'activities', 'activity_process_apply.html'), encoding='utf-8').read()
 body = re.search(r'{% block content %}(.*){% endblock %}\\s*$', source, re.S).group(1)
 context = Context({
-    'activity': NS(pk=5, code='ATV-2026-00005', title='Obra', company=NS(name='Biasi Engenharia')),
+    'activity': NS(pk=5, code='DEM-2026-00005', title='Obra', company=NS(name='Biasi Engenharia')),
     'panels': panels, 'no_company': False, 'csrf_token': 'test-csrf-token',
     'form': NS(process_version=NS(value=None, errors=[]), non_field_errors=[]),
 })
@@ -78,7 +78,7 @@ const script = readFileSync(path.join(root, "static/js/process-apply.js"), "utf8
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
 function setup(t) {
-    const dom = new JSDOM("<!doctype html><body>" + fixture + "</body>", {url: "http://localhost/atividades/5/processo/aplicar/", runScripts: "outside-only"});
+    const dom = new JSDOM("<!doctype html><body>" + fixture + "</body>", {url: "http://localhost/demandas/5/processo/aplicar/", runScripts: "outside-only"});
     t.after(() => dom.window.close());
     const {window} = dom;
     window.eval(script);
@@ -262,7 +262,7 @@ test("erro do formulário como um todo sobe para o espaço reservado no topo", a
     next();
     const list = window.document.createElement("ul");
     list.className = "errorlist";
-    list.innerHTML = "<li>Esta atividade já tem um processo aplicado.</li>";
+    list.innerHTML = "<li>Esta demanda já tem um processo aplicado.</li>";
     $(".modal__body").appendChild(list);  // onde o LPSModal anexa erros sem campo
     await flush();
     assert.match($("[data-form-errors]").textContent, /já tem um processo aplicado/);

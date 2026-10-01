@@ -23,7 +23,7 @@ dois casos ela é o contexto (a tarefa já pertence a ela) e aparece só como re
         <span class="task-section-number" aria-hidden="true">1</span>
         <div>
             <h3 class="task-section-title" id="task-section-1">Tarefa</h3>
-            <p class="task-section-subtitle">Defina a atividade e o que precisa ser feito.</p>
+            <p class="task-section-subtitle">Defina a demanda e o que precisa ser feito.</p>
         </div>
     </div>
 
@@ -38,7 +38,7 @@ dois casos ela é o contexto (a tarefa já pertence a ela) e aparece só como re
     </div>
     {% elif activity_summary %}
     <div class="task-field">
-        <span class="task-label">Atividade</span>
+        <span class="task-label">Demanda</span>
         {% include "activities/_task_activity_summary.html" with summary=activity_summary %}
     </div>
     {% endif %}
@@ -100,7 +100,7 @@ dois casos ela é o contexto (a tarefa já pertence a ela) e aparece só como re
     <div class="task-note">
         <span class="task-note__label">Prazo que a equipe se comprometeu a cumprir</span>
         <span class="task-note__value">{% include "_icon.html" with name="clock" %}{% if task.committed_deadline %}{{ task.committed_deadline|date:"d/m/Y H:i" }}{% else %}<span class="muted">Ainda não combinado</span>{% endif %}</span>
-        <p class="task-helper">Não se edita aqui: é combinado com o responsável pela atividade em Mais ações → Propor novo prazo.</p>
+        <p class="task-helper">Não se edita aqui: é combinado com o responsável pela demanda em Mais ações → Propor novo prazo.</p>
     </div>
     {% else %}
     <p class="task-helper">É o prazo que quem pediu espera. O prazo que a equipe se compromete a cumprir é combinado depois, em Mais ações → Propor novo prazo. Sem hora, vale até o fim do dia.</p>

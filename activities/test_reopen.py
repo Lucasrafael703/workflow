@@ -345,7 +345,7 @@ class ReopenWithActivityTests(ReopenTestCase):
         self.assertEqual(AuditLog.objects.filter(task=self.task, action=AuditLog.Action.REOPEN).count(), 1)
 
     def test_refused_without_permission_to_reopen_the_activity(self):
-        with self.assertRaisesMessage(ActivityError, "reabrir a atividade"):
+        with self.assertRaisesMessage(ActivityError, "reabrir a demanda"):
             self.reopen(self.task, user=self.manager)
         self.activity.refresh_from_db()
         self.task.refresh_from_db()
@@ -498,7 +498,7 @@ class ReopenViewTests(ReopenTestCase):
         html = response.content.decode()
         notice = html[html.index("Concluída em") - 200 : html.index("Concluída em") + 500]
         self.assertIn(reopen_url, notice)
-        self.assertIn("Reabrir atividade", notice)
+        self.assertIn("Reabrir demanda", notice)
 
     def test_button_is_hidden_from_those_without_atividade_reabrir(self):
         detail = self.concluded_activity()

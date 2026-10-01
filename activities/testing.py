@@ -79,7 +79,7 @@ class ProcessTestCase(TestCase):
 
     # -- fábricas -------------------------------------------------------------
 
-    def new_activity(self, company="default", title="ATV de teste"):
+    def new_activity(self, company="default", title="Demanda de teste"):
         return ActivityService.create_activity(
             organization=self.org,
             title=title,

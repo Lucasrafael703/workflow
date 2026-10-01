@@ -274,23 +274,23 @@ class ActivityTransitionPolicy(_Policy):
     @staticmethod
     def _check_edit(activity, user):
         if activity.status in ACTIVITY_TERMINAL:
-            return "Não é possível editar uma atividade concluída ou cancelada."
+            return "Não é possível editar uma demanda concluída ou cancelada."
         return None
 
     @staticmethod
     def _check_change_owner(activity, user):
         if activity.status in ACTIVITY_TERMINAL:
-            return "Não é possível alterar o dono de uma atividade concluída ou cancelada."
+            return "Não é possível alterar o dono de uma demanda concluída ou cancelada."
         if activity.status == Activity.Status.RASCUNHO:
-            return "Termine de criar a atividade antes de transferir o responsável."
+            return "Termine de criar a demanda antes de transferir o responsável."
         return None
 
     @staticmethod
     def _check_change_sector(activity, user):
         if activity.status in ACTIVITY_TERMINAL:
-            return "Não é possível alterar o setor de uma atividade concluída ou cancelada."
+            return "Não é possível alterar o setor de uma demanda concluída ou cancelada."
         if activity.status == Activity.Status.RASCUNHO:
-            return "Termine de criar a atividade antes de alterar o setor."
+            return "Termine de criar a demanda antes de alterar o setor."
         # O setor define quem aprova e o dono já foi trocado para o gestor.
         if open_pendency(activity, requires_approval=True) is not None:
             return "Resolva a pendência antes de trocar o setor."
@@ -299,47 +299,47 @@ class ActivityTransitionPolicy(_Policy):
     @staticmethod
     def _check_claim(activity, user):
         if activity.status in ACTIVITY_TERMINAL:
-            return "Não é possível assumir uma atividade concluída ou cancelada."
+            return "Não é possível assumir uma demanda concluída ou cancelada."
         return None
 
     @staticmethod
     def _check_complete(activity, user):
         if activity.status in ACTIVITY_TERMINAL:
-            return "Esta atividade já está concluída ou cancelada."
+            return "Esta demanda já está concluída ou cancelada."
         if activity.tasks.exclude(status__in=TASK_TERMINAL).exists():
-            return "Existem tarefas ainda não concluídas ou canceladas nesta atividade."
+            return "Existem tarefas ainda não concluídas ou canceladas nesta demanda."
         return None
 
     @staticmethod
     def _check_cancel(activity, user):
         if activity.status in ACTIVITY_TERMINAL:
-            return "Esta atividade já está concluída ou cancelada."
+            return "Esta demanda já está concluída ou cancelada."
         return None
 
     @staticmethod
     def _check_reopen(activity, user):
         if activity.status != Activity.Status.CONCLUIDA:
-            return "Somente atividades concluídas podem ser reabertas."
+            return "Somente demandas concluídas podem ser reabertas."
         return None
 
     @staticmethod
     def _check_mark_pending(activity, user):
         if activity.status not in (Activity.Status.ABERTA, Activity.Status.EM_ANDAMENTO):
-            return "Só é possível marcar como pendente uma atividade aberta ou em andamento."
+            return "Só é possível marcar como pendente uma demanda aberta ou em andamento."
         return None
 
     @staticmethod
     def _check_approve_pendency(activity, user):
         if activity.status != Activity.Status.PENDENTE:
-            return "Esta atividade não está pendente de aprovação."
+            return "Esta demanda não está pendente de aprovação."
         if open_pendency(activity, requires_approval=True) is None:
-            return "Não há uma pendência aguardando aprovação nesta atividade."
+            return "Não há uma pendência aguardando aprovação nesta demanda."
         return None
 
     @staticmethod
     def _check_resolve_pendency(activity, user):
         if activity.status != Activity.Status.PENDENTE:
-            return "Esta atividade não está pendente."
+            return "Esta demanda não está pendente."
         if open_pendency(activity, requires_approval=False) is None:
-            return "Não há uma pendência simples aberta nesta atividade."
+            return "Não há uma pendência simples aberta nesta demanda."
         return None

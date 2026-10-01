@@ -113,7 +113,7 @@ class IntakeEditForm(OrganizationScopedFormMixin, forms.Form):
     """Corrigir o que a LPS sugeriu, sem sair da Caixa de Entrada."""
 
     title = forms.CharField(
-        label="Nome da atividade", max_length=200, required=False,
+        label="Nome da demanda", max_length=200, required=False,
         help_text="Descreva a entrega esperada. Ex.: Orçamento do gerador aprovado.",
         widget=_text(),
     )
@@ -158,7 +158,7 @@ class IntakeConvertForm(OrganizationScopedFormMixin, forms.Form):
     """Criar a demanda: só o que a atividade exige, já preenchido pelo que foi entendido."""
 
     title = forms.CharField(
-        label="Nome da atividade", max_length=200,
+        label="Nome da demanda", max_length=200,
         help_text="Descreva a entrega esperada. Ex.: Orçamento do gerador aprovado.",
         widget=_text(autofocus=True),
     )
@@ -195,13 +195,13 @@ class IntakeConvertForm(OrganizationScopedFormMixin, forms.Form):
     def clean_title(self):
         title = (self.cleaned_data.get("title") or "").strip()
         if not title:
-            raise forms.ValidationError("Informe o nome da atividade.")
+            raise forms.ValidationError("Informe o nome da demanda.")
         return title
 
     def clean_owner(self):
         owner = self.cleaned_data.get("owner")
         if not owner:
-            raise forms.ValidationError("Escolha quem fica com a atividade.")
+            raise forms.ValidationError("Escolha quem fica com a demanda.")
         return owner
 
     def clean_sector(self):

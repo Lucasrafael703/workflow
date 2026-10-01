@@ -32,7 +32,7 @@ from .forms import (
     UserForm,
     WorkflowStatusForm,
 )
-from .colors import is_valid_palette_color, valid_codes_for
+from .colors import get_contrast_text, is_valid_palette_color, valid_codes_for
 from .mixins import ActionRequiredMixin, OrganizationRequiredMixin
 from .models import ActivityStage, Client, Company, CostCenter, Sector, Site, Tag, TaskStage, WorkflowStatus
 from .services import (
@@ -461,15 +461,15 @@ class ReturnReasonFormView(CadastroFormView):
 class ActivityStageFormView(CadastroFormView):
     form_class = ActivityStageForm
     model = ActivityStage
-    tab = "estagios-atividade"
-    title = "Estagio de atividade"
+    tab = "estagios-demanda"
+    title = "Estagio de demanda"
     required_action = catalog.ESTAGIO_TAREFA_GERIR
 
     def initial_from(self, instance):
         return {"name": instance.name, "color": instance.color}
 
     def success_url_for_tab(self):
-        return f"{reverse('config-etapas-status')}?tab=estagios-atividade"
+        return f"{reverse('config-etapas-status')}?tab=estagios-demanda"
 
     def create(self, data):
         return ActivityStageService.create(
@@ -542,9 +542,9 @@ class WorkflowStatusFormView(OrganizationRequiredMixin, ActionRequiredMixin, For
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         domain = self.kwargs["domain"]
-        context["title"] = "Status de atividade" if domain == "activity" else "Status de tarefa"
+        context["title"] = "Status de demanda" if domain == "activity" else "Status de tarefa"
         context["instance"] = self.get_instance()
-        context["tab"] = "status-atividade" if domain == "activity" else "status-tarefa"
+        context["tab"] = "status-demanda" if domain == "activity" else "status-tarefa"
         context["return_url"] = f"{reverse('config-etapas-status')}?tab={context['tab']}"
         return context
 
@@ -577,7 +577,7 @@ class WorkflowStatusFormView(OrganizationRequiredMixin, ActionRequiredMixin, For
             return self.form_invalid(form)
         if _is_ajax(self.request):
             return JsonResponse({"id": instance.pk, "name": instance.name})
-        tab = "status-atividade" if domain == "activity" else "status-tarefa"
+        tab = "status-demanda" if domain == "activity" else "status-tarefa"
         return redirect(f"{reverse('config-etapas-status')}?tab={tab}")
 
     def form_invalid(self, form):
@@ -615,7 +615,7 @@ class EnumColorLabelFormView(OrganizationRequiredMixin, ActionRequiredMixin, For
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         domain = self.kwargs["domain"]
-        tab = "status-atividade" if domain == "activity_status" else "status-tarefa"
+        tab = "status-demanda" if domain == "activity_status" else "status-tarefa"
         context["title"] = f"Status: {self.kwargs['code']}"
         context["instance"] = True
         context["tab"] = tab
@@ -637,7 +637,7 @@ class EnumColorLabelFormView(OrganizationRequiredMixin, ActionRequiredMixin, For
         messages.success(self.request, "Status atualizado.")
         if _is_ajax(self.request):
             return JsonResponse({"ok": True})
-        tab = "status-atividade" if domain == "activity_status" else "status-tarefa"
+        tab = "status-demanda" if domain == "activity_status" else "status-tarefa"
         return redirect(f"{reverse('config-etapas-status')}?tab={tab}")
 
     def form_invalid(self, form):
@@ -686,7 +686,7 @@ class SwatchColorSaveView(OrganizationRequiredMixin, ActionRequiredMixin, View):
 
     swatch_models = {
         "tags": (Tag, TagService, catalog.TAG_GERIR),
-        "estagios-de-atividade": (ActivityStage, ActivityStageService, catalog.ESTAGIO_TAREFA_GERIR),
+        "estagios-de-demanda": (ActivityStage, ActivityStageService, catalog.ESTAGIO_TAREFA_GERIR),
         "estagios-de-tarefa": (TaskStage, TaskStageService, catalog.ESTAGIO_TAREFA_GERIR),
     }
 
@@ -721,7 +721,7 @@ class CadastroToggleActiveView(OrganizationRequiredMixin, View):
         "obras": (Site, catalog.OBRA_GERIR),
         "centros-de-custo": (CostCenter, catalog.CENTRO_CUSTO_GERIR),
         "clientes": (Client, catalog.CLIENTE_GERIR),
-        "estagios-de-atividade": (ActivityStage, catalog.ESTAGIO_TAREFA_GERIR),
+        "estagios-de-demanda": (ActivityStage, catalog.ESTAGIO_TAREFA_GERIR),
         "estagios-de-tarefa": (TaskStage, catalog.ESTAGIO_TAREFA_GERIR),
         "status-configuravel": (WorkflowStatus, catalog.COR_STATUS_GERIR),
         "tags": (Tag, catalog.TAG_GERIR),
@@ -767,9 +767,9 @@ class FlowConfigDeleteView(OrganizationRequiredMixin, ActionRequiredMixin, View)
         model, _action = self.models_by_kind[kind]
         instance = get_object_or_404(model, pk=pk, organization=self.organization)
         if isinstance(instance, WorkflowStatus):
-            tab = "status-atividade" if instance.domain == WorkflowStatus.Domain.ACTIVITY else "status-tarefa"
+            tab = "status-demanda" if instance.domain == WorkflowStatus.Domain.ACTIVITY else "status-tarefa"
         elif isinstance(instance, ActivityStage):
-            tab = "estagios-atividade"
+            tab = "estagios-demanda"
         else:
             tab = "estagios-tarefa"
         instance.delete()
@@ -784,7 +784,7 @@ class EtapasEStatusView(OrganizationRequiredMixin, ActionRequiredMixin, Template
     template_name = "core/etapas_e_status.html"
 
     def dispatch(self, request, *args, **kwargs):
-        tab = request.GET.get("tab", "estagios-atividade")
+        tab = request.GET.get("tab", "estagios-demanda")
         self.required_action = catalog.ESTAGIO_TAREFA_GERIR if tab.startswith("estagios") or tab == "etapas" else catalog.COR_STATUS_GERIR
         return super().dispatch(request, *args, **kwargs)
 
@@ -792,13 +792,15 @@ class EtapasEStatusView(OrganizationRequiredMixin, ActionRequiredMixin, Template
         from activities.models import Activity, Task
 
         context = super().get_context_data(**kwargs)
-        tab = self.request.GET.get("tab", "estagios-atividade")
-        tab = {"atividade": "status-atividade", "tarefa": "status-tarefa", "etapas": "estagios-tarefa"}.get(tab, tab)
+        tab = self.request.GET.get("tab", "estagios-demanda")
+        # Endereços de antes da troca de "atividade" por "demanda" (01/10/2026) continuam abrindo a aba certa.
+        legacy_tabs = {"atividade": "status-demanda", "estagios-atividade": "estagios-demanda", "status-atividade": "status-demanda"}
+        tab = {**legacy_tabs, "tarefa": "status-tarefa", "etapas": "estagios-tarefa"}.get(tab, tab)
         context["tab"] = tab
         activity_status_meta = {
             Activity.Status.ABERTA: {
                 "description": "Item aberto e pronto para entrar no fluxo.",
-                "behavior": "Mantem a atividade aberta",
+                "behavior": "Mantem a demanda aberta",
             },
             Activity.Status.EM_ANDAMENTO: {
                 "description": "Trabalho iniciado, com tarefas em andamento.",
@@ -813,11 +815,11 @@ class EtapasEStatusView(OrganizationRequiredMixin, ActionRequiredMixin, Template
                 "behavior": "Mantem aberta com pendencia",
             },
             Activity.Status.CONCLUIDA: {
-                "description": "Atividade encerrada com entrega concluida.",
-                "behavior": "Encerra a atividade",
+                "description": "Demanda encerrada com entrega concluida.",
+                "behavior": "Encerra a demanda",
             },
             Activity.Status.CANCELADA: {
-                "description": "Atividade encerrada sem continuidade.",
+                "description": "Demanda encerrada sem continuidade.",
                 "behavior": "Encerra sem entrega",
             },
         }
@@ -856,7 +858,7 @@ class EtapasEStatusView(OrganizationRequiredMixin, ActionRequiredMixin, Template
             },
         }
 
-        if tab == "status-atividade":
+        if tab == "status-demanda":
             colors = EnumColorService.list_for_domain(self.organization, "activity_status")
             overrides = EnumColorService.list_overrides_for_domain(self.organization, "activity_status")
             context["rows"] = [
@@ -864,6 +866,7 @@ class EtapasEStatusView(OrganizationRequiredMixin, ActionRequiredMixin, Template
                     "code": code,
                     "label": overrides.get(code, {}).get("label") or label,
                     "color": colors[code],
+                    "text_color": get_contrast_text(colors[code]),
                     "is_system": True,
                     "is_hidden": overrides.get(code, {}).get("is_hidden", False),
                     "enum_domain": "activity_status",
@@ -872,12 +875,14 @@ class EtapasEStatusView(OrganizationRequiredMixin, ActionRequiredMixin, Template
                 }
                 for code, label in Activity.Status.choices
             ]
-            context["custom_rows"] = WorkflowStatus.objects.filter(
+            context["custom_rows"] = list(WorkflowStatus.objects.filter(
                 organization=self.organization, domain=WorkflowStatus.Domain.ACTIVITY
-            ).order_by("name")
+            ).order_by("name"))
+            for row in context["custom_rows"]:
+                row.text_color = get_contrast_text(row.color)
             context["status_domain"] = "activity"
-            context["section_title"] = "Status de atividades"
-            context["section_description"] = "Configure a aparencia dos estados reais das atividades."
+            context["section_title"] = "Status de demandas"
+            context["section_description"] = "Configure a aparencia dos estados reais das demandas."
         elif tab == "status-tarefa":
             colors = EnumColorService.list_for_domain(self.organization, "task_status")
             overrides = EnumColorService.list_overrides_for_domain(self.organization, "task_status")
@@ -886,6 +891,7 @@ class EtapasEStatusView(OrganizationRequiredMixin, ActionRequiredMixin, Template
                     "code": code,
                     "label": overrides.get(code, {}).get("label") or label,
                     "color": colors[code],
+                    "text_color": get_contrast_text(colors[code]),
                     "is_system": True,
                     "is_hidden": overrides.get(code, {}).get("is_hidden", False),
                     "enum_domain": "task_status",
@@ -894,19 +900,21 @@ class EtapasEStatusView(OrganizationRequiredMixin, ActionRequiredMixin, Template
                 }
                 for code, label in Task.Status.choices
             ]
-            context["custom_rows"] = WorkflowStatus.objects.filter(
+            context["custom_rows"] = list(WorkflowStatus.objects.filter(
                 organization=self.organization, domain=WorkflowStatus.Domain.TASK
-            ).order_by("name")
+            ).order_by("name"))
+            for row in context["custom_rows"]:
+                row.text_color = get_contrast_text(row.color)
             context["status_domain"] = "task"
             context["section_title"] = "Status de tarefas"
             context["section_description"] = "A cor ajuda a leitura; o comportamento continua protegido pelas regras da LPS."
-        elif tab == "estagios-atividade":
+        elif tab == "estagios-demanda":
             context["stages"] = ActivityStage.objects.filter(organization=self.organization).order_by("order")
             context["stage_kind"] = "activity-stage"
-            context["stage_color_tab"] = "estagios-de-atividade"
+            context["stage_color_tab"] = "estagios-de-demanda"
             context["stage_create_url"] = reverse("activitystage-create")
-            context["section_title"] = "Estagios de atividades"
-            context["section_description"] = "Organize o fluxo visual das atividades em Lista, Kanban e Calendario."
+            context["section_title"] = "Estagios de demandas"
+            context["section_description"] = "Organize o fluxo visual das demandas em Lista, Kanban e Calendario."
         elif tab == "estagios-tarefa":
             context["stages"] = TaskStage.objects.filter(organization=self.organization).order_by("order")
             context["stage_kind"] = "task-stage"
@@ -915,7 +923,7 @@ class EtapasEStatusView(OrganizationRequiredMixin, ActionRequiredMixin, Template
             context["section_title"] = "Estagios de tarefas"
             context["section_description"] = "Organize as colunas visuais usadas em Lista, Kanban e Calendario."
 
-        context["domain"] = {"status-atividade": "activity_status", "status-tarefa": "task_status"}.get(tab)
+        context["domain"] = {"status-demanda": "activity_status", "status-tarefa": "task_status"}.get(tab)
         return context
 
 

@@ -5,6 +5,21 @@
 > As regras de negócio que motivam cada decisão estão em `Regras/`; os
 > docstrings do código citam essas seções (ex.: "Regras 05 §43").
 
+> **Glossário (01/10/2026): na interface, "Atividade" passou a se chamar "Demanda".**
+> Mudou tudo o que a pessoa vê: menus, títulos, botões, formulários, mensagens, avisos,
+> e-mails, nomes de ações e de grupos de permissão (inclusive as chaves mostradas em
+> `/permissoes/`: `demanda.criar`, `demanda.editar`…), rótulos de modelos (no Admin) e as
+> notificações já gravadas. **O endereço e o código também mudaram:** as páginas vivem em
+> `/demandas/...` (os links `/atividades/...` de antes redirecionam), o código gerado é
+> `DEM-AAAA-NNNNN` (os já emitidos foram reescritos, junto com as pastas de anexos), os anexos são
+> servidos em `/demanda-arquivos/` e os slugs de aba na URL passaram a `?tab=estagios-demanda`,
+> `?tab=status-demanda`, `?visao=demanda`, `?sort=demanda` (os valores antigos continuam valendo).
+> Fica como está, de propósito, por ser nome técnico e não o que a pessoa vê: o código (`Activity`,
+> `activities/`, `ActivityService`, as constantes `ATIVIDADE_*`), as tabelas, os nomes de rota
+> (`activity-*`), a pasta em disco `atividade_arquivos/` (variável `ACTIVITY_FILES_ROOT`) e os valores
+> internos (`MINHAS_ATIVIDADES`, `ACTIVITY_CREATED`). Este documento e os demais em `docs/` seguem
+> dizendo "atividade" ao falar do modelo `Activity`.
+
 ---
 
 ## 1. Apps

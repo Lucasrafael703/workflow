@@ -64,6 +64,7 @@ from .models import (
     TaskChecklistItem,
     TaskExecutor,
     TaskReturn,
+    code_search_term,
 )
 from .activity_editor import ActivityCreateView, ActivityEditView, ActivityMiniCreateView
 from .navigation import activity_return_url
@@ -232,6 +233,7 @@ def task_filter_context(request, organization):
         "status": request.GET.get("status", "abertas"),
         "view_filter": request.GET.get("filtro", ""),
         "search": request.GET.get("q", ""),
+        "has_filters": any(request.GET.get(key) for key in ("q", "status", "filtro", "sector")),
         "sectors": Sector.objects.filter(organization=organization, is_active=True),
         "selected_sector": request.GET.get("sector", ""),
         "filter_querystring": params.urlencode(),
@@ -383,7 +385,7 @@ class HomeView(OrganizationRequiredMixin, TemplateView):
 
         my_sectors = user_sectors(user)
 
-        next_tasks = (
+        next_tasks = list(
             Task.objects.filter(
                 activity__organization=org,
                 status__in=[Task.Status.DISPONIVEL, Task.Status.EM_FILA],
@@ -399,15 +401,18 @@ class HomeView(OrganizationRequiredMixin, TemplateView):
             .order_by("requested_deadline", "created_at")[:8]
         )
 
-        followed = (
+        followed = list(
             Activity.objects.filter(organization=org, owner=user)
             .exclude(status__in=[Activity.Status.CONCLUIDA, Activity.Status.CANCELADA, Activity.Status.RASCUNHO])
+            .select_related("stage")
             .annotate(
                 total_tasks=Count("tasks", distinct=True),
                 done_tasks=Count("tasks", filter=Q(tasks__status=Task.Status.CONCLUIDA), distinct=True),
             )
             .order_by("requested_deadline", "-created_at")[:6]
         )
+        decorate_task_statuses(next_tasks, org)
+        decorate_activity_cards(followed, org)
 
         pending = pending_items(user, org)
 
@@ -503,7 +508,7 @@ def filtered_activities_queryset(request, organization, *, order=True):
     if search:
         queryset = queryset.filter(
             Q(title__icontains=search)
-            | Q(code__icontains=search)
+            | Q(code__icontains=code_search_term(search))
             | Q(client__name__icontains=search)
             | Q(site__name__icontains=search)
         )
@@ -637,6 +642,17 @@ def decorate_activity_cards(activities, organization):
         activity.stage_name = activity.stage.name if activity.stage else "Sem estagio"
         activity.stage_color = activity.stage.color if activity.stage else "#94A3B8"
     return activities
+
+
+def decorate_task_statuses(tasks, organization):
+    """Resolve os rótulos e cores de tarefa uma vez por lista, sem N+1."""
+    from core.colors import EnumColorResolver
+
+    status_colors = EnumColorResolver(organization, "task_status")
+    for task in tasks:
+        task._status_color = status_colors.color_for(task.status)
+        task._status_label = status_colors.label_for(task.status, task.get_status_display())
+    return tasks
 
 
 def activity_row_for_request(activity_id, user, organization):
@@ -828,7 +844,7 @@ class ActivityMoveStageView(OrganizationRequiredMixin, View):
     def post(self, request, pk):
         activity = get_object_or_404(Activity, pk=pk, organization=self.organization)
         if not AuthorizationService.can(request.user, catalog.ATIVIDADE_MOVER_ESTAGIO, activity):
-            raise PermissionDenied("Você não possui autorização para mover o estágio desta atividade.")
+            raise PermissionDenied("Você não possui autorização para mover o estágio desta demanda.")
         stage_id = request.POST.get("stage_id") or None
         stage = None
         if stage_id:
@@ -840,7 +856,7 @@ class ActivityMoveStageView(OrganizationRequiredMixin, View):
             activity = activity_row_for_request(activity.pk, request.user, self.organization)
             return JsonResponse({
                 "success": True,
-                "message": "Estágio da atividade atualizado.",
+                "message": "Estágio da demanda atualizado.",
                 "activity_id": activity.pk,
                 "stage_id": stage.pk if stage else None,
                 "target": f"activity-{activity.pk}",
@@ -1028,10 +1044,10 @@ class ActivityWizardStep3View(OrganizationRequiredMixin, FormView):
             return self.form_invalid(form)
 
         if acao == "publicar_e_tarefas":
-            messages.success(self.request, "Atividade criada. Agora defina a primeira tarefa.")
+            messages.success(self.request, "Demanda criada. Agora defina a primeira tarefa.")
             return redirect("task-quick-create", activity_pk=activity.pk)
 
-        messages.success(self.request, "Atividade criada. Próximo passo: adicionar a primeira tarefa.")
+        messages.success(self.request, "Demanda criada. Próximo passo: adicionar a primeira tarefa.")
         return redirect("activity-detail", pk=activity.pk)
 
 
@@ -1071,7 +1087,7 @@ class ActivitySearchView(OrganizationRequiredMixin, View):
             .order_by("-created_at")
         )
         if term:
-            queryset = queryset.filter(Q(title__icontains=term) | Q(code__icontains=term))
+            queryset = queryset.filter(Q(title__icontains=term) | Q(code__icontains=code_search_term(term)))
         results = [
             {
                 "id": activity.pk,
@@ -1267,7 +1283,7 @@ class ActivityCompleteView(ServiceActionView):
     def perform(self, request, pk):
         activity = get_object_or_404(Activity, pk=pk, organization=self.organization)
         ActivityService.complete_activity(activity, request.user)
-        messages.success(request, "Atividade concluída.")
+        messages.success(request, "Demanda concluída.")
 
     def redirect_to(self):
         return reverse("activity-detail", args=[self.kwargs["pk"]])
@@ -1295,7 +1311,7 @@ class ActivityCancelView(OrganizationRequiredMixin, FormView):
         except ActivityError as exc:
             form.add_error(None, str(exc))
             return self.form_invalid(form)
-        messages.success(self.request, "Atividade cancelada.")
+        messages.success(self.request, "Demanda cancelada.")
         return redirect("activity-detail", pk=activity.pk)
 
 
@@ -1308,7 +1324,7 @@ class ActivityActionResponseMixin:
             activity = activity_row_for_request(kwargs["pk"], request.user, self.organization)
             return JsonResponse({
                 "success": True,
-                "message": "Atividade atualizada.",
+                "message": "Demanda atualizada.",
                 "target": f"activity-{activity.pk}",
                 "html": render_to_string("activities/_activity_row.html", {"activity": activity}, request=request),
                 "redirect_url": response.url,
@@ -1339,7 +1355,7 @@ class ActivityReopenView(ActivityActionResponseMixin, OrganizationRequiredMixin,
         except ActivityError as exc:
             form.add_error(None, str(exc))
             return self.form_invalid(form)
-        messages.success(self.request, "Atividade reaberta.")
+        messages.success(self.request, "Demanda reaberta.")
         return redirect("activity-detail", pk=activity.pk)
 
 
@@ -1367,7 +1383,7 @@ class ActivityChangeOwnerView(ActivityActionResponseMixin, OrganizationRequiredM
         except ActivityError as exc:
             form.add_error(None, str(exc))
             return self.form_invalid(form)
-        messages.success(self.request, "Dono da atividade alterado.")
+        messages.success(self.request, "Dono da demanda alterado.")
         return redirect("activity-detail", pk=activity.pk)
 
 
@@ -1397,7 +1413,7 @@ class ActivityChangeDeadlineView(ActivityActionResponseMixin, OrganizationRequir
         except ActivityError as exc:
             form.add_error(None, str(exc))
             return self.form_invalid(form)
-        messages.success(self.request, "Prazo da atividade alterado.")
+        messages.success(self.request, "Prazo da demanda alterado.")
         return redirect("activity-detail", pk=activity.pk)
 
 
@@ -1441,12 +1457,12 @@ class ActivityFinalizeView(OrganizationRequiredMixin, FormView):
             activity = activity_row_for_request(activity.pk, self.request.user, self.organization)
             return JsonResponse({
                 "success": True,
-                "message": "Atividade finalizada.",
+                "message": "Demanda finalizada.",
                 "status": activity.status,
                 "target": f"activity-{activity.pk}",
                 "html": render_to_string("activities/_activity_row.html", {"activity": activity}, request=self.request),
             })
-        messages.success(self.request, "Atividade finalizada.")
+        messages.success(self.request, "Demanda finalizada.")
         return redirect("activity-detail", pk=activity.pk)
 
     def form_invalid(self, form):
@@ -1476,7 +1492,7 @@ class ActivityProcessApplyView(OrganizationRequiredMixin, FormView):
     def get(self, request, *args, **kwargs):
         activity = self.get_activity()
         if activity.process_version_id is not None:
-            messages.info(request, "Esta atividade já tem um processo aplicado.")
+            messages.info(request, "Esta demanda já tem um processo aplicado.")
             return redirect("activity-detail", pk=activity.pk)
         if not AuthorizationService.can(request.user, catalog.PROCESSO_APLICAR, activity):
             raise PermissionDenied
@@ -1519,7 +1535,7 @@ class ActivityProcessApplyView(OrganizationRequiredMixin, FormView):
         redirect_url = reverse("activity-detail", args=[activity.pk]) + "#processo"
         if _is_ajax(self.request):
             return JsonResponse({"redirect_url": redirect_url})
-        messages.success(self.request, "Processo aplicado. As tarefas da atividade foram criadas.")
+        messages.success(self.request, "Processo aplicado. As tarefas da demanda foram criadas.")
         return redirect(redirect_url)
 
     def form_invalid(self, form):
@@ -1596,7 +1612,7 @@ class ActivityMarkPendingView(OrganizationRequiredMixin, FormView):
             return self.form_invalid(form)
         if _is_ajax(self.request):
             return JsonResponse({"status": activity.status})
-        messages.success(self.request, "Atividade marcada como pendente.")
+        messages.success(self.request, "Demanda marcada como pendente.")
         return redirect("activity-detail", pk=activity.pk)
 
     def form_invalid(self, form):
@@ -1649,7 +1665,7 @@ class ActivityClaimView(ServiceActionView):
     def perform(self, request, pk):
         activity = get_object_or_404(Activity, pk=pk, organization=self.organization)
         ActivityService.claim(activity, request.user)
-        messages.success(request, "Atividade assumida — agora está em Minhas atividades.")
+        messages.success(request, "Demanda assumida — agora está em Minhas demandas.")
 
     def redirect_to(self):
         referer = self.request.META.get("HTTP_REFERER")
@@ -1710,13 +1726,24 @@ class TaskListView(OrganizationRequiredMixin, ListView):
     # mesmo par (comprometido, solicitado) já usado como ordenação padrão.
     SORT_FIELDS = {
         "tarefa": ["title"],
-        "atividade": ["activity__title"],
+        "demanda": ["activity__title"],
         "prazo": ["requested_deadline", "created_at"],
         "situacao": ["status"],
     }
 
-    def get_queryset(self):
+    # Endereços de antes da troca de "atividade" por "demanda" (01/10/2026) continuam valendo.
+    LEGACY_VALUES = {"atividade": "demanda"}
+
+    def current_sort(self):
         sort = self.request.GET.get("sort", "prazo")
+        return self.LEGACY_VALUES.get(sort, sort)
+
+    def current_view_mode(self):
+        mode = self.request.GET.get("visao", "lista")
+        return self.LEGACY_VALUES.get(mode, mode)
+
+    def get_queryset(self):
+        sort = self.current_sort()
         direction = self.request.GET.get("dir", "asc")
         fields = self.SORT_FIELDS.get(sort, self.SORT_FIELDS["prazo"])
         if direction == "desc":
@@ -1726,9 +1753,9 @@ class TaskListView(OrganizationRequiredMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context.update(task_filter_context(self.request, self.organization))
-        context["view_mode"] = self.request.GET.get("visao", "lista")
+        context["view_mode"] = self.current_view_mode()
         context["stats"] = _task_stats(self.request, self.organization)
-        context["current_sort"] = self.request.GET.get("sort", "prazo")
+        context["current_sort"] = self.current_sort()
         context["current_dir"] = self.request.GET.get("dir", "asc")
 
         from core.colors import EnumColorResolver
@@ -1749,6 +1776,7 @@ class TaskListView(OrganizationRequiredMixin, ListView):
         )
         for task in tasks:
             task._status_color = status_colors.color_for(task.status)
+            task._status_label = status_colors.label_for(task.status, task.get_status_display())
             task.effective_deadline = task.committed_deadline or task.requested_deadline
             task.is_overdue = bool(
                 task.effective_deadline
@@ -1764,7 +1792,7 @@ class TaskListView(OrganizationRequiredMixin, ListView):
             task.can_propose_deadline = list_access[(catalog.PRAZO_PROPOR, task.pk)]
         context["object_list"] = tasks
 
-        if context["view_mode"] == "atividade":
+        if context["view_mode"] == "demanda":
             grouped = {}
             order = []
             for task in context["object_list"]:
@@ -1800,6 +1828,7 @@ class TaskKanbanView(OrganizationRequiredMixin, TemplateView):
 
         for task in tasks:
             task._status_color = status_colors.color_for(task.status)
+            task._status_label = status_colors.label_for(task.status, task.get_status_display())
             # Indicador de "parado": tempo desde a última troca de estágio,
             # ou desde a criação se nunca mudou — nunca persiste, só exibe.
             reference = task.stage_changed_at or task.created_at
@@ -1865,6 +1894,7 @@ class TaskCalendarView(OrganizationRequiredMixin, TemplateView):
         undated = []
         for task in tasks:
             task._status_color = status_colors.color_for(task.status)
+            task._status_label = status_colors.label_for(task.status, task.get_status_display())
             deadline = task.committed_deadline or task.requested_deadline
             if deadline is None:
                 undated.append(task)
@@ -2762,7 +2792,7 @@ class DeadlineProposeView(TaskFormActionView):
 
     def run(self, task, data):
         DeadlineService.propose(task, data["proposed_deadline"], self.request.user)
-        messages.success(self.request, "Prazo enviado para aprovação do dono da atividade.")
+        messages.success(self.request, "Prazo enviado para aprovação do dono da demanda.")
 
 
 class DeadlineDecisionView(OrganizationRequiredMixin, View):
@@ -2887,6 +2917,7 @@ class QueueView(OrganizationRequiredMixin, TemplateView):
             context["entries"] = list(entries)
             for entry in context["entries"]:
                 entry.task._status_color = status_colors.color_for(entry.task.status)
+                entry.task._status_label = status_colors.label_for(entry.task.status, entry.task.get_status_display())
             context["in_execution"] = sum(
                 1 for e in entries if e.task.status == Task.Status.EM_EXECUCAO
             )
@@ -2902,6 +2933,7 @@ class QueueView(OrganizationRequiredMixin, TemplateView):
             )
             for entry in my_entries:
                 entry.task._status_color = status_colors.color_for(entry.task.status)
+                entry.task._status_label = status_colors.label_for(entry.task.status, entry.task.get_status_display())
             context["my_entries"] = my_entries
         return context
 

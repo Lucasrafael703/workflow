@@ -5,7 +5,7 @@
 {% block content %}
 <div class="activity-detail">
     <div class="breadcrumb">
-        <a href="{{ return_url }}">Atividades</a><span>›</span>{{ activity.title|truncatechars:48 }}
+        <a href="{{ return_url }}">Demandas</a><span>›</span>{{ activity.title|truncatechars:48 }}
     </div>
 
     <header class="ad-header">
@@ -72,7 +72,7 @@
                             <a href="{% url 'activity-finalize' activity.pk %}?outcome=CANCELADO" class="menu-dots__item menu-dots__item--danger" data-activity-action>Cancelar</a>
                             {% endif %}
                             {% elif can_reopen %}
-                            <a href="{% url 'activity-reopen' activity.pk %}" data-activity-action class="menu-dots__item">Reabrir atividade</a>
+                            <a href="{% url 'activity-reopen' activity.pk %}" data-activity-action class="menu-dots__item">Reabrir demanda</a>
                             {% endif %}
                         </div>
                     </div>
@@ -108,7 +108,7 @@
     {% elif activity.status == "CONCLUIDA" %}
     <div class="message message--success" style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap">
         <span>Concluída em {{ activity.completed_at|date:"d/m/Y H:i" }} por {{ activity.completed_by.get_username }}.</span>
-        {% if can_reopen %}<a href="{% url 'activity-reopen' activity.pk %}" data-activity-action class="btn btn--sm">Reabrir atividade</a>{% endif %}
+        {% if can_reopen %}<a href="{% url 'activity-reopen' activity.pk %}" data-activity-action class="btn btn--sm">Reabrir demanda</a>{% endif %}
     </div>
     {% endif %}
 
@@ -137,7 +137,7 @@
                             <div class="situation-attention__copy">
                                 <div class="situation-attention__title"><a href="{% url 'task-detail' next_attention.pk %}">{{ next_attention.title }}</a></div>
                                 <div class="situation-attention__body">
-                                    {% if next_attention.attention_reason == "blocked" %}Bloqueada — esta tarefa trava o andamento da atividade.
+                                    {% if next_attention.attention_reason == "blocked" %}Bloqueada — esta tarefa trava o andamento da demanda.
                                     {% elif next_attention.attention_reason == "overdue" %}Atrasada desde {{ next_attention.committed_deadline|date:"d/m/Y H:i" }}.
                                     {% elif next_attention.attention_reason == "negotiating" %}Prazo em negociação, aguardando decisão.
                                     {% else %}Prazo mais próximo entre as tarefas em aberto: {{ next_attention.committed_deadline|default:next_attention.requested_deadline|date:"d/m/Y H:i" }}.{% endif %}
@@ -185,7 +185,7 @@
             {% include "activities/_process_panel.html" %}
 
             <div class="card card--flush ad-details-card">
-                <div class="card__head"><h2><span class="ad-section-icon">{% include "_icon.html" with name="info" %}</span> Detalhes da atividade</h2></div>
+                <div class="card__head"><h2><span class="ad-section-icon">{% include "_icon.html" with name="info" %}</span> Detalhes da demanda</h2></div>
                 <div class="card__body">
                     <div class="info-grid">
                         {% if activity.client %}<div><div class="k">Cliente</div><div class="v">{{ activity.client.name }}</div></div>{% endif %}

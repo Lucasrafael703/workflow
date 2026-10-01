@@ -164,7 +164,7 @@ class RelationalScopeTests(AuthorizationTestCase):
         grant_action(self.paulo, catalog.ATIVIDADE_CRIAR, organization=self.org)
         grant_action(self.paulo, catalog.TAREFA_CRIAR, organization=self.org)
         self.activity = ActivityService.create_activity(
-            organization=self.org, title="Minha atividade", owner=self.paulo, created_by=self.paulo
+            organization=self.org, title="Minha demanda", owner=self.paulo, created_by=self.paulo
         )
         self.task = TaskService.create_task(
             self.activity, self.comercial, "Tarefa", created_by=self.paulo,

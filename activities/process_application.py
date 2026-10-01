@@ -197,7 +197,7 @@ class ProcessApplicationService:
         if not getattr(user, "is_authenticated", False):
             raise ActivityError("Entre no sistema para aplicar um processo.")
         if _user_organization_id(user) != activity.organization_id:
-            raise ActivityError("Você não pertence à organização desta atividade.")
+            raise ActivityError("Você não pertence à organização desta demanda.")
 
         process = process_version.process
         if process.organization_id != activity.organization_id:
@@ -207,19 +207,19 @@ class ProcessApplicationService:
         if process_version.status != ProcessVersion.Status.PUBLICADO:
             raise ActivityError("Só é possível aplicar uma versão publicada do processo.")
         if activity.process_version_id is not None:
-            raise ActivityError("Esta atividade já tem um processo aplicado.")
+            raise ActivityError("Esta demanda já tem um processo aplicado.")
         if activity.status == Activity.Status.RASCUNHO:
-            raise ActivityError("Conclua a criação da atividade antes de aplicar um processo.")
+            raise ActivityError("Conclua a criação da demanda antes de aplicar um processo.")
         if activity.status in _CLOSED_STATUSES:
-            raise ActivityError("Não é possível aplicar um processo a uma atividade concluída ou cancelada.")
+            raise ActivityError("Não é possível aplicar um processo a uma demanda concluída ou cancelada.")
         if activity.company_id is None:
             raise ActivityError(
-                "Defina a empresa da atividade antes de aplicar um processo: cada processo pertence a uma empresa."
+                "Defina a empresa da demanda antes de aplicar um processo: cada processo pertence a uma empresa."
             )
         if activity.company_id != process.company_id:
             raise ActivityError(
                 f"O processo «{process.name}» pertence a {process.company.name}, "
-                "que não é a empresa desta atividade."
+                "que não é a empresa desta demanda."
             )
 
     @staticmethod
@@ -318,7 +318,7 @@ class ProcessApplicationService:
                     user, activity, process_version, responsible_by_step or {}, input_values or {}
                 )
         except IntegrityError:
-            raise ActivityError("Este processo já foi aplicado a esta atividade.") from None
+            raise ActivityError("Este processo já foi aplicado a esta demanda.") from None
         # Quem chamou segurou uma cópia anterior da atividade; deixa-a coerente.
         activity.process_version = applied.process_version
         return applied
@@ -446,7 +446,7 @@ class ProcessApplicationService:
             NotificationService.notify(
                 users={owner},
                 event_type=Notification.EventType.PROCESS_APPLIED,
-                title="Processo aplicado à atividade",
+                title="Processo aplicado à demanda",
                 message=(
                     f"O processo {label} foi aplicado a '{activity.title}': {len(tasks)} tarefa(s) criada(s), "
                     f"{len(queued)} já na fila."
@@ -495,9 +495,9 @@ class ActivityProcessService:
     @staticmethod
     def _assert_can_update(user, activity):
         if activity.status in _CLOSED_STATUSES:
-            raise ActivityError("Esta atividade já foi finalizada e não aceita mais alterações no processo.")
+            raise ActivityError("Esta demanda já foi finalizada e não aceita mais alterações no processo.")
         if not ActivityProcessService.can_update(user, activity):
-            raise ActivityError("Você não tem permissão para atualizar o processo desta atividade.")
+            raise ActivityError("Você não tem permissão para atualizar o processo desta demanda.")
 
     @staticmethod
     @transaction.atomic

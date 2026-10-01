@@ -4,7 +4,7 @@ const {readFileSync} = require("node:fs");
 const path = require("node:path");
 const {JSDOM} = require("jsdom");
 const script = readFileSync(path.join(__dirname, "../static/js/modal.js"), "utf8");
-const html = `<div class="modal-backdrop"><div class="modal"><h2>Ação da atividade</h2><button class="modal__close">Fechar</button><form><div class="modal__body"><details><summary>Contexto</summary><div class="form-row"><input name="title" value="Trabalho em andamento"></div></details></div><div class="modal__foot"><a class="btn" href="/atividades/">Voltar</a><button type="submit" name="acao" value="publicar">Salvar</button></div></form></div></div>`;
+const html = `<div class="modal-backdrop"><div class="modal"><h2>Ação da demanda</h2><button class="modal__close">Fechar</button><form><div class="modal__body"><details><summary>Contexto</summary><div class="form-row"><input name="title" value="Trabalho em andamento"></div></details></div><div class="modal__foot"><a class="btn" href="/demandas/">Voltar</a><button type="submit" name="acao" value="publicar">Salvar</button></div></form></div></div>`;
 function setup(fetch) {
     const dom = new JSDOM('<button id="opener">Abrir</button>', {url:'http://localhost/', runScripts:'outside-only'});
     dom.window.fetch = fetch;

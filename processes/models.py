@@ -14,8 +14,8 @@ class ActivityType(models.Model):
     created_at = models.DateTimeField("criado em", auto_now_add=True)
 
     class Meta:
-        verbose_name = "tipo de atividade"
-        verbose_name_plural = "tipos de atividade"
+        verbose_name = "tipo de demanda"
+        verbose_name_plural = "tipos de demanda"
         ordering = ["name"]
         constraints = [
             models.UniqueConstraint(fields=["organization", "name"], name="unique_activity_type_name_per_org"),
@@ -36,7 +36,7 @@ class Process(models.Model):
     )
     activity_type = models.ForeignKey(
         ActivityType,
-        verbose_name="tipo de atividade",
+        verbose_name="tipo de demanda",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
@@ -247,7 +247,7 @@ class ActivityInputValue(models.Model):
     """Situação de um input do processo dentro de uma atividade real (Regras 11 §10, §29)."""
 
     activity = models.ForeignKey(
-        "activities.Activity", verbose_name="atividade", on_delete=models.CASCADE, related_name="input_values"
+        "activities.Activity", verbose_name="demanda", on_delete=models.CASCADE, related_name="input_values"
     )
     process_input = models.ForeignKey(
         ProcessInput, verbose_name="input do processo", on_delete=models.PROTECT, related_name="+"
@@ -265,8 +265,8 @@ class ActivityInputValue(models.Model):
     )
 
     class Meta:
-        verbose_name = "input recebido na atividade"
-        verbose_name_plural = "inputs recebidos na atividade"
+        verbose_name = "input recebido na demanda"
+        verbose_name_plural = "inputs recebidos na demanda"
         ordering = ["activity", "process_input__order"]
         constraints = [
             models.UniqueConstraint(fields=["activity", "process_input"], name="unique_input_value_per_activity"),
@@ -280,7 +280,7 @@ class ActivityCriterionCheck(models.Model):
     """Situação de um critério de aceite dentro de uma atividade real (Regras 11 §14, §31)."""
 
     activity = models.ForeignKey(
-        "activities.Activity", verbose_name="atividade", on_delete=models.CASCADE, related_name="criterion_checks"
+        "activities.Activity", verbose_name="demanda", on_delete=models.CASCADE, related_name="criterion_checks"
     )
     process_criterion = models.ForeignKey(
         ProcessCriterion, verbose_name="critério de aceite", on_delete=models.PROTECT, related_name="+"
@@ -297,8 +297,8 @@ class ActivityCriterionCheck(models.Model):
     )
 
     class Meta:
-        verbose_name = "critério verificado na atividade"
-        verbose_name_plural = "critérios verificados na atividade"
+        verbose_name = "critério verificado na demanda"
+        verbose_name_plural = "critérios verificados na demanda"
         ordering = ["activity", "process_criterion__order"]
         constraints = [
             models.UniqueConstraint(

@@ -7,8 +7,19 @@ from django.utils import timezone
 
 
 # ---------------------------------------------------------------------------
-# Atividade
+# Demanda (no código, `Activity`)
 # ---------------------------------------------------------------------------
+
+# Código da demanda: `DEM-AAAA-NNNNN`. Até 01/10/2026 o prefixo era `ATV`; a migração `0020` reescreveu
+# os já emitidos, mas o código antigo ainda aparece em e-mails, comentários e anotações das pessoas.
+CODE_PREFIX = "DEM"
+LEGACY_CODE_PREFIX = "ATV"
+_LEGACY_CODE_IN_SEARCH = re.compile(rf"\b{LEGACY_CODE_PREFIX}-(?=\d)", re.IGNORECASE)
+
+
+def code_search_term(term):
+    """Termo de busca com o prefixo antigo do código trocado pelo novo (`ATV-2026-00007` acha `DEM-2026-00007`)."""
+    return _LEGACY_CODE_IN_SEARCH.sub(f"{CODE_PREFIX}-", term or "")
 
 
 class Activity(models.Model):
@@ -82,7 +93,7 @@ class Activity(models.Model):
         blank=True,
         on_delete=models.SET_NULL,
         related_name="designated_activities",
-        help_text="Setor para quem a atividade é endereçada — distinto do setor de cada tarefa.",
+        help_text="Setor para quem a demanda é endereçada — distinto do setor de cada tarefa.",
     )
 
     stage = models.ForeignKey(
@@ -92,7 +103,7 @@ class Activity(models.Model):
         blank=True,
         on_delete=models.SET_NULL,
         related_name="activities",
-        help_text="Camada visual configuravel; nao altera o status operacional da atividade.",
+        help_text="Camada visual configuravel; nao altera o status operacional da demanda.",
     )
     stage_changed_at = models.DateTimeField(
         "estagio alterado em",
@@ -108,7 +119,7 @@ class Activity(models.Model):
         null=True,
         blank=True,
         editable=False,
-        help_text="Gerado automaticamente ao salvar. Identifica a atividade e a pasta de anexos.",
+        help_text="Gerado automaticamente ao salvar. Identifica a demanda e a pasta de anexos.",
     )
 
     title = models.CharField("resultado esperado", max_length=200)
@@ -131,7 +142,7 @@ class Activity(models.Model):
         "link / caminho dos arquivos",
         max_length=500,
         blank=True,
-        help_text="Link (Drive, OneDrive...) ou caminho de rede/pasta dos arquivos da atividade. "
+        help_text="Link (Drive, OneDrive...) ou caminho de rede/pasta dos arquivos da demanda. "
         "A LPS não guarda o arquivo: só aponta onde ele está.",
     )
     tags = models.ManyToManyField(
@@ -145,7 +156,7 @@ class Activity(models.Model):
         blank=True,
         on_delete=models.PROTECT,
         related_name="activities_owned",
-        help_text="Responsável único pelo acompanhamento até a resolução (Regras 01 §6.1). Só pode ficar em branco enquanto a atividade é um rascunho.",
+        help_text="Responsável único pelo acompanhamento até a resolução (Regras 01 §6.1). Só pode ficar em branco enquanto a demanda é um rascunho.",
     )
     requested_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -172,7 +183,7 @@ class Activity(models.Model):
         blank=True,
         on_delete=models.PROTECT,
         related_name="activities",
-        help_text="Vínculo travado no momento da criação — publicar nova versão não altera atividades antigas (Regras 11 §19).",
+        help_text="Vínculo travado no momento da criação — publicar nova versão não altera demandas antigas (Regras 11 §19).",
     )
 
     status = models.CharField("status", max_length=14, choices=Status.choices, default=Status.ABERTA)
@@ -208,14 +219,14 @@ class Activity(models.Model):
     reopened_at = models.DateTimeField("reaberta em", null=True, blank=True)
 
     class Meta:
-        verbose_name = "atividade"
-        verbose_name_plural = "atividades"
+        verbose_name = "demanda"
+        verbose_name_plural = "demandas"
         ordering = ["-created_at"]
         permissions = [
-            ("can_view_all_activities", "Pode visualizar todas as atividades da organização"),
-            ("can_change_owner", "Pode alterar o dono da atividade"),
-            ("can_reopen_activity", "Pode reabrir atividade concluída"),
-            ("can_cancel_activity", "Pode cancelar atividade"),
+            ("can_view_all_activities", "Pode visualizar todas as demandas da organização"),
+            ("can_change_owner", "Pode alterar o dono da demanda"),
+            ("can_reopen_activity", "Pode reabrir demanda concluída"),
+            ("can_cancel_activity", "Pode cancelar demanda"),
         ]
 
     def __str__(self):
@@ -274,14 +285,14 @@ class Activity(models.Model):
 
     @classmethod
     def _generate_code(cls):
-        """Gera o identificador único da atividade (Regra 12): `ATV-{ano}-{sequencial}`.
+        """Gera o identificador único da demanda (Regra 12): `DEM-{ano}-{sequencial}`.
 
         Usado como nome da pasta de anexos, então precisa existir antes do
         primeiro upload — é atribuído automaticamente logo após o primeiro
         `save()`, nunca informado manualmente.
         """
         year = timezone.now().year
-        prefix = f"ATV-{year}-"
+        prefix = f"{CODE_PREFIX}-{year}-"
         last = cls.objects.filter(code__startswith=prefix).order_by("-code").first()
         next_number = 1
         if last and last.code:
@@ -303,7 +314,7 @@ class Activity(models.Model):
 class OwnerChangeLog(models.Model):
     """Histórico de troca de dono da atividade (Regras 02 §113-114). Nunca sobrescrito."""
 
-    activity = models.ForeignKey(Activity, verbose_name="atividade", on_delete=models.CASCADE, related_name="owner_changes")
+    activity = models.ForeignKey(Activity, verbose_name="demanda", on_delete=models.CASCADE, related_name="owner_changes")
     previous_owner = models.ForeignKey(
         settings.AUTH_USER_MODEL, verbose_name="dono anterior", on_delete=models.PROTECT, related_name="+"
     )
@@ -348,7 +359,7 @@ class ActivityPendency(models.Model):
         APROVADA = "APROVADA", "Aprovada"
         ENCERRADA = "ENCERRADA", "Encerrada"
 
-    activity = models.ForeignKey(Activity, verbose_name="atividade", on_delete=models.CASCADE, related_name="pendencies")
+    activity = models.ForeignKey(Activity, verbose_name="demanda", on_delete=models.CASCADE, related_name="pendencies")
     reason = models.CharField("motivo", max_length=20, choices=Reason.choices)
     comment = models.TextField("comentário")
     decision_deadline = models.DateTimeField(
@@ -382,8 +393,8 @@ class ActivityPendency(models.Model):
     resolution_comment = models.TextField("comentário da aprovação", blank=True)
 
     class Meta:
-        verbose_name = "pendência da atividade"
-        verbose_name_plural = "pendências da atividade"
+        verbose_name = "pendência da demanda"
+        verbose_name_plural = "pendências da demanda"
         ordering = ["-opened_at"]
 
     def __str__(self):
@@ -411,7 +422,7 @@ class MessageKind(models.TextChoices):
 class ActivityMessage(models.Model):
     """Comunicação contextual ligada à atividade (Regras 06). Não altera dados oficiais."""
 
-    activity = models.ForeignKey(Activity, verbose_name="atividade", on_delete=models.CASCADE, related_name="messages")
+    activity = models.ForeignKey(Activity, verbose_name="demanda", on_delete=models.CASCADE, related_name="messages")
     author = models.ForeignKey(
         settings.AUTH_USER_MODEL, verbose_name="autor", on_delete=models.PROTECT, related_name="+"
     )
@@ -420,8 +431,8 @@ class ActivityMessage(models.Model):
     created_at = models.DateTimeField("enviada em", auto_now_add=True)
 
     class Meta:
-        verbose_name = "mensagem da atividade"
-        verbose_name_plural = "mensagens da atividade"
+        verbose_name = "mensagem da demanda"
+        verbose_name_plural = "mensagens da demanda"
         ordering = ["created_at"]
 
     def __str__(self):
@@ -456,7 +467,7 @@ class ActivityAttachment(models.Model):
     (LPS_ERP/Atividade), organizado por empresa e por atividade."""
 
     activity = models.ForeignKey(
-        Activity, verbose_name="atividade", on_delete=models.CASCADE, related_name="attachments"
+        Activity, verbose_name="demanda", on_delete=models.CASCADE, related_name="attachments"
     )
     file = models.FileField(
         "arquivo", upload_to=activity_attachment_upload_to, storage=activity_files_storage, max_length=255
@@ -468,8 +479,8 @@ class ActivityAttachment(models.Model):
     uploaded_at = models.DateTimeField("enviado em", auto_now_add=True)
 
     class Meta:
-        verbose_name = "anexo da atividade"
-        verbose_name_plural = "anexos da atividade"
+        verbose_name = "anexo da demanda"
+        verbose_name_plural = "anexos da demanda"
         ordering = ["-uploaded_at"]
 
     def __str__(self):
@@ -515,7 +526,7 @@ class Task(models.Model):
         CONCLUIDA = "CONCLUIDA", "Concluída"
         CANCELADA = "CANCELADA", "Cancelada"
 
-    activity = models.ForeignKey(Activity, verbose_name="atividade", on_delete=models.CASCADE, related_name="tasks")
+    activity = models.ForeignKey(Activity, verbose_name="demanda", on_delete=models.CASCADE, related_name="tasks")
     sector = models.ForeignKey(
         "core.Sector", verbose_name="setor responsável", on_delete=models.PROTECT, related_name="tasks"
     )
@@ -557,7 +568,7 @@ class Task(models.Model):
         related_name="tasks",
         help_text=(
             "Etapa do processo que gerou esta tarefa (Regras 12 §16). Vazio nas tarefas criadas "
-            "manualmente. Uma etapa gera no máximo uma tarefa por atividade."
+            "manualmente. Uma etapa gera no máximo uma tarefa por demanda."
         ),
     )
 

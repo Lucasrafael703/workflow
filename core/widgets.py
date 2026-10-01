@@ -193,7 +193,7 @@ class ActivityPickerWidget(VisibleHiddenInput):
 
         return format_html(
             '<div class="person-picker" data-person-picker data-search-url="{search_url}"'
-            ' data-create-label="Criar nova atividade"{create_attr}>'
+            ' data-create-label="Criar nova demanda"{create_attr}>'
             '{hidden_html}'
             '<button type="button" class="person-picker__trigger">'
             '<span class="person-picker__icon">{icon}</span>'
@@ -205,7 +205,7 @@ class ActivityPickerWidget(VisibleHiddenInput):
             hidden_html=hidden_html,
             icon=self._icon(),
             label_class=label_class,
-            label=label or "Selecionar atividade",
+            label=label or "Selecionar demanda",
         )
 
 

@@ -5,7 +5,7 @@
 {% block content %}
 <div class="modal-backdrop activity-modal-overlay">
     <div class="modal activity-modal intake-modal">
-        {% include "intake/_modal_head.html" with modal_icon="inbox" modal_title="Registrar solicitação" modal_subtitle="Cole o pedido que chegou. Nada vira atividade ainda: ele fica na Caixa de Entrada até alguém decidir." %}
+        {% include "intake/_modal_head.html" with modal_icon="inbox" modal_title="Registrar solicitação" modal_subtitle="Cole o pedido que chegou. Nada vira demanda ainda: ele fica na Caixa de Entrada até alguém decidir." %}
 
         <form method="post" class="activity-modal-form" novalidate>
             {% csrf_token %}

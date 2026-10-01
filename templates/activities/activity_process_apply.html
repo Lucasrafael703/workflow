@@ -34,11 +34,11 @@
                 <div class="empty-state" style="padding:28px 12px">
                     <div class="empty-state__icon">{% include "_icon.html" with name="info" %}</div>
                     {% if no_company %}
-                    <h3>Esta atividade ainda não tem empresa</h3>
-                    <p>Cada processo pertence a uma empresa. Defina a empresa da atividade (Editar → Contexto) para ver os processos disponíveis.</p>
+                    <h3>Esta demanda ainda não tem empresa</h3>
+                    <p>Cada processo pertence a uma empresa. Defina a empresa da demanda (Editar → Contexto) para ver os processos disponíveis.</p>
                     {% else %}
                     <h3>Nenhum processo publicado para {{ activity.company.name }}</h3>
-                    <p>Só processos ativos, com versão publicada e da mesma empresa da atividade aparecem aqui.</p>
+                    <p>Só processos ativos, com versão publicada e da mesma empresa da demanda aparecem aqui.</p>
                     {% endif %}
                 </div>
                 {% else %}
@@ -114,7 +114,7 @@
 
                 {# ---- Passo 3: entradas ------------------------------------- #}
                 <section class="apply-pane" data-pane="3" hidden>
-                    <p class="muted small" style="margin-top:0">Informe o que já chegou. O resto pode ser registrado depois, na ficha da atividade — mas as tarefas do processo só começam com as entradas obrigatórias recebidas.</p>
+                    <p class="muted small" style="margin-top:0">Informe o que já chegou. O resto pode ser registrado depois, na ficha da demanda — mas as tarefas do processo só começam com as entradas obrigatórias recebidas.</p>
                     {% for panel in panels %}
                     <div class="apply-version" data-version="{{ panel.version.pk }}" hidden>
                         {% for row in panel.inputs %}
@@ -134,7 +134,7 @@
                             <label class="apply-input__check"><input type="checkbox" name="{{ row.received_name }}" {% if row.received %}checked{% endif %} disabled data-input-received> Já recebi</label>
                             <input type="text" id="id_{{ row.value_name }}" name="{{ row.value_name }}" value="{{ row.value }}" maxlength="500" disabled
                                    placeholder="{% if row.input.input_type == 'ARQUIVO' %}Onde está o arquivo? (opcional){% else %}Opção escolhida (opcional){% endif %}">
-                            {% if row.input.input_type == "ARQUIVO" %}<div class="helptext">Anexe o arquivo na conversa da atividade depois de aplicar.</div>{% endif %}
+                            {% if row.input.input_type == "ARQUIVO" %}<div class="helptext">Anexe o arquivo na conversa da demanda depois de aplicar.</div>{% endif %}
                             {% else %}
                             <input type="text" id="id_{{ row.value_name }}" name="{{ row.value_name }}" value="{{ row.value }}" maxlength="5000" disabled>
                             {% endif %}

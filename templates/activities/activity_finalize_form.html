@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Finalizar atividade — LPS{% endblock %}
+{% block title %}Finalizar demanda — LPS{% endblock %}
 
 {% block content %}
 <div class="modal-backdrop">
@@ -22,7 +22,7 @@
                 {% endif %}
 
                 <div class="message message--info">
-                    Ao finalizar a atividade, ela será movida para Concluídas ou Declinadas/Canceladas,
+                    Ao finalizar a demanda, ela será movida para Concluídas ou Declinadas/Canceladas,
                     conforme o resultado informado. O resultado e o comentário ficam registrados no histórico.
                 </div>
 
@@ -32,7 +32,7 @@
                     <ul style="margin:6px 0 6px 18px; padding:0">
                         {% for name in unmet_required_criteria %}<li>{{ name }}</li>{% endfor %}
                     </ul>
-                    “Sucesso” exige todos atendidos. “Concluído com pendências” encerra a atividade e registra no histórico o que ficou em aberto.
+                    “Sucesso” exige todos atendidos. “Concluído com pendências” encerra a demanda e registra no histórico o que ficou em aberto.
                 </div>
                 {% endif %}
 
@@ -50,9 +50,9 @@
                             </span>
                             <span class="outcome-card__label">{{ radio.choice_label }}</span>
                             <span class="outcome-card__hint">
-                                {% if radio.data.value == "SUCESSO" %}Atividade concluída com sucesso
+                                {% if radio.data.value == "SUCESSO" %}Demanda concluída com sucesso
                                 {% elif radio.data.value == "CONCLUIDO_COM_PENDENCIAS" %}Concluída, mas com itens pendentes
-                                {% elif radio.data.value == "DECLINADO" %}Cliente optou por não seguir com a atividade
+                                {% elif radio.data.value == "DECLINADO" %}Cliente optou por não seguir com a demanda
                                 {% else %}Cancelada por motivos internos{% endif %}
                             </span>
                         </label>
@@ -69,7 +69,7 @@
             </div>
             <div class="modal__foot">
                 <a href="{% url 'activity-detail' activity.pk %}" class="btn">Cancelar</a>
-                <button type="submit" class="btn btn--primary">{% include "_icon.html" with name="check" %} Finalizar atividade</button>
+                <button type="submit" class="btn btn--primary">{% include "_icon.html" with name="check" %} Finalizar demanda</button>
             </div>
         </form>
     </div>

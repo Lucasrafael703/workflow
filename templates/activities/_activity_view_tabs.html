@@ -2,7 +2,7 @@
 activity_list.html, activity_kanban.html e activity_calendar.html. Preserva
 a querystring de filtros (tab/status/.../q) ao trocar de visão, via
 `filter_querystring` (montada em activity_filter_context).{% endcomment %}
-<nav class="tabs task-view-tabs" aria-label="Como visualizar as atividades">
+<nav class="tabs task-view-tabs" aria-label="Como visualizar as demandas">
     <a href="{% url 'activity-list' %}?{{ filter_querystring }}" class="{% if view_mode == 'lista' %}is-active{% endif %}"{% if view_mode == 'lista' %} aria-current="page"{% endif %}>
         {% include "_icon.html" with name="menu" %} Lista
     </a>

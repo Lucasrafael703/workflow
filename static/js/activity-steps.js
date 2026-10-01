@@ -10,8 +10,8 @@
 
     // Campos obrigatórios da etapa 1 (o servidor exige os mesmos em ActivityEditorForm.clean).
     var REQUIRED_MESSAGES = {
-        title: "Informe o nome da atividade.",
-        owner: "Escolha quem fica com a atividade.",
+        title: "Informe o nome da demanda.",
+        owner: "Escolha quem fica com a demanda.",
         sector: "Escolha o setor responsável."
     };
 

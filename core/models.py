@@ -124,7 +124,7 @@ class ActivityStage(models.Model):
         "cor",
         max_length=7,
         default="#94A3B8",
-        help_text="So decoracao do fluxo visual; nunca afeta o status operacional da atividade.",
+        help_text="So decoracao do fluxo visual; nunca afeta o status operacional da demanda.",
     )
     is_active = models.BooleanField("ativo", default=True)
     created_by = models.ForeignKey(
@@ -133,8 +133,8 @@ class ActivityStage(models.Model):
     created_at = models.DateTimeField("criado em", auto_now_add=True)
 
     class Meta:
-        verbose_name = "estagio de atividade"
-        verbose_name_plural = "estagios de atividade"
+        verbose_name = "estagio de demanda"
+        verbose_name_plural = "estagios de demanda"
         ordering = ["organization", "order", "name"]
         constraints = [
             models.UniqueConstraint(fields=["organization", "name"], name="unique_activitystage_name_per_org"),
@@ -159,7 +159,7 @@ class WorkflowStatus(models.Model):
     """
 
     class Domain(models.TextChoices):
-        ACTIVITY = "activity", "Atividade"
+        ACTIVITY = "activity", "Demanda"
         TASK = "task", "Tarefa"
 
     organization = models.ForeignKey(
@@ -324,9 +324,9 @@ class EnumColor(models.Model):
     """
 
     class Domain(models.TextChoices):
-        ACTIVITY_STATUS = "activity_status", "Status da atividade"
+        ACTIVITY_STATUS = "activity_status", "Status da demanda"
         TASK_STATUS = "task_status", "Status da tarefa"
-        ACTIVITY_URGENCY = "activity_urgency", "Prioridade da atividade"
+        ACTIVITY_URGENCY = "activity_urgency", "Prioridade da demanda"
 
     organization = models.ForeignKey(
         Organization, verbose_name="organização", on_delete=models.CASCADE, related_name="enum_colors"

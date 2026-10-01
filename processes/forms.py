@@ -5,7 +5,7 @@ from .models import ProcessCriterion, ProcessInput, ProcessStep, ProcessVersion
 
 class ProcessBasicInfoForm(forms.Form):
     name = forms.CharField(label="Nome", max_length=200)
-    activity_type = forms.ModelChoiceField(label="Tipo de atividade", queryset=None, required=False)
+    activity_type = forms.ModelChoiceField(label="Tipo de demanda", queryset=None, required=False)
     description = forms.CharField(label="Descrição", widget=forms.Textarea(attrs={"rows": 3}), required=False)
 
     def __init__(self, *args, activity_types=None, **kwargs):

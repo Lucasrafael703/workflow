@@ -124,7 +124,7 @@ class Scope(models.Model):
         RELACIONAL = "RELACIONAL", "Relação com o objeto"
 
     class Relation(models.TextChoices):
-        MINHAS_ATIVIDADES = "MINHAS_ATIVIDADES", "Atividades das quais sou dono"
+        MINHAS_ATIVIDADES = "MINHAS_ATIVIDADES", "Demandas das quais sou dono"
         MINHAS_TAREFAS = "MINHAS_TAREFAS", "Tarefas atribuídas a mim"
         MEUS_SETORES = "MEUS_SETORES", "Setores dos quais participo"
         SETORES_GERENCIADOS = "SETORES_GERENCIADOS", "Setores que gerencio"

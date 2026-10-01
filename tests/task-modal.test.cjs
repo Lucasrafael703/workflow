@@ -15,9 +15,9 @@ const markup = `
 <div class="modal-backdrop"><form>
   <div data-task-activity data-field="activity">
     <div data-task-activity-picker>
-      <div class="person-picker" data-person-picker data-search-url="/atividades/busca/" data-placeholder="Buscar..." data-empty-label="Selecionar atividade">
+      <div class="person-picker" data-person-picker data-search-url="/demandas/busca/" data-placeholder="Buscar..." data-empty-label="Selecionar demanda">
         <input type="hidden" name="activity" id="id_activity">
-        <button type="button" class="person-picker__trigger"><span class="person-picker__label muted">Selecionar atividade</span></button>
+        <button type="button" class="person-picker__trigger"><span class="person-picker__label muted">Selecionar demanda</span></button>
       </div>
     </div>
     <div class="task-selected-activity" data-task-activity-summary hidden>
@@ -41,7 +41,7 @@ function setup(t, {withPicker = false, html = markup} = {}) {
 test('choosing an activity swaps the picker for the activity card', t => {
     const {$, choose} = setup(t);
     $('#id_activity').value = '7';
-    choose({id: 7, name: 'ATV-1 — Sincronização Cérebro', summary: SUMMARY});
+    choose({id: 7, name: 'DEM-1 — Sincronização Cérebro', summary: SUMMARY});
     assert.equal($('[data-task-activity-summary]').hidden, false);
     assert.equal($('[data-summary-title]').textContent, SUMMARY.title);
     assert.equal($('[data-summary-meta]').textContent, SUMMARY.meta);
@@ -73,7 +73,7 @@ test('clearing the selection (value emptied) shows the picker again', t => {
 test('a choice without a summary keeps what is on screen', t => {
     const {$, choose} = setup(t);
     $('#id_activity').value = '9';
-    choose({id: 9, name: 'ATV-9 — Sem resumo'});
+    choose({id: 9, name: 'DEM-9 — Sem resumo'});
     assert.equal($('[data-task-activity-summary]').hidden, true);
     assert.equal($('[data-task-activity-picker]').hidden, false);
 });
@@ -100,16 +100,16 @@ test('a window injected later is started through LPSWidgets', t => {
 });
 
 test('windows without an activity picker (inside an activity, edit) are left alone', t => {
-    const html = '<div class="task-field"><div class="task-selected-activity" data-task-activity-summary><div data-summary-title>ATV</div></div></div>';
+    const html = '<div class="task-field"><div class="task-selected-activity" data-task-activity-summary><div data-summary-title>DEM</div></div></div>';
     const {$} = setup(t, {html});
     assert.equal($('[data-task-activity-summary]').hidden, false);
-    assert.equal($('[data-summary-title]').textContent, 'ATV');
+    assert.equal($('[data-summary-title]').textContent, 'DEM');
 });
 
 test('with the real picker: picking a search result carries its summary to the card', async t => {
     const {w, $} = setup(t, {withPicker: true});
     w.fetch = async url => ({
-        json: async () => ({results: [{id: 7, name: 'ATV-1 — Sincronização Cérebro', summary: SUMMARY}]}),
+        json: async () => ({results: [{id: 7, name: 'DEM-1 — Sincronização Cérebro', summary: SUMMARY}]}),
         url,
     });
     $('.person-picker__trigger').dispatchEvent(new w.MouseEvent('click', {bubbles: true}));

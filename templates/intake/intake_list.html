@@ -6,7 +6,7 @@
 <div class="page-head">
     <div class="page-head__text">
         <h1>Caixa de Entrada</h1>
-        <p class="sub">Solicitações que chegaram e ainda não viraram trabalho. Nada vira atividade sozinho: você decide.</p>
+        <p class="sub">Solicitações que chegaram e ainda não viraram trabalho. Nada vira demanda sozinho: você decide.</p>
     </div>
     <div class="page-head__actions">
         <form method="get" class="toolbar__search">
@@ -30,7 +30,7 @@
 </div>
 
 {% if page_obj.object_list %}
-<ul class="intake-list" data-intake-list>
+<ul class="intake-list lps-sheet-list" data-intake-list>
     {% for item in page_obj.object_list %}{% include "intake/_item_card.html" %}{% endfor %}
 </ul>
 
@@ -56,7 +56,7 @@
         {% if can_register %}<a href="{% url 'intake-capture' %}" class="btn btn--primary" data-intake-action>Registrar solicitação</a>{% endif %}
         {% elif tab == "convertidos" %}
         <h3>Nenhuma solicitação virou demanda ainda</h3>
-        <p>As solicitações que você transformar em atividade passam a aparecer aqui, com o link para ela.</p>
+        <p>As solicitações que você transformar em demanda passam a aparecer aqui, com o link para ela.</p>
         {% else %}
         <h3>Nenhuma solicitação ignorada</h3>
         <p>O que você ignorar fica guardado aqui, e dá para restaurar se precisar.</p>

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load lps %}
-{% block title %}Atividades - LPS{% endblock %}
+{% block title %}Demandas - LPS{% endblock %}
 
 {% block content %}
 <section class="activities-page activities-page--list" aria-labelledby="activities-title">
@@ -10,8 +10,8 @@
     {% include "activities/_activity_toolbar.html" %}
 
     {% if activities %}
-    <div class="activities-table-card" aria-label="Lista de atividades">
-        <table class="activities-table">
+    <div class="activities-table-card" aria-label="Lista de demandas">
+        <table class="activities-table lps-sheet lps-sheet--demand">
             <colgroup>
                 <col class="activities-col-title">
                 <col class="activities-col-context">
@@ -26,7 +26,7 @@
             <thead>
                 <tr>
                     <th class="is-sortable{% if ordem == 'titulo' %} is-sorted{% endif %}">
-                        <a href="?{{ filter_querystring }}&ordem=titulo">Atividade {% include "_icon.html" with name="chevron-down" %}</a>
+                        <a href="?{{ filter_querystring }}&ordem=titulo">Demanda {% include "_icon.html" with name="chevron-down" %}</a>
                     </th>
                     <th>Cliente / Obra</th>
                     <th>Setor</th>
@@ -67,12 +67,7 @@
                         </span>{% if activity.can_repassar %}<span class="actionable-value__arrow" aria-hidden="true">›</span></a>{% endif %}
                         {% else %}-{% endif %}
                     </td>
-                    <td>
-                        <div class="activity-progress-count">
-                            <strong>{{ activity.done_tasks }} de {{ activity.total_tasks }}</strong>
-                            <div class="activity-progress-track"><span style="width: {{ activity.progress_percent }}%"></span></div>
-                        </div>
-                    </td>
+                    <td>{% include "_sheet_progress.html" with done=activity.done_tasks total=activity.total_tasks percent=activity.progress_percent %}</td>
                     <td>
                         <div class="activity-deadline-inline{% if activity.is_overdue %} is-late{% endif %}">
                             <span class="activity-deadline-icon" aria-hidden="true">{% include "_icon.html" with name="clock" %}</span>
@@ -86,18 +81,18 @@
                         </div>
                     </td>
                     <td><span class="activity-stage-pill" style="--stage-color: {{ activity.stage_color }};">{{ activity.stage_name }}</span></td>
-                    <td><span class="activity-status-pill" style="--status-color: {{ activity.status_color }};">{{ activity.status_label }}</span></td>
+                    <td class="lps-sheet-status-cell">{% include "_sheet_status.html" with color=activity.status_color text_color=activity.status_text_color label=activity.status_label %}</td>
                     <td class="activities-table__actions">
                         {% if activity.can_assumir or activity.can_edit or activity.can_repassar or activity.can_complete or activity.can_cancel or activity.can_reopen %}
                         <details class="activity-menu">
                             <summary aria-label="Mais acoes">{% include "_icon.html" with name="more" %}</summary>
                             <div class="activity-menu__items">
-                                {% if activity.can_assumir %}<form method="post" action="{% url 'activity-claim' activity.pk %}">{% csrf_token %}<button type="submit">Assumir atividade</button></form>{% endif %}
+                                {% if activity.can_assumir %}<form method="post" action="{% url 'activity-claim' activity.pk %}">{% csrf_token %}<button type="submit">Assumir demanda</button></form>{% endif %}
                                 {% if activity.can_edit %}<a href="{% url 'activity-edit' activity.pk %}?next={{ request.get_full_path|urlencode }}" data-activity-action data-activity-navigate>Editar</a>{% endif %}
                                 {% if activity.can_repassar %}<a href="{% url 'activity-change-owner' activity.pk %}" data-activity-action>Transferir responsabilidade</a>{% endif %}
                                 {% if activity.can_complete %}<a href="{% url 'activity-finalize' activity.pk %}?outcome=SUCESSO" data-activity-action>Concluir</a>{% endif %}
                                 {% if activity.can_cancel %}<a href="{% url 'activity-finalize' activity.pk %}?outcome=CANCELADO" data-activity-action class="is-danger">Cancelar</a>{% endif %}
-                                {% if activity.can_reopen %}<a href="{% url 'activity-reopen' activity.pk %}" data-activity-action>Reabrir atividade</a>{% endif %}
+                                {% if activity.can_reopen %}<a href="{% url 'activity-reopen' activity.pk %}" data-activity-action>Reabrir demanda</a>{% endif %}
                             </div>
                         </details>
                         {% endif %}
@@ -107,7 +102,7 @@
             </tbody>
         </table>
         <div class="activities-table-footer">
-            <span>Mostrando {{ activities|length }} de {{ page_obj.paginator.count }} atividades</span>
+            <span>Mostrando {{ activities|length }} de {{ page_obj.paginator.count }} demandas</span>
             {% if is_paginated %}
             <div class="activities-pagination">
                 {% if page_obj.has_previous %}<a href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.previous_page_number }}">{% include "_icon.html" with name="chevron-left" %}</a>{% endif %}
@@ -120,9 +115,9 @@
     {% else %}
     <div class="activities-empty">
         {% if has_filters %}
-        <h2>Nenhuma atividade encontrada.</h2><p>Tente remover alguns filtros.</p><a href="?tab={{ tab }}" class="btn">Limpar filtros</a>
+        <h2>Nenhuma demanda encontrada.</h2><p>Tente remover alguns filtros.</p><a href="?tab={{ tab }}" class="btn">Limpar filtros</a>
         {% else %}
-        <h2>Nenhuma atividade nesta visao.</h2><p>Crie uma atividade ou altere o escopo selecionado.</p>
+        <h2>Nenhuma demanda nesta visao.</h2><p>Crie uma demanda ou altere o escopo selecionado.</p>
         {% endif %}
     </div>
     {% endif %}

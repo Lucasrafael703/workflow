@@ -10,11 +10,11 @@
             <p class="sub">Configure como o trabalho aparece nas telas sem confundir estagio visual com status operacional.</p>
         </div>
         <div class="page-head__actions">
-            {% if tab == "estagios-atividade" %}
+            {% if tab == "estagios-demanda" %}
             <a href="{% url 'activitystage-create' %}" class="btn btn--primary js-flow-modal">{% include "_icon.html" with name="plus" %} Novo estagio</a>
             {% elif tab == "estagios-tarefa" %}
             <a href="{% url 'taskstage-create' %}" class="btn btn--primary js-flow-modal">{% include "_icon.html" with name="plus" %} Novo estagio</a>
-            {% elif tab == "status-atividade" %}
+            {% elif tab == "status-demanda" %}
             <a href="{% url 'workflowstatus-create' domain='activity' %}" class="btn btn--primary js-flow-modal">{% include "_icon.html" with name="plus" %} Novo status</a>
             {% if domain %}
             <button type="button" class="btn" data-restore-defaults data-restore-url="{% url 'enumcolor-reset' domain=domain %}">
@@ -41,14 +41,14 @@
     </div>
 
     <nav class="tabs flow-config-tabs" aria-label="Fluxo e status">
-        <a href="?tab=estagios-atividade" class="{% if tab == 'estagios-atividade' %}is-active{% endif %}">
-            {% include "_icon.html" with name="activity" %} Estagios de atividades
+        <a href="?tab=estagios-demanda" class="{% if tab == 'estagios-demanda' %}is-active{% endif %}">
+            {% include "_icon.html" with name="activity" %} Estagios de demandas
         </a>
         <a href="?tab=estagios-tarefa" class="{% if tab == 'estagios-tarefa' %}is-active{% endif %}">
             {% include "_icon.html" with name="queue" %} Estagios de tarefas
         </a>
-        <a href="?tab=status-atividade" class="{% if tab == 'status-atividade' %}is-active{% endif %}">
-            {% include "_icon.html" with name="check" %} Status de atividades
+        <a href="?tab=status-demanda" class="{% if tab == 'status-demanda' %}is-active{% endif %}">
+            {% include "_icon.html" with name="check" %} Status de demandas
         </a>
         <a href="?tab=status-tarefa" class="{% if tab == 'status-tarefa' %}is-active{% endif %}">
             {% include "_icon.html" with name="task" %} Status de tarefas
@@ -61,14 +61,14 @@
                 <h2>{{ section_title }}</h2>
                 <p>{{ section_description }}</p>
             </div>
-            {% if tab == "estagios-atividade" or tab == "estagios-tarefa" %}
+            {% if tab == "estagios-demanda" or tab == "estagios-tarefa" %}
             <span class="flow-config-panel__note">Camada visual</span>
             {% else %}
             <span class="flow-config-panel__note">Sistema + personalizados</span>
             {% endif %}
         </header>
 
-        {% if tab == "estagios-atividade" or tab == "estagios-tarefa" %}
+        {% if tab == "estagios-demanda" or tab == "estagios-tarefa" %}
         <ul class="flow-stage-list">
             {% for stage in stages %}
             <li class="flow-stage-row">
@@ -107,7 +107,7 @@
         </ul>
         {% else %}
         <div class="flow-status-table-wrap">
-            <table class="flow-status-table">
+            <table class="flow-status-table lps-sheet lps-sheet--compact">
                 <thead>
                     <tr>
                         <th>Status</th>
@@ -127,9 +127,7 @@
                                 {% if row.is_hidden %}<span class="flow-hidden-badge">Oculto</span>{% endif %}
                             </div>
                         </td>
-                        <td>
-                            <span class="tag" style="--tag-bg: {{ row.color }}1A; --tag-fg: {{ row.color }};">{{ row.label }}</span>
-                        </td>
+                        <td class="lps-sheet-status-cell">{% include "_sheet_status.html" with color=row.color text_color=row.text_color label=row.label %}</td>
                         <td><span class="flow-behavior">{{ row.behavior }}</span></td>
                         <td><span class="flow-lock-note">Nativo</span></td>
                         <td class="flow-table-actions">
@@ -151,9 +149,7 @@
                                 <span>{{ row.description|default:"Status personalizado." }}</span>
                             </div>
                         </td>
-                        <td>
-                            <span class="tag" style="--tag-bg: {{ row.color }}1A; --tag-fg: {{ row.color }};">{{ row.name }}</span>
-                        </td>
+                        <td class="lps-sheet-status-cell">{% include "_sheet_status.html" with color=row.color text_color=row.text_color label=row.name %}</td>
                         <td><span class="flow-behavior">{{ row.behavior }}</span></td>
                         <td><span class="flow-custom-note">Personalizado</span></td>
                         <td class="flow-table-actions">

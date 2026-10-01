@@ -42,8 +42,8 @@ test('every collection uses the same filter submission behavior',()=>{
  dom.window.close();
 });
 
-test('activity search submits after debounce and Enter submits immediately',async()=>{
- const dom=new JSDOM('<form data-activity-filters><input data-activity-search value=""></form>',{runScripts:'outside-only'});
+test('activity search waits for explicit form submission',async()=>{
+ const dom=new JSDOM('<form data-activity-filters><input data-activity-search value=""><button type="submit">Buscar</button></form>',{runScripts:'outside-only'});
  const w=dom.window; let submitted=0;
  const form=w.document.querySelector('form');
  form.requestSubmit=()=>submitted++;
@@ -53,10 +53,11 @@ test('activity search submits after debounce and Enter submits immediately',asyn
  search.dispatchEvent(new w.Event('input',{bubbles:true}));
  assert.equal(submitted,0);
  await new Promise(resolve=>w.setTimeout(resolve,380));
- assert.equal(submitted,1);
+ assert.equal(submitted,0);
  search.value='Cliente';
  search.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
- assert.equal(submitted,2);
+ assert.equal(submitted,0);
+ assert.ok(form.querySelector('button[type="submit"]'));
  dom.window.close();
 });
 

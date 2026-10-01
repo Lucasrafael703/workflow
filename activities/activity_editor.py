@@ -97,13 +97,13 @@ class ActivityEditorView(OrganizationRequiredMixin, FormView):
             activity=activity, draft=activity if not self.editing else None,
             editing=self.editing, picker=self.picker, return_url=return_url,
             cancel_url=activity_detail_url(activity, return_url) if self.editing else return_url,
-            editor_title="Editar atividade" if self.editing else "Nova atividade",
+            editor_title="Editar demanda" if self.editing else "Nova demanda",
             editor_subtitle=(
-                "Atualize as informações da atividade."
+                "Atualize as informações da demanda."
                 if self.editing
-                else "Preencha as informações para criar uma nova atividade."
+                else "Preencha as informações para criar uma nova demanda."
             ),
-            submit_label="Salvar alterações" if self.editing else "Criar atividade",
+            submit_label="Salvar alterações" if self.editing else "Criar demanda",
             steps=form.steps,
             initial_step=form.step_with_errors() if form.is_bound else 1,
             # Anexos enviados antes desta tela perder o upload: continuam removíveis.
@@ -146,7 +146,7 @@ class ActivityEditorView(OrganizationRequiredMixin, FormView):
             target = activity_detail_url(activity, return_url)
             messages.success(
                 self.request,
-                "Atividade atualizada." if self.editing else "Atividade criada. Adicione as tarefas para organizar a execução.",
+                "Demanda atualizada." if self.editing else "Demanda criada. Adicione as tarefas para organizar a execução.",
             )
         if self.is_ajax():
             return JsonResponse({"redirect_url": target})

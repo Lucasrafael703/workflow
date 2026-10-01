@@ -3,17 +3,17 @@
 None só na etapa 1 antes do primeiro salvamento) no contexto.{% endcomment %}
 <div class="wizard-head">
     <div class="breadcrumb">
-        <a href="{% url 'activity-list' %}">Atividades</a><span>›</span> Nova atividade
+        <a href="{% url 'activity-list' %}">Demandas</a><span>›</span> Nova demanda
     </div>
-    <h1>Nova atividade</h1>
+    <h1>Nova demanda</h1>
     <p class="sub">
         {% if current == "essencial" %}Preencha o essencial. O restante pode ser feito depois.
-        {% elif current == "contexto" %}Vincule a atividade ao contexto correto. Os detalhes não obrigatórios podem ser preenchidos agora ou depois.
+        {% elif current == "contexto" %}Vincule a demanda ao contexto correto. Os detalhes não obrigatórios podem ser preenchidos agora ou depois.
         {% else %}Adicione informações complementares antes de concluir.{% endif %}
     </p>
 </div>
 
-<nav class="wizard-stepper" aria-label="Etapas da nova atividade">
+<nav class="wizard-stepper" aria-label="Etapas da nova demanda">
     <div class="wizard-step {% if current == 'essencial' %}is-active{% else %}is-done{% endif %}">
         <span class="wizard-step__circle">{% if current != 'essencial' %}{% include "_icon.html" with name="check" %}{% else %}1{% endif %}</span>
         <span class="wizard-step__label">1. Essencial</span>

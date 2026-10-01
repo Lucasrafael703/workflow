@@ -103,12 +103,12 @@ em `UserSector` invalida o cache via signal (`invalidate_sector_cache`).
 | Serviços de `activities` | `require_action(user, catalog.X, recurso)` no início de cada método; converte a negação em `ActivityError`. |
 | Serviços de `processes` | `_require(...)` com endereço org + empresa; levanta `ProcessError`. |
 | Aplicar processo (`ProcessApplicationService.apply`) | `require_action(user, PROCESSO_APLICAR, atividade)` — o recurso é a **atividade**, então escopos de empresa, setor designado, obra, centro de custo e "minhas atividades" valem. Ver a seção 4.1. |
-| Inputs e critérios do processo aplicado (`ActivityProcessService`) | Sem ação nova: `ActivityProcessService.can_update` aceita quem pode `atividade.editar` na atividade, o dono e quem é responsável/participante de alguma tarefa dela (mesmo critério do checklist da tarefa), sempre dentro da organização e nunca em atividade encerrada. |
+| Inputs e critérios do processo aplicado (`ActivityProcessService`) | Sem ação nova: `ActivityProcessService.can_update` aceita quem pode `demanda.editar` na atividade, o dono e quem é responsável/participante de alguma tarefa dela (mesmo critério do checklist da tarefa), sempre dentro da organização e nunca em atividade encerrada. |
 | Caixa de Entrada (`IntakeService`) | `entrada.registrar` e `entrada.visualizar` na **porta** da tela usam `can_anywhere` (`AnywhereActionMixin`, em `intake/views.py`): registrar não tem setor ainda, e `ActionRequiredMixin` só olharia o escopo de organização e negaria quem cuida de um setor. Itens: `entrada.triar` / `entrada.visualizar` sobre o próprio `IntakeItem` (outro tenant = 404, sem a ação = 403). A lista é filtrada por `IntakeService.visible_queryset`. Ver a seção 4.2. |
 | Menu lateral | `acessos.context_processors.navigation` — **só UX**, não protege nada. |
 
 Algumas ações do catálogo ainda não são verificadas em nenhum ponto (ex.:
-`atividade.visualizar`) — ver
+`demanda.visualizar`) — ver
 [13_PENDENCIAS_CONHECIDAS.md](13_PENDENCIAS_CONHECIDAS.md).
 
 ### 4.1 `processo.aplicar` × `tarefa.criar`
@@ -133,7 +133,7 @@ elas. As Regras não dizem se aplicar processo dispensa o escopo de setor de
 `tarefa.criar`; a decisão segue `Regras/05` §2057 (usar o fluxo padrão não exige
 poder editar o fluxo) e está registrada em `Regras/12` §41.
 
-### 4.2 Caixa de Entrada: `entrada.*` × `atividade.criar`
+### 4.2 Caixa de Entrada: `entrada.*` × `demanda.criar`
 
 | Ação | Permite |
 |---|---|
@@ -141,7 +141,7 @@ poder editar o fluxo) e está registrada em `Regras/12` §41.
 | `entrada.registrar` | Colocar uma solicitação na Caixa de Entrada (e-mail, Teams, pedido verbal). |
 | `entrada.triar` | Corrigir as sugestões, **criar a demanda**, ignorar e restaurar. |
 
-- **Criar demanda exige também `atividade.criar`** no contexto final (setor, obra e
+- **Criar demanda exige também `demanda.criar`** no contexto final (setor, obra e
   organização escolhidos). Quem garante é o `ActivityService` (`save_draft` +
   `publish_draft`), que a `IntakeService.convert` chama; o `intake` não repete a regra. Quem
   só tem `entrada.triar` recebe a recusa e a solicitação continua nova, sem atividade nem
@@ -196,7 +196,7 @@ partida — a organização pode renomear e alterar (doc 05 §11).
 > `seed_lps_demo` de novo também a acrescentaria, mas ele re-adiciona **todas** as
 > ações sugeridas (desfazendo remoções feitas de propósito) e recria setores de
 > demonstração que faltarem — não use em produção. Reabrir uma tarefa
-> de atividade já concluída também exige `atividade.reabrir` (hoje só no
+> de atividade já concluída também exige `demanda.reabrir` (hoje só no
 > Administrador). Ver [06_ATIVIDADES_E_TAREFAS.md](06_ATIVIDADES_E_TAREFAS.md) §2.11.
 
 ---

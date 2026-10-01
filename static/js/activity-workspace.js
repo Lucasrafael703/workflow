@@ -69,28 +69,6 @@
             field.addEventListener("change", function () { submitFilterForm(form); });
         });
 
-        var search = form.querySelector("[data-activity-search]");
-        if (!search) return;
-
-        var timer = null;
-        var lastSubmitted = search.value.trim();
-        var submitSearch = function (force) {
-            var value = search.value.trim();
-            if (!force && value === lastSubmitted && form.dataset.filterSubmitting !== "true") return;
-            lastSubmitted = value;
-            submitFilterForm(form);
-        };
-
-        search.addEventListener("input", function () {
-            window.clearTimeout(timer);
-            timer = window.setTimeout(submitSearch, 350);
-        });
-        search.addEventListener("keydown", function (event) {
-            if (event.key !== "Enter") return;
-            event.preventDefault();
-            window.clearTimeout(timer);
-            submitSearch(true);
-        });
     }
 
     document.querySelectorAll("[data-activity-filters]").forEach(setupActivityFilters);

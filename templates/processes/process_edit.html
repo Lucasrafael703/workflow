@@ -54,7 +54,7 @@
                             <input type="text" id="id_name" name="name" value="{{ process.name }}" required>
                         </div>
                         <div class="field">
-                            <label for="id_activity_type">Tipo de atividade</label>
+                            <label for="id_activity_type">Tipo de demanda</label>
                             <select id="id_activity_type" name="activity_type">
                                 <option value="">—</option>
                                 {% for t in basic_form.activity_type.field.queryset %}

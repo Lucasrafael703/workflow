@@ -17,7 +17,7 @@
 </div>
 
 {% if item.activity %}
-<div class="message message--success">Esta solicitação virou a atividade <a href="{% url 'activity-detail' item.activity.pk %}">{{ item.activity.code }} — {{ item.activity.title }}</a>.</div>
+<div class="message message--success">Esta solicitação virou a demanda <a href="{% url 'activity-detail' item.activity.pk %}">{{ item.activity.code }} — {{ item.activity.title }}</a>.</div>
 {% elif item.status == "IGNORADO" %}
 <div class="message message--info">Solicitação ignorada{% if item.resolved_by %} por {{ item.resolved_by.get_full_name|default:item.resolved_by.get_username }}{% endif %}{% if item.resolution_note %}: {{ item.resolution_note }}{% endif %}.</div>
 {% endif %}

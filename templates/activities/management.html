@@ -85,7 +85,7 @@ ao que o modelo trazia.{% endcomment %}
     <div class="stat-card">
         <div class="stat-card__icon stat-card__icon--neutral">{% include "_icon.html" with name="activity" %}</div>
         <div class="value">{{ dash_total }}</div>
-        <div class="label">Total de atividades</div>
+        <div class="label">Total de demandas</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__icon stat-card__icon--info">{% include "_icon.html" with name="task" %}</div>
@@ -106,7 +106,7 @@ ao que o modelo trazia.{% endcomment %}
         <div class="stat-card__icon stat-card__icon--neutral">{% include "_icon.html" with name="block" %}</div>
         <div class="value">{{ dash_declinadas }}</div>
         <div class="label">Declinadas</div>
-        <div class="hint">Atividades canceladas</div>
+        <div class="hint">Demandas canceladas</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__icon stat-card__icon--danger">{% include "_icon.html" with name="alert" %}</div>
@@ -145,7 +145,7 @@ ao que o modelo trazia.{% endcomment %}
             <div class="card__head"><h2>Filas por setor</h2></div>
             {% if dash_filas_por_setor %}
             <div class="table-wrap">
-                <table class="responsive">
+                <table class="responsive lps-sheet lps-sheet--compact">
                     <thead><tr><th>Setor</th><th>Na fila</th><th class="col-actions">Ações</th></tr></thead>
                     <tbody>
                     {% for sector in dash_filas_por_setor %}
@@ -164,10 +164,10 @@ ao que o modelo trazia.{% endcomment %}
         </div>
 
         <div class="card card--flush">
-            <div class="card__head"><h2>Atividades com maior atraso</h2></div>
+            <div class="card__head"><h2>Demandas com maior atraso</h2></div>
             {% if dash_maiores_atrasos %}
             <div class="table-wrap">
-                <table class="responsive">
+                <table class="responsive lps-sheet lps-sheet--compact">
                     <thead><tr><th>ID</th><th>Cliente</th><th>Título</th><th>Responsável</th><th>Prazo</th></tr></thead>
                     <tbody>
                     {% for activity in dash_maiores_atrasos %}
@@ -183,15 +183,15 @@ ao que o modelo trazia.{% endcomment %}
                 </table>
             </div>
             {% else %}
-            <div class="card__body"><p class="muted" style="margin:0">Nenhuma atividade atrasada no recorte atual.</p></div>
+            <div class="card__body"><p class="muted" style="margin:0">Nenhuma demanda atrasada no recorte atual.</p></div>
             {% endif %}
         </div>
 
         <div class="card card--flush">
-            <div class="card__head"><h2>Atividades recentemente concluídas</h2></div>
+            <div class="card__head"><h2>Demandas recentemente concluídas</h2></div>
             {% if dash_recem_concluidas %}
             <div class="table-wrap">
-                <table class="responsive">
+                <table class="responsive lps-sheet lps-sheet--compact">
                     <thead><tr><th>ID</th><th>Cliente</th><th>Título</th><th>Responsável</th><th>Concluída em</th></tr></thead>
                     <tbody>
                     {% for activity in dash_recem_concluidas %}
@@ -207,30 +207,30 @@ ao que o modelo trazia.{% endcomment %}
                 </table>
             </div>
             {% else %}
-            <div class="card__body"><p class="muted" style="margin:0">Nenhuma atividade concluída no recorte atual.</p></div>
+            <div class="card__body"><p class="muted" style="margin:0">Nenhuma demanda concluída no recorte atual.</p></div>
             {% endif %}
         </div>
     </div>
 
     <div>
         <div class="card card--flush">
-            <div class="card__head"><h2>Atividades por cliente</h2></div>
+            <div class="card__head"><h2>Demandas por cliente</h2></div>
             {% if dash_por_cliente %}
             <div class="table-wrap">
-                <table class="responsive">
-                    <thead><tr><th>Cliente</th><th>Atividades</th></tr></thead>
+                <table class="responsive lps-sheet lps-sheet--compact">
+                    <thead><tr><th>Cliente</th><th>Demandas</th></tr></thead>
                     <tbody>
                     {% for row in dash_por_cliente %}
                     <tr>
                         <td data-label="Cliente">{{ row.client__name }}</td>
-                        <td data-label="Atividades">{{ row.total }}</td>
+                        <td data-label="Demandas">{{ row.total }}</td>
                     </tr>
                     {% endfor %}
                     </tbody>
                 </table>
             </div>
             {% else %}
-            <div class="card__body"><p class="muted" style="margin:0">Nenhuma atividade com cliente no recorte atual.</p></div>
+            <div class="card__body"><p class="muted" style="margin:0">Nenhuma demanda com cliente no recorte atual.</p></div>
             {% endif %}
         </div>
 
@@ -238,7 +238,7 @@ ao que o modelo trazia.{% endcomment %}
             <div class="card__head"><h2>Desempenho por responsável</h2></div>
             {% if dash_por_responsavel %}
             <div class="table-wrap">
-                <table class="responsive">
+                <table class="responsive lps-sheet lps-sheet--compact">
                     <thead><tr><th>Responsável</th><th>Total</th><th>Concluídas</th></tr></thead>
                     <tbody>
                     {% for row in dash_por_responsavel %}
@@ -252,7 +252,7 @@ ao que o modelo trazia.{% endcomment %}
                 </table>
             </div>
             {% else %}
-            <div class="card__body"><p class="muted" style="margin:0">Nenhuma atividade no recorte atual.</p></div>
+            <div class="card__body"><p class="muted" style="margin:0">Nenhuma demanda no recorte atual.</p></div>
             {% endif %}
         </div>
 
@@ -260,20 +260,20 @@ ao que o modelo trazia.{% endcomment %}
             <div class="card__head"><h2>Por centro de custo</h2></div>
             {% if dash_por_centro_custo %}
             <div class="table-wrap">
-                <table class="responsive">
-                    <thead><tr><th>Centro de custo</th><th>Atividades</th></tr></thead>
+                <table class="responsive lps-sheet lps-sheet--compact">
+                    <thead><tr><th>Centro de custo</th><th>Demandas</th></tr></thead>
                     <tbody>
                     {% for row in dash_por_centro_custo %}
                     <tr>
                         <td data-label="Centro de custo">{{ row.cost_center__name }}</td>
-                        <td data-label="Atividades">{{ row.total }}</td>
+                        <td data-label="Demandas">{{ row.total }}</td>
                     </tr>
                     {% endfor %}
                     </tbody>
                 </table>
             </div>
             {% else %}
-            <div class="card__body"><p class="muted" style="margin:0">Nenhuma atividade com centro de custo no recorte atual.</p></div>
+            <div class="card__body"><p class="muted" style="margin:0">Nenhuma demanda com centro de custo no recorte atual.</p></div>
             {% endif %}
         </div>
 
@@ -289,7 +289,7 @@ ao que o modelo trazia.{% endcomment %}
             </div>
             {% if dash_time_origin.reasons %}
             <div class="table-wrap">
-                <table class="responsive">
+                <table class="responsive lps-sheet lps-sheet--compact">
                     <thead><tr><th>Motivo</th><th>Tempo</th><th>% do informado</th></tr></thead>
                     <tbody>
                     {% for row in dash_time_origin.reasons %}
@@ -453,7 +453,7 @@ ao que o modelo trazia.{% endcomment %}
                     {% endfor %}
                 </ul>
                 {% else %}
-                <p class="muted" style="margin:0">Nenhuma atividade parada.</p>
+                <p class="muted" style="margin:0">Nenhuma demanda parada.</p>
                 {% endif %}
             </div>
         </div>

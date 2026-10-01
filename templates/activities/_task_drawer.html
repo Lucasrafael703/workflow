@@ -11,7 +11,7 @@ _task_editor_fields.html).{% endcomment %}
     <div class="drawer">
         <div class="drawer__head">
             <div>
-                <div class="muted small">Atividade: {{ activity.title }}</div>
+                <div class="muted small">Demanda: {{ activity.title }}</div>
                 <h2>{{ task.title }}</h2>
                 <span class="tag tag--{{ task.status }}">{{ task.status_label }}</span>
                 {% if queue_info %}<span class="position-pill">Na fila: {{ queue_info.position }} de {{ queue_info.total }}</span>{% endif %}

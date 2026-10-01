@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Cancelar atividade — LPS{% endblock %}
+{% block title %}Cancelar demanda — LPS{% endblock %}
 
 {% block content %}
 <div class="modal-backdrop">
     <div class="modal">
         <div class="modal__head">
             <div>
-                <h2>Cancelar atividade</h2>
+                <h2>Cancelar demanda</h2>
                 <div class="sub">{{ activity.title }}</div>
             </div>
             <a href="{% url 'activity-detail' activity.pk %}" class="modal__close" title="Fechar">&times;</a>
@@ -16,14 +16,14 @@
             {% csrf_token %}
             <div class="modal__body">
                 <div class="message message--warning">
-                    O cancelamento preserva todo o histórico — nada é apagado. A atividade deixa de
+                    O cancelamento preserva todo o histórico — nada é apagado. A demanda deixa de
                     aparecer nas listas de trabalho em aberto.
                 </div>
                 {% include "activities/_form_fields.html" %}
             </div>
             <div class="modal__foot">
                 <a href="{% url 'activity-detail' activity.pk %}" class="btn">Voltar</a>
-                <button type="submit" class="btn btn--danger">Cancelar atividade</button>
+                <button type="submit" class="btn btn--danger">Cancelar demanda</button>
             </div>
         </form>
     </div>

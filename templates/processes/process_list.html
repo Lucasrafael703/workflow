@@ -26,7 +26,7 @@
     <div class="stat-card">
         <div class="stat-card__icon stat-card__icon--info">{% include "_icon.html" with name="folder" %}</div>
         <div class="value">{{ stat_types }}</div>
-        <div class="label">Tipos de atividade</div>
+        <div class="label">Tipos de demanda</div>
     </div>
 </div>
 
@@ -37,7 +37,7 @@
             <input type="search" name="q" value="{{ search }}" placeholder="Buscar pelo nome…">
         </div>
         <select name="tipo">
-            <option value="">Todos os tipos de atividade</option>
+            <option value="">Todos os tipos de demanda</option>
             {% for t in activity_types %}
             <option value="{{ t.pk }}" {% if activity_type_id == t.pk|stringformat:"s" %}selected{% endif %}>{{ t.name }}</option>
             {% endfor %}
@@ -55,11 +55,11 @@
 
 <div class="card card--flush">
     <div class="table-wrap">
-        <table class="responsive">
+        <table class="responsive lps-sheet lps-sheet--compact">
             <thead>
                 <tr>
                     <th>Nome</th>
-                    <th>Tipo de atividade</th>
+                    <th>Tipo de demanda</th>
                     <th>Inputs</th>
                     <th>Output</th>
                     <th>Fluxo</th>
@@ -76,7 +76,7 @@
                     <a href="{% url 'process-edit' process.pk %}" class="title">{{ process.name }}</a>
                     {% if not process.is_active %}<div class="muted" style="font-size:11.5px">Inativo</div>{% endif %}
                 </td>
-                <td data-label="Tipo de atividade">{{ process.activity_type.name|default:"—" }}</td>
+                <td data-label="Tipo de demanda">{{ process.activity_type.name|default:"—" }}</td>
                 <td data-label="Inputs">{{ version.inputs.count|default:"0" }}</td>
                 <td data-label="Output">
                     {% if version.output_description %}<span title="{{ version.output_description }}">{{ version.output_description|truncatechars:40 }}</span>{% else %}<span class="muted">—</span>{% endif %}
@@ -112,6 +112,6 @@
 </div>
 <div class="hint-bar">
     {% include "_icon.html" with name="info" %}
-    <span>Processo não é obrigatório: atividades ad hoc continuam podendo ser criadas apenas com título, dono e prazo.</span>
+    <span>Processo não é obrigatório: demandas ad hoc continuam podendo ser criadas apenas com título, dono e prazo.</span>
 </div>
 {% endblock %}

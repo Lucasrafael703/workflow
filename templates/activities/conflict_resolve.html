@@ -20,7 +20,7 @@
                     <div class="attention__title">
                         Prazo proposto: {{ conflict.proposal.proposed_deadline|date:"d/m/Y H:i" }}
                     </div>
-                    <div class="muted small">Recusado pelo responsável pela atividade.</div>
+                    <div class="muted small">Recusado pelo responsável pela demanda.</div>
                     {% if conflict.proposal.decision_note %}
                     <div class="muted small">Motivo da recusa: {{ conflict.proposal.decision_note }}</div>
                     {% endif %}

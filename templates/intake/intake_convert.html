@@ -19,7 +19,7 @@ O resto fica em "Mais detalhes" e dá para completar depois, na própria ativida
                 {% include "intake/_form_errors.html" %}
                 <p class="intake-modal-hint">
                     Solicitação de <strong>{{ item.sender_display }}</strong>{% if item.subject %}: “{{ item.subject }}”{% endif %}.
-                    O texto original acompanha a atividade.
+                    O texto original acompanha a demanda.
                 </p>
                 <div class="activity-form-grid">
                     {% include "activities/_activity_modal_field.html" with field=form.title icon="file-text" full=True required=True %}

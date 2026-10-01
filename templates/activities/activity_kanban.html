@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Atividades - Kanban - LPS{% endblock %}
+{% block title %}Demandas - Kanban - LPS{% endblock %}
 
 {% block content %}
 <section class="activities-page" aria-labelledby="activities-title">
@@ -21,7 +21,7 @@
                     {% for activity in unassigned_column.activities %}
                         {% include "activities/_activity_kanban_card.html" %}
                     {% empty %}
-                    <div class="activities-kanban-empty">Nenhuma atividade sem estagio</div>
+                    <div class="activities-kanban-empty">Nenhuma demanda sem estagio</div>
                     {% endfor %}
                 </div>
             </div>
@@ -37,7 +37,7 @@
                     {% for activity in column.activities %}
                         {% include "activities/_activity_kanban_card.html" %}
                     {% empty %}
-                    <div class="activities-kanban-empty">Nenhuma atividade em {{ column.stage.name|lower }}</div>
+                    <div class="activities-kanban-empty">Nenhuma demanda em {{ column.stage.name|lower }}</div>
                     {% endfor %}
                 </div>
             </div>
@@ -45,7 +45,7 @@
             <div class="activities-empty">
                 <h2>Nenhum estagio cadastrado</h2>
                 <p>Configure as colunas do Kanban em Cadastros.</p>
-                <a href="{% url 'cadastros' %}?tab=estagios-de-atividade" class="btn btn--primary">Configurar estagios</a>
+                <a href="{% url 'cadastros' %}?tab=estagios-de-demanda" class="btn btn--primary">Configurar estagios</a>
             </div>
             {% endfor %}
         </div>

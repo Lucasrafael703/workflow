@@ -8,19 +8,21 @@ Este arquivo é a única fonte da verdade do catálogo: o comando
 `seed_acoes` o materializa no banco, e o código referencia as constantes.
 """
 
-# Atividades
-ATIVIDADE_VISUALIZAR = "atividade.visualizar"
-ATIVIDADE_VISUALIZAR_TODAS = "atividade.visualizar_todas"
-ATIVIDADE_CRIAR = "atividade.criar"
-ATIVIDADE_EDITAR = "atividade.editar"
-ATIVIDADE_ALTERAR_DONO = "atividade.alterar_dono"
-ATIVIDADE_ASSUMIR = "atividade.assumir"
-ATIVIDADE_CONCLUIR = "atividade.concluir"
-ATIVIDADE_CANCELAR = "atividade.cancelar"
-ATIVIDADE_REABRIR = "atividade.reabrir"
-ATIVIDADE_MARCAR_PENDENTE = "atividade.marcar_pendente"
-ATIVIDADE_APROVAR_PENDENCIA = "atividade.aprovar_pendencia"
-ATIVIDADE_MOVER_ESTAGIO = "atividade.mover_estagio"
+# Demandas (na interface a "Atividade" passou a se chamar "Demanda"; o nome das constantes
+# em Python continua ATIVIDADE_*, e as chaves gravadas no banco foram renomeadas por
+# acessos/migrations/0003 sem perder nenhuma concessão)
+ATIVIDADE_VISUALIZAR = "demanda.visualizar"
+ATIVIDADE_VISUALIZAR_TODAS = "demanda.visualizar_todas"
+ATIVIDADE_CRIAR = "demanda.criar"
+ATIVIDADE_EDITAR = "demanda.editar"
+ATIVIDADE_ALTERAR_DONO = "demanda.alterar_dono"
+ATIVIDADE_ASSUMIR = "demanda.assumir"
+ATIVIDADE_CONCLUIR = "demanda.concluir"
+ATIVIDADE_CANCELAR = "demanda.cancelar"
+ATIVIDADE_REABRIR = "demanda.reabrir"
+ATIVIDADE_MARCAR_PENDENTE = "demanda.marcar_pendente"
+ATIVIDADE_APROVAR_PENDENCIA = "demanda.aprovar_pendencia"
+ATIVIDADE_MOVER_ESTAGIO = "demanda.mover_estagio"
 
 # Tarefas
 TAREFA_VISUALIZAR = "tarefa.visualizar"
@@ -102,21 +104,21 @@ ENTRADA_TRIAR = "entrada.triar"
 # (chave, nome, descrição, sensível)
 GROUPS = [
     (
-        "atividades",
-        "Atividades",
+        "demandas",
+        "Demandas",
         [
-            (ATIVIDADE_VISUALIZAR, "Visualizar atividades", "Permite abrir atividades dentro do escopo autorizado.", False),
-            (ATIVIDADE_VISUALIZAR_TODAS, "Visualizar todas as atividades", "Permite ver atividades de que a pessoa não é dona nem executora.", False),
-            (ATIVIDADE_CRIAR, "Criar atividade", "Permite registrar um novo resultado a ser alcançado.", False),
-            (ATIVIDADE_EDITAR, "Editar atividade", "Permite alterar título, descrição, prazo e contexto da atividade.", False),
-            (ATIVIDADE_ALTERAR_DONO, "Alterar dono da atividade", "Permite transferir a responsabilidade pelo resultado para outra pessoa.", True),
-            (ATIVIDADE_ASSUMIR, "Assumir atividade do grupo", "Permite se tornar dono de uma atividade endereçada ao setor da pessoa, direto na fila do grupo.", False),
-            (ATIVIDADE_CONCLUIR, "Concluir atividade", "Permite encerrar a atividade quando o resultado foi alcançado.", False),
-            (ATIVIDADE_CANCELAR, "Cancelar atividade", "Permite cancelar a atividade registrando o motivo.", True),
-            (ATIVIDADE_REABRIR, "Reabrir atividade", "Permite reabrir uma atividade já concluída.", True),
-            (ATIVIDADE_MARCAR_PENDENTE, "Marcar atividade como pendente", "Permite pausar a atividade registrando o motivo da pendência, com comentário obrigatório.", False),
-            (ATIVIDADE_APROVAR_PENDENCIA, "Aprovar pendência da atividade", "Permite decidir uma pendência que aguarda aprovação do gestor, devolvendo a atividade para quem a designou.", True),
-            (ATIVIDADE_MOVER_ESTAGIO, "Mover estágio da atividade", "Permite alterar o estágio visual de uma atividade no Kanban.", False),
+            (ATIVIDADE_VISUALIZAR, "Visualizar demandas", "Permite abrir demandas dentro do escopo autorizado.", False),
+            (ATIVIDADE_VISUALIZAR_TODAS, "Visualizar todas as demandas", "Permite ver demandas de que a pessoa não é dona nem executora.", False),
+            (ATIVIDADE_CRIAR, "Criar demanda", "Permite registrar um novo resultado a ser alcançado.", False),
+            (ATIVIDADE_EDITAR, "Editar demanda", "Permite alterar título, descrição, prazo e contexto da demanda.", False),
+            (ATIVIDADE_ALTERAR_DONO, "Alterar dono da demanda", "Permite transferir a responsabilidade pelo resultado para outra pessoa.", True),
+            (ATIVIDADE_ASSUMIR, "Assumir demanda do grupo", "Permite se tornar dono de uma demanda endereçada ao setor da pessoa, direto na fila do grupo.", False),
+            (ATIVIDADE_CONCLUIR, "Concluir demanda", "Permite encerrar a demanda quando o resultado foi alcançado.", False),
+            (ATIVIDADE_CANCELAR, "Cancelar demanda", "Permite cancelar a demanda registrando o motivo.", True),
+            (ATIVIDADE_REABRIR, "Reabrir demanda", "Permite reabrir uma demanda já concluída.", True),
+            (ATIVIDADE_MARCAR_PENDENTE, "Marcar demanda como pendente", "Permite pausar a demanda registrando o motivo da pendência, com comentário obrigatório.", False),
+            (ATIVIDADE_APROVAR_PENDENCIA, "Aprovar pendência da demanda", "Permite decidir uma pendência que aguarda aprovação do gestor, devolvendo a demanda para quem a designou.", True),
+            (ATIVIDADE_MOVER_ESTAGIO, "Mover estágio da demanda", "Permite alterar o estágio visual de uma demanda no Kanban.", False),
         ],
     ),
     (
@@ -124,7 +126,7 @@ GROUPS = [
         "Tarefas",
         [
             (TAREFA_VISUALIZAR, "Visualizar tarefas", "Permite abrir tarefas dentro do escopo autorizado.", False),
-            (TAREFA_CRIAR, "Criar tarefa", "Permite adicionar tarefas a uma atividade.", False),
+            (TAREFA_CRIAR, "Criar tarefa", "Permite adicionar tarefas a uma demanda.", False),
             (TAREFA_EDITAR, "Editar tarefa", "Permite alterar título, descrição, ordem e dependência.", False),
             (TAREFA_ATRIBUIR, "Atribuir participante", "Permite incluir ou remover participantes de uma tarefa.", False),
             (TAREFA_ALTERAR_RESPONSAVEL, "Alterar responsável da tarefa", "Permite transferir a responsabilidade pela conclusão da tarefa para outra pessoa.", True),
@@ -168,7 +170,7 @@ GROUPS = [
         "comunicacao",
         "Comunicação",
         [
-            (COMUNICACAO_PARTICIPAR, "Participar da conversa", "Permite escrever mensagens no contexto de atividades e tarefas.", False),
+            (COMUNICACAO_PARTICIPAR, "Participar da conversa", "Permite escrever mensagens no contexto de demandas e tarefas.", False),
         ],
     ),
     (
@@ -184,9 +186,9 @@ GROUPS = [
             (CLIENTE_GERIR, "Gerir clientes", "Permite criar, editar e inativar clientes da organização.", False),
             (MOTIVO_DEVOLUCAO_GERIR, "Gerir motivos de devolução", "Permite manter a lista de motivos usada nas devoluções.", False),
             (ESTAGIO_TAREFA_GERIR, "Gerir estágios de tarefa", "Permite criar, editar, reordenar e inativar os estágios (colunas do Kanban) de tarefa da organização.", False),
-            (TAG_GERIR, "Gerir marcadores", "Permite criar, editar e inativar os marcadores (tags) usados em atividades e tarefas da organização.", False),
-            (COR_STATUS_GERIR, "Gerir cores de status", "Permite customizar a cor visual dos status de atividade e de tarefa da organização.", False),
-            (COR_PRIORIDADE_GERIR, "Gerir cores de prioridade", "Permite customizar a cor visual das prioridades (urgência) das atividades da organização.", False),
+            (TAG_GERIR, "Gerir marcadores", "Permite criar, editar e inativar os marcadores (tags) usados em demandas e tarefas da organização.", False),
+            (COR_STATUS_GERIR, "Gerir cores de status", "Permite customizar a cor visual dos status de demanda e de tarefa da organização.", False),
+            (COR_PRIORIDADE_GERIR, "Gerir cores de prioridade", "Permite customizar a cor visual das prioridades (urgência) das demandas da organização.", False),
         ],
     ),
     (
@@ -197,9 +199,9 @@ GROUPS = [
             (PROCESSO_CRIAR, "Criar processo", "Permite cadastrar um novo processo em rascunho.", False),
             (PROCESSO_EDITAR_RASCUNHO, "Editar rascunho de processo", "Permite alterar inputs, output, critérios e fluxo antes da publicação.", False),
             (PROCESSO_PUBLICAR, "Publicar versão de processo", "Permite tornar uma versão do processo disponível para uso — depois disso ela não é mais alterada.", True),
-            (PROCESSO_CRIAR_VERSAO, "Criar nova versão de processo", "Permite abrir uma nova versão a partir da publicada, sem alterar atividades já em andamento.", False),
+            (PROCESSO_CRIAR_VERSAO, "Criar nova versão de processo", "Permite abrir uma nova versão a partir da publicada, sem alterar demandas já em andamento.", False),
             (PROCESSO_INATIVAR, "Inativar processo", "Permite impedir novas aplicações do processo, preservando o histórico.", True),
-            (PROCESSO_APLICAR, "Aplicar processo em atividade", "Permite aplicar a versão publicada de um processo a uma atividade: ela recebe as entradas, os critérios de aceite e as tarefas do fluxo, em todos os setores do processo.", False),
+            (PROCESSO_APLICAR, "Aplicar processo em demanda", "Permite aplicar a versão publicada de um processo a uma demanda: ela recebe as entradas, os critérios de aceite e as tarefas do fluxo, em todos os setores do processo.", False),
         ],
     ),
     (

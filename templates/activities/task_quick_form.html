@@ -10,7 +10,7 @@ resumo. Mesmo corpo de "Nova tarefa" avulsa e de "Editar tarefa" (_task_editor_f
 <div class="modal-backdrop activity-modal-overlay task-modal-overlay">
     <div class="modal activity-modal task-modal">
         {% url 'activity-detail' activity.pk as close_url %}
-        {% include "activities/_task_modal_head.html" with modal_title="Nova tarefa" modal_subtitle="Adicione uma tarefa a esta atividade e defina quem será responsável por executá-la." %}
+        {% include "activities/_task_modal_head.html" with modal_title="Nova tarefa" modal_subtitle="Adicione uma tarefa a esta demanda e defina quem será responsável por executá-la." %}
         <form method="post" class="activity-modal-form">
             {% csrf_token %}
             <div class="activity-modal-body task-modal-body">

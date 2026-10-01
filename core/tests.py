@@ -275,11 +275,23 @@ class EnumColorLabelFormViewTests(TestCase):
     def test_post_saves_override_and_redirects_to_settings_tab(self):
         url = reverse("enumcolor-label-edit", kwargs={"domain": "activity_status", "code": "BLOQUEADA"})
         response = self.client.post(url, {"label": "Travada", "description": "Impedimento", "is_hidden": "on"})
-        self.assertRedirects(response, f"{reverse('config-etapas-status')}?tab=status-atividade")
+        self.assertRedirects(response, f"{reverse('config-etapas-status')}?tab=status-demanda")
         label, description, is_hidden = EnumColorService.get_overrides(self.org, "activity_status", "BLOQUEADA")
         self.assertEqual(label, "Travada")
         self.assertEqual(description, "Impedimento")
         self.assertTrue(is_hidden)
+
+    def test_old_tab_addresses_still_open_the_right_tab(self):
+        grant_action(self.admin, catalog.ESTAGIO_TAREFA_GERIR, organization=self.org)
+        for old, new in (
+            ("status-atividade", "status-demanda"),
+            ("estagios-atividade", "estagios-demanda"),
+            ("atividade", "status-demanda"),
+        ):
+            with self.subTest(old=old):
+                response = self.client.get(reverse("config-etapas-status"), {"tab": old})
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.context["tab"], new)
 
     def test_unknown_code_is_404(self):
         url = reverse("enumcolor-label-edit", kwargs={"domain": "activity_status", "code": "NAO_EXISTE"})
@@ -288,6 +300,8 @@ class EnumColorLabelFormViewTests(TestCase):
 
     def test_settings_page_reflects_custom_label(self):
         EnumColorService.set_overrides(self.org, "activity_status", "BLOQUEADA", label="Travada")
-        response = self.client.get(f"{reverse('config-etapas-status')}?tab=status-atividade")
+        response = self.client.get(f"{reverse('config-etapas-status')}?tab=status-demanda")
         self.assertContains(response, "Travada")
+        self.assertContains(response, 'class="lps-sheet-status"')
+        self.assertContains(response, 'data-color-swatch')
         self.assertFalse(User.objects.filter(email="nova@example.com").exists())

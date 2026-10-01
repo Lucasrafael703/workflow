@@ -169,8 +169,8 @@ class ActivityService:
         NotificationService.notify(
             users={activity.owner, created_by},
             event_type=Notification.EventType.ACTIVITY_CREATED,
-            title="Atividade criada",
-            message=f"A atividade '{activity.title}' foi criada.",
+            title="Demanda criada",
+            message=f"A demanda '{activity.title}' foi criada.",
             activity=activity,
             actor=created_by,
         )
@@ -202,9 +202,9 @@ class ActivityService:
             ),
         )
         if not title:
-            raise ActivityError("Informe o resultado esperado da atividade.")
+            raise ActivityError("Informe o resultado esperado da demanda.")
         if owner is None:
-            raise ActivityError("Toda atividade precisa de um único dono.")
+            raise ActivityError("Toda demanda precisa de um único dono.")
 
         activity = Activity.objects.create(
             organization=organization,
@@ -259,7 +259,7 @@ class ActivityService:
             )
         else:
             if activity.status != Activity.Status.RASCUNHO:
-                raise ActivityError("Esta atividade já foi criada e não é mais um rascunho.")
+                raise ActivityError("Esta demanda já foi criada e não é mais um rascunho.")
             if activity.created_by_id != created_by.id:
                 raise ActivityError("Você não pode editar o rascunho de outra pessoa.")
             activity.title = title
@@ -279,12 +279,12 @@ class ActivityService:
         rascunho), exige título e dono de verdade, e só então dispara os
         mesmos efeitos colaterais de `create_activity`."""
         if activity.status != Activity.Status.RASCUNHO:
-            raise ActivityError("Esta atividade já foi publicada.")
+            raise ActivityError("Esta demanda já foi publicada.")
         require_action(user, catalog.ATIVIDADE_CRIAR, ResourceContext.of(activity))
         if not activity.title or activity.title == Activity.DRAFT_TITLE_PLACEHOLDER:
             raise ActivityError("Informe o resultado esperado antes de concluir.")
         if activity.owner_id is None:
-            raise ActivityError("Toda atividade precisa de um único dono antes de concluir.")
+            raise ActivityError("Toda demanda precisa de um único dono antes de concluir.")
 
         activity.status = Activity.Status.ABERTA
         activity.save(update_fields=["status"])
@@ -311,7 +311,7 @@ class ActivityService:
         require_action(changed_by, catalog.ATIVIDADE_ALTERAR_DONO, activity)
         ActivityTransitionPolicy.assert_allowed(activity, "change_owner", changed_by)
         if new_owner.id == activity.owner_id:
-            raise ActivityError("Este usuário já é o dono da atividade.")
+            raise ActivityError("Este usuário já é o dono da demanda.")
 
         previous_owner = activity.owner
         activity.owner = new_owner
@@ -330,7 +330,7 @@ class ActivityService:
         NotificationService.notify(
             users={previous_owner, new_owner},
             event_type=Notification.EventType.OWNER_CHANGED,
-            title="Dono da atividade alterado",
+            title="Dono da demanda alterado",
             message=f"O dono de '{activity.title}' passou de {previous_owner} para {new_owner}.",
             activity=activity,
             actor=changed_by,
@@ -347,9 +347,9 @@ class ActivityService:
         require_action(user, catalog.ATIVIDADE_ASSUMIR, activity)
         ActivityTransitionPolicy.assert_allowed(activity, "claim", user)
         if activity.sector_id is None:
-            raise ActivityError("Esta atividade não possui um grupo designado para ser assumida pela fila.")
+            raise ActivityError("Esta demanda não possui um grupo designado para ser assumida pela fila.")
         if user.id == activity.owner_id:
-            raise ActivityError("Você já é o dono desta atividade.")
+            raise ActivityError("Você já é o dono desta demanda.")
 
         previous_owner = activity.owner
         activity.owner = user
@@ -369,8 +369,8 @@ class ActivityService:
         NotificationService.notify(
             users={previous_owner, user},
             event_type=Notification.EventType.OWNER_CHANGED,
-            title="Atividade assumida",
-            message=f"{user.get_username()} assumiu a atividade '{activity.title}'.",
+            title="Demanda assumida",
+            message=f"{user.get_username()} assumiu a demanda '{activity.title}'.",
             activity=activity,
             actor=user,
         )
@@ -410,7 +410,7 @@ class ActivityService:
             if old_value == value:
                 continue
             if field == "title" and not value:
-                raise ActivityError("Informe o resultado esperado da atividade.")
+                raise ActivityError("Informe o resultado esperado da demanda.")
             setattr(activity, field, value)
             changed.append(field)
             AuditService.log(
@@ -479,7 +479,7 @@ class ActivityService:
         if not _same_organization(activity, sector):
             raise ActivityError("O setor informado pertence a outra organização.")
         if sector.pk == activity.sector_id:
-            raise ActivityError("Esta atividade já está neste setor.")
+            raise ActivityError("Esta demanda já está neste setor.")
         return ActivityService.update_activity(activity, user, sector=sector)
 
     @staticmethod
@@ -487,7 +487,7 @@ class ActivityService:
         return (
             "Não é possível concluir com sucesso ainda. Falta atender: "
             + "; ".join(names)
-            + ". Se a atividade precisa ser encerrada mesmo assim, finalize como “Concluído com pendências”."
+            + ". Se a demanda precisa ser encerrada mesmo assim, finalize como “Concluído com pendências”."
         )
 
     @staticmethod
@@ -513,8 +513,8 @@ class ActivityService:
         NotificationService.notify(
             users={activity.owner},
             event_type=Notification.EventType.ACTIVITY_COMPLETED,
-            title="Atividade concluída",
-            message=f"A atividade '{activity.title}' foi concluída.",
+            title="Demanda concluída",
+            message=f"A demanda '{activity.title}' foi concluída.",
             activity=activity,
             actor=user,
         )
@@ -545,8 +545,8 @@ class ActivityService:
         NotificationService.notify(
             users={activity.owner},
             event_type=Notification.EventType.ACTIVITY_CANCELLED,
-            title="Atividade cancelada",
-            message=f"A atividade '{activity.title}' foi cancelada. Motivo: {reason}",
+            title="Demanda cancelada",
+            message=f"A demanda '{activity.title}' foi cancelada. Motivo: {reason}",
             activity=activity,
             actor=user,
         )
@@ -579,8 +579,8 @@ class ActivityService:
         NotificationService.notify(
             users={activity.owner},
             event_type=Notification.EventType.ACTIVITY_REOPENED,
-            title="Atividade reaberta",
-            message=f"A atividade '{activity.title}' foi reaberta. Motivo: {reason}"[:255],
+            title="Demanda reaberta",
+            message=f"A demanda '{activity.title}' foi reaberta. Motivo: {reason}"[:255],
             activity=activity,
             actor=user,
         )
@@ -610,7 +610,7 @@ class ActivityService:
         if not comment:
             raise ActivityError("O comentário de finalização é obrigatório.")
         if activity.status in (Activity.Status.CONCLUIDA, Activity.Status.CANCELADA):
-            raise ActivityError("Esta atividade já foi finalizada.")
+            raise ActivityError("Esta demanda já foi finalizada.")
 
         as_concluded = outcome in ActivityService.OUTCOMES_AS_CONCLUDED
         action_key = catalog.ATIVIDADE_CONCLUIR if as_concluded else catalog.ATIVIDADE_CANCELAR
@@ -674,8 +674,8 @@ class ActivityService:
         NotificationService.notify(
             users={activity.owner},
             event_type=event_type,
-            title="Atividade finalizada" if as_concluded else "Atividade cancelada",
-            message=f"A atividade '{activity.title}' foi finalizada como \"{outcome_label}\". {comment}",
+            title="Demanda finalizada" if as_concluded else "Demanda cancelada",
+            message=f"A demanda '{activity.title}' foi finalizada como \"{outcome_label}\". {comment}",
             activity=activity,
             actor=user,
         )
@@ -708,7 +708,7 @@ class ActivityService:
                 raise ActivityError("Informe o prazo para o gestor decidir.")
             if activity.sector_id is None:
                 raise ActivityError(
-                    "Esta atividade não possui um grupo designado — defina um grupo antes de "
+                    "Esta demanda não possui um grupo designado — defina um grupo antes de "
                     "marcar uma pendência que precisa de aprovação do gestor."
                 )
             approver = _pick_sector_manager(activity.sector)
@@ -765,8 +765,8 @@ class ActivityService:
             NotificationService.notify(
                 users=recipients,
                 event_type=Notification.EventType.ACTIVITY_APPROVAL_NEEDED,
-                title="Atividade aguardando sua aprovação",
-                message=f"A atividade '{activity.title}' está pendente: {pendency.get_reason_display()}. Prazo: {decision_deadline:%d/%m/%Y %H:%M}.",
+                title="Demanda aguardando sua aprovação",
+                message=f"A demanda '{activity.title}' está pendente: {pendency.get_reason_display()}. Prazo: {decision_deadline:%d/%m/%Y %H:%M}.",
                 activity=activity,
                 actor=user,
             )
@@ -775,8 +775,8 @@ class ActivityService:
                 NotificationService.notify(
                     users={previous_owner},
                     event_type=Notification.EventType.ACTIVITY_PENDING,
-                    title="Atividade pendente",
-                    message=f"A atividade '{activity.title}' está pendente e aguarda aprovação do gestor.",
+                    title="Demanda pendente",
+                    message=f"A demanda '{activity.title}' está pendente e aguarda aprovação do gestor.",
                     activity=activity,
                     actor=user,
                 )
@@ -784,8 +784,8 @@ class ActivityService:
             NotificationService.notify(
                 users={activity.owner},
                 event_type=Notification.EventType.ACTIVITY_PENDING,
-                title="Atividade pendente",
-                message=f"A atividade '{activity.title}' está pendente: {pendency.get_reason_display()}.",
+                title="Demanda pendente",
+                message=f"A demanda '{activity.title}' está pendente: {pendency.get_reason_display()}.",
                 activity=activity,
                 actor=user,
             )
@@ -844,7 +844,7 @@ class ActivityService:
             users={activity.owner},
             event_type=Notification.EventType.ACTIVITY_APPROVED,
             title="Pendência aprovada",
-            message=f"A pendência de '{activity.title}' foi aprovada. A atividade voltou para a sua fila.",
+            message=f"A pendência de '{activity.title}' foi aprovada. A demanda voltou para a sua fila.",
             activity=activity,
             actor=user,
         )
@@ -1321,7 +1321,7 @@ class TaskService:
             if depends_on.pk == task.pk:
                 raise ActivityError("Uma tarefa não pode depender dela mesma.")
             if depends_on.activity_id != task.activity_id:
-                raise ActivityError("A tarefa anterior precisa ser da mesma atividade.")
+                raise ActivityError("A tarefa anterior precisa ser da mesma demanda.")
             if depends_on.status == Task.Status.CANCELADA:
                 raise ActivityError("Não dá para depender de uma tarefa cancelada.")
             if depends_on.pk in TaskService._descendant_ids(task):
@@ -1923,12 +1923,12 @@ class TaskService:
 
         activity = task.activity
         if activity.status == Activity.Status.CANCELADA:
-            raise ActivityError("A atividade desta tarefa foi cancelada; não é possível reabrir a tarefa.")
+            raise ActivityError("A demanda desta tarefa foi cancelada; não é possível reabrir a tarefa.")
         reopens_activity = activity.status == Activity.Status.CONCLUIDA
         if reopens_activity and not AuthorizationService.can(user, catalog.ATIVIDADE_REABRIR, activity):
             raise ActivityError(
-                "A atividade desta tarefa está concluída e reabrir a tarefa exige reabrir a atividade, "
-                "o que você não tem permissão para fazer. Peça a quem pode reabrir a atividade."
+                "A demanda desta tarefa está concluída e reabrir a tarefa exige reabrir a demanda, "
+                "o que você não tem permissão para fazer. Peça a quem pode reabrir a demanda."
             )
 
         # Tudo o que pode recusar vem antes de qualquer gravação.
@@ -2257,7 +2257,7 @@ class TaskService:
                 users=recipients,
                 event_type=Notification.EventType.TASK_OVERDUE,
                 title="Tarefa atrasada",
-                message=f"A tarefa '{task.title}' da atividade '{task.activity.title}' está atrasada.",
+                message=f"A tarefa '{task.title}' da demanda '{task.activity.title}' está atrasada.",
                 activity=task.activity,
                 task=task,
             )
@@ -2455,7 +2455,7 @@ class DeadlineService:
         if proposal.status != DeadlineProposal.Status.PENDENTE:
             raise ActivityError("Esta proposta já foi decidida.")
         if user.id != proposal.task.activity.owner_id:
-            raise ActivityError("Somente o dono da atividade pode aceitar o prazo proposto.")
+            raise ActivityError("Somente o dono da demanda pode aceitar o prazo proposto.")
 
         proposal.status = DeadlineProposal.Status.ACEITO
         proposal.decided_by = user
@@ -2487,7 +2487,7 @@ class DeadlineService:
         if proposal.status != DeadlineProposal.Status.PENDENTE:
             raise ActivityError("Esta proposta já foi decidida.")
         if user.id != proposal.task.activity.owner_id:
-            raise ActivityError("Somente o dono da atividade pode recusar o prazo proposto.")
+            raise ActivityError("Somente o dono da demanda pode recusar o prazo proposto.")
 
         proposal.status = DeadlineProposal.Status.RECUSADO
         proposal.decided_by = user
@@ -2580,7 +2580,7 @@ class MessageService:
             NotificationService.notify(
                 users=recipients,
                 event_type=Notification.EventType.MESSAGE_POSTED,
-                title="Nova mensagem na atividade",
+                title="Nova mensagem na demanda",
                 message=MessageService._truncate(f"{author.get_username()}: {body}"),
                 activity=activity,
                 actor=author,

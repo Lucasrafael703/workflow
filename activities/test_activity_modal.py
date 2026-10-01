@@ -59,26 +59,26 @@ class StructureTests(ModalTestCase):
         self.assertEqual(html.count("data-step-panel="), 3)
         self.assertEqual(html.count("data-step-indicator="), 3)
         for subtitle in (
-            "Dados básicos da atividade e responsáveis.",
+            "Dados básicos da demanda e responsáveis.",
             "Dados relacionados ao cliente, obra e centro de custo.",
-            "Informações complementares para a execução da atividade.",
+            "Informações complementares para a execução da demanda.",
         ):
             self.assertIn(subtitle, html)
 
     def test_header_and_footer(self):
         html = self.html()
-        self.assertIn("Nova atividade", html)
-        self.assertIn("Preencha as informações para criar uma nova atividade.", html)
+        self.assertIn("Nova demanda", html)
+        self.assertIn("Preencha as informações para criar uma nova demanda.", html)
         for marker in ("data-step-prev", "data-step-next", "data-step-submit"):
             self.assertIn(marker, html)
         self.assertIn("Cancelar", html)
-        self.assertIn("Criar atividade", html)
+        self.assertIn("Criar demanda", html)
 
     def test_step_one_fields_in_the_expected_order(self):
         html = self.html()
         positions = [html.index(f'data-field="{name}"') for name in ("title", "owner", "sector", "requested_deadline", "urgency", "company")]
         self.assertEqual(positions, sorted(positions))
-        for label in ("Nome da atividade", "Atribuído a", "Setor responsável", "Prazo de vencimento", "Urgência", "Organização"):
+        for label in ("Nome da demanda", "Atribuído a", "Setor responsável", "Prazo de vencimento", "Urgência", "Organização"):
             self.assertIn(label, html)
 
     def test_step_two_and_three_fields(self):
@@ -93,19 +93,19 @@ class StructureTests(ModalTestCase):
         for text in (
             "Descreva a entrega esperada. Ex.: Orçamento do gerador aprovado.",
             "Essa pessoa será responsável pela entrega e acompanhará as tarefas.",
-            "Escolha o setor que será responsável por esta atividade.",
-            "Data e horário para conclusão da atividade. Sem horário, vale até o fim do dia.",
+            "Escolha o setor que será responsável por esta demanda.",
+            "Data e horário para conclusão da demanda. Sem horário, vale até o fim do dia.",
             "Ex.: Comercial, Engenharia, Operações, etc.",
-            "Selecione o cliente relacionado a esta atividade.",
+            "Selecione o cliente relacionado a esta demanda.",
             "Selecione a obra relacionada, se houver.",
-            "Escolha o centro de custo para apropriação desta atividade.",
+            "Escolha o centro de custo para apropriação desta demanda.",
             "Pessoa que solicitou a demanda (cliente, fornecedor, etc.).",
             "Informações adicionais do local, se necessário.",
-            "Inclua todas as informações necessárias para a execução desta atividade.",
+            "Inclua todas as informações necessárias para a execução desta demanda.",
             "Ex.: Material disponível na obra", "Buscar pessoa...", "Selecionar setor", "Selecionar organização",
             "Selecionar cliente", "Selecionar obra", "Selecionar centro de custo", "Nome do solicitante",
             "Ex.: Rua, número, complemento, bairro, cidade", "Cole aqui o link ou caminho dos arquivos",
-            "Descreva aqui os detalhes da atividade",
+            "Descreva aqui os detalhes da demanda",
         ):
             self.assertIn(text, html, msg=text)
 
@@ -137,7 +137,7 @@ class StructureTests(ModalTestCase):
         self.assertNotIn("multipart/form-data", html)
         for name in ("internal_notes", "requested_by", "tags", "files"):
             self.assertNotIn(f'name="{name}"', html, msg=name)
-        for text in ("Arraste", "Adicionar arquivos", "Anotações para a equipe", "Marcadores", "Contexto da atividade"):
+        for text in ("Arraste", "Adicionar arquivos", "Anotações para a equipe", "Marcadores", "Contexto da demanda"):
             self.assertNotIn(text, html, msg=text)
 
     def test_notes_editor_has_the_requested_tools_and_a_counter(self):
@@ -157,10 +157,10 @@ class StructureTests(ModalTestCase):
         for name in ("Informações principais", "Informações do cliente", "Descrição e arquivos", "Link / caminho dos arquivos"):
             self.assertIn(name, edit_html)
         self.assertEqual(create_html.count("data-step-panel="), edit_html.count("data-step-panel="))
-        self.assertIn("Editar atividade", edit_html)
-        self.assertIn("Atualize as informações da atividade.", edit_html)
+        self.assertIn("Editar demanda", edit_html)
+        self.assertIn("Atualize as informações da demanda.", edit_html)
         self.assertIn("Salvar alterações", edit_html)
-        self.assertNotIn("Criar atividade", edit_html.replace("Nova atividade", ""))
+        self.assertNotIn("Criar demanda", edit_html.replace("Nova demanda", ""))
         self.assertEqual(edit.context["form"].initial.get("title") or edit.context["form"]["title"].value(), self.activity.title)
 
     def test_stepper_and_nav_buttons_are_hidden_until_javascript_runs(self):

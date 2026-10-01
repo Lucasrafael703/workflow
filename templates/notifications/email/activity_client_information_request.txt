@@ -1,6 +1,6 @@
 Olá, {{ client.name }}.
 
-Precisamos de algumas informações para continuar o atendimento da atividade "{{ activity.title }}".
+Precisamos de algumas informações para continuar o atendimento da demanda "{{ activity.title }}".
 
 {{ pendency.comment }}
 
