@@ -141,7 +141,7 @@ campos de texto para “Continuar”. Todos os painéis são do **mesmo formulá
 ficam `hidden`, então nada se perde ao avançar ou voltar. Escuta o envio em captura
 (antes do `LPSModal`) para que só o botão final envie e, quando o servidor devolve
 erros, abre a etapa do primeiro erro. Sem o script as três etapas aparecem empilhadas.
-Ao **editar**, o botão “Salvar alterações” existe em qualquer etapa (`data-submit-anywhere`: tudo já
+A janela de **criar** tem 4 etapas (Informações principais, Cliente e obra, **Quadro de tarefas** — começar em branco ou usar um quadro existente, e o campo “Modelo de quadro” só aparece e só é exigido no segundo caso —, Descrição e arquivos, sem upload); a de **editar** tem 3, sem o quadro (a demanda já tem o seu). Erro ao montar o quadro (`BoardError`) volta como erro do formulário no passo 3. Ao **editar**, o botão “Salvar alterações” existe em qualquer etapa (`data-submit-anywhere`: tudo já
 vem preenchido, e o envio ainda confere as três etapas); ao criar continua só na última. A janela de
 edição aceita `?passo=N` (o clique em Cliente / Obra da lista de Demandas abre a etapa 2).
 O editor de texto (`RichTextWidget`) ganhou tachado, lista numerada, marcador de

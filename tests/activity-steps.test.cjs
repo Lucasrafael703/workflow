@@ -24,6 +24,7 @@ import django
 django.setup()
 from django.template import Context, Template
 from activities.forms import ActivityEditorForm
+from activities.models import Activity
 
 source = open(os.path.join('templates', 'activities', 'activity_form.html'), encoding='utf-8').read()
 body = re.search(r'{% block content %}(.*){% endblock %}\\s*$', source, re.S).group(1)
@@ -34,8 +35,10 @@ context = Context({
     'cancel_url': '/demandas/', 'return_url': '/demandas/', 'draft': None, 'activity': None, 'attachments': [],
     'csrf_token': 'test-csrf-token',
 })
-edit_context = Context({**context.flatten(), 'editing': True, 'initial_step': 2, 'editor_title': 'Editar demanda',
-    'submit_label': 'Salvar alterações'})
+# Editar: a demanda já tem o seu quadro, então o passo "Quadro de tarefas" não existe (3 etapas).
+edit_form = ActivityEditorForm(organization=None, can_change_owner=True, instance=Activity(pk=9, status='ABERTA'))
+edit_context = Context({**context.flatten(), 'form': edit_form, 'steps': edit_form.steps, 'editing': True, 'initial_step': 2,
+    'editor_title': 'Editar demanda', 'submit_label': 'Salvar alterações'})
 print(json.dumps([Template(body).render(context), Template(body).render(edit_context)]))
 `], {cwd: root, encoding: "utf8"}).trim();
 
@@ -80,7 +83,7 @@ test("abre na etapa 1, com o indicador visível e Voltar desabilitado", t => {
 
 test("os nomes das etapas estão no indicador", t => {
     const {$$} = setup(t);
-    assert.deepEqual($$(".activity-step-label").map(el => el.textContent.trim()), ["Informações principais", "Informações do cliente", "Descrição e arquivos"]);
+    assert.deepEqual($$(".activity-step-label").map(el => el.textContent.trim()), ["Informações principais", "Cliente e obra", "Quadro de tarefas", "Descrição e arquivos"]);
 });
 
 test("continuar com os obrigatórios vazios fica na etapa 1 e mostra o erro junto do campo", t => {
@@ -129,18 +132,20 @@ test("avança para a etapa 2 e marca a 1 como concluída com o ✓", t => {
     assert.equal(indicator(3).querySelector(".activity-step-number").textContent, "3");
 });
 
-test("na etapa 3 o botão final aparece e o Continuar some", t => {
+test("na etapa 4 o botão final aparece e o Continuar some", t => {
     const {$, visiblePanels, indicator, next, fillRequired} = setup(t);
     fillRequired();
     next();
     next();
-    assert.deepEqual(visiblePanels(), ["3"]);
+    next();
+    assert.deepEqual(visiblePanels(), ["4"]);
     assert.equal($("[data-step-next]").hidden, true);
     assert.equal($("[data-step-submit]").hidden, false);
     assert.equal($("[data-step-prev]").disabled, false);
     assert.ok(indicator(1).classList.contains("is-complete"));
     assert.ok(indicator(2).classList.contains("is-complete"));
-    assert.ok(indicator(3).classList.contains("is-active"));
+    assert.ok(indicator(3).classList.contains("is-complete"));
+    assert.ok(indicator(4).classList.contains("is-active"));
     assert.match($("[data-step-submit]").textContent, /Criar demanda/);
 });
 
@@ -151,7 +156,9 @@ test("voltar e avançar não apagam nada do que foi preenchido", t => {
     $("[name=external_requester]").value = "Maria Silva";
     $("[name=address]").value = "Rua das Flores, 100";
     next();
+    next();
     $("[name=files_location]").value = "\\\\Servidor\\Comercial\\Projeto X";
+    prev();
     prev();
     prev();
     assert.deepEqual(visiblePanels(), ["1"]);
@@ -160,22 +167,23 @@ test("voltar e avançar não apagam nada do que foi preenchido", t => {
     assert.equal($("[name=sector]").value, "2");
     next();
     next();
+    next();
     assert.equal($("[name=external_requester]").value, "Maria Silva");
     assert.equal($("[name=address]").value, "Rua das Flores, 100");
     assert.equal($("[name=files_location]").value, "\\\\Servidor\\Comercial\\Projeto X");
 });
 
-test("todos os campos das três etapas seguem dentro do mesmo formulário", t => {
+test("todos os campos das quatro etapas seguem dentro do mesmo formulário", t => {
     const {$, $$} = setup(t);
     const form = $("form");
-    for (const name of ["title", "owner", "sector", "requested_deadline_0", "requested_deadline_1", "urgency", "company", "client", "site", "cost_center", "external_requester", "address", "description", "files_location"]) {
+    for (const name of ["board_setup_mode", "board_template", "stage", "condition", "title", "owner", "sector", "requested_deadline_0", "requested_deadline_1", "urgency", "company", "client", "site", "cost_center", "external_requester", "address", "description", "files_location"]) {
         assert.ok(form.querySelector(`[name=${name}]`), name);
     }
     assert.equal($$("form").length, 1);
     assert.equal($$("input[type=file]").length, 0, "não há upload");
 });
 
-test("o envio nas duas primeiras etapas vira 'continuar' e não chega ao LPSModal", t => {
+test("o envio nas três primeiras etapas vira 'continuar' e não chega ao LPSModal", t => {
     const {$, window, visiblePanels, fillRequired} = setup(t);
     let reached = 0;
     $("form").addEventListener("submit", event => { reached += 1; event.preventDefault(); });
@@ -194,7 +202,11 @@ test("o envio nas duas primeiras etapas vira 'continuar' e não chega ao LPSModa
     assert.equal(reached, 0);
     assert.deepEqual(visiblePanels(), ["3"]);
 
-    submit();  // etapa 3: agora sim envia
+    submit();  // etapa 3 (quadro): avança
+    assert.equal(reached, 0);
+    assert.deepEqual(visiblePanels(), ["4"]);
+
+    submit();  // etapa 4: agora sim envia
     assert.equal(reached, 1);
 });
 
@@ -205,6 +217,7 @@ test("na última etapa, se algo obrigatório ficou vazio, volta à etapa 1 em ve
     fillRequired();
     next();
     next();
+    next();
     $("[name=sector]").value = "";  // limpado por fora da etapa 1
     $("form").dispatchEvent(new window.Event("submit", {bubbles: true, cancelable: true}));
     assert.equal(reached, 0);
@@ -213,15 +226,17 @@ test("na última etapa, se algo obrigatório ficou vazio, volta à etapa 1 em ve
 });
 
 test("Enter num campo de texto avança em vez de enviar", t => {
-    const {$, window, visiblePanels, fillRequired} = setup(t);
+    const {$, window, visiblePanels, fillRequired, next} = setup(t);
     fillRequired();
     const press = target => target.dispatchEvent(new window.KeyboardEvent("keydown", {key: "Enter", bubbles: true, cancelable: true}));
     press($("[name=title]"));
     assert.deepEqual(visiblePanels(), ["2"]);
     press($("[name=external_requester]"));
     assert.deepEqual(visiblePanels(), ["3"]);
+    next();
+    assert.deepEqual(visiblePanels(), ["4"]);
     press($("[name=files_location]"));  // última etapa: Enter envia (comportamento do navegador)
-    assert.deepEqual(visiblePanels(), ["3"]);
+    assert.deepEqual(visiblePanels(), ["4"]);
 });
 
 test("abre direto na etapa indicada pelo servidor", t => {
@@ -372,15 +387,16 @@ async function openAndFill(ctx, onSuccess) {
     ctx.$("[data-step-next]").click();
     ctx.$("[name=external_requester]").value = "Maria Silva";
     ctx.$("[data-step-next]").click();
+    ctx.$("[data-step-next]").click();  // etapa 3: quadro em branco (padrão)
     ctx.$("[name=files_location]").value = "https://drive.example.com/pasta";
 }
 
-test("LPSModal: a demanda só é enviada no botão final, com as três etapas juntas", async t => {
+test("LPSModal: a demanda só é enviada no botão final, com as quatro etapas juntas", async t => {
     const ctx = modalSetup(t, [{html: fixture}, {json: {redirect_url: "/demandas/9/"}}]);
     let result = null;
     await openAndFill(ctx, value => { result = value; });
     assert.equal(ctx.calls.length, 1, "avançar de etapa não envia nada");
-    assert.deepEqual(ctx.visiblePanels(), ["3"]);
+    assert.deepEqual(ctx.visiblePanels(), ["4"]);
 
     ctx.$("[data-step-submit]").click();
     await flush();
@@ -492,4 +508,52 @@ test("LPSModal: fechar e abrir de novo começa na etapa 1", async t => {
     assert.equal(ctx.$(".activity-modal"), null);
     await ctx.window.LPSModal.open("/demandas/nova/", {});
     assert.deepEqual(ctx.visiblePanels(), ["1"]);
+});
+
+
+/* ---------------------------------------------------------------------------
+   Passo 3 — Quadro de tarefas: o "Modelo de quadro" só existe em "Usar quadro existente". */
+test("quadro: começar em branco é o padrão e o campo de modelo fica escondido e não obrigatório", t => {
+    const {$} = setup(t);
+    assert.equal($("[name=board_setup_mode]:checked").value, "BLANK");
+    assert.equal($("[data-board-template-field]").hidden, true);
+    assert.equal($("[data-board-template-field] [data-field=board_template]").hasAttribute("data-required"), false);
+});
+
+test("quadro: escolher 'Usar quadro existente' mostra o modelo e passa a exigi-lo antes de seguir", t => {
+    const {$, window, visiblePanels, next, fillRequired} = setup(t);
+    fillRequired();
+    next();
+    next();
+    assert.deepEqual(visiblePanels(), ["3"]);
+    const radio = $("[name=board_setup_mode][value=TEMPLATE]");
+    radio.checked = true;
+    radio.dispatchEvent(new window.Event("change", {bubbles: true}));
+    assert.equal($("[data-board-template-field]").hidden, false);
+    assert.ok($("[data-board-template-field] [data-field=board_template]").hasAttribute("data-required"));
+    next();  // sem modelo: não avança e mostra o erro junto do campo
+    assert.deepEqual(visiblePanels(), ["3"]);
+    assert.match($("[data-field=board_template] .activity-error").textContent, /modelo de quadro/);
+    // voltando para "em branco" o campo some e nada mais é exigido
+    const blank = $("[name=board_setup_mode][value=BLANK]");
+    blank.checked = true;
+    blank.dispatchEvent(new window.Event("change", {bubbles: true}));
+    assert.equal($("[data-board-template-field]").hidden, true);
+    assert.equal($("[data-field=board_template] .activity-error"), null);
+    next();
+    assert.deepEqual(visiblePanels(), ["4"]);
+});
+
+test("etapa e status ficam no passo 1, independentes, e o quadro não aparece ali", t => {
+    const {$} = setup(t);
+    const panel1 = $('[data-step-panel="1"]');
+    assert.ok(panel1.querySelector("[data-field=stage]"));
+    assert.ok(panel1.querySelector("[data-field=condition]"));
+    assert.equal(panel1.querySelector("[name=board_setup_mode]"), null);
+});
+
+test("editar: não há o passo do quadro (3 etapas)", t => {
+    const {$$} = setup(t, {edit: true});
+    assert.equal($$("[data-step-panel]").length, 3);
+    assert.equal($$("[name=board_setup_mode]").length, 0);
 });

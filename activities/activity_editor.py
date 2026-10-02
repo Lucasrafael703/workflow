@@ -20,6 +20,8 @@ from acessos import catalog
 from acessos.services import AuthorizationService
 from core.mixins import OrganizationRequiredMixin
 
+from boards.services import BoardError
+
 from .forms import ActivityEditorForm, activity_summary
 from .models import Activity
 from .navigation import activity_detail_url, activity_return_url
@@ -142,8 +144,9 @@ class ActivityEditorView(OrganizationRequiredMixin, FormView):
                     )
                     if not save_draft:
                         ActivityService.publish_draft(activity, self.request.user)
-        except ActivityError as exc:
-            form.add_error(None, str(exc))
+        except (ActivityError, BoardError) as exc:
+            # Falha ao montar o quadro (modelo indisponível...) vira erro do formulário, não 500; nada é gravado.
+            form.add_error("board_template" if isinstance(exc, BoardError) else None, str(exc))
             return self.form_invalid(form)
 
         return_url = activity_return_url(self.request)

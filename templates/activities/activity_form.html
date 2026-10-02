@@ -2,9 +2,9 @@
 {% block title %}{{ editor_title }} — LPS{% endblock %}
 
 {% comment %}
-Nova atividade e Editar atividade: a MESMA janela, em três etapas.
+Nova atividade e Editar atividade: a MESMA janela, em quatro etapas.
 
-    1. Informações principais   2. Informações do cliente   3. Descrição e arquivos
+    1. Informações principais   2. Cliente e obra   3. Quadro de tarefas   4. Descrição e arquivos
 
 Todas as etapas são campos de um único formulário; nada é gravado antes do envio
 final (static/js/activity-steps.js só mostra uma etapa por vez e valida a
@@ -54,7 +54,7 @@ Não há upload: a etapa 3 só tem as observações e o link/caminho dos arquivo
                         </div>
                     </div>
 
-                    {% if step.number == 1 %}
+                    {% if step.key == 1 %}
                     <div class="activity-form-grid">
                         {% include "activities/_activity_modal_field.html" with field=form.title icon="file-text" full=True required=True %}
                         {% if form.owner.field.disabled %}
@@ -68,8 +68,6 @@ Não há upload: a etapa 3 só tem as observações e o link/caminho dos arquivo
                         {% include "activities/_activity_modal_field.html" with field=form.owner required=True %}
                         {% endif %}
                         {% include "activities/_activity_modal_field.html" with field=form.sector required=True %}
-                        {% include "activities/_activity_modal_field.html" with field=form.board_setup_mode full=True %}
-                        {% include "activities/_activity_modal_field.html" with field=form.board_template full=True %}
                         {% include "activities/_activity_modal_field.html" with field=form.stage %}
                         {% include "activities/_activity_modal_field.html" with field=form.condition %}
                         {% include "activities/_activity_modal_field.html" with field=form.requested_deadline %}
@@ -90,13 +88,35 @@ Não há upload: a etapa 3 só tem as observações e o link/caminho dos arquivo
                         {% include "activities/_activity_modal_field.html" with field=form.company full=True %}
                     </div>
 
-                    {% elif step.number == 2 %}
+                    {% elif step.key == 2 %}
                     <div class="activity-form-grid">
                         {% include "activities/_activity_modal_field.html" with field=form.client %}
                         {% include "activities/_activity_modal_field.html" with field=form.site %}
                         {% include "activities/_activity_modal_field.html" with field=form.cost_center %}
                         {% include "activities/_activity_modal_field.html" with field=form.external_requester icon="user" %}
                         {% include "activities/_activity_modal_field.html" with field=form.address icon="pin" full=True %}
+                    </div>
+
+                    {% elif step.key == 3 %}
+                    <div class="activity-form-grid">
+                        <div class="activity-form-group form-row activity-form-full{% if form.board_setup_mode.errors %} has-error{% endif %}" data-field="board_setup_mode">
+                            <span class="activity-label" id="board-mode-label">Como deseja organizar as tarefas?</span>
+                            <div class="board-choice-grid" role="radiogroup" aria-labelledby="board-mode-label">
+                                {% for radio in form.board_setup_mode %}
+                                <label class="board-choice" for="{{ radio.id_for_label }}">
+                                    {{ radio.tag }}
+                                    <span>
+                                        <strong>{{ radio.choice_label }}</strong>
+                                        <small>{% if radio.data.value == 'TEMPLATE' %}Use um quadro já configurado como modelo.{% else %}Crie um novo quadro de tarefas do zero para esta demanda.{% endif %}</small>
+                                    </span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                            {% if form.board_setup_mode.errors %}<ul class="errorlist" role="alert">{% for error in form.board_setup_mode.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+                        </div>
+                        <div class="activity-form-full" data-board-template-field>
+                            {% include "activities/_activity_modal_field.html" with field=form.board_template full=True %}
+                        </div>
                     </div>
 
                     {% else %}

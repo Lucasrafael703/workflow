@@ -12,7 +12,8 @@
     var REQUIRED_MESSAGES = {
         title: "Informe o nome da demanda.",
         owner: "Escolha quem fica com a demanda.",
-        sector: "Escolha o setor responsável."
+        sector: "Escolha o setor responsável.",
+        board_template: "Escolha o modelo de quadro."
     };
 
     function setup(root) {
@@ -31,6 +32,24 @@
 
         var total = panels.length;
         var current = 1;
+
+        // Quadro de tarefas: o campo "Modelo de quadro" só existe (e só é obrigatório) em "Usar quadro existente".
+        var templateBox = root.querySelector("[data-board-template-field]");
+        function syncTemplate() {
+            if (!templateBox) return;
+            var checked = root.querySelector("input[name=board_setup_mode]:checked");
+            var useTemplate = !!checked && checked.value === "TEMPLATE";
+            templateBox.hidden = !useTemplate;
+            var group = templateBox.querySelector("[data-field=board_template]");
+            if (group) {
+                if (useTemplate) group.setAttribute("data-required", "");
+                else { group.removeAttribute("data-required"); group.classList.remove("has-error"); var old = group.querySelector(".activity-error"); if (old) old.remove(); }
+            }
+        }
+        root.addEventListener("change", function (event) {
+            if (event.target && event.target.name === "board_setup_mode") syncTemplate();
+        });
+        syncTemplate();
         // Editar: tudo já vem preenchido, então "Salvar alterações" vale em qualquer etapa (criar continua só na última).
         var submitAnywhere = root.hasAttribute("data-submit-anywhere");
 

@@ -82,6 +82,22 @@
 .activity-step.is-complete .activity-step-number { background: var(--primary); color: #fff; }
 .activity-step-label { margin-top: 10px; color: #233854; font-size: 13px; font-weight: 600; }
 
+/* Passo "Quadro de tarefas": duas opções em cartão; o modelo só aparece em "Usar quadro existente". */
+.board-choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 8px 0 4px; }
+.board-choice {
+    display: flex; align-items: flex-start; gap: 12px; padding: 16px; border: 1px solid #dce6f0; border-radius: 10px;
+    background: var(--surface); cursor: pointer; transition: border-color .15s ease, background-color .15s ease;
+}
+.board-choice:hover { border-color: #b9cbe0; }
+.board-choice:has(input:checked) { border-color: var(--primary); background: #eef5ff; }
+.board-choice:has(input:focus-visible) { outline: 2px solid rgba(27, 98, 196, .45); outline-offset: 2px; }
+.board-choice input { margin-top: 3px; accent-color: var(--primary); }
+.board-choice span { display: grid; gap: 4px; }
+.board-choice strong { color: #162944; font-size: 14px; }
+.board-choice small { color: #5b718a; font-size: 12.5px; }
+[data-board-template-field][hidden] { display: none; }
+@media (max-width: 760px) { .board-choice-grid { grid-template-columns: 1fr; } }
+
 /* =========================================================
    CORPO (rola sozinho) E CARTÃO DE CADA ETAPA
 ========================================================= */

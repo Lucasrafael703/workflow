@@ -1,6 +1,6 @@
 """Nova atividade e Editar atividade: uma janela só, em três etapas.
 
-    1. Informações principais   2. Informações do cliente   3. Descrição e arquivos
+    1. Informações principais   2. Cliente e obra   3. Quadro de tarefas   4. Descrição e arquivos
 
 O backend de criação/edição é o de sempre; o que muda é a apresentação, os campos
 (sem upload, marcadores, solicitante interno nem anotações internas) e as regras
@@ -8,13 +8,14 @@ de obrigatoriedade e de dependência Cliente → Obra → Centro de custo.
 """
 
 import json
+from unittest import mock
 
 from django.urls import reverse
 from django.utils import timezone
 
 from acessos import catalog
 from acessos.testing import grant_action
-from core.models import Client, Company, CostCenter, Site
+from core.models import Client, Company, CostCenter, Sector, Site
 from core.sanitize import sanitize_description
 from core.widgets import CompanyPickerWidget, PersonPickerWidget, RichTextWidget, SitePickerWidget
 
@@ -52,18 +53,54 @@ class ModalTestCase(ViewTestCase):
 
 
 class StructureTests(ModalTestCase):
-    def test_three_steps_with_the_expected_names(self):
+    def test_four_steps_with_the_expected_names(self):
         html = self.html()
-        for name in ("Informações principais", "Informações do cliente", "Descrição e arquivos"):
+        for name in ("Informações principais", "Cliente e obra", "Quadro de tarefas", "Descrição e arquivos"):
             self.assertIn(name, html)
-        self.assertEqual(html.count("data-step-panel="), 3)
-        self.assertEqual(html.count("data-step-indicator="), 3)
+        self.assertEqual(html.count("data-step-panel="), 4)
+        self.assertEqual(html.count("data-step-indicator="), 4)
         for subtitle in (
             "Dados básicos da demanda e responsáveis.",
             "Dados relacionados ao cliente, obra e centro de custo.",
+            "Defina como as tarefas desta demanda serão organizadas.",
             "Informações complementares para a execução da demanda.",
         ):
             self.assertIn(subtitle, html)
+
+    def test_each_field_is_in_its_own_step(self):
+        form = ActivityEditorForm(organization=self.org)
+        by_step = {step["key"]: [field.name for field in step["fields"]] for step in form.steps}
+        self.assertEqual(by_step[1], ["title", "owner", "sector", "stage", "condition", "requested_deadline", "urgency", "company"])
+        self.assertEqual(by_step[2], ["client", "site", "cost_center", "external_requester", "address"])
+        self.assertEqual(by_step[3], ["board_setup_mode", "board_template"])
+        self.assertEqual(by_step[4], ["description", "files_location"])
+
+    def test_board_choice_cards_and_template_field_live_in_step_three(self):
+        html = self.html()
+        panel3 = html[html.index('data-step-panel="3"'): html.index('data-step-panel="4"')]
+        self.assertIn("Como deseja organizar as tarefas?", panel3)
+        self.assertIn("Começar em branco", panel3)
+        self.assertIn("Usar quadro existente", panel3)
+        self.assertIn("data-board-template-field", panel3)
+        panel1 = html[html.index('data-step-panel="1"'): html.index('data-step-panel="2"')]
+        self.assertNotIn("board_setup_mode", panel1)
+        self.assertNotIn("board_template", panel1)
+        self.assertIn('data-field="stage"', panel1)
+        self.assertIn('data-field="condition"', panel1)
+        self.assertIn(">Status<", panel1)
+
+    def test_there_is_no_file_upload_in_the_window(self):
+        html = self.html()
+        self.assertNotIn('type="file"', html)
+        self.assertNotIn("Arraste", html)
+
+    def test_editing_has_no_board_step(self):
+        grant_action(self.requester, catalog.ATIVIDADE_EDITAR, organization=self.org)
+        response = self.client.get(reverse("activity-edit", args=[self.activity.pk]))
+        html = response.content.decode()
+        self.assertEqual(html.count("data-step-panel="), 3)
+        self.assertNotIn("Como deseja organizar as tarefas?", html)
+        self.assertEqual([step["number"] for step in response.context["form"].steps], [1, 2, 3])
 
     def test_header_and_footer(self):
         html = self.html()
@@ -154,9 +191,9 @@ class StructureTests(ModalTestCase):
         self.assertTemplateUsed(create, "activities/activity_form.html")
         self.assertTemplateUsed(edit, "activities/activity_form.html")
         create_html, edit_html = create.content.decode(), edit.content.decode()
-        for name in ("Informações principais", "Informações do cliente", "Descrição e arquivos", "Link / caminho dos arquivos"):
+        for name in ("Informações principais", "Cliente e obra", "Descrição e arquivos", "Link / caminho dos arquivos"):
             self.assertIn(name, edit_html)
-        self.assertEqual(create_html.count("data-step-panel="), edit_html.count("data-step-panel="))
+        self.assertEqual(create_html.count("data-step-panel="), edit_html.count("data-step-panel=") + 1)  # o quadro só existe ao criar
         self.assertIn("Editar demanda", edit_html)
         self.assertIn("Atualize as informações da demanda.", edit_html)
         self.assertIn("Salvar alterações", edit_html)
@@ -321,6 +358,99 @@ class SubmitTests(ModalTestCase):
         self.assertNotIn('href="\\\\Servidor', html)
 
 
+class BoardStepTests(ModalTestCase):
+    """Passo 3: começar em branco ou usar um quadro existente (cópia independente)."""
+
+    def make_template(self, name="Modelo", **extra):
+        from boards.models import Board
+
+        return Board.objects.create(
+            organization=self.org, name=name, kind=Board.Kind.TEMPLATE, sector=self.sector, created_by=self.requester, **extra
+        )
+
+    def test_blank_is_the_default_and_creates_the_demands_own_board(self):
+        response = self.client.post(reverse("activity-create"), self.payload(title="Em branco"), **AJAX)
+        self.assertEqual(response.status_code, 200)
+        activity = Activity.objects.get(title="Em branco")
+        self.assertEqual(activity.board_setup_mode, "BLANK")
+        self.assertIsNone(activity.board_template)
+        from boards.models import Board
+
+        self.assertTrue(Board.objects.filter(activity=activity, kind="DEMAND").exists())
+
+    def test_a_template_is_copied_into_an_independent_board(self):
+        from boards.models import Board
+
+        template = self.make_template()
+        response = self.client.post(
+            reverse("activity-create"), self.payload(title="Com modelo", board_setup_mode="TEMPLATE", board_template=template.pk), **AJAX
+        )
+        self.assertEqual(response.status_code, 200)
+        board = Board.objects.get(activity__title="Com modelo")
+        self.assertNotEqual(board.pk, template.pk)
+        self.assertEqual((board.kind, board.source_template_id), ("DEMAND", template.pk))
+        Board.objects.filter(pk=template.pk).update(name="Modelo renomeado")
+        board.refresh_from_db()
+        self.assertNotEqual(board.name, "Modelo renomeado")  # sem vínculo vivo com o modelo
+
+    def test_using_an_existing_board_requires_the_template(self):
+        response = self.client.post(reverse("activity-create"), self.payload(title="Sem modelo", board_setup_mode="TEMPLATE"), **AJAX)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("board_template", response.json()["errors"])
+        self.assertFalse(Activity.objects.filter(title="Sem modelo").exists())
+        html = self.client.post(reverse("activity-create"), self.payload(title="Sem modelo", board_setup_mode="TEMPLATE")).content.decode()
+        self.assertIn('data-initial-step="3"', html)
+
+    def test_a_blank_choice_ignores_a_leftover_template(self):
+        template = self.make_template()
+        self.client.post(reverse("activity-create"), self.payload(title="Branco", board_setup_mode="BLANK", board_template=template.pk), **AJAX)
+        self.assertIsNone(Activity.objects.get(title="Branco").board_template)
+
+    def test_inactive_and_foreign_templates_are_refused(self):
+        from boards.models import Board
+
+        inactive = self.make_template("Inativo", is_active=False)
+        foreign = Board.objects.create(organization=self.other_org, name="De fora", kind=Board.Kind.TEMPLATE, created_by=self.requester)
+        for template in (inactive, foreign):
+            response = self.client.post(
+                reverse("activity-create"), self.payload(title="Recusado", board_setup_mode="TEMPLATE", board_template=template.pk), **AJAX
+            )
+            self.assertEqual(response.status_code, 400)
+        self.assertFalse(Activity.objects.filter(title="Recusado").exists())
+
+    def test_a_board_failure_is_a_form_error_not_a_500_and_nothing_is_saved(self):
+        from boards.services import BoardError
+
+        template = self.make_template()
+        with mock.patch(
+            "boards.demand_services.BoardInstantiationService.create_for_activity", side_effect=BoardError("O modelo de quadro não está disponível nesta organização.")
+        ):
+            response = self.client.post(
+                reverse("activity-create"), self.payload(title="Falha no quadro", board_setup_mode="TEMPLATE", board_template=template.pk), **AJAX
+            )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("não está disponível", json.dumps(response.json()["errors"], ensure_ascii=False))
+        self.assertFalse(Activity.objects.filter(title="Falha no quadro").exists())
+
+    def test_stage_and_status_are_independent_and_must_belong_to_the_sector(self):
+        from core.models import ActivityStage, WorkflowStatus
+
+        stage = ActivityStage.objects.create(organization=self.org, sector=self.sector, name="Execução")
+        status = WorkflowStatus.objects.create(organization=self.org, sector=self.sector, domain="activity", name="Aguardando")
+        ok = self.client.post(reverse("activity-create"), self.payload(title="Etapa e status", stage=stage.pk, condition=status.pk), **AJAX)
+        self.assertEqual(ok.status_code, 200)
+        created = Activity.objects.get(title="Etapa e status")
+        self.assertEqual((created.stage_id, created.condition_id), (stage.pk, status.pk))
+        self.assertEqual(created.status, Activity.Status.ABERTA)  # o status visual não mexe no estado operacional
+        only_status = self.client.post(reverse("activity-create"), self.payload(title="Só status", condition=status.pk), **AJAX)
+        self.assertEqual(only_status.status_code, 200)
+        other = Sector.objects.create(organization=self.org, name="Outro setor")
+        foreign_stage = ActivityStage.objects.create(organization=self.org, sector=other, name="De outro setor")
+        refused = self.client.post(reverse("activity-create"), self.payload(title="Etapa errada", stage=foreign_stage.pk), **AJAX)
+        self.assertEqual(refused.status_code, 400)
+        self.assertIn("stage", refused.json()["errors"])
+
+
 class OpenAtStepTests(ModalTestCase):
     """Clique em Cliente / Obra na lista de Demandas: a mesma janela "Editar demanda", direto na etapa 2."""
 
@@ -444,7 +574,7 @@ class WidgetTests(ModalTestCase):
         listed = [name for names in form.STEP_FIELDS.values() for name in names]
         self.assertEqual(sorted(listed), sorted(form._meta.fields))
         self.assertEqual(len(listed), len(set(listed)))
-        self.assertEqual([step["number"] for step in form.steps], [1, 2, 3])
+        self.assertEqual([step["number"] for step in form.steps], [1, 2, 3, 4])
 
     def test_deadline_is_shown_in_local_time_in_its_own_inputs(self):
         Activity.objects.filter(pk=self.activity.pk).update(requested_deadline=timezone.make_aware(timezone.datetime(2026, 10, 5, 16, 0)))

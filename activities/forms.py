@@ -302,11 +302,12 @@ class ActivityWizardStep3Form(forms.ModelForm):
 
 
 class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
-    """Criar e editar atividade: o mesmo formulário, em três etapas.
+    """Criar e editar atividade: o mesmo formulário, em quatro etapas.
 
-        1. Informações principais  — nome, atribuído a, setor, prazo, urgência, organização
-        2. Informações do cliente  — cliente, obra, centro de custo, solicitante externo, endereço
-        3. Descrição e arquivos    — observações e o link/caminho dos arquivos (sem upload)
+        1. Informações principais  — nome, atribuído a, setor, prazo, urgência, etapa, status, organização
+        2. Cliente e obra          — cliente, obra, centro de custo, solicitante externo, endereço
+        3. Quadro de tarefas       — começar em branco ou usar um quadro existente (cópia independente)
+        4. Descrição e arquivos    — observações e o link/caminho dos arquivos (sem upload)
 
     Não tem: marcadores, solicitante interno, anotações internas nem envio de
     arquivo. Esses campos continuam no modelo, mas ficam **fora** do formulário
@@ -319,17 +320,16 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
     """
 
     STEP_FIELDS = {
-        1: (
-            "title", "owner", "sector", "board_setup_mode", "board_template", "stage", "condition",
-            "requested_deadline", "urgency", "company",
-        ),
+        1: ("title", "owner", "sector", "stage", "condition", "requested_deadline", "urgency", "company"),
         2: ("client", "site", "cost_center", "external_requester", "address"),
-        3: ("description", "files_location"),
+        3: ("board_setup_mode", "board_template"),
+        4: ("description", "files_location"),
     }
     STEP_TITLES = {
         1: ("Informações principais", "Dados básicos da demanda e responsáveis."),
-        2: ("Informações do cliente", "Dados relacionados ao cliente, obra e centro de custo."),
-        3: ("Descrição e arquivos", "Informações complementares para a execução da demanda."),
+        2: ("Cliente e obra", "Dados relacionados ao cliente, obra e centro de custo."),
+        3: ("Quadro de tarefas", "Defina como as tarefas desta demanda serão organizadas."),
+        4: ("Descrição e arquivos", "Informações complementares para a execução da demanda."),
     }
     DESCRIPTION_LIMIT = 2000
 
@@ -385,7 +385,7 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
         }
         widgets = {
             "title": forms.TextInput(
-                attrs={"class": "activity-input", "placeholder": "Ex.: Material disponível na obra", "autofocus": True}
+                attrs={"class": "activity-input", "placeholder": "Ex.: Material disponível na obra"}
             ),
             "owner": PersonPickerWidget(icon="user", selection_label="Buscar pessoa..."),
             "sector": SectorPickerWidget(icon="users"),
@@ -460,23 +460,35 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
     # -- etapas ------------------------------------------------------------------------
 
     @property
+    def _has_board_step(self):
+        """O passo "Quadro de tarefas" só existe ao criar: uma demanda publicada já tem o seu quadro."""
+        instance = getattr(self, "instance", None)
+        return not (instance is not None and instance.pk and instance.status != Activity.Status.RASCUNHO)
+
+    def _active_steps(self):
+        """`[(número mostrado, número de origem, campos)]`; sem o passo do quadro, a numeração segue sem buraco."""
+        origins = [number for number in self.STEP_FIELDS if number != 3 or self._has_board_step]
+        return [(shown, origin, self.STEP_FIELDS[origin]) for shown, origin in enumerate(origins, start=1)]
+
+    @property
     def steps(self):
         """Para o template: número, título, descrição e campos de cada etapa."""
         return [
             {
-                "number": number,
-                "title": self.STEP_TITLES[number][0],
-                "description": self.STEP_TITLES[number][1],
+                "number": shown,
+                "key": origin,
+                "title": self.STEP_TITLES[origin][0],
+                "description": self.STEP_TITLES[origin][1],
                 "fields": [self[name] for name in names],
             }
-            for number, names in self.STEP_FIELDS.items()
+            for shown, origin, names in self._active_steps()
         ]
 
     def step_with_errors(self):
         """Primeira etapa com erro (1 se não houver): onde a janela deve abrir."""
-        for number, names in self.STEP_FIELDS.items():
+        for shown, _origin, names in self._active_steps():
             if any(self[name].errors for name in names):
-                return number
+                return shown
         return 1
 
     # -- validação -------------------------------------------------------------------------
@@ -511,6 +523,7 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
         if site and cost_center and cost_center.site_id not in (None, site.pk):
             self.add_error("cost_center", "Este centro de custo pertence a outra obra.")
         mode = cleaned.get("board_setup_mode") or Activity.BoardSetupMode.BLANK
+        cleaned["board_setup_mode"] = mode  # sem escolha = começar em branco (nunca grava vazio)
         template = cleaned.get("board_template")
         if mode == Activity.BoardSetupMode.TEMPLATE and template is None:
             self.add_error("board_template", "Escolha o modelo de quadro.")
