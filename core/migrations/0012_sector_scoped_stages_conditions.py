@@ -83,6 +83,14 @@ def scope_visual_workflows(apps, schema_editor):
                     created_by_id=source.created_by_id,
                 )
 
+    # No PostgreSQL as gravações acima deixam eventos de gatilho das chaves estrangeiras (restrições adiadas)
+    # pendentes, e o ALTER TABLE das operações seguintes, na mesma transação, falha com "cannot ALTER TABLE ...
+    # because it has pending trigger events" (com banco que já tem dados; vazio ou SQLite não mostram o erro).
+    # Conferir as restrições agora esvazia a fila; depois elas voltam a ser adiadas.
+    if schema_editor.connection.vendor == "postgresql":
+        schema_editor.execute("SET CONSTRAINTS ALL IMMEDIATE")
+        schema_editor.execute("SET CONSTRAINTS ALL DEFERRED")
+
 
 class Migration(migrations.Migration):
 
