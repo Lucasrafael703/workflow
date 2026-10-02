@@ -34,6 +34,7 @@ from .models import (
     BoardItem,
     BoardView,
 )
+from .calendar_view import clean_calendar_settings, complete_new_settings
 from .kanban import clean_kanban_settings
 from .validators import (
     CURRENCY_SYMBOLS,
@@ -206,10 +207,19 @@ class BoardService:
         _audit(user, AuditLog.Action.BOARD_DELETED, board, "board", board, old=board.name)
 
 
+def clean_view_settings(view_type, columns, raw, current=None):
+    """Configuração válida de uma visualização, pelas regras do tipo dela. `ValidationError` quando algo não serve."""
+    if view_type == BoardView.Type.CALENDAR:
+        return clean_calendar_settings(columns, raw, current=current)
+    return clean_kanban_settings(columns, raw, current=current)
+
+
 class ViewService:
-    """Visualizações do quadro (Kanban). São compartilhadas por todos que veem o quadro, então criar, renomear,
-    configurar e excluir pedem `quadro.editar`; já usar a visualização (arrastar cartão, preencher campo) segue as
-    permissões de item de sempre."""
+    """Visualizações do quadro (Kanban e Calendário). São compartilhadas por todos que veem o quadro, então criar,
+    renomear, configurar e excluir pedem `quadro.editar`; já usar a visualização (arrastar cartão, preencher campo) segue
+    as permissões de item de sempre."""
+
+    DEFAULT_NAMES = {BoardView.Type.KANBAN: "Kanban", BoardView.Type.CALENDAR: "Calendário"}
 
     @staticmethod
     def _unique_name(board, base):
@@ -222,17 +232,23 @@ class ViewService:
         return f"{base} {index}"
 
     @staticmethod
-    def _make(user, board, name, settings):
+    def _make(user, board, name, settings, view_type=BoardView.Type.KANBAN):
         columns = list(BoardColumn.objects.filter(board=board, is_active=True))
         try:
-            clean = clean_kanban_settings(columns, settings)
+            if view_type == BoardView.Type.CALENDAR:
+                # o calendário nasce já apontando para a coluna de Data (e a de cor) que o servidor resolveria
+                clean = complete_new_settings(columns, settings)
+            else:
+                clean = clean_kanban_settings(columns, settings)
         except ValidationError as exc:
             raise BoardError(exc.messages[0]) from exc
         siblings = BoardView.objects.select_for_update().filter(board=board, is_active=True)
         view = BoardView.objects.create(
             board=board,
-            name=ViewService._unique_name(board, _clean_name(name, "view", required=False, fallback="Kanban")),
-            type=BoardView.Type.KANBAN,
+            name=ViewService._unique_name(
+                board, _clean_name(name, "view", required=False, fallback=ViewService.DEFAULT_NAMES[view_type])
+            ),
+            type=view_type,
             position=PositionService.place(siblings),
             settings=clean,
             created_by=user,
@@ -252,9 +268,9 @@ class ViewService:
     @transaction.atomic
     def create(*, user, board, name="", view_type=BoardView.Type.KANBAN, settings=None):
         _require(user, catalog.QUADRO_EDITAR, board)
-        if view_type != BoardView.Type.KANBAN:
+        if view_type not in (BoardView.Type.KANBAN, BoardView.Type.CALENDAR):
             raise BoardError("Tipo de visualização inválido.")
-        return ViewService._make(user, board, name, settings)
+        return ViewService._make(user, board, name, settings, view_type)
 
     @staticmethod
     @transaction.atomic
@@ -268,7 +284,7 @@ class ViewService:
         if settings:
             columns = list(BoardColumn.objects.filter(board=view.board, is_active=True))
             try:
-                clean = clean_kanban_settings(columns, settings, current=view.settings)
+                clean = clean_view_settings(view.type, columns, settings, current=view.settings)
             except ValidationError as exc:
                 raise BoardError(exc.messages[0]) from exc
             old = view.settings or {}

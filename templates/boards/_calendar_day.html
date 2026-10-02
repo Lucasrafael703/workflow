@@ -1,0 +1,8 @@
+<div class="cal-day{% if not day.in_month %} is-outside{% endif %}{% if day.is_today %} is-today{% endif %}{% if day.is_weekend %} is-weekend{% endif %}{% if day.blocked %} is-blocked{% endif %}" data-cal-day data-date="{{ day.iso }}" role="gridcell" aria-label="{{ day.label }}{% if day.is_today %} (hoje){% endif %}{% if day.blocked %} (a coluna não aceita este dia){% endif %}">
+    <div class="cal-day__head">
+        <span class="cal-day__num"{% if day.is_today %} aria-current="date"{% endif %}>{{ day.number }}{% if day.show_month %}<small>{{ day.month_abbr }}</small>{% endif %}</span>
+        {% if permissions.create_item and not day.blocked %}<button type="button" class="cal-day__add" data-cal-add aria-label="Adicionar item em {{ day.label }}">{% include "_icon.html" with name="plus" %} Adicionar</button>{% endif %}
+    </div>
+    <div class="cal-day__items" data-cal-items>{% for entry in day.entries %}{% include "boards/_calendar_card.html" %}{% endfor %}</div>
+    {% if day.more %}<button type="button" class="cal-day__more" data-cal-more>+ {{ day.more }} mais</button>{% endif %}
+</div>

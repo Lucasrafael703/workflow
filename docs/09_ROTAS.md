@@ -224,11 +224,12 @@ pede confirmação: **409** com `needs_confirmation: true`; sem permissão: 403;
 | `novo/` | `board-create` | POST (form) | `quadro.criar` | `name`, `template` (`orcamentos`, opcional) → redireciona ao quadro |
 | `<id>/` | `board-detail` | GET | `quadro.visualizar` | A tabela. `?sort=<coluna>&dir=asc\|desc`, `?q=` (nome, texto, etiqueta, pessoa), `?pessoa=<id>` |
 | `<id>/historico/` | `board-history` | GET | `quadro.visualizar` | `AuditLog` do quadro, 50 por página |
-| `visoes/<id>/` | `board-view-detail` | GET | `quadro.visualizar` | A visualização **Kanban**: as raias com os cartões. `?q=` e `?pessoa=` como na tabela; ordem e agrupamento vêm da configuração salva |
-| `<id>/visoes/novo/` | `board-view-create` | POST | `quadro.editar` | `{name, type: "KANBAN", settings}` → `{view, redirect_url}` |
+| `visoes/<id>/` | `board-view-detail` | GET | `quadro.visualizar` | A visualização escolhida na aba: **Kanban** (as raias com os cartões) ou **Calendário** (a grade do mês, `?mes=AAAA-MM`; mês inválido = o atual). `?q=` e `?pessoa=` como na tabela; ordem, agrupamento, coluna de Data e cor vêm da configuração salva |
+| `<id>/visoes/novo/` | `board-view-create` | POST | `quadro.editar` | `{name, type: "KANBAN"\|"CALENDAR", settings}` → `{view, redirect_url}`; Calendário num quadro sem coluna de Data: 400 |
 | `visoes/<id>/editar/` | `board-view-update` | POST | `quadro.editar` | `{name?, settings?}` (só as chaves enviadas mudam; valida e audita uma a uma) → `{view, settings}` completo |
 | `visoes/<id>/excluir/` | `board-view-delete` | POST | `quadro.editar` | Exclusão lógica → `{redirect_url}` (a tabela). Os itens não são afetados |
-| `visoes/<id>/lanes/` | `board-view-lanes` | POST | `quadro.visualizar` | `{q, pessoa}` → `{lanes_html, total_items, columns, settings, group_column_id, sum_column_id, card_column_ids}`: o servidor redistribui os cartões e o navegador troca o HTML |
+| `visoes/<id>/lanes/` | `board-view-lanes` | POST | `quadro.visualizar` | Só de visualização Kanban (outra: 404). `{q, pessoa}` → `{lanes_html, total_items, columns, settings, group_column_id, sum_column_id, card_column_ids}`: o servidor redistribui os cartões e o navegador troca o HTML |
+| `visoes/<id>/calendario/` | `board-view-calendar` | POST | `quadro.visualizar` | Só de visualização Calendário (outra: 404). `{mes, q, pessoa}` → `{body_html, title, month, prev, next, today, columns, settings, date_column_id, color_kind, color_column_id, card_column_ids}`: o servidor posiciona os cartões e o navegador troca o HTML (trocar de mês, depois de mover/criar/editar, ao configurar) |
 | `<id>/renomear/` | `board-rename` | POST | `quadro.editar` | `{name, description}` → `{name, description}` |
 | `<id>/excluir/` | `board-delete` | POST | `quadro.excluir` | → `{redirect_url}` |
 | `<id>/grupos/novo/` | `board-group-create` | POST | `quadro.editar` | `{name, color}` → `{group, group_html}` |
@@ -240,8 +241,9 @@ pede confirmação: **409** com `needs_confirmation: true`; sem permissão: 403;
 | `colunas/<id>/tipo/` | `board-column-type` | POST | `quadro.gerir_colunas` | `{type, preview}` → `{plan: {mode, filled, lost}}`; sem `confirm` e fora de `safe`: **409**; `{type, confirm: true}` converte |
 | `colunas/<id>/fragmento/` | `board-column-fragment` | POST | `quadro.visualizar` | Redesenha cabeçalho e células de uma coluna (depois de editar etiquetas) |
 | `colunas/<id>/etiquetas/novo/` · `etiquetas/<id>/editar/` · `mover/` · `excluir/` | `board-option-create` · `-update` · `-reorder` · `-delete` | POST | `quadro.gerir_colunas` | `{label, color}` · `{label, color, is_default, is_done}` · `{before_id, after_id}` · `{cleared_cells}` |
-| `<id>/itens/novo/` | `board-item-create` | POST | `quadro.criar_item` | `{group_id, name, initial: {column_id, value}}` → `{item, row_html}` (grupo de outro quadro: 404). `initial` preenche já uma coluna **na mesma transação** (o Kanban cria o cartão dentro de uma raia): valor inválido ou sem `editar_item` desfaz tudo |
+| `<id>/itens/novo/` | `board-item-create` | POST | `quadro.criar_item` | `{group_id, name, initial: {column_id, value} ou [{column_id, value}, …]}` → `{item, row_html}` (grupo de outro quadro: 404). `initial` preenche já uma ou várias colunas (até 30) **na mesma transação** (o Kanban cria o cartão dentro de uma raia; o Calendário, no dia clicado, com a data e os demais campos): valor inválido ou sem `editar_item` desfaz tudo |
 | `itens/<id>/renomear/` · `mover/` · `excluir/` | `board-item-rename` · `-move` · `-delete` | POST | `quadro.editar_item` · `quadro.editar_item` · `quadro.excluir_item` | `{name}` · `{group_id, before_id, after_id}` |
+| `itens/<id>/detalhe/` | `board-item-detail` | POST | `quadro.visualizar` | → `{drawer_html}`: a gaveta do item (todos os campos, os ocultos também, editáveis no lugar pelos mesmos editores da tabela, e as últimas 8 mudanças do item). Só lê, então a permissão é conferida na view |
 | `itens/<id>/colunas/<id>/valor/` | `board-cell-update` | POST | `quadro.editar_item` | `{value}` → `{display, cell_html}`; sem `value` limpa a célula |
 
 - A pesquisa de pessoas da célula reaproveita `person-search` (`/api/pessoas/`).

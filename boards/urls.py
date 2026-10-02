@@ -30,12 +30,13 @@ urlpatterns = [
     path("<int:pk>/renomear/", views.BoardRenameView.as_view(), name="board-rename"),
     path("<int:pk>/excluir/", views.BoardDeleteView.as_view(), name="board-delete"),
     path("<int:pk>/historico/", views.BoardHistoryView.as_view(), name="board-history"),
-    # visualizações (Kanban)
+    # visualizações (Kanban e Calendário)
     path("<int:pk>/visoes/novo/", views.ViewCreateView.as_view(), name="board-view-create"),
-    path("visoes/<int:pk>/", views.BoardKanbanView.as_view(), name="board-view-detail"),
+    path("visoes/<int:pk>/", views.BoardViewDetailView.as_view(), name="board-view-detail"),
     path("visoes/<int:pk>/editar/", views.ViewUpdateView.as_view(), name="board-view-update"),
     path("visoes/<int:pk>/excluir/", views.ViewDeleteView.as_view(), name="board-view-delete"),
     path("visoes/<int:pk>/lanes/", views.ViewLanesView.as_view(), name="board-view-lanes"),
+    path("visoes/<int:pk>/calendario/", views.ViewCalendarView.as_view(), name="board-view-calendar"),
     # grupos
     path("<int:pk>/grupos/novo/", views.GroupCreateView.as_view(), name="board-group-create"),
     path("grupos/<int:pk>/editar/", views.GroupUpdateView.as_view(), name="board-group-update"),
@@ -62,6 +63,7 @@ urlpatterns = [
     path("itens/<int:pk>/renomear/", views.ItemRenameView.as_view(), name="board-item-rename"),
     path("itens/<int:pk>/mover/", views.ItemMoveView.as_view(), name="board-item-move"),
     path("itens/<int:pk>/excluir/", views.ItemDeleteView.as_view(), name="board-item-delete"),
+    path("itens/<int:pk>/detalhe/", views.ItemDetailView.as_view(), name="board-item-detail"),
     path(
         "itens/<int:item_pk>/colunas/<int:column_pk>/valor/",
         views.CellUpdateView.as_view(),

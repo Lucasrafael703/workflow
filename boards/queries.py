@@ -120,6 +120,56 @@ class BoardQueryService:
         key = F("_sort").desc(nulls_last=True) if descending else F("_sort").asc(nulls_last=True)
         return queryset.order_by(key, *manual)
 
+    # -- Calendário --------------------------------------------------------------------------------
+    # As mesmas regras de visibilidade da tabela (busca, pessoa); o que muda é o recorte: só o intervalo da grade.
+
+    @staticmethod
+    def _dated(date_column, **lookups):
+        return Exists(BoardCell.objects.filter(item_id=OuterRef("pk"), column=date_column, **lookups))
+
+    @staticmethod
+    def _done(status_column):
+        """Item cuja etiqueta de Status representa conclusão."""
+        return Exists(
+            BoardCellOption.objects.filter(
+                cell__item_id=OuterRef("pk"), cell__column=status_column,
+                option__is_done=True, option__is_active=True,
+            )
+        )
+
+    @staticmethod
+    def calendar_items(board, date_column, start, end, *, status_column=None, show_completed=True, search="", person_id=None):
+        """Itens com data entre `start` e `end` (a grade do mês, com a margem das semanas de ponta), na ordem do quadro."""
+        queryset = BoardQueryService._filtered_items(board, search, person_id).filter(
+            BoardQueryService._dated(date_column, value_date__gte=start, value_date__lte=end)
+        )
+        if status_column is not None and not show_completed:
+            queryset = queryset.filter(~BoardQueryService._done(status_column))
+        return queryset.order_by("group__position", "position", "id")
+
+    @staticmethod
+    def calendar_undated(board, date_column, *, status_column=None, show_completed=True, search="", person_id=None):
+        """Itens sem data na coluna: continuam existindo e precisam de um caminho para voltar à grade."""
+        queryset = BoardQueryService._filtered_items(board, search, person_id).filter(
+            ~BoardQueryService._dated(date_column, value_date__isnull=False)
+        )
+        if status_column is not None and not show_completed:
+            queryset = queryset.filter(~BoardQueryService._done(status_column))
+        return queryset.order_by("group__position", "position", "id")
+
+    @staticmethod
+    def calendar_overdue(board, date_column, today, *, status_column=None, search="", person_id=None):
+        """Itens abertos com data anterior a hoje (o mês aberto não pode esconder trabalho vencido). `due_date` traz a data."""
+        due = BoardCell.objects.filter(item_id=OuterRef("pk"), column=date_column)
+        queryset = (
+            BoardQueryService._filtered_items(board, search, person_id)
+            .filter(BoardQueryService._dated(date_column, value_date__lt=today))
+            .annotate(due_date=Subquery(due.values("value_date")[:1]))
+        )
+        if status_column is not None:
+            queryset = queryset.filter(~BoardQueryService._done(status_column))
+        return queryset.order_by("due_date", "group__position", "position", "id")
+
     @staticmethod
     def with_cells(queryset):
         cells = BoardCell.objects.filter(column__is_active=True).prefetch_related(
@@ -150,3 +200,13 @@ class BoardQueryService:
     @staticmethod
     def history(board):
         return AuditLog.objects.filter(metadata__board_id=board.pk).select_related("user").order_by("-timestamp", "-id")
+
+    @staticmethod
+    def item_history(item, limit):
+        """Últimas mudanças de UM item: o próprio item (criar, renomear, mover, excluir) e as células dele."""
+        return (
+            AuditLog.objects.filter(metadata__board_id=item.board_id)
+            .filter(Q(target_type="board_item", target_id=item.pk) | Q(metadata__item_id=item.pk))
+            .select_related("user")
+            .order_by("-timestamp", "-id")[:limit]
+        )

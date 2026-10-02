@@ -301,11 +301,23 @@ erDiagram
   `card_fields` (ids na ordem do cartão; vazio = os 4 primeiros campos visíveis, fora o agrupador), `show_field_names`.
   Item sem etiqueta (ou com a etiqueta apagada) cai na raia **"Em branco"**. Arrastar o cartão grava a etiqueta da coluna
   agrupadora pelo mesmo serviço da célula (`CellService.set_value`): mesma validação, mesma auditoria.
+- **Visualizações (Calendário)** (`boards/calendar_view.py`): o Calendário **lê os mesmos itens** e só decide em que **dia**
+  mostrá-los, pela coluna de Data escolhida. Mover um cartão grava a **mesma célula** de data (`CellService.set_value`: a
+  mesma permissão, validação e auditoria da tabela, que registra a data anterior e a nova), então não há cópia nem
+  sincronização. `BoardView.type = CALENDAR`; `settings` aceita só: `date_field` (id de coluna de Data; vazio = a coluna
+  marcada como prazo ou a primeira Data), `period` (hoje só `month`), `color_by` (id de coluna de Status/Lista, `group` ou
+  `none`; vazio = o primeiro Status), `card_fields` (até 6 ids, na ordem; vazio = Status, a primeira Pessoa e mais um campo
+  visível, no máximo 3; a coluna de Data da lente não entra), `show_weekends`, `show_completed`. Criar exige uma coluna de
+  Data (`BoardError` se o quadro não tem) e já grava a coluna de Data e a de cor que o servidor resolveria, para criar outra
+  Data depois não trocar a lente de lugar. Só se busca o intervalo da grade (o mês e as semanas de ponta). Item **sem data**
+  não está na grade: tem contador e lista "Sem data". **Concluído** = etiqueta com `is_done` na primeira coluna de
+  **Status**; **atrasado** = coluna marcada como prazo (`is_deadline`) com data anterior a hoje e item aberto. A hora só
+  existe quando a coluna tem `show_time` **e** a célula tem hora (dia sem hora é "dia inteiro": nunca se inventa 00:00).
 - **Exclusão lógica** em tudo (`is_active`). Excluir coluna **mantém** as células no banco; grupo só sai se estiver sem itens.
 - **Auditoria genérica:** `audit.AuditLog` ganhou `target_type` (ex.: `board_cell`), `target_id` e `metadata` (JSON). Todo
   registro do quadro leva `metadata["board_id"]`, que alimenta o histórico do quadro (`/quadros/<id>/historico/`). Migração
   `audit/0010`.
-- **Migrations:** `boards/0001_initial`, `boards/0002_boardview` e `boards/0003_kanban_padrao_nos_quadros` (de dados: dá um Kanban aos quadros que já existiam; reversível); `audit/0010_auditoria_generica_de_quadros` e `audit/0011_visualizacoes_de_quadro`; `acessos/0005_quadros_actions` (cria o
+- **Migrations:** `boards/0001_initial`, `boards/0002_boardview` e `boards/0003_kanban_padrao_nos_quadros` (de dados: dá um Kanban aos quadros que já existiam; reversível); `boards/0006_visualizacao_calendario` (só acrescenta o tipo `CALENDAR` às escolhas de `BoardView.type`; não mexe em dados); `audit/0010_auditoria_generica_de_quadros` e `audit/0011_visualizacoes_de_quadro`; `acessos/0005_quadros_actions` (cria o
   grupo `quadros` e **concede por mapeamento** aos perfis existentes: quem tem `demanda.criar` recebe visualizar/criar
   item/editar item; quem tem `demanda.aprovar_pendencia`, também criar/editar quadro, gerir colunas e excluir item; quem
   tem `seguranca.gerir_perfis`, tudo. Reversível).

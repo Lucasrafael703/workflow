@@ -7,6 +7,7 @@ JSON e, quando a tela precisa redesenhar algo, devolvem o fragmento HTML pronto 
 """
 
 import json
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
@@ -17,6 +18,7 @@ from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils import timezone
 from django.views import View
 from django.views.generic import TemplateView
 
@@ -24,6 +26,25 @@ from acessos import catalog
 from acessos.services import AuthorizationService, ResourceContext
 from core.mixins import OrganizationRequiredMixin
 
+from .calendar_view import (
+    DEFAULT_CARD_FIELD_COUNT,
+    MAX_CARD_FIELDS,
+    MAX_VISIBLE_PER_DAY,
+    PANEL_LIMIT,
+    build_month,
+    clean_calendar_settings,
+    date_columns,
+    grid_range,
+    colorable_columns,
+    parse_month,
+    resolve_card_columns as resolve_calendar_card_columns,
+    resolve_color_source,
+    resolve_date_column,
+    resolve_status_column,
+    month_key,
+    month_title,
+    shift_month,
+)
 from .kanban import (
     GROUPABLE_TYPES,
     SUMMABLE_TYPES,
@@ -48,6 +69,7 @@ from .services import (
     ItemService,
     OptionService,
     ViewService,
+    clean_view_settings,
     _require as require_action,
 )
 from .starter_templates import create_board_from_template, template_choices
@@ -58,6 +80,8 @@ HISTORY_PAGE_SIZE = 50
 NAME_COLUMN_WIDTH = 280  # a primeira coluna (nome do item) tem largura fixa, igual no CSS e no JS
 ADD_COLUMN_WIDTH = 64
 SEARCH_MAX_LENGTH = 120
+MAX_INITIAL_VALUES = 30
+DRAWER_HISTORY_LIMIT = 8
 
 
 # ---------------------------------------------------------------------------
@@ -369,18 +393,143 @@ def kanban_context(view, *, permissions, search="", person_id=None):
     }
 
 
-class BoardKanbanView(OrganizationRequiredMixin, TemplateView):
+def _keep_query(search, person_id):
+    """Busca e pessoa em formato de query string, para os links de mês levarem os filtros junto."""
+    params = {}
+    if search:
+        params["q"] = search
+    if person_id:
+        params["pessoa"] = person_id
+    return "&" + urlencode(params) if params else ""
+
+
+def calendar_context(view, *, permissions, month=None, search="", person_id=None):
+    """O que a página e o fragmento do calendário precisam: os mesmos itens da tabela, só que posicionados no dia da coluna
+    de Data escolhida. Só se busca o intervalo da grade (o mês e a margem das semanas de ponta), nunca o histórico todo."""
+    board = view.board
+    all_columns = list(BoardQueryService.columns(board, visible=None))
+    settings = clean_calendar_settings(all_columns, {}, current=view.settings)
+    date_column = resolve_date_column(settings, all_columns)
+    status_column = resolve_status_column(all_columns)
+    color_kind, color_column = resolve_color_source(settings, all_columns)
+    card_columns = resolve_calendar_card_columns(settings, all_columns, date_column, color_column)
+    today = timezone.localdate()
+    year, number = parse_month(month, today)
+
+    context = {
+        "board": board,
+        "view": view,
+        "permissions": permissions,
+        "all_columns": all_columns,
+        "settings": settings,
+        "date_column": date_column,
+        "color_kind": color_kind,
+        "color_column": color_column,
+        "card_columns": card_columns,
+        "calendar": None,
+        "month_title": month_title(year, number),
+        "month_key": month_key(year, number),
+        "prev_month": month_key(*shift_month(year, number, -1)),
+        "next_month": month_key(*shift_month(year, number, 1)),
+        "today_month": month_key(today.year, today.month),
+        "max_visible": MAX_VISIBLE_PER_DAY,
+        "nodate_items": [], "nodate_count": 0, "nodate_more": 0,
+        "overdue_items": [], "overdue_count": 0, "overdue_more": 0,
+        "keep_query": _keep_query(search, person_id),
+        "search": search,
+        "person_id": person_id,
+        "calendar_meta": {
+            "view": {"id": view.pk, "name": view.name},
+            "settings": settings,
+            "date_column_id": date_column.pk if date_column else None,
+            "status_column_id": status_column.pk if status_column else None,
+            "color_kind": color_kind,
+            "color_column_id": color_column.pk if color_column else None,
+            "card_column_ids": [column.pk for column in card_columns],
+            "dateable_ids": [column.pk for column in date_columns(all_columns)],
+            "colorable_ids": [column.pk for column in colorable_columns(all_columns)],
+            "month": month_key(year, number),
+            "today": today.isoformat(),
+            "max_visible": MAX_VISIBLE_PER_DAY,
+            "max_card_fields": MAX_CARD_FIELDS,
+            "recommended_card_fields": DEFAULT_CARD_FIELD_COUNT,
+        },
+    }
+    if date_column is None:
+        return context
+
+    used = {column.pk: column for column in card_columns}
+    for extra in (date_column, status_column, color_column):
+        if extra is not None:
+            used[extra.pk] = extra
+    start, end = grid_range(year, number)
+    show_completed = bool(settings["show_completed"])
+    filters = {"search": search, "person_id": person_id}
+    items = BoardQueryService.with_cells(
+        BoardQueryService.calendar_items(
+            board, date_column, start, end, status_column=status_column, show_completed=show_completed, **filters
+        )
+    )
+    items = BoardQueryService.attach_cells(list(items), used)
+    context["calendar"] = build_month(
+        year, number, items, date_column=date_column, status_column=status_column, color_kind=color_kind,
+        color_column=color_column, card_columns=card_columns, show_weekends=bool(settings["show_weekends"]),
+        show_completed=show_completed, today=today,
+    )
+
+    undated = BoardQueryService.calendar_undated(
+        board, date_column, status_column=status_column, show_completed=show_completed, **filters
+    )
+    context["nodate_count"] = undated.count()
+    context["nodate_items"] = list(undated[:PANEL_LIMIT])
+    context["nodate_more"] = max(0, context["nodate_count"] - len(context["nodate_items"]))
+    if (date_column.settings or {}).get("is_deadline"):
+        overdue = BoardQueryService.calendar_overdue(board, date_column, today, status_column=status_column, **filters)
+        context["overdue_count"] = overdue.count()
+        context["overdue_items"] = list(overdue[:PANEL_LIMIT])
+        context["overdue_more"] = max(0, context["overdue_count"] - len(context["overdue_items"]))
+    context["has_deadline"] = bool((date_column.settings or {}).get("is_deadline"))
+    return context
+
+
+class BoardViewDetailView(OrganizationRequiredMixin, TemplateView):
+    """A visualização escolhida na aba. Cada tipo tem a sua página (Kanban, Calendário), todas sobre os mesmos itens."""
+
     template_name = "boards/board_kanban.html"
+
+    def get_template_names(self):
+        if getattr(self, "board_view", None) is not None and self.board_view.type == BoardView.Type.CALENDAR:
+            return ["boards/board_calendar.html"]
+        return [self.template_name]
 
     def get_context_data(self, pk, **kwargs):
         context = super().get_context_data(**kwargs)
         view = get_view(self.organization, pk)
+        self.board_view = view
         board = view.board
         permissions = board_permissions(self.request.user, board)
         if not permissions["view"]:
             raise PermissionDenied("Você não possui acesso a este conteúdo.")
         search = (self.request.GET.get("q") or "").strip()[:SEARCH_MAX_LENGTH]
         person_id = _int_or_none(self.request.GET.get("pessoa"))
+
+        if view.type == BoardView.Type.CALENDAR:
+            context.update(
+                calendar_context(
+                    view, permissions=permissions, month=self.request.GET.get("mes"), search=search, person_id=person_id
+                )
+            )
+            groups = list(BoardQueryService.groups(board))
+            meta = board_meta(board, context["all_columns"], groups, permissions=permissions)
+            meta["calendar"] = {**context["calendar_meta"], "default_group_id": groups[0].pk if groups else None}
+            context.update(
+                meta=meta,
+                views=list(board.views.filter(is_active=True)),
+                active_view=view,
+                people=board_people(board),
+                filtering=bool(search or person_id),
+            )
+            return context
 
         context.update(kanban_context(view, permissions=permissions, search=search, person_id=person_id))
         groups = list(BoardQueryService.groups(board))
@@ -426,7 +575,7 @@ class ViewUpdateView(BoardAPIView):
         columns = list(BoardQueryService.columns(view.board, visible=None))
         return {
             "view": {"id": view.pk, "name": view.name},
-            "settings": clean_kanban_settings(columns, {}, current=view.settings),
+            "settings": clean_view_settings(view.type, columns, {}, current=view.settings),
         }
 
 
@@ -443,6 +592,8 @@ class ViewLanesView(BoardAPIView):
 
     def handle(self, request, data, pk):
         view = get_view(self.organization, pk)
+        if view.type != BoardView.Type.KANBAN:
+            raise Http404()  # as raias são do Kanban; o calendário tem a sua rota
         permissions = self.permissions(view.board)
         if not permissions["view"]:
             raise BoardPermissionError("Você não possui acesso a este conteúdo.")
@@ -453,6 +604,39 @@ class ViewLanesView(BoardAPIView):
             "total_items": context["total_items"],
             "columns": [column_meta(column) for column in context["all_columns"]],
             **{key: context["kanban_meta"][key] for key in ("settings", "group_column_id", "sum_column_id", "card_column_ids")},
+        }
+
+
+class ViewCalendarView(BoardAPIView):
+    """Redesenha o corpo do calendário (trocar de mês, depois de mover/criar/editar um item ou de mudar a configuração): o
+    servidor é quem sabe posicionar os cartões, então o navegador só troca o HTML. Mantém busca e pessoa."""
+
+    def handle(self, request, data, pk):
+        view = get_view(self.organization, pk)
+        if view.type != BoardView.Type.CALENDAR:
+            raise Http404()
+        permissions = self.permissions(view.board)
+        if not permissions["view"]:
+            raise BoardPermissionError("Você não possui acesso a este conteúdo.")
+        search = str(data.get("q") or "").strip()[:SEARCH_MAX_LENGTH]
+        context = calendar_context(
+            view, permissions=permissions, month=data.get("mes"), search=search, person_id=_int_or_none(data.get("pessoa"))
+        )
+        return {
+            "body_html": render_to_string("boards/_calendar_body.html", context, request=request),
+            "title": context["month_title"],
+            "month": context["month_key"],
+            "prev": context["prev_month"],
+            "next": context["next_month"],
+            "today": context["today_month"],
+            "columns": [column_meta(column) for column in context["all_columns"]],
+            **{
+                key: context["calendar_meta"][key]
+                for key in (
+                    "settings", "date_column_id", "color_kind", "color_column_id", "card_column_ids",
+                    "dateable_ids", "colorable_ids",
+                )
+            },
         }
 
 
@@ -736,16 +920,22 @@ class ItemCreateView(BoardAPIView):
         if group.board_id != board.pk:
             raise Http404()
         initial = data.get("initial")
-        if initial is not None and not isinstance(initial, dict):
+        if initial is None:
+            initials = []
+        elif isinstance(initial, dict):
+            initials = [initial]
+        elif isinstance(initial, list) and len(initial) <= MAX_INITIAL_VALUES and all(isinstance(e, dict) for e in initial):
+            initials = initial
+        else:
             raise BoardError("Valor inicial inválido.")
         with transaction.atomic():
             item = ItemService.create(user=request.user, board=board, group=group, name=data.get("name", ""))
-            if initial:
-                # criar já preenchendo um campo (o Kanban cria o cartão dentro de uma raia): tudo ou nada
-                column = get_column(self.organization, _int_or_none(initial.get("column_id")) or 0)
+            # criar já preenchendo campos (o Kanban cria o cartão dentro de uma raia; o Calendário, no dia clicado): tudo ou nada
+            for entry in initials:
+                column = get_column(self.organization, _int_or_none(entry.get("column_id")) or 0)
                 if column.board_id != board.pk:
                     raise Http404()
-                CellService.set_value(user=request.user, item=item, column=column, raw_value=initial.get("value"))
+                CellService.set_value(user=request.user, item=item, column=column, raw_value=entry.get("value"))
         columns = self.columns_of(board)
         item = _item_for_render(board, item.pk, columns)
         return {
@@ -782,6 +972,30 @@ class ItemDeleteView(BoardAPIView):
         item = get_item(self.organization, pk)
         ItemService.soft_delete(user=request.user, item=item)
         return {}
+
+
+class ItemDetailView(BoardAPIView):
+    """A gaveta de um item: todos os campos (editáveis no lugar, pelos mesmos editores da tabela) e as últimas mudanças.
+    Só lê, então a permissão é conferida aqui: o serviço não roda."""
+
+    def handle(self, request, data, pk):
+        item = get_item(self.organization, pk)
+        board = item.board
+        permissions = self.permissions(board)
+        if not permissions["view"]:
+            raise BoardPermissionError("Você não possui acesso a este conteúdo.")
+        columns = list(BoardQueryService.columns(board, visible=None))
+        item = _item_for_render(board, item.pk, columns)
+        return {
+            "drawer_html": render_to_string(
+                "boards/_item_drawer.html",
+                {
+                    "board": board, "item": item, "columns": columns, "permissions": permissions,
+                    "history": list(BoardQueryService.item_history(item, DRAWER_HISTORY_LIMIT)),
+                },
+                request=request,
+            ),
+        }
 
 
 class CellUpdateView(BoardAPIView):

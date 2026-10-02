@@ -279,12 +279,12 @@ class ViewServiceTests(KanbanBase):
         view = ViewService.create(user=self.admin, board=self.board, name="Segundo")
         self.assertEqual(list(self.board.views.filter(is_active=True).values_list("pk", flat=True)), [self.kanban.pk, view.pk])
 
-    def test_create_with_settings_and_only_kanban_type(self):
+    def test_create_with_settings_and_only_kanban_or_calendar_type(self):
         view = ViewService.create(user=self.admin, board=self.board, name="Por lista",
                                   settings={"group_by": self.col["lista"].pk, "card_fields": [self.col["texto"].pk]})
         self.assertEqual(view.settings["group_by"], self.col["lista"].pk)
         with self.assertRaises(BoardError):
-            ViewService.create(user=self.admin, board=self.board, name="X", view_type="CALENDAR")
+            ViewService.create(user=self.admin, board=self.board, name="X", view_type="TIMELINE")
         with self.assertRaises(BoardError):
             ViewService.create(user=self.admin, board=self.board, name="X", settings={"group_by": self.col["texto"].pk})
 
@@ -497,7 +497,7 @@ class KanbanApiTests(ViewTestCase):
 
     def test_create_view_errors(self):
         self.login(self.admin)
-        self.assertEqual(self.api("board-view-create", [self.board.pk], {"type": "CALENDAR"}).status_code, 400)
+        self.assertEqual(self.api("board-view-create", [self.board.pk], {"type": "TIMELINE"}).status_code, 400)
         self.assertEqual(self.api("board-view-create", [self.board.pk], {"settings": "x"}).status_code, 400)
         self.assertEqual(self.api("board-view-create", [self.board.pk], {"settings": {"group_by": self.col["texto"].pk}}).status_code, 400)
 

@@ -1,0 +1,34 @@
+{% load lps_board %}<div class="board-drawer__panel" data-drawer data-item-id="{{ item.pk }}" role="dialog" aria-label="Detalhes: {{ item.name|default:'item sem título' }}" tabindex="-1">
+    <header class="board-drawer__head">
+        <div class="board-drawer__titlewrap">
+            <span class="board-drawer__kicker">{{ board.item_label }}</span>
+            <span class="board-drawer__title{% if not item.name %} is-empty{% endif %}" data-drawer-title{% if permissions.edit_item %} tabindex="0" role="textbox" aria-label="Nome do item"{% endif %}>{% if item.name %}{{ item.name }}{% else %}Sem título{% endif %}</span>
+        </div>
+        <button type="button" class="board-dialog__close" data-drawer-close aria-label="Fechar detalhes">×</button>
+    </header>
+    <dl class="board-drawer__fields">
+        {% for column in columns %}{% with cell=item|cell_of:column.id %}
+        <div class="board-drawer__field">
+            <dt>{{ column.name }}</dt>
+            <dd class="board-drawer__value{% if permissions.edit_item %} is-editable{% endif %}" data-cell data-item-id="{{ item.pk }}" data-column-id="{{ column.id }}" data-type="{{ column.type }}" data-value="{% raw_value cell column %}"{% if permissions.edit_item %} tabindex="0"{% endif %}>{% include "boards/_cell.html" %}</dd>
+        </div>
+        {% endwith %}{% endfor %}
+        <div class="board-drawer__field"><dt>Grupo</dt><dd class="board-drawer__static">{{ item.group.name }}</dd></div>
+    </dl>
+    <section class="board-drawer__history" aria-label="Últimas mudanças">
+        <h3>Últimas mudanças</h3>
+        <ul>
+            {% for entry in history %}
+            <li>
+                <time datetime="{{ entry.timestamp|date:'c' }}">{{ entry.timestamp|date:"d/m/Y H:i" }}</time>
+                <span class="board-drawer__who">{% if entry.user %}{{ entry.user.get_full_name|default:entry.user.get_username }}{% else %}Sistema{% endif %}</span>
+                <span><strong>{{ entry.get_action_display }}</strong>{% if entry.field_name %} · {{ entry.field_name }}{% endif %}{% if entry.old_value or entry.new_value %}: {% if entry.old_value %}<s class="board-history__old">{{ entry.old_value }}</s> → {% endif %}{{ entry.new_value|default:"(vazio)" }}{% endif %}</span>
+            </li>
+            {% empty %}<li class="board-drawer__none">Nenhuma mudança registrada.</li>{% endfor %}
+        </ul>
+        <a class="board-drawer__more" href="{% url 'board-history' board.pk %}">Histórico completo do quadro</a>
+    </section>
+    {% if permissions.delete_item %}
+    <footer class="board-drawer__foot"><button type="button" class="btn btn--sm btn--soft-danger" data-drawer-delete>{% include "_icon.html" with name="trash" %} Excluir item</button></footer>
+    {% endif %}
+</div>

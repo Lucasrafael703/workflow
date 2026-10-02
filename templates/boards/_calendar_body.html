@@ -1,0 +1,45 @@
+{% load lps_board %}{% if not date_column %}
+<div class="kanban-state cal-state">
+    <h3>Escolha uma coluna de Data</h3>
+    <p>O Calendário coloca cada item no dia de uma coluna de <strong>Data</strong>.{% if settings.date_field %} A coluna que esta visualização usava foi excluída.{% else %} Este quadro ainda não tem nenhuma.{% endif %}</p>
+    {% if permissions.manage_columns %}
+    <p><button type="button" class="btn btn--primary" data-cal-create-date>{% include "_icon.html" with name="plus" %} Criar coluna de Data</button></p>
+    {% else %}
+    <p class="board-field__hint">Peça a quem gerencia o quadro para criar uma coluna de Data.</p>
+    {% endif %}
+</div>
+{% else %}
+<div class="cal-chips">
+    <button type="button" class="cal-chip{% if not nodate_count %} is-zero{% endif %}" data-cal-panel-open="nodate" aria-haspopup="dialog">Sem data <strong>{{ nodate_count }}</strong></button>
+    {% if has_deadline %}<button type="button" class="cal-chip cal-chip--late{% if not overdue_count %} is-zero{% endif %}" data-cal-panel-open="overdue" aria-haspopup="dialog">{% include "_icon.html" with name="alert" %} Atrasados <strong>{{ overdue_count }}</strong></button>{% endif %}
+    <span class="cal-chip cal-chip--info" title="A coluna de Data que posiciona os itens no calendário">{% include "_icon.html" with name="calendar" %} {{ date_column.name }}</span>
+    {% if calendar.hidden_weekend %}
+    {% if permissions.edit %}<button type="button" class="cal-chip cal-chip--note" data-cal-show-weekends>{{ calendar.hidden_weekend }} ite{{ calendar.hidden_weekend|pluralize:"m,ns" }} em fim de semana oculto · Mostrar finais de semana</button>
+    {% else %}<span class="cal-chip cal-chip--note">{{ calendar.hidden_weekend }} ite{{ calendar.hidden_weekend|pluralize:"m,ns" }} em fim de semana oculto</span>{% endif %}
+    {% endif %}
+</div>
+{% if not calendar.total %}<p class="cal-empty-hint">Nenhum item neste período. Passe o mouse sobre um dia para adicionar.</p>{% endif %}
+<div class="cal-grid" role="grid" aria-label="Calendário de {{ month_title }}" style="--cal-cols:{{ calendar.columns }}" data-cal-grid data-month="{{ calendar.key }}">
+    <div class="cal-grid__head" role="row">{% for label in calendar.weekdays %}<div class="cal-weekday" role="columnheader">{{ label }}</div>{% endfor %}</div>
+    {% for week in calendar.weeks %}<div class="cal-week" role="row">{% for day in week %}{% include "boards/_calendar_day.html" %}{% endfor %}</div>{% endfor %}
+</div>
+<div class="cal-panels" hidden>
+    <div data-cal-panel="nodate">
+        <p class="board-pop__title">Itens sem data ({{ nodate_count }})</p>
+        {% if nodate_items %}
+        <ul class="cal-panel__list">{% for item in nodate_items %}<li><button type="button" class="cal-panel__row" data-cal-open data-item-id="{{ item.pk }}"><span class="cal-panel__name">{{ item.name|default:"Sem título" }}</span><span class="cal-panel__sub">{{ item.group.name }}</span></button></li>{% endfor %}</ul>
+        {% if nodate_more %}<p class="board-people__hint">E mais {{ nodate_more }}. Use a busca para achar um item específico.</p>{% endif %}
+        <p class="board-people__hint">Abra o item e defina a data: ele aparece no dia escolhido.</p>
+        {% else %}<p class="board-people__hint">Todos os itens têm data.</p>{% endif %}
+    </div>
+    {% if has_deadline %}
+    <div data-cal-panel="overdue">
+        <p class="board-pop__title">Atrasados ({{ overdue_count }})</p>
+        {% if overdue_items %}
+        <ul class="cal-panel__list">{% for item in overdue_items %}<li><button type="button" class="cal-panel__row" data-cal-open data-item-id="{{ item.pk }}"><span class="cal-panel__name">{{ item.name|default:"Sem título" }}</span><span class="cal-panel__sub">venceu em {{ item.due_date|date:"d/m/Y" }}</span></button></li>{% endfor %}</ul>
+        {% if overdue_more %}<p class="board-people__hint">E mais {{ overdue_more }}.</p>{% endif %}
+        {% else %}<p class="board-people__hint">Nada atrasado.</p>{% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endif %}

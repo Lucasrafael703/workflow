@@ -1,9 +1,9 @@
-{% comment %}Abas das visualizações do quadro: a tabela ("Quadro principal", sempre existe) e os Kanbans. `active_view` vazio = tabela.{% endcomment %}
+{% comment %}Abas das visualizações do quadro: a tabela ("Quadro principal", sempre existe), os Kanbans e os Calendários. `active_view` vazio = tabela.{% endcomment %}
 <nav class="board-tabs" aria-label="Visualizações do quadro" data-view-tabs>
     <a class="board-tab{% if not active_view %} is-active{% endif %}" href="{% url 'board-detail' board.pk %}"{% if not active_view %} aria-current="page"{% endif %}>{% include "_icon.html" with name="list-ul" %} <span>Quadro principal</span></a>
     {% for tab in views %}
     <span class="board-tab-wrap{% if active_view and active_view.pk == tab.pk %} is-active{% endif %}">
-        <a class="board-tab{% if active_view and active_view.pk == tab.pk %} is-active{% endif %}" href="{% url 'board-view-detail' tab.pk %}" data-view-id="{{ tab.pk }}" data-view-name="{{ tab.name }}"{% if active_view and active_view.pk == tab.pk %} aria-current="page"{% endif %}>{% include "_icon.html" with name="kanban" %} <span>{{ tab.name }}</span></a>
+        <a class="board-tab{% if active_view and active_view.pk == tab.pk %} is-active{% endif %}" href="{% url 'board-view-detail' tab.pk %}" data-view-id="{{ tab.pk }}" data-view-name="{{ tab.name }}"{% if active_view and active_view.pk == tab.pk %} aria-current="page"{% endif %}>{% if tab.type == "CALENDAR" %}{% include "_icon.html" with name="calendar" %}{% else %}{% include "_icon.html" with name="kanban" %}{% endif %} <span>{{ tab.name }}</span></a>
         {% if permissions.edit %}<button type="button" class="board-tab__menu" data-view-menu data-view-id="{{ tab.pk }}" aria-haspopup="menu" aria-label="Opções da visualização {{ tab.name }}">{% include "_icon.html" with name="more" %}</button>{% endif %}
     </span>
     {% endfor %}

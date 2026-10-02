@@ -100,6 +100,8 @@ def board_urls(board):
         "view_delete": reverse("board-view-delete", args=[s]),
         "view_lanes": reverse("board-view-lanes", args=[s]),
         "view_detail": reverse("board-view-detail", args=[s]),
+        "view_calendar": reverse("board-view-calendar", args=[s]),
+        "item_detail": reverse("board-item-detail", args=[s]),
         "person_search": reverse("person-search"),
     }
 

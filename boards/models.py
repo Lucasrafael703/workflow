@@ -55,12 +55,14 @@ class Board(models.Model):
 
 
 class BoardView(models.Model):
-    """Uma forma de enxergar os MESMOS itens do quadro (hoje: Kanban). Não guarda dado de negócio, só a configuração
-    da lente: por qual coluna agrupar, quais campos aparecem no cartão, ordenação. A tabela do quadro ("Quadro
-    principal") é implícita: existe em todo quadro e não tem registro aqui."""
+    """Uma forma de enxergar os MESMOS itens do quadro (Kanban e Calendário). Não guarda dado de negócio, só a
+    configuração da lente: por qual coluna agrupar (Kanban) ou qual coluna de Data usar (Calendário), quais campos
+    aparecem no cartão, ordenação. A tabela do quadro ("Quadro principal") é implícita: existe em todo quadro e não
+    tem registro aqui."""
 
     class Type(models.TextChoices):
         KANBAN = "KANBAN", "Kanban"
+        CALENDAR = "CALENDAR", "Calendário"
 
     board = models.ForeignKey(Board, verbose_name="quadro", on_delete=models.CASCADE, related_name="views")
     name = models.CharField("nome", max_length=80)

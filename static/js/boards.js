@@ -1,4 +1,4 @@
-/* Quadros dinâmicos: a tela do quadro (tabela editável).
+/* Quadros dinâmicos: a tela do quadro (tabela editável), o modo Kanban e o modo Calendário.
 
    O servidor desenha tudo (cabeçalho, linha, célula) e este arquivo só liga o comportamento: abrir o
    seletor de tipo, criar coluna e item sem recarregar, renomear no lugar, redimensionar, arrastar,
@@ -57,9 +57,31 @@
         return match ? match[3] + "/" + match[2] + "/" + match[1] : "";
     }
 
+    /** "2026-10-15T14:00" -> {date: "2026-10-15", time: "14:00"}. Data pura vem com `time` vazio. */
+    function splitDateValue(raw) {
+        var match = /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2}))?/.exec(String(raw || ""));
+        return match ? {date: match[1], time: match[2] || ""} : {date: "", time: ""};
+    }
+
+    /** Junta a data e a hora opcional como o servidor entende. Sem hora vai só a data: nunca se inventa 00:00. */
+    function composeDateValue(date, time) {
+        return date && time ? date + "T" + time : (date || "");
+    }
+
+    /** "14:30", "9:05", "1430", "14h", "14h30", "9" -> "HH:MM"; qualquer outra coisa (ou hora impossível) -> null. */
+    function parseTimeInput(text) {
+        var value = String(text || "").trim().toLowerCase().replace(/\s+/g, "").replace(/h(\d{2})$/, ":$1").replace(/h$/, "");
+        var match = /^(\d{1,2}):(\d{2})$/.exec(value) || /^(\d{2})(\d{2})$/.exec(value) || /^(\d{1,2})()$/.exec(value);
+        if (!match) return null;
+        var hours = parseInt(match[1], 10), minutes = match[2] ? parseInt(match[2], 10) : 0;
+        if (hours > 23 || minutes > 59) return null;
+        return (hours < 10 ? "0" : "") + hours + ":" + (minutes < 10 ? "0" : "") + minutes;
+    }
+
     var helpers = {
         fillUrl: fillUrl, clamp: clamp, neighbours: neighbours, contrastColor: contrastColor,
-        initials: initials, formatIsoDate: formatIsoDate
+        initials: initials, formatIsoDate: formatIsoDate, splitDateValue: splitDateValue,
+        composeDateValue: composeDateValue, parseTimeInput: parseTimeInput
     };
 
     // ---------------------------------------------------------------------------------------------
@@ -167,10 +189,13 @@
             return field ? field.value : "";
         }
 
-        function request(endpoint, body) {
-            pending += 1;
-            win.clearTimeout(statusTimer);
-            setStatus("Salvando…");
+        function request(endpoint, body, options) {
+            var quiet = !!(options && options.quiet); // navegar e abrir a gaveta não são "salvar": o indicador não muda
+            if (!quiet) {
+                pending += 1;
+                win.clearTimeout(statusTimer);
+                setStatus("Salvando…");
+            }
             return win.fetch(endpoint, {
                 method: "POST",
                 credentials: "same-origin",
@@ -189,10 +214,10 @@
             }, function () {
                 throw new Error("Sem conexão com o servidor. Tente de novo.");
             }).then(function (data) {
-                finishRequest(true);
+                if (!quiet) finishRequest(true);
                 return data;
             }, function (error) {
-                finishRequest(false);
+                if (!quiet) finishRequest(false);
                 throw error;
             });
         }
@@ -1045,7 +1070,10 @@
                     ]));
                 }
             } else if (type === "DATE") {
-                if (raw) td.appendChild(el("span", {class: "board-date", text: formatIsoDate(raw)}));
+                if (raw) {
+                    var when = splitDateValue(raw);
+                    td.appendChild(el("span", {class: "board-date", text: formatIsoDate(when.date) + (when.time ? " " + when.time : "")}));
+                }
             } else if (type === "CHECKBOX") {
                 var on = String(raw) === "1";
                 var box = el("span", {class: "board-check" + (on ? " is-on" : "")});
@@ -1061,6 +1089,7 @@
             var itemId = td.dataset.itemId;
             var snapshot = td.cloneNode(true);
             var hadFocus = doc.activeElement === td;
+            var inDrawer = !!(td.closest && td.closest("[data-drawer]"));
             optimisticCell(td, column, raw, extra);
             td.classList.add("is-saving");
             return request(url("cell_update", {id: itemId, column: column.id}), {value: raw}).then(function (payload) {
@@ -1079,6 +1108,11 @@
                 // mudou o que decide as raias (a etiqueta agrupadora), a soma ou a ordem: o servidor redistribui
                 if (kanban && (column.id === kanban.group_column_id || column.id === kanban.sum_column_id ||
                     (kanban.settings.sort && kanban.settings.sort.by === column.id))) refreshKanban();
+                // o calendário reposiciona o cartão (data), recolore (etiqueta) e atualiza o que o cartão mostra
+                if (cal) {
+                    refreshCalendar();
+                    if (inDrawer) refreshDrawer(column.id);
+                }
             }, function (error) {
                 if (td.parentNode) td.parentNode.replaceChild(snapshot, td);
                 snapshot.classList.add("has-error");
@@ -1134,6 +1168,7 @@
         }
 
         function editDate(td, column, current) {
+            if (cal) return editDateWithTime(td, column, current);
             var withTime = !!(column.settings && column.settings.show_time);
             var input = el("input", {type: withTime ? "datetime-local" : "date", "aria-label": column.name});
             input.value = current;
@@ -1186,7 +1221,8 @@
             openPopover(td, el("div", {}, [list, foot.childNodes.length ? foot : null]), {label: column.name});
         }
 
-        function editPerson(td, column, current) {
+        // Busca de pessoas (a mesma do editor de célula e da janela de criar no calendário): digitar filtra no servidor.
+        function personSearchNode(onPick) {
             var search = el("input", {type: "search", class: "board-people__search", placeholder: "Buscar pessoa…", "aria-label": "Buscar pessoa", maxlength: "60"});
             var list = el("ul", {class: "board-people__list"});
             var timer = null, serial = 0;
@@ -1197,7 +1233,7 @@
                     var button = el("button", {type: "button", class: "board-people__item"}, [
                         el("span", {class: "board-avatar", text: initials(person.name)}), el("span", {text: person.name})
                     ]);
-                    button.addEventListener("click", function () { closePopover(true); saveCell(td, person.id, {person: person}); });
+                    button.addEventListener("click", function () { onPick(person); });
                     list.appendChild(el("li", {}, [button]));
                 });
             }
@@ -1209,14 +1245,19 @@
                     .catch(function () { if (mine === serial) { list.textContent = ""; list.appendChild(el("li", {class: "board-people__hint", text: "Não foi possível buscar agora."})); } });
             }
             search.addEventListener("input", function () { win.clearTimeout(timer); timer = win.setTimeout(function () { load(search.value.trim()); }, 200); });
+            return {search: search, list: list, load: load};
+        }
+
+        function editPerson(td, column, current) {
+            var finder = personSearchNode(function (person) { closePopover(true); saveCell(td, person.id, {person: person}); });
             var foot = el("div", {class: "board-pop__foot"});
             if (current && !column.is_required) {
                 var clear = el("button", {type: "button", class: "btn btn--sm", text: "Remover pessoa"});
                 clear.addEventListener("click", function () { closePopover(true); saveCell(td, ""); });
                 foot.appendChild(clear);
             }
-            openPopover(td, el("div", {}, [search, list, foot.childNodes.length ? foot : null]), {label: column.name});
-            load("");
+            openPopover(td, el("div", {}, [finder.search, finder.list, foot.childNodes.length ? foot : null]), {label: column.name});
+            finder.load("");
         }
 
         function moveFocus(td, dRow, dCol) {
@@ -1234,31 +1275,84 @@
 
         // -- visualizações do quadro (abas) -----------------------------------------------------
 
+        // Cria uma coluna de Data (o Calendário precisa de uma) sem sair da tela. Na tabela a coluna entra na hora.
+        function createDateColumn() {
+            return request(url("column_create"), {type: "DATE"}).then(function (payload) {
+                if (table) insertColumn(payload); else meta.columns.push(payload.column);
+                return payload.column;
+            }, function (error) { fail(error); return null; });
+        }
+
+        function hasDateColumn() {
+            return meta.columns.some(function (column) { return column.type === "DATE"; });
+        }
+
         function openViewDialog() {
+            var kinds = [
+                {key: "TABLE", label: "Tabela", text: "Já existe: é o Quadro principal."},
+                {key: "KANBAN", label: "Kanban", text: "Os mesmos itens em raias, por Status ou Lista suspensa.", name: "Kanban"},
+                {key: "CALENDAR", label: "Calendário", text: "Os mesmos itens nos dias de uma coluna de Data.", name: "Calendário"},
+                {key: "TIMELINE", label: "Linha do tempo", text: "Em breve."},
+                {key: "DASHBOARD", label: "Dashboard", text: "Em breve."}
+            ];
+            var selected = "KANBAN";
+            var touched = false;
             var name = el("input", {type: "text", maxlength: "80", "aria-label": "Nome da visualização"});
             name.value = "Kanban";
-            var types = el("div", {class: "board-view-types"});
-            [
-                ["Tabela", "Já existe: é o Quadro principal.", false],
-                ["Kanban", "Os mesmos itens em raias, por Status ou Lista suspensa.", true],
-                ["Calendário", "Em breve.", false],
-                ["Linha do tempo", "Em breve.", false],
-                ["Dashboard", "Em breve.", false]
-            ].forEach(function (entry) {
-                var option = el("div", {class: "board-view-type" + (entry[2] ? " is-selected" : " is-disabled"), "aria-disabled": entry[2] ? null : "true"},
-                    [el("strong", {text: entry[0]}), el("span", {text: entry[1]})]);
+            name.addEventListener("input", function () { touched = true; });
+            var notice = el("div", {class: "board-field__hint", role: "status", hidden: true});
+            var types = el("div", {class: "board-view-types", role: "radiogroup", "aria-label": "Tipo de visualização"});
+            var options = {};
+            var createButton = null;
+
+            function updateNotice() {
+                var missing = selected === "CALENDAR" && !hasDateColumn();
+                notice.hidden = !missing;
+                notice.textContent = "";
+                if (createButton) createButton.disabled = missing;
+                if (!missing) return;
+                notice.appendChild(el("p", {text: "Para usar o Calendário, escolha ou crie uma coluna de Data."}));
+                if (perms.manage_columns) {
+                    var make = el("button", {type: "button", class: "btn btn--sm", text: "+ Criar coluna de Data"});
+                    make.addEventListener("click", function () {
+                        make.disabled = true;
+                        createDateColumn().then(function (column) { if (column) updateNotice(); else make.disabled = false; });
+                    });
+                    notice.appendChild(make);
+                }
+            }
+            function choose(kind) {
+                selected = kind.key;
+                Object.keys(options).forEach(function (key) {
+                    options[key].classList.toggle("is-selected", key === selected);
+                    options[key].setAttribute("aria-checked", key === selected ? "true" : "false");
+                });
+                if (!touched) name.value = kind.name;
+                updateNotice();
+            }
+            kinds.forEach(function (kind) {
+                var available = !!kind.name;
+                var option = el("button", {
+                    type: "button", role: "radio", "aria-checked": kind.key === selected ? "true" : "false",
+                    class: "board-view-type" + (kind.key === selected ? " is-selected" : "") + (available ? "" : " is-disabled"),
+                    "aria-disabled": available ? null : "true", disabled: available ? null : true
+                }, [el("strong", {text: kind.label}), el("span", {text: kind.text})]);
+                if (available) option.addEventListener("click", function () { choose(kind); });
+                options[kind.key] = option;
                 types.appendChild(option);
             });
             var field = el("label", {class: "board-field"}, [el("span", {text: "Nome da visualização"}), name]);
-            var dialog = openDialog("Adicionar visualização", el("div", {}, [types, field]), [
+            var dialog = openDialog("Adicionar visualização", el("div", {}, [types, notice, field]), [
                 {label: "Cancelar"},
                 {label: "Criar visualização", kind: "primary", onClick: function (d) {
-                    request(url("view_create"), {name: name.value, type: "KANBAN"}).then(function (payload) {
+                    if (selected === "CALENDAR" && !hasDateColumn()) { d.error("Para usar o Calendário, escolha ou crie uma coluna de Data."); return; }
+                    request(url("view_create"), {name: name.value, type: selected}).then(function (payload) {
                         d.close();
                         navigate(payload.redirect_url);
                     }, function (error) { d.error(error.message); });
                 }}
             ]);
+            createButton = dialog.root.querySelector(".btn--primary");
             return dialog;
         }
 
@@ -1554,6 +1648,570 @@
             });
         }
 
+        // -- Calendário -------------------------------------------------------------------------
+        // O Calendário lê os mesmos itens do quadro; o servidor posiciona os cartões nos dias. Aqui só se liga o
+        // comportamento: arrastar o cartão para outro dia grava a MESMA célula de data (pelo endpoint da célula, então
+        // com a mesma permissão e auditoria da tabela), criar no dia já manda a data preenchida, e tudo que muda o que
+        // aparece (mês, configuração, edição de um campo) pede o corpo do calendário de novo.
+
+        var calRoot = page.querySelector("[data-cal-body]");
+        var cal = calRoot ? meta.calendar : null;
+        var drawerRoot = page.querySelector("[data-cal-drawer]");
+        var calConfigState = null;
+
+        function calDay(iso) { return calRoot ? q('[data-cal-day][data-date="' + iso + '"]', calRoot) : null; }
+        function calCardEl(itemId) { return calRoot ? q('[data-cal-card][data-item-id="' + itemId + '"]', calRoot) : null; }
+        function dateColumn() { return cal && cal.date_column_id ? columnMeta(cal.date_column_id) : null; }
+        function dateShowsTime() {
+            var column = dateColumn();
+            return !!(column && column.settings && column.settings.show_time);
+        }
+
+        function isoToday() {
+            var now = new Date();
+            var pad = function (n) { return (n < 10 ? "0" : "") + n; };
+            return now.getFullYear() + "-" + pad(now.getMonth() + 1) + "-" + pad(now.getDate());
+        }
+
+        function calHref(month) {
+            var params = new win.URLSearchParams(win.location.search);
+            params.set("mes", month);
+            return win.location.pathname + "?" + params.toString();
+        }
+
+        function setNav(selector, month) {
+            var link = page.querySelector(selector);
+            if (!link) return;
+            link.dataset.month = month;
+            link.setAttribute("href", calHref(month));
+        }
+
+        function applyCalendar(payload) {
+            if (!payload || typeof payload.body_html !== "string") return;
+            calRoot.innerHTML = payload.body_html;
+            meta.columns = payload.columns;
+            cal.settings = payload.settings;
+            cal.date_column_id = payload.date_column_id;
+            cal.color_kind = payload.color_kind;
+            cal.color_column_id = payload.color_column_id;
+            cal.card_column_ids = payload.card_column_ids;
+            if (payload.dateable_ids) cal.dateable_ids = payload.dateable_ids; // criar uma coluna de Data muda as opções da configuração
+            if (payload.colorable_ids) cal.colorable_ids = payload.colorable_ids;
+            cal.month = payload.month;
+            var title = page.querySelector("[data-cal-title]");
+            if (title) title.textContent = payload.title;
+            setNav("[data-cal-prev]", payload.prev);
+            setNav("[data-cal-next]", payload.next);
+            setNav("[data-cal-today]", payload.today);
+            var monthInput = page.querySelector("[data-cal-month-input]");
+            if (monthInput) monthInput.value = payload.month;
+            if (calConfigState) calConfigState.updatePreview();
+        }
+
+        // Devolve o que o servidor mandou, ou null se falhou (o aviso já foi mostrado). `options.quiet`: navegar não é gravar.
+        function refreshCalendar(month, options) {
+            return request(url("view_calendar", {id: cal.view.id}), {mes: month || cal.month, q: queryState().q, pessoa: queryState().pessoa}, options)
+                .then(function (payload) { applyCalendar(payload); return payload; }, function (error) { fail(error); return null; });
+        }
+
+        function goToMonth(month) {
+            return refreshCalendar(month, {quiet: true}).then(function (payload) {
+                if (!payload) return;
+                try { win.history.replaceState(null, "", calHref(payload.month)); } catch (e) { /* sem histórico: só não atualiza o endereço */ }
+            });
+        }
+
+        function updateCalView(settings) {
+            return request(url("view_update", {id: cal.view.id}), {settings: settings}).then(function (payload) {
+                cal.settings = payload.settings;
+                return refreshCalendar();
+            }, function (error) { fail(error); return null; });
+        }
+
+        // um dia com mais cartões que o limite mostra os primeiros e "+ N mais" (o resto continua no DOM, escondido)
+        function layoutDay(day) {
+            var cards = qa("[data-cal-card]", day);
+            cards.forEach(function (card, index) { card.classList.toggle("is-overflow", index >= cal.max_visible); });
+            var extra = Math.max(0, cards.length - cal.max_visible);
+            var more = day.querySelector("[data-cal-more]");
+            if (extra && !more) {
+                more = el("button", {type: "button", class: "cal-day__more", "data-cal-more": true});
+                day.appendChild(more);
+            }
+            if (!more) return;
+            if (extra) more.textContent = "+ " + extra + " mais";
+            else if (more.parentNode) more.parentNode.removeChild(more);
+        }
+
+        // Arrastar para outro dia muda SÓ a data (e mantém a hora do cartão): status, pessoa e o resto não se mexem.
+        // Otimista: o cartão muda de dia na hora e volta, com aviso, se o servidor recusar.
+        function moveCalCard(card, targetDay) {
+            var column = dateColumn();
+            var fromDay = card.closest("[data-cal-day]");
+            if (!cal || !column || !fromDay || !targetDay || fromDay === targetDay || targetDay.classList.contains("is-blocked")) return null;
+            var oldDate = card.dataset.date, time = card.dataset.time || "";
+            var iso = targetDay.dataset.date;
+            var next = card.nextElementSibling;
+            var targetItems = targetDay.querySelector("[data-cal-items]");
+            targetItems.insertBefore(card, targetItems.firstChild);
+            card.dataset.date = iso;
+            layoutDay(fromDay);
+            layoutDay(targetDay);
+            return request(url("cell_update", {id: card.dataset.itemId, column: column.id}), {value: composeDateValue(iso, dateShowsTime() ? time : "")}).then(
+                function () { return refreshCalendar(); },
+                function (error) {
+                    var back = fromDay.querySelector("[data-cal-items]");
+                    back.insertBefore(card, next && next.parentNode === back ? next : null);
+                    card.dataset.date = oldDate;
+                    layoutDay(fromDay);
+                    layoutDay(targetDay);
+                    var reason = error && error.status && error.status < 500 && error.message ? " " + error.message : "";
+                    toast("Não foi possível alterar a data. O item voltou para " + formatIsoDate(oldDate) + "." + reason, "error");
+                }
+            );
+        }
+
+        // -- gaveta do item: os campos editáveis no lugar, sem sair do calendário
+
+        function drawerPanel() { return drawerRoot ? drawerRoot.querySelector("[data-drawer]") : null; }
+
+        function closeDrawer(restoreFocus) {
+            if (!drawerRoot || drawerRoot.hidden) return;
+            var panel = drawerPanel();
+            var itemId = panel ? panel.dataset.itemId : null;
+            drawerRoot.hidden = true;
+            drawerRoot.innerHTML = "";
+            if (restoreFocus && itemId) {
+                var card = calCardEl(itemId);
+                if (card) card.focus();
+            }
+        }
+
+        function openDrawer(itemId) {
+            if (!drawerRoot) return null;
+            return request(url("item_detail", {id: itemId}), {}, {quiet: true}).then(function (payload) {
+                drawerRoot.innerHTML = payload.drawer_html;
+                drawerRoot.hidden = false;
+                var panel = drawerPanel();
+                if (panel) panel.focus();
+            }, fail);
+        }
+
+        // atualiza a gaveta aberta (campos e últimas mudanças) depois de uma gravação, devolvendo o foco ao campo editado
+        function refreshDrawer(columnId) {
+            var panel = drawerPanel();
+            if (!panel) return null;
+            var itemId = panel.dataset.itemId;
+            return request(url("item_detail", {id: itemId}), {}, {quiet: true}).then(function (payload) {
+                var current = drawerPanel();
+                if (!current || current.dataset.itemId !== String(itemId)) return;
+                drawerRoot.innerHTML = payload.drawer_html;
+                if (columnId) {
+                    var cell = drawerRoot.querySelector('[data-cell][data-column-id="' + columnId + '"]');
+                    if (cell) cell.focus();
+                }
+            }, fail);
+        }
+
+        function startDrawerRename() {
+            var panel = drawerPanel();
+            var titleEl = panel ? panel.querySelector("[data-drawer-title]") : null;
+            if (!perms.edit_item || !titleEl) return;
+            var wasEmpty = titleEl.classList.contains("is-empty");
+            var previous = wasEmpty ? "" : titleEl.textContent;
+            var itemId = panel.dataset.itemId;
+            inlineEdit(titleEl, {
+                value: previous, maxlength: 255,
+                onCommit: function (value) {
+                    titleEl.textContent = value || "Sem título";
+                    titleEl.classList.toggle("is-empty", !value);
+                    request(url("item_rename", {id: itemId}), {name: value}).then(function () { refreshCalendar(); refreshDrawer(); }, function (error) {
+                        titleEl.textContent = previous || "Sem título";
+                        titleEl.classList.toggle("is-empty", !previous);
+                        fail(error);
+                    });
+                }
+            });
+        }
+
+        function deleteDrawerItem() {
+            var panel = drawerPanel();
+            if (!panel) return;
+            var itemId = panel.dataset.itemId;
+            var titleEl = panel.querySelector("[data-drawer-title]");
+            var name = titleEl.classList.contains("is-empty") ? "Sem título" : titleEl.textContent.trim();
+            confirmDialog({
+                title: "Excluir item", danger: true, confirmLabel: "Excluir",
+                message: "Excluir “" + name + "”? Ele deixa de aparecer no quadro."
+            }).then(function (yes) {
+                if (!yes) return;
+                request(url("item_delete", {id: itemId}), {}).then(function () { closeDrawer(false); refreshCalendar(); }, fail);
+            });
+        }
+
+        // -- listas em pop-over: "+ N mais" de um dia, "Sem data" e "Atrasados"
+
+        function openDayPopover(anchor, day) {
+            var label = day.getAttribute("aria-label") || day.dataset.date;
+            var holder = el("div", {class: "cal-pop-day"}, [el("p", {class: "board-pop__title", text: label})]);
+            qa("[data-cal-card]", day).forEach(function (card) {
+                var copy = card.cloneNode(true);
+                copy.removeAttribute("draggable");
+                copy.classList.remove("is-overflow");
+                qa("[data-cell]", copy).forEach(function (node) {
+                    node.removeAttribute("data-cell");
+                    node.removeAttribute("tabindex");
+                    node.classList.remove("is-editable");
+                });
+                copy.addEventListener("click", function () { closePopover(false); openDrawer(card.dataset.itemId); });
+                copy.addEventListener("keydown", function (event) {
+                    if (event.key === "Enter" || event.key === " ") { event.preventDefault(); closePopover(false); openDrawer(card.dataset.itemId); }
+                });
+                holder.appendChild(copy);
+            });
+            openPopover(anchor, holder, {label: "Itens de " + label, wide: true});
+        }
+
+        function openPanel(anchor, key) {
+            var source = calRoot.querySelector('[data-cal-panel="' + key + '"]');
+            if (!source) return;
+            var copy = source.cloneNode(true);
+            copy.removeAttribute("data-cal-panel");
+            copy.addEventListener("click", function (event) {
+                var row = event.target.closest("[data-cal-open]");
+                if (!row) return;
+                closePopover(false);
+                openDrawer(row.dataset.itemId);
+            });
+            openPopover(anchor, copy, {label: key === "overdue" ? "Itens atrasados" : "Itens sem data"});
+        }
+
+        // -- data com hora opcional (no calendário a data se edita neste pop-over; a hora só existe se a coluna a exibe)
+
+        function editDateWithTime(td, column, current) {
+            var withTime = !!(column.settings && column.settings.show_time);
+            var parts = splitDateValue(current);
+            var dateInput = el("input", {type: "date", "aria-label": column.name});
+            dateInput.value = parts.date;
+            var root = el("div", {class: "cal-datepop"}, [dateInput]);
+            var finished = false;
+
+            function commit(date, time) {
+                if (finished) return;
+                finished = true;
+                closePopover(true);
+                saveCell(td, composeDateValue(date, withTime ? time : ""));
+            }
+            dateInput.addEventListener("change", function () { if (dateInput.value) commit(dateInput.value, parts.time); });
+
+            if (withTime) {
+                var block = el("div", {class: "cal-datepop__time"});
+                var timeInput = el("input", {type: "text", inputmode: "numeric", placeholder: "HH:MM", maxlength: "5", "aria-label": "Horário (opcional)"});
+                timeInput.value = parts.time;
+                var error = el("p", {class: "cal-datepop__error", role: "alert", hidden: true});
+                var applyTime = function (text) {
+                    var time = parseTimeInput(text);
+                    if (!time) { error.textContent = "Use o formato HH:MM, por exemplo 14:30."; error.hidden = false; return; }
+                    commit(dateInput.value || isoToday(), time);
+                };
+                var quick = el("div", {class: "cal-datepop__times"});
+                ["08:00", "09:00", "10:00", "14:00", "15:00", "16:00"].forEach(function (time) {
+                    var button = el("button", {type: "button", class: "btn btn--sm", text: time});
+                    button.addEventListener("click", function () { applyTime(time); });
+                    quick.appendChild(button);
+                });
+                timeInput.addEventListener("keydown", function (event) {
+                    if (event.key === "Enter") { event.preventDefault(); applyTime(timeInput.value); }
+                });
+                timeInput.addEventListener("change", function () { if (timeInput.value.trim()) applyTime(timeInput.value); });
+                block.appendChild(el("label", {text: "Horário (opcional)"}));
+                block.appendChild(quick);
+                block.appendChild(timeInput);
+                block.appendChild(error);
+                root.appendChild(block);
+            } else if (perms.manage_columns) {
+                var enable = el("button", {type: "button", class: "btn btn--sm", text: "Ativar horário nesta coluna"});
+                enable.addEventListener("click", function () {
+                    request(url("column_settings", {id: column.id}), {settings: {show_time: true}}).then(function (payload) {
+                        for (var i = 0; i < meta.columns.length; i += 1) if (meta.columns[i].id === payload.column.id) meta.columns[i] = payload.column;
+                        closePopover(false);
+                        if (doc.contains(td)) editDateWithTime(td, payload.column, current);
+                    }, fail);
+                });
+                root.appendChild(el("p", {class: "cal-datepop__hint", text: "Esta coluna guarda só o dia. O horário é opcional e pode ser ativado."}));
+                root.appendChild(enable);
+            }
+
+            var foot = el("div", {class: "board-pop__foot"});
+            var today = el("button", {type: "button", class: "btn btn--sm", text: "Hoje"});
+            today.addEventListener("click", function () { commit(isoToday(), parts.time); });
+            foot.appendChild(today);
+            if (withTime && parts.time) {
+                var clearTime = el("button", {type: "button", class: "btn btn--sm", text: "Limpar horário"});
+                clearTime.addEventListener("click", function () { commit(parts.date, ""); });
+                foot.appendChild(clearTime);
+            }
+            if (parts.date && !column.is_required) {
+                var clearDate = el("button", {type: "button", class: "btn btn--sm", text: "Limpar data"});
+                clearDate.addEventListener("click", function () {
+                    if (finished) return;
+                    finished = true;
+                    closePopover(true);
+                    saveCell(td, "");
+                });
+                foot.appendChild(clearDate);
+            }
+            root.appendChild(foot);
+            openPopover(td, root, {label: column.name});
+        }
+
+        // -- criar no dia: a janela abre por cima do calendário, com a data já preenchida
+
+        function createControl(column) {
+            var type = column.type;
+            if (type === "STATUS" || type === "DROPDOWN") {
+                var select = el("select", {"aria-label": column.name}, [el("option", {value: "", text: "—"})]);
+                column.options.forEach(function (option) { select.appendChild(el("option", {value: String(option.id), text: option.label})); });
+                column.options.forEach(function (option) { if (option.is_default) select.value = String(option.id); });
+                return {node: el("label", {class: "board-field"}, [el("span", {text: column.name}), select]), value: function () { return select.value ? Number(select.value) : ""; }};
+            }
+            if (type === "PERSON") {
+                var chosen = null;
+                var chip = el("div", {class: "cal-form__chosen", hidden: true});
+                var holder = el("div", {class: "cal-form__person"});
+                var finder = personSearchNode(function (person) {
+                    chosen = person;
+                    chip.hidden = false;
+                    chip.textContent = "";
+                    var remove = el("button", {type: "button", "aria-label": "Remover " + person.name, text: "×"});
+                    remove.addEventListener("click", function () { chosen = null; chip.hidden = true; });
+                    chip.appendChild(el("span", {text: person.name}));
+                    chip.appendChild(remove);
+                });
+                finder.list.className = "board-people__list cal-form__person-list";
+                holder.appendChild(chip);
+                holder.appendChild(finder.search);
+                holder.appendChild(finder.list);
+                finder.load("");
+                return {node: el("div", {class: "board-field"}, [el("span", {text: column.name}), holder]), value: function () { return chosen ? chosen.id : ""; }};
+            }
+            if (type === "CHECKBOX") {
+                var box = el("input", {type: "checkbox"});
+                return {node: el("label", {class: "board-field board-field--check"}, [box, el("span", {text: column.name})]), value: function () { return box.checked ? "1" : ""; }};
+            }
+            if (type === "DATE") {
+                var withTime = !!(column.settings && column.settings.show_time);
+                var date = el("input", {type: withTime ? "datetime-local" : "date", "aria-label": column.name});
+                return {node: el("label", {class: "board-field"}, [el("span", {text: column.name}), date]), value: function () { return date.value; }};
+            }
+            if (type === "TEXT" || type === "NUMBER" || type === "CURRENCY") {
+                var text = el("input", {type: "text", maxlength: type === "TEXT" ? "5000" : "40", inputmode: type === "TEXT" ? null : "decimal", "aria-label": column.name});
+                return {node: el("label", {class: "board-field"}, [el("span", {text: column.name}), text]), value: function () { return text.value.trim(); }};
+            }
+            return null;
+        }
+
+        function openCreateDialog(iso) {
+            var column = dateColumn();
+            if (!column || !perms.create_item) return null;
+            if (!cal.default_group_id) { toast("Crie um grupo no Quadro principal antes de adicionar itens.", "error"); return null; }
+            var withTime = dateShowsTime();
+            var label = String(meta.board.item_label || "item").toLowerCase();
+            var form = el("form", {class: "cal-form", novalidate: true});
+            var title = el("input", {type: "text", maxlength: "255", "aria-label": "Título"});
+            form.appendChild(el("label", {class: "board-field"}, [el("span", {text: "Título"}), title]));
+
+            var groupSelect = null;
+            if ((meta.groups || []).length > 1) {
+                groupSelect = el("select", {"aria-label": "Grupo"});
+                meta.groups.forEach(function (group) { groupSelect.appendChild(el("option", {value: String(group.id), text: group.name})); });
+                groupSelect.value = String(cal.default_group_id);
+                form.appendChild(el("label", {class: "board-field"}, [el("span", {text: "Grupo"}), groupSelect]));
+            }
+
+            var dateInput = el("input", {type: "date", "aria-label": column.name});
+            dateInput.value = iso;
+            var timeInput = withTime ? el("input", {type: "text", inputmode: "numeric", placeholder: "HH:MM", maxlength: "5", "aria-label": "Horário (opcional)"}) : null;
+            var dateRow = el("div", {class: "cal-form__row"}, [
+                el("label", {class: "board-field"}, [el("span", {text: column.name}), dateInput]),
+                timeInput ? el("label", {class: "board-field"}, [el("span", {text: "Horário (opcional)"}), timeInput]) : null
+            ]);
+            form.appendChild(dateRow);
+
+            var controls = [];
+            (cal.card_column_ids || []).forEach(function (id) {
+                var meta_column = columnMeta(id);
+                if (!meta_column || meta_column.id === column.id) return;
+                var control = createControl(meta_column);
+                if (!control) return;
+                controls.push({column: meta_column, control: control});
+                form.appendChild(control.node);
+            });
+
+            var dialog;
+            function submit(button) {
+                var name = title.value.trim();
+                if (!name) { dialog.error("Informe o título."); title.focus(); return; }
+                if (!dateInput.value) { dialog.error("Informe a data."); dateInput.focus(); return; }
+                var time = "";
+                if (timeInput && timeInput.value.trim()) {
+                    time = parseTimeInput(timeInput.value);
+                    if (!time) { dialog.error("Use o formato HH:MM para o horário, por exemplo 14:30."); timeInput.focus(); return; }
+                }
+                var initial = [{column_id: column.id, value: composeDateValue(dateInput.value, time)}];
+                controls.forEach(function (entry) {
+                    var value = entry.control.value();
+                    if (value !== "" && value != null) initial.push({column_id: entry.column.id, value: value});
+                });
+                button.disabled = true;
+                var body = {group_id: Number(groupSelect ? groupSelect.value : cal.default_group_id), name: name, initial: initial};
+                request(url("item_create", {id: meta.board.id}), body).then(function (payload) {
+                    dialog.close();
+                    return refreshCalendar().then(function () {
+                        if (!calCardEl(payload.item.id)) toast("“" + name + "” foi criado para " + formatIsoDate(dateInput.value) + ".");
+                    });
+                }, function (error) { button.disabled = false; dialog.error(error.message); });
+            }
+            dialog = openDialog("Criar " + label, form, [
+                {label: "Cancelar"},
+                {label: "Criar " + label, kind: "primary", onClick: function (d, button) { submit(button); }}
+            ]);
+            form.addEventListener("submit", function (event) {
+                event.preventDefault();
+                submit(dialog.root.querySelector(".btn--primary"));
+            });
+            title.addEventListener("keydown", function (event) {
+                if (event.key === "Enter") { event.preventDefault(); submit(dialog.root.querySelector(".btn--primary")); }
+            });
+            return dialog;
+        }
+
+        // -- configurar a visualização (salva sozinha a cada mudança)
+
+        function createDateColumnForCalendar() {
+            return createDateColumn().then(function (column) {
+                if (!column) return null;
+                var saved = perms.edit
+                    ? request(url("view_update", {id: cal.view.id}), {settings: {date_field: column.id}}).then(null, function () { return null; })
+                    : Promise.resolve(null);
+                return saved.then(function () { return refreshCalendar(); });
+            });
+        }
+
+        function openCalendarConfig() {
+            var settings = function () { return cal.settings; };
+            var root = el("div", {class: "kanban-config"});
+            var controls = el("div", {class: "kanban-config__controls"});
+            var preview = el("div", {class: "kanban-config__preview", "aria-label": "Pré-visualização do cartão"});
+            var timer = null;
+
+            function check(label, key) {
+                var input = el("input", {type: "checkbox"});
+                input.checked = !!settings()[key];
+                input.addEventListener("change", function () {
+                    var change = {};
+                    change[key] = input.checked;
+                    updateCalView(change).then(function (payload) { if (!payload) input.checked = !!settings()[key]; });
+                });
+                controls.appendChild(el("label", {class: "board-field board-field--check"}, [input, el("span", {text: label})]));
+            }
+            function select(label, key, choices, current, transform) {
+                var control = el("select", {"aria-label": label});
+                choices.forEach(function (choice) { control.appendChild(el("option", {value: choice[0], text: choice[1], disabled: choice[2] ? true : null})); });
+                control.value = current;
+                var previous = current;
+                control.addEventListener("change", function () {
+                    var change = {};
+                    change[key] = transform ? transform(control.value) : control.value;
+                    updateCalView(change).then(function (payload) {
+                        if (payload) previous = control.value; else control.value = previous;
+                    });
+                });
+                controls.appendChild(el("label", {class: "board-field"}, [el("span", {text: label}), control]));
+            }
+            var number = function (value) { return /^\d+$/.test(value) ? Number(value) : value; };
+
+            var dates = meta.columns.filter(function (column) { return cal.dateable_ids.indexOf(column.id) >= 0; });
+            select("Data utilizada", "date_field", dates.map(function (column) { return [String(column.id), column.name]; }),
+                cal.date_column_id ? String(cal.date_column_id) : "", function (value) { return value ? Number(value) : null; });
+            var colorable = meta.columns.filter(function (column) { return cal.colorable_ids.indexOf(column.id) >= 0; });
+            select("Colorir por", "color_by",
+                colorable.map(function (column) { return [String(column.id), column.name]; }).concat([["group", "Grupo do item"], ["none", "Sem cor"]]),
+                cal.color_kind === "column" && cal.color_column_id ? String(cal.color_column_id) : cal.color_kind, number);
+            select("Escala", "period", [["month", "Mês"], ["week", "Semana (em breve)", true], ["day", "Dia (em breve)", true], ["agenda", "Agenda (em breve)", true]], settings().period || "month");
+            check("Mostrar finais de semana", "show_weekends");
+            check("Mostrar concluídos (itens cujo Status representa conclusão)", "show_completed");
+
+            // campos do cartão: marcados primeiro, na ordem do cartão; os demais depois, na ordem do quadro
+            var candidates = meta.columns.filter(function (column) { return column.id !== cal.date_column_id; });
+            var chosen = cal.card_column_ids.slice();
+            var rest = candidates.map(function (column) { return column.id; }).filter(function (id) { return chosen.indexOf(id) < 0; });
+            var order = chosen.concat(rest);
+            var checked = {};
+            chosen.forEach(function (id) { checked[id] = true; });
+            var fields = el("div", {class: "kanban-config__fields", role: "list"});
+
+            function saveFields() {
+                win.clearTimeout(timer);
+                timer = win.setTimeout(function () {
+                    updateCalView({card_fields: order.filter(function (id) { return checked[id]; })});
+                }, 250);
+            }
+            function renderFields() {
+                fields.textContent = "";
+                order.forEach(function (id, index) {
+                    var column = columnMeta(id);
+                    if (!column) return;
+                    var box = el("input", {type: "checkbox", "aria-label": "Mostrar " + column.name + " no cartão"});
+                    box.checked = !!checked[id];
+                    box.addEventListener("change", function () {
+                        if (box.checked && order.filter(function (other) { return checked[other]; }).length >= cal.max_card_fields) {
+                            box.checked = false;
+                            toast("O cartão do calendário aceita até " + cal.max_card_fields + " campos.", "error");
+                            return;
+                        }
+                        checked[id] = box.checked;
+                        saveFields();
+                    });
+                    var up = el("button", {type: "button", class: "btn btn--ghost btn--sm", "aria-label": "Subir " + column.name, text: "↑"});
+                    var down = el("button", {type: "button", class: "btn btn--ghost btn--sm", "aria-label": "Descer " + column.name, text: "↓"});
+                    up.disabled = index === 0;
+                    down.disabled = index === order.length - 1;
+                    up.addEventListener("click", function () { order.splice(index - 1, 0, order.splice(index, 1)[0]); renderFields(); saveFields(); });
+                    down.addEventListener("click", function () { order.splice(index + 1, 0, order.splice(index, 1)[0]); renderFields(); saveFields(); });
+                    fields.appendChild(el("div", {class: "kanban-config__field", role: "listitem"}, [
+                        el("label", {}, [box, el("span", {text: column.name})]), el("span", {class: "kanban-config__move"}, [up, down])
+                    ]));
+                });
+            }
+            renderFields();
+            controls.appendChild(el("p", {class: "board-pop__title", text: "Campos do cartão"}));
+            controls.appendChild(el("p", {class: "board-field__hint", text: "O cartão do mês é compacto: o recomendado é até " + cal.recommended_card_fields + " campos (o limite é " + cal.max_card_fields + ")."}));
+            controls.appendChild(fields);
+
+            function updatePreview() {
+                preview.textContent = "";
+                preview.appendChild(el("p", {class: "board-pop__title", text: "Pré-visualização"}));
+                var first = calRoot.querySelector("[data-cal-card]");
+                if (!first) { preview.appendChild(el("p", {class: "board-field__hint", text: "Ainda não há cartões neste mês para mostrar."})); return; }
+                var copy = first.cloneNode(true);
+                copy.removeAttribute("draggable");
+                copy.classList.add("is-preview");
+                copy.classList.remove("is-overflow");
+                qa("[tabindex]", copy).forEach(function (node) { node.removeAttribute("tabindex"); });
+                qa("[data-cell]", copy).forEach(function (node) { node.removeAttribute("data-cell"); });
+                preview.appendChild(copy);
+            }
+            calConfigState = {updatePreview: updatePreview};
+            updatePreview();
+
+            root.appendChild(controls);
+            root.appendChild(preview);
+            var dialog = openDialog("Configurar calendário", root, [{label: "Concluir", kind: "primary"}]);
+            dialog.root.classList.add("board-dialog--wide");
+            dialog.onClose = function () { win.clearTimeout(timer); calConfigState = null; };
+        }
+
         // -- ligação dos eventos ----------------------------------------------------------------
 
         page.addEventListener("click", function (event) {
@@ -1585,6 +2243,36 @@
                 if ((node = target.closest("[data-card-title]"))) { startItemRename(node.closest("[data-card]")); return; }
                 if ((node = target.closest("[data-lane-title]"))) {
                     if (event.detail >= 2) renameLane(node.closest("[data-lane]"));
+                    return;
+                }
+            }
+            if (cal) {
+                if ((node = target.closest("[data-cal-nav]"))) {
+                    if (event.ctrlKey || event.metaKey || event.shiftKey || event.button) return; // abrir em outra aba continua valendo
+                    event.preventDefault();
+                    goToMonth(node.dataset.month);
+                    return;
+                }
+                if ((node = target.closest("[data-cal-add]"))) { openCreateDialog(node.closest("[data-cal-day]").dataset.date); return; }
+                if ((node = target.closest("[data-cal-more]"))) {
+                    if (popover && popover.anchor === node) { closePopover(true); return; }
+                    openDayPopover(node, node.closest("[data-cal-day]"));
+                    return;
+                }
+                if ((node = target.closest("[data-cal-panel-open]"))) {
+                    if (popover && popover.anchor === node) { closePopover(true); return; }
+                    openPanel(node, node.dataset.calPanelOpen);
+                    return;
+                }
+                if ((node = target.closest("[data-cal-config]"))) { openCalendarConfig(); return; }
+                if ((node = target.closest("[data-cal-show-weekends]"))) { updateCalView({show_weekends: true}); return; }
+                if ((node = target.closest("[data-cal-create-date]"))) { createDateColumnForCalendar(); return; }
+                if ((node = target.closest("[data-drawer-close]"))) { closeDrawer(true); return; }
+                if ((node = target.closest("[data-drawer-delete]"))) { deleteDrawerItem(); return; }
+                if ((node = target.closest("[data-drawer-title]"))) { startDrawerRename(); return; }
+                if ((node = target.closest("[data-cal-card]"))) {
+                    var field = target.closest("[data-cell]");
+                    if (field) openCellEditor(field); else openDrawer(node.dataset.itemId);
                     return;
                 }
             }
@@ -1627,6 +2315,12 @@
         page.addEventListener("keydown", function (event) {
             var node = event.target;
             if (node.matches && node.matches("[data-column-resize]")) { resizeByKey(event, node); return; }
+            if (cal && node.matches && node.matches("[data-cal-card]") && (event.key === "Enter" || event.key === " ")) {
+                event.preventDefault();
+                openDrawer(node.dataset.itemId);
+                return;
+            }
+            if (cal && node.matches && node.matches("[data-drawer-title]") && event.key === "Enter") { event.preventDefault(); startDrawerRename(); return; }
             if (node.matches && node.matches("[data-cell]")) {
                 if (event.key === "Enter" || event.key === "F2" || (event.key === " " && node.dataset.type === "CHECKBOX")) {
                     event.preventDefault(); openCellEditor(node);
@@ -1655,6 +2349,16 @@
 
         // arrastar colunas e itens
         page.addEventListener("dragstart", function (event) {
+            var calCard = event.target.closest && event.target.closest("[data-cal-card]");
+            if (calCard && cal && perms.edit_item) {
+                drag = {kind: "calcard", id: Number(calCard.dataset.itemId), el: calCard, day: calCard.closest("[data-cal-day]")};
+                calCard.classList.add("is-dragging");
+                if (event.dataTransfer) {
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData("text/plain", "calcard:" + calCard.dataset.itemId);
+                }
+                return;
+            }
             var card = event.target.closest && event.target.closest("[data-card]");
             if (card && kanban && perms.edit_item) {
                 drag = {kind: "card", id: Number(card.dataset.itemId), el: card, lane: card.closest("[data-lane]")};
@@ -1687,6 +2391,14 @@
 
         page.addEventListener("dragover", function (event) {
             if (!drag) return;
+            if (drag.kind === "calcard") {
+                var overDay = event.target.closest("[data-cal-day]");
+                if (!overDay || overDay.classList.contains("is-blocked")) return; // dia que a coluna recusa: sem "soltar aqui"
+                event.preventDefault();
+                clearDropMarks();
+                if (overDay !== drag.day) overDay.classList.add("is-drop-target");
+                return;
+            }
             if (drag.kind === "card") {
                 var overLane = event.target.closest("[data-lane]");
                 if (!overLane) return;
@@ -1721,6 +2433,12 @@
             if (!drag) return;
             var current = drag;
             event.preventDefault();
+            if (current.kind === "calcard") {
+                var dropDay = event.target.closest("[data-cal-day]");
+                endDrag();
+                if (dropDay) moveCalCard(current.el, dropDay);
+                return;
+            }
             if (current.kind === "card") {
                 var dropLane = event.target.closest("[data-lane]");
                 endDrag();
@@ -1833,7 +2551,8 @@
             closePopover(false);
         });
         doc.addEventListener("keydown", function (event) {
-            if (event.key === "Escape" && popover) { event.stopPropagation(); closePopover(true); }
+            if (event.key === "Escape" && popover) { event.stopPropagation(); closePopover(true); return; }
+            if (event.key === "Escape" && cal && drawerRoot && !drawerRoot.hidden) closeDrawer(true);
         });
         // rolar a tabela ou redimensionar a janela: o pop-over acompanha o botão que o abriu (e não fecha, porque o
         // navegador também dispara "scroll" quando só rola o botão para dentro da tela antes do clique)
@@ -1848,7 +2567,8 @@
 
         return {
             request: request, openColumnMenu: openColumnMenu, openTypePicker: openTypePicker, addColumn: addColumn,
-            saveCell: saveCell, columnMeta: columnMeta, toast: toast, refreshKanban: refreshKanban, moveCard: moveCard
+            saveCell: saveCell, columnMeta: columnMeta, toast: toast, refreshKanban: refreshKanban, moveCard: moveCard,
+            refreshCalendar: refreshCalendar, openDrawer: openDrawer, moveCalCard: moveCalCard
         };
     }
 

@@ -653,7 +653,7 @@ class MenuTests(ViewTestCase):
     def test_every_board_route_is_mapped_to_the_menu_item(self):
         # só as rotas do motor de quadros (`board-*`): as `workboard-*` são das lentes sobre Demandas e Tarefas
         names = {pattern.name for pattern in board_urls.urlpatterns if pattern.name.startswith("board-")}
-        self.assertEqual(len(names), 34)
+        self.assertEqual(len(names), 36)
         for name in names:
             self.assertEqual(_NAV_BY_URL_NAME.get(name), "boards", name)
 

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% load static lps_board %}
+{% block title %}{{ view.name }} — {{ board.name }} — Quadros — LPS{% endblock %}
+
+{% block content %}
+<section class="board-page board-page--calendar" data-board-page data-board-id="{{ board.id }}" data-view-id="{{ view.id }}">
+    {% include "boards/_board_head.html" %}
+    {% include "boards/_board_view_tabs.html" with active_view=view %}
+
+    <form class="board-toolbar" method="get" data-board-toolbar>
+        <input type="hidden" name="mes" value="{{ month_key }}" data-cal-month-input>
+        <label class="board-search">
+            {% include "_icon.html" with name="search" %}
+            <input type="search" name="q" value="{{ search }}" placeholder="Buscar neste quadro…" aria-label="Buscar neste quadro" maxlength="120">
+        </label>
+        <label class="board-select">
+            <span class="sr-only">Filtrar por pessoa</span>
+            <select name="pessoa" data-board-person-filter aria-label="Filtrar por pessoa">
+                <option value="">Todas as pessoas</option>
+                {% for person in people %}<option value="{{ person.pk }}"{% if person.pk == person_id %} selected{% endif %}>{{ person|person_name }}</option>{% endfor %}
+            </select>
+        </label>
+        <button type="submit" class="btn btn--sm">Buscar</button>
+        <button type="button" class="board-tool" disabled title="Em breve: filtros por valor de coluna">{% include "_icon.html" with name="sliders" %} Filtros <span class="board-soon">em breve</span></button>
+        {% if permissions.edit %}<button type="button" class="board-tool" data-cal-config aria-haspopup="dialog">{% include "_icon.html" with name="settings" %} Configurar calendário</button>{% endif %}
+        {% if filtering %}<a class="board-clear" href="{% url 'board-view-detail' view.pk %}?mes={{ month_key }}">Limpar busca</a>{% endif %}
+    </form>
+
+    <div class="cal-bar">
+        <div class="cal-nav" role="group" aria-label="Período">
+            <a class="btn btn--sm" href="{% url 'board-view-detail' view.pk %}?mes={{ today_month }}{{ keep_query }}" data-cal-nav data-cal-today data-month="{{ today_month }}">Hoje</a>
+            <a class="cal-nav__step cal-nav__step--prev" href="{% url 'board-view-detail' view.pk %}?mes={{ prev_month }}{{ keep_query }}" data-cal-nav data-cal-prev data-month="{{ prev_month }}" aria-label="Mês anterior" title="Mês anterior">{% include "_icon.html" with name="chevron-left" %}</a>
+            <a class="cal-nav__step cal-nav__step--next" href="{% url 'board-view-detail' view.pk %}?mes={{ next_month }}{{ keep_query }}" data-cal-nav data-cal-next data-month="{{ next_month }}" aria-label="Próximo mês" title="Próximo mês">{% include "_icon.html" with name="chevron-left" %}</a>
+            <h2 class="cal-title" data-cal-title aria-live="polite">{{ month_title }}</h2>
+        </div>
+        <label class="board-select board-select--labeled">
+            <span class="sr-only">Escala do calendário</span>
+            <select data-cal-period aria-label="Escala do calendário">
+                <option value="month" selected>Mês</option>
+                <option value="week" disabled>Semana (em breve)</option>
+                <option value="day" disabled>Dia (em breve)</option>
+                <option value="agenda" disabled>Agenda (em breve)</option>
+            </select>
+        </label>
+    </div>
+
+    <div class="cal-scroll" data-board-scroll>
+        <div class="cal-body" data-cal-body>{% include "boards/_calendar_body.html" %}</div>
+    </div>
+
+    <aside class="board-drawer" data-cal-drawer hidden aria-label="Detalhes do item"></aside>
+</section>
+
+<div class="board-toast-area" data-board-toasts role="status" aria-live="polite"></div>
+{{ meta|json_script:"board-meta" }}
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/boards.js' %}?v=20261010a"></script>
+{% endblock %}

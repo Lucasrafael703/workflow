@@ -1,0 +1,15 @@
+{% load lps_board %}<article class="cal-card{% if entry.overdue %} is-overdue{% endif %}{% if entry.done %} is-done{% endif %}{% if entry.overflow %} is-overflow{% endif %}" data-cal-card data-item-id="{{ entry.item.pk }}" data-date="{{ entry.iso }}" data-time="{{ entry.time }}" tabindex="0" style="--card-color:{{ entry.color }}" aria-label="{{ entry.item.name|default:'Sem título' }}, {{ entry.date|date:'d/m/Y' }}{% if entry.time %} às {{ entry.time }}{% endif %}. Enter abre os detalhes."{% if permissions.edit_item %} draggable="true"{% endif %}>
+    <div class="cal-card__main">
+        {% if entry.time %}<time class="cal-card__time" datetime="{{ entry.iso }}T{{ entry.time }}">{{ entry.time }}</time>{% endif %}
+        <span class="cal-card__title{% if not entry.item.name %} is-empty{% endif %}" title="{{ entry.item.name }}">{{ entry.item.name|default:"Sem título" }}</span>
+    </div>
+    {% if entry.overdue %}<span class="cal-card__flag">{% include "_icon.html" with name="alert" %} Atrasada</span>{% endif %}
+    {% if entry.fields %}
+    <div class="cal-card__fields">
+        {% for field in entry.fields %}
+        <div class="cal-field cal-field--{{ field.column.type|lower }}"><span class="sr-only">{{ field.column.name }}: </span><span class="cal-field__value{% if permissions.edit_item %} is-editable{% endif %}" data-cell data-item-id="{{ entry.item.pk }}" data-column-id="{{ field.column.pk }}" data-type="{{ field.column.type }}" data-value="{% raw_value field.cell field.column %}"{% if permissions.edit_item %} tabindex="0"{% endif %}>{% with cell=field.cell column=field.column %}{% include "boards/_cell.html" %}{% endwith %}</span></div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% if entry.color_label %}<span class="sr-only">{{ entry.color_label }}{% if entry.done %} (concluído){% endif %}</span>{% endif %}
+</article>

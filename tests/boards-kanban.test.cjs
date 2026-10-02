@@ -619,11 +619,12 @@ test("tabs: main table first, the Kanbans after, current one marked, + only for 
     assert.equal(setup(t, {fixture: VIEWER}).$("[data-view-add]"), null);
 });
 
-test("adding a view: the dialog lists the types, only Kanban is available, and creating goes to the new view", async t => {
+test("adding a view: the dialog lists the types, Kanban and Calendar are available, and creating goes to the new view", async t => {
     const {$, $$, click, calls} = setup(t, {respond: () => jsonResponse({ok: true, view: {id: 9, name: "Kanban 2"}, redirect_url: "/quadros/visoes/9/"})});
     click($("[data-view-add]"));
     assert.deepEqual($$(".board-view-type strong").map(node => node.textContent), ["Tabela", "Kanban", "Calendário", "Linha do tempo", "Dashboard"]);
-    assert.deepEqual($$(".board-view-type.is-disabled").map(node => node.querySelector("strong").textContent), ["Tabela", "Calendário", "Linha do tempo", "Dashboard"]);
+    assert.deepEqual($$(".board-view-type.is-disabled").map(node => node.querySelector("strong").textContent), ["Tabela", "Linha do tempo", "Dashboard"]);
+    assert.equal($(".board-view-type.is-selected strong").textContent, "Kanban");
     const name = $(".board-dialog input[type=text]");
     assert.equal(name.value, "Kanban");
     name.value = "Kanban Comercial";
