@@ -25,6 +25,7 @@ from django.views.generic import TemplateView
 from acessos import catalog
 from acessos.services import AuthorizationService, ResourceContext
 from core.mixins import OrganizationRequiredMixin
+from core.models import Sector
 
 from .calendar_view import (
     DEFAULT_CARD_FIELD_COUNT,
@@ -124,15 +125,12 @@ def get_view(organization, pk):
 
 def board_people(board):
     """Pessoas que aparecem em alguma célula de Pessoa do quadro (alimenta o filtro por pessoa)."""
-    return list(
-        User.objects.filter(
-            board_cell_values__cell__item__board=board,
-            board_cell_values__cell__item__is_active=True,
-            board_cell_values__cell__column__is_active=True,
-        )
-        .distinct()
-        .order_by("first_name", "username")
+    people = User.objects.filter(
+        board_cell_values__cell__item__board=board,
+        board_cell_values__cell__item__is_active=True,
+        board_cell_values__cell__column__is_active=True,
     )
+    return list(people.distinct().order_by("first_name", "username"))
 
 
 def get_item(organization, pk):
@@ -258,11 +256,16 @@ class BoardListView(OrganizationRequiredMixin, TemplateView):
         scope = ResourceContext.for_new(self.organization)
         if not AuthorizationService.can(self.request.user, catalog.QUADRO_VISUALIZAR, scope):
             raise PermissionDenied("Você não possui acesso a este conteúdo.")
-        boards = list(Board.objects.filter(organization=self.organization, is_active=True).order_by("name", "id"))
+        boards = list(
+            Board.objects.filter(
+                organization=self.organization, is_active=True, kind=Board.Kind.TEMPLATE
+            ).select_related("sector").order_by("name", "id")
+        )
         context.update(
             boards=boards,
             can_create=AuthorizationService.can(self.request.user, catalog.QUADRO_CRIAR, scope),
             template_choices=template_choices(),
+            sectors=Sector.objects.filter(organization=self.organization, is_active=True).order_by("name"),
         )
         return context
 
@@ -275,13 +278,17 @@ class BoardCreateView(OrganizationRequiredMixin, View):
     def post(self, request):
         name = request.POST.get("name", "")
         template_key = request.POST.get("template", "").strip()
+        sector = get_object_or_404(
+            Sector, pk=_int_or_none(request.POST.get("sector_id")) or 0,
+            organization=self.organization, is_active=True,
+        )
         try:
             if template_key:
                 board = create_board_from_template(
-                    user=request.user, organization=self.organization, key=template_key, name=name
+                    user=request.user, organization=self.organization, key=template_key, name=name, sector=sector
                 )
             else:
-                board = BoardService.create(user=request.user, organization=self.organization, name=name)
+                board = BoardService.create(user=request.user, organization=self.organization, name=name, sector=sector)
         except BoardPermissionError:
             raise PermissionDenied("Você não possui permissão para criar quadros.")
         except BoardError as exc:
@@ -347,6 +354,43 @@ class BoardDetailView(OrganizationRequiredMixin, TemplateView):
             total_items=len(items),
             filtering=bool(search or person_id),
         )
+        return context
+
+
+class DemandTaskBoardView(BoardDetailView):
+    """Entrada única de Tarefas: seleciona uma Demanda e abre seu Board próprio."""
+
+    template_name = "boards/task_board.html"
+
+    def _available_boards(self):
+        from .demand_services import DemandBoardAccess
+
+        boards = list(
+            Board.objects.filter(
+                organization=self.organization,
+                kind=Board.Kind.DEMAND,
+                is_active=True,
+                activity__status__in=(
+                    "ABERTA", "EM_ANDAMENTO", "PENDENTE", "CONCLUIDA", "CANCELADA",
+                ),
+            )
+            .select_related("activity", "activity__owner", "activity__created_by")
+            .order_by("activity__title", "activity_id")
+        )
+        return [board for board in boards if DemandBoardAccess.can_view(self.request.user, board)]
+
+    def get_context_data(self, **kwargs):
+        boards = self._available_boards()
+        board_id = _int_or_none(self.request.GET.get("demanda"))
+        selected = next((entry for entry in boards if entry.activity_id == board_id), None)
+        if board_id is not None and selected is None:
+            raise Http404("Demanda nÃ£o encontrada.")
+
+        if selected is None:
+            context = TemplateView.get_context_data(self, **kwargs)
+        else:
+            context = super().get_context_data(pk=selected.pk, **kwargs)
+        context["accessible_demands"] = [entry.activity for entry in boards]
         return context
 
 
@@ -939,7 +983,7 @@ class ItemCreateView(BoardAPIView):
         columns = self.columns_of(board)
         item = _item_for_render(board, item.pk, columns)
         return {
-            "item": {"id": item.pk, "group_id": item.group_id, "name": item.name},
+            "item": {"id": item.pk, "group_id": item.group_id, "name": getattr(item, "display_name", item.name)},
             "row_html": render_row(request, board, item, columns, self.permissions(board)),
         }
 
@@ -948,7 +992,8 @@ class ItemRenameView(BoardAPIView):
     def handle(self, request, data, pk):
         item = get_item(self.organization, pk)
         ItemService.rename(user=request.user, item=item, name=data.get("name", ""))
-        return {"name": item.name}
+        item = _item_for_render(item.board, item.pk, self.columns_of(item.board))
+        return {"name": item.display_name}
 
 
 class ItemMoveView(BoardAPIView):

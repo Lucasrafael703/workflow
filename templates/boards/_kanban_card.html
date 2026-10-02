@@ -1,16 +1,8 @@
-{% load lps_board %}<article class="kanban-card" data-card data-item-id="{{ item.pk }}"{% if permissions.edit_item %} draggable="true"{% endif %}>
+{% load lps_board %}
+<article class="kanban-card" data-card data-item-id="{{ item.pk }}"{% if permissions.edit_item %} draggable="true"{% endif %}>
     <header class="kanban-card__head">
-        <span class="kanban-card__title{% if not item.name %} is-empty{% endif %}" data-card-title{% if permissions.edit_item %} tabindex="0" role="textbox" aria-label="Nome do item"{% endif %}>{% if item.name %}{{ item.name }}{% else %}Sem título{% endif %}</span>
-        {% if permissions.edit_item or permissions.delete_item %}<button type="button" class="kanban-card__menu" data-card-menu aria-haspopup="menu" aria-label="Opções do item {{ item.name }}">{% include "_icon.html" with name="more" %}</button>{% endif %}
+        <span class="kanban-card__title{% if not item.display_name and not item.name %} is-empty{% endif %}" data-card-title{% if permissions.edit_item %} tabindex="0" role="textbox" aria-label="{{ board.item_label }}"{% endif %}>{% if item.display_name %}{{ item.display_name }}{% elif item.name %}{{ item.name }}{% else %}Sem título{% endif %}</span>
+        {% if permissions.edit_item or permissions.delete_item %}<button type="button" class="kanban-card__menu" data-card-menu aria-haspopup="menu" aria-label="Opções da tarefa {{ item.display_name }}">{% include "_icon.html" with name="more" %}</button>{% endif %}
     </header>
-    {% if card_columns %}
-    <dl class="kanban-card__fields">
-        {% for column in card_columns %}{% with cell=item|cell_of:column.id %}
-        <div class="kanban-field kanban-field--{{ column.type|lower }}">
-            {% if show_field_names %}<dt>{{ column.name }}</dt>{% else %}<dt class="sr-only">{{ column.name }}</dt>{% endif %}
-            <dd class="kanban-field__value{% if permissions.edit_item %} is-editable{% endif %}" data-cell data-item-id="{{ item.pk }}" data-column-id="{{ column.id }}" data-type="{{ column.type }}" data-value="{% raw_value cell column %}"{% if permissions.edit_item %} tabindex="0"{% endif %}>{% include "boards/_cell.html" %}</dd>
-        </div>
-        {% endwith %}{% endfor %}
-    </dl>
-    {% endif %}
+    {% if card_columns %}<dl class="kanban-card__fields">{% for column in card_columns %}{% with cell=item|cell_of:column.id %}<div class="kanban-field kanban-field--{{ column.type|lower }}">{% if show_field_names %}<dt>{{ column.name }}</dt>{% else %}<dt class="sr-only">{{ column.name }}</dt>{% endif %}<dd class="kanban-field__value{% if permissions.edit_item %} is-editable{% endif %}" data-cell data-item-id="{{ item.pk }}" data-column-id="{{ column.id }}" data-type="{{ column.type }}" data-value="{% raw_value cell column %}"{% if permissions.edit_item %} tabindex="0"{% endif %}>{% include "boards/_cell.html" %}</dd></div>{% endwith %}{% endfor %}</dl>{% endif %}
 </article>

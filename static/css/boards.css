@@ -198,6 +198,38 @@ body.board-resizing, body.board-resizing * { cursor: col-resize !important; user
 .board-add-item svg { width: 14px; height: 14px; }
 .board-add-item:hover { color: var(--primary); background: var(--primary-soft); }
 
+/* Criação de tarefa em quadros de Demanda. Mantém a mesma linha de inclusão
+   dos Quadros comuns e só revela os dados operacionais quando necessário. */
+.board-demand-task-composer[hidden] { display: none; }
+.board-demand-task-composer { position: sticky; left: 0; padding: 8px 10px; }
+.board-inline-task {
+    display: grid; grid-template-columns: minmax(190px, 1.55fr) minmax(160px, 1fr) minmax(220px, 1.25fr) auto;
+    gap: 8px; align-items: end; max-width: 920px; padding: 10px;
+    border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--board-head-bg);
+    box-shadow: 0 4px 12px rgba(24, 49, 78, .08);
+}
+.board-inline-task__field { display: grid; gap: 4px; min-width: 0; color: var(--text-2); font-size: 11.5px; font-weight: 650; }
+.board-inline-task__field span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-inline-task__field em { color: var(--muted); font-style: normal; font-weight: 500; }
+.board-inline-task__field input,
+.board-inline-task__field select {
+    width: 100%; min-width: 0; height: 34px; padding: 0 9px; border: 1px solid var(--border-strong);
+    border-radius: 6px; outline: 0; background: var(--surface); color: var(--text); font: inherit; font-size: 13px;
+}
+.board-inline-task__field select { padding-right: 28px; }
+.board-inline-task__field input::placeholder { color: var(--muted); }
+.board-inline-task__field input:focus,
+.board-inline-task__field select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+.board-inline-task__actions { display: flex; align-items: center; gap: 6px; min-height: 34px; white-space: nowrap; }
+.board-inline-task__actions .btn { height: 34px; }
+.board-inline-task__error { grid-column: 1 / -1; margin: 0; color: var(--danger); font-size: 12px; font-weight: 600; }
+
+@media (max-width: 760px) {
+    .board-demand-task-composer { padding: 8px; }
+    .board-inline-task { grid-template-columns: 1fr; max-width: none; }
+    .board-inline-task__actions { justify-content: flex-end; }
+}
+
 /* -- Conteúdo das células -------------------------------------------------- */
 
 .board-pill {

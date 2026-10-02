@@ -76,9 +76,10 @@ class DomainWorkBoardTests(TestCase):
         response = self.client.get(reverse("activity-kanban"))
         self.assertContains(response, "Quadro por etapas")
         self.assertContains(response, "Sem estágio")
+        # Tarefas agora é a entrada única que escolhe uma Demanda e abre o quadro próprio dela.
         response = self.client.get(reverse("task-kanban"))
-        self.assertContains(response, "Revisar escopo")
-        self.assertContains(response, "data-work-kanban")
+        self.assertContains(response, "Selecione uma Demanda")
+        self.assertContains(response, "Conferir proposta")
 
     def test_value_endpoint_rejects_item_from_another_organization(self):
         other_sector = Sector.objects.create(organization=self.other_org, name="Financeiro")

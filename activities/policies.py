@@ -47,6 +47,8 @@ ACTIVITY_PERMISSIONS = {
     "edit": catalog.ATIVIDADE_EDITAR,
     "change_owner": catalog.ATIVIDADE_ALTERAR_DONO,
     "change_sector": catalog.ATIVIDADE_EDITAR,
+    "set_stage": catalog.ATIVIDADE_DEFINIR_ETAPA,
+    "set_condition": catalog.ATIVIDADE_DEFINIR_CONDICAO,
     "complete": catalog.ATIVIDADE_CONCLUIR,
     "cancel": catalog.ATIVIDADE_CANCELAR,
     "reopen": catalog.ATIVIDADE_REABRIR,
@@ -268,7 +270,7 @@ class ActivityTransitionPolicy(_Policy):
     (`BLOQUEADA` existe no modelo mas nenhum fluxo a grava)."""
 
     ACTIONS = (
-        "edit", "change_owner", "change_sector", "claim", "complete", "cancel", "reopen",
+        "edit", "change_owner", "change_sector", "set_stage", "set_condition", "claim", "complete", "cancel", "reopen",
         "mark_pending", "approve_pendency", "resolve_pendency",
     )
 
@@ -284,6 +286,19 @@ class ActivityTransitionPolicy(_Policy):
             return "Não é possível alterar o dono de uma demanda concluída ou cancelada."
         if activity.status == Activity.Status.RASCUNHO:
             return "Termine de criar a demanda antes de transferir o responsável."
+        return None
+
+    @staticmethod
+    def _check_set_stage(activity, user):
+        # Vale para qualquer tela (lista, Kanban, edição): demanda encerrada não troca de estágio.
+        if activity.status in ACTIVITY_TERMINAL:
+            return "Não é possível alterar o estágio de uma demanda concluída ou cancelada."
+        return None
+
+    @staticmethod
+    def _check_set_condition(activity, user):
+        if activity.status in ACTIVITY_TERMINAL:
+            return "Não é possível alterar o status de uma demanda concluída ou cancelada."
         return None
 
     @staticmethod

@@ -1,8 +1,46 @@
+import re
+
 from django import template
+from django.utils.html import conditional_escape, format_html, urlize
+from django.utils.safestring import mark_safe
 
 from audit.models import AuditLog
 
 register = template.Library()
+
+_CONVERSATION_URL = re.compile(r"(https?://[^\s<]+)", re.IGNORECASE)
+_CONVERSATION_MENTION = re.compile(r"(?<!\S)@([^\s#]+)")
+
+
+@register.filter(needs_autoescape=True)
+def conversation_body(value, autoescape=True):
+    """Renderiza texto de conversa com links e menções, sem aceitar HTML.
+
+    A mensagem continua sendo texto simples no banco. Esta pequena camada de
+    apresentação destaca ``@pessoa`` e transforma URLs em links, preservando
+    a proteção contra HTML inserido por quem escreveu a atualização.
+    """
+    value = value or ""
+
+    def highlight_mentions(fragment):
+        escaped = str(conditional_escape(fragment))
+
+        def replace(match):
+            token = match.group(1)
+            bare_name = token.rstrip(".,;:!?")
+            suffix = token[len(bare_name) :]
+            return f"{format_html('<span class=\"conversation-mention\">@{}</span>', bare_name)}{suffix}"
+
+        return _CONVERSATION_MENTION.sub(replace, escaped)
+
+    pieces = _CONVERSATION_URL.split(str(value))
+    rendered = []
+    for index, piece in enumerate(pieces):
+        if index % 2:
+            rendered.append(str(urlize(piece, autoescape=autoescape)))
+        else:
+            rendered.append(highlight_mentions(piece))
+    return mark_safe("".join(rendered).replace("\n", "<br>"))
 
 # O histórico precisa ser lido por qualquer pessoa, não parecer log técnico
 # (doc 09 §124). Cada evento vira uma frase em português.

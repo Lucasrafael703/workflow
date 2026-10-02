@@ -15,7 +15,7 @@ Não há upload: a etapa 3 só tem as observações e o link/caminho dos arquivo
 
 {% block content %}
 <div class="modal-backdrop activity-modal-overlay">
-    <div class="modal activity-modal" data-activity-stepper data-initial-step="{{ initial_step }}">
+    <div class="modal activity-modal" data-activity-stepper data-initial-step="{{ initial_step }}"{% if editing %} data-submit-anywhere{% endif %}>
         <header class="activity-modal-header">
             <span class="activity-header-icon" aria-hidden="true">{% include "_icon.html" with name="file-text" %}</span>
             <div class="activity-header-content">
@@ -68,6 +68,8 @@ Não há upload: a etapa 3 só tem as observações e o link/caminho dos arquivo
                         {% include "activities/_activity_modal_field.html" with field=form.owner required=True %}
                         {% endif %}
                         {% include "activities/_activity_modal_field.html" with field=form.sector required=True %}
+                        {% include "activities/_activity_modal_field.html" with field=form.board_setup_mode full=True %}
+                        {% include "activities/_activity_modal_field.html" with field=form.board_template full=True %}
                         {% include "activities/_activity_modal_field.html" with field=form.stage %}
                         {% include "activities/_activity_modal_field.html" with field=form.condition %}
                         {% include "activities/_activity_modal_field.html" with field=form.requested_deadline %}
@@ -119,7 +121,7 @@ Não há upload: a etapa 3 só tem as observações e o link/caminho dos arquivo
                 <a href="{{ cancel_url }}" class="activity-btn activity-btn-secondary btn">Cancelar</a>
                 <div class="activity-footer-right">
                     <button type="button" class="activity-btn activity-btn-secondary" data-step-prev hidden disabled>{% include "_icon.html" with name="back" %} Voltar</button>
-                    <button type="button" class="activity-btn activity-btn-primary" data-step-next hidden>Continuar {% include "_icon.html" with name="arrow-right" %}</button>
+                    <button type="button" class="activity-btn activity-btn-{% if editing %}secondary{% else %}primary{% endif %}" data-step-next hidden>Continuar {% include "_icon.html" with name="arrow-right" %}</button>
                     <button type="submit" name="acao" value="publicar" class="activity-btn activity-btn-primary" data-step-submit>{{ submit_label }} {% include "_icon.html" with name="arrow-right" %}</button>
                 </div>
             </footer>

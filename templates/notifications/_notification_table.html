@@ -1,0 +1,32 @@
+{% load lps %}
+{% for n in items %}
+<article class="notification-grid__row{% if not n.is_read %} is-unread{% endif %}{% if n.table_date_is_urgent %} is-urgent{% endif %}">
+    <form method="post" action="{% url 'notification-mark-read' n.pk %}" class="notification-grid__open-form">
+        {% csrf_token %}{% include "notifications/_return_fields.html" %}<button type="submit" aria-label="Abrir {{ n.headline }}"></button>
+    </form>
+    <div class="notification-grid__indicator"><span></span></div>
+    <div class="notification-grid__type"><span class="notification-grid__type-icon notification-grid__type-icon--{{ n.tone }}">{% include "_icon.html" with name=n.icon %}</span><span class="notification-grid__type-label">{{ n.category_label }}</span></div>
+    <div class="notification-grid__main"><div class="notification-grid__tags"><span>{{ n.category_label }}</span>{% if n.needs_action %}<em>Ação necessária</em>{% endif %}</div><strong>{{ n.headline }}</strong><p>{{ n.summary }}</p>{% if n.show_message %}<small>{{ n.message }}</small>{% endif %}</div>
+    <div class="notification-grid__demand">{% if n.context_activity %}<strong>{{ n.context_activity.title }}</strong>{% if n.context_activity.code %}<span>{{ n.context_activity.code }}</span>{% endif %}{% else %}<span class="muted">Sem demanda</span>{% endif %}</div>
+    <div class="notification-grid__sector">{% if n.context_sector %}<span>{{ n.context_sector.name }}</span>{% else %}<span class="muted">—</span>{% endif %}</div>
+    <div class="notification-grid__person">{% if n.actor %}<span class="avatar avatar--{{ n.actor|avatar_color }}">{{ n.actor.get_username|slice:":2"|upper }}</span><div><strong>{{ n.actor.get_full_name|default:n.actor.get_username }}</strong><span>para você</span></div>{% else %}<span class="notification-grid__system">{% include "_icon.html" with name="settings" %}</span><div><strong>Sistema LPS</strong><span>para você</span></div>{% endif %}</div>
+    <div class="notification-grid__date"><strong>{{ n.table_date }}</strong><span{% if n.table_date_is_urgent %} class="is-urgent"{% endif %}>{{ n.table_date_meta }}</span></div>
+    <div class="notification-grid__action">
+        {% if n.event_type == "DEADLINE_PROPOSED" and n.pending_proposal_id %}
+            <form method="post" action="{% url 'deadline-accept' n.pending_proposal_id %}">{% csrf_token %}<input type="hidden" name="notification_id" value="{{ n.pk }}"><button type="submit" class="notification-grid__button notification-grid__button--primary">Aceitar</button></form>
+            {% include "notifications/_open_button.html" with target="deadline" label="Recusar" button_class="notification-grid__button notification-grid__button--outline" %}
+        {% elif n.event_type == "DEADLINE_CONFLICT" %}
+            {% include "notifications/_open_button.html" with target="conflict" label="Analisar" button_class="notification-grid__button notification-grid__button--primary" %}
+        {% elif n.event_type == "ACTIVITY_APPROVAL_NEEDED" %}
+            {% include "notifications/_open_button.html" with target="pendency" label="Analisar" button_class="notification-grid__button notification-grid__button--primary" %}
+        {% elif n.table_action_variant == "primary" %}
+            {% include "notifications/_open_button.html" with target=n.table_action_target label=n.table_action_label button_class="notification-grid__button notification-grid__button--primary" %}
+        {% elif n.table_action_variant == "soft" %}
+            {% include "notifications/_open_button.html" with target=n.table_action_target label=n.table_action_label button_class="notification-grid__button notification-grid__button--soft" %}
+        {% else %}
+            {% include "notifications/_open_button.html" with target=n.table_action_target label=n.table_action_label button_class="notification-grid__button notification-grid__button--outline" %}
+        {% endif %}
+        <div class="notification-grid__more"><button type="button" data-notif-menu-toggle aria-label="Mais opções" aria-expanded="false">{% include "_icon.html" with name="more" %}</button><div hidden data-notif-menu>{% if not n.is_read %}<form method="post" action="{% url 'notification-mark-read' n.pk %}">{% csrf_token %}<input type="hidden" name="mode" value="read">{% include "notifications/_return_fields.html" %}<button type="submit">{% include "_icon.html" with name="check" %} Marcar como lida</button></form>{% endif %}{% if n.task_id or n.activity_id %}{% include "notifications/_open_button.html" with target="history" label="Ver histórico" %}{% endif %}</div></div>
+    </div>
+</article>
+{% endfor %}

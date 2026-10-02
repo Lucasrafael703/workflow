@@ -23,6 +23,7 @@ from core.widgets import (
     TagPickerWidget,
     sprite_icon,
 )
+from boards.models import Board
 
 from .models import Activity, ActivityPendency, MessageKind, ReturnReason, Task, WorkSession
 from .services import RETROACTIVE_JUSTIFICATION_DAYS
@@ -318,7 +319,10 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
     """
 
     STEP_FIELDS = {
-        1: ("title", "owner", "sector", "stage", "condition", "requested_deadline", "urgency", "company"),
+        1: (
+            "title", "owner", "sector", "board_setup_mode", "board_template", "stage", "condition",
+            "requested_deadline", "urgency", "company",
+        ),
         2: ("client", "site", "cost_center", "external_requester", "address"),
         3: ("description", "files_location"),
     }
@@ -338,7 +342,7 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
     class Meta:
         model = Activity
         fields = [
-            "title", "owner", "sector", "stage", "condition", "requested_deadline", "urgency", "company",
+            "title", "owner", "sector", "board_setup_mode", "board_template", "stage", "condition", "requested_deadline", "urgency", "company",
             "client", "site", "cost_center", "external_requester", "address",
             "description", "files_location",
         ]
@@ -346,6 +350,8 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
             "title": "Nome da demanda",
             "owner": "Atribuído a",
             "sector": "Setor responsável",
+            "board_setup_mode": "Quadro de tarefas",
+            "board_template": "Modelo de quadro",
             "stage": "Etapa",
             "condition": "Condição",
             "urgency": "Urgência",
@@ -362,6 +368,8 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
             "title": "Descreva a entrega esperada. Ex.: Orçamento do gerador aprovado.",
             "owner": "Essa pessoa será responsável pela entrega e acompanhará as tarefas.",
             "sector": "Escolha o setor que será responsável por esta demanda.",
+            "board_setup_mode": "Escolha como as tarefas desta Demanda serão organizadas.",
+            "board_template": "Modelos de qualquer setor podem ser usados; a cópia será independente.",
             "stage": "Etapa visual deste setor.",
             "condition": "Condição manual deste setor; não muda o status operacional.",
             "urgency": "Indique o quanto esta demanda precisa de atenção.",
@@ -381,6 +389,8 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
             ),
             "owner": PersonPickerWidget(icon="user", selection_label="Buscar pessoa..."),
             "sector": SectorPickerWidget(icon="users"),
+            "board_setup_mode": forms.RadioSelect(),
+            "board_template": forms.Select(attrs={"class": "activity-input"}),
             "urgency": forms.RadioSelect(),
             "company": CompanyPickerWidget(icon="building", empty_label="Selecionar organização"),
             "client": ClientPickerWidget(icon="building"),
@@ -417,6 +427,7 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
+        self.organization = organization
         self.require_essentials = require_essentials
         self.scope_querysets(
             organization,
@@ -428,6 +439,10 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
             can_create_cost_center=can_create_cost_center,
         )
         fields = self.fields
+        fields["board_template"].queryset = Board.objects.filter(
+            organization=organization, kind=Board.Kind.TEMPLATE, is_active=True
+        ).select_related("sector").order_by("name") if organization is not None else Board.objects.none()
+        fields["board_template"].required = False
         fields["owner"].empty_label = None
         fields["client"].empty_label = None
         # A obrigatoriedade é tratada em `clean()` (e marcada na tela com `*`),
@@ -495,6 +510,14 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
             self.add_error("site", "Esta obra pertence a outro cliente. Escolha uma obra de quem foi selecionado.")
         if site and cost_center and cost_center.site_id not in (None, site.pk):
             self.add_error("cost_center", "Este centro de custo pertence a outra obra.")
+        mode = cleaned.get("board_setup_mode") or Activity.BoardSetupMode.BLANK
+        template = cleaned.get("board_template")
+        if mode == Activity.BoardSetupMode.TEMPLATE and template is None:
+            self.add_error("board_template", "Escolha o modelo de quadro.")
+        if template is not None and template.organization_id != getattr(self.organization, "pk", None):
+            self.add_error("board_template", "O modelo pertence a outra organização.")
+        if mode == Activity.BoardSetupMode.BLANK:
+            cleaned["board_template"] = None
         return cleaned
 
 

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load lps %}
+{% load lps static %}
 {% block title %}Demandas — LPS{% endblock %}
 
 {% block content %}
@@ -58,20 +58,24 @@
 
     {% if view_mode == 'lista' %}
     <div class="demand-board__table-card">
-        <table class="demand-board__table" aria-label="Lista de demandas">
+        <table class="demand-board__table" aria-label="Lista de demandas" data-activity-list data-inline-url="{% url 'activity-inline-update' 999999999 %}" data-inline-sentinel="999999999" data-people-url="{% url 'person-search' %}" data-options-url="{% url 'activity-inline-options' 999999999 %}">
             <colgroup><col class="demand-board__col-title"><col class="demand-board__col-context"><col class="demand-board__col-sector"><col class="demand-board__col-owner"><col class="demand-board__col-progress"><col class="demand-board__col-deadline"><col class="demand-board__col-stage"><col class="demand-board__col-condition"><col class="demand-board__col-actions"></colgroup>
             <thead><tr><th>Demanda</th><th>Cliente / Obra</th><th>Setor</th><th>Responsável</th><th>Tarefas</th><th>Prazo</th><th>Estágio</th><th>Status</th><th><span class="sr-only">Ações</span></th></tr></thead>
             <tbody>
             {% for activity in activities %}
-                <tr>
-                    <td class="demand-board__title-cell"><a href="{% url 'activity-detail' activity.pk %}?next={{ request.get_full_path|urlencode }}"><strong>{{ activity.title }}</strong><span>{% if activity.code %}{{ activity.code }} · {% endif %}{% if activity.client %}{{ activity.client.name }}{% else %}Sem cliente{% endif %}{% if activity.site %} · {{ activity.site.name }}{% endif %}</span></a></td>
-                    <td class="demand-board__context-cell"><strong>{{ activity.client.name|default:'Sem cliente' }}</strong>{% if activity.site %}<span>{{ activity.site.name }}</span>{% endif %}</td>
-                    <td>{% if activity.sector %}{% include "_sector_badge.html" with sector=activity.sector variant="table" %}{% else %}<span class="demand-board__muted">Sem setor</span>{% endif %}</td>
-                    <td>{% if activity.owner %}<span class="demand-board__owner"><span class="avatar avatar--{{ activity.owner|avatar_color }}">{{ activity.owner.get_full_name|default:activity.owner.get_username|slice:':2'|upper }}</span><span>{{ activity.owner.get_full_name|default:activity.owner.get_username }}</span></span>{% else %}<span class="demand-board__muted">Sem responsável</span>{% endif %}</td>
+                <tr data-activity-id="{{ activity.pk }}">
+                    {% comment %}Edição inline (só quem pode: `activity.inline`). Sem permissão a célula é a de sempre. O título vira campo editável e o link para o detalhe fica no subtítulo (código · cliente · obra).{% endcomment %}
+                    <td class="demand-board__title-cell">{% if activity.inline.title %}<div class="demand-board__title-wrap"><strong class="activity-inline-field" data-inline-field="title" data-inline-value="{{ activity.title }}" tabindex="0" role="button" aria-label="Editar o título da demanda {{ activity.title }}">{{ activity.title }}</strong><a href="{% url 'activity-detail' activity.pk %}?next={{ request.get_full_path|urlencode }}"><span>{% if activity.code %}{{ activity.code }} · {% endif %}{% if activity.client %}{{ activity.client.name }}{% else %}Sem cliente{% endif %}{% if activity.site %} · {{ activity.site.name }}{% endif %}</span></a></div>{% else %}<a href="{% url 'activity-detail' activity.pk %}?next={{ request.get_full_path|urlencode }}"><strong>{{ activity.title }}</strong><span>{% if activity.code %}{{ activity.code }} · {% endif %}{% if activity.client %}{{ activity.client.name }}{% else %}Sem cliente{% endif %}{% if activity.site %} · {{ activity.site.name }}{% endif %}</span></a>{% endif %}</td>
+                    {% comment %}Cliente / Obra: quem pode editar abre a janela "Editar demanda" direto na etapa 2 (Informações do cliente). Sem data-activity-navigate: ao salvar, a lista recarrega e mantém filtros e aba.{% endcomment %}
+                    <td class="demand-board__context-cell">{% if activity.inline.client %}<a class="demand-board__context-link" href="{% url 'activity-edit' activity.pk %}?passo=2&amp;next={{ request.get_full_path|urlencode }}" data-activity-action aria-label="Editar cliente e obra da demanda {{ activity.title }}">{% endif %}<strong>{{ activity.client.name|default:'Sem cliente' }}</strong>{% if activity.site %}<span>{{ activity.site.name }}</span>{% endif %}{% if activity.inline.client %}</a>{% endif %}</td>
+                    {% comment %}Setor: quem pode editar clica na própria célula (um pop-over na tela, sem janela). O marcador fica no <td> porque o selo preenche a célula inteira (margens negativas). Estágio e Status têm data-column: são redesenhados quando o setor muda.{% endcomment %}
+                    <td{% if activity.inline.sector %} class="demand-board__inline-cell" data-column="sector" data-inline-field="sector" tabindex="0" role="button" aria-label="Alterar o setor da demanda {{ activity.title }}"{% endif %}>{% if activity.sector %}{% include "_sector_badge.html" with sector=activity.sector variant="table" %}{% else %}<span class="demand-board__muted">Sem setor</span>{% endif %}</td>
+                    <td>{% if activity.inline.owner %}<div class="activity-inline-field" data-inline-field="owner" data-inline-value="{{ activity.owner_id|default:'' }}" tabindex="0" role="button" aria-label="Editar responsável">{% endif %}{% if activity.owner %}<span class="demand-board__owner"><span class="avatar avatar--{{ activity.owner|avatar_color }}">{{ activity.owner.get_full_name|default:activity.owner.get_username|slice:':2'|upper }}</span><span>{{ activity.owner.get_full_name|default:activity.owner.get_username }}</span></span>{% else %}<span class="demand-board__muted">Sem responsável</span>{% endif %}{% if activity.inline.owner %}</div>{% endif %}</td>
                     <td><div class="demand-board__progress"><strong>{{ activity.done_tasks }} de {{ activity.total_tasks }}</strong><span><i style="width:{{ activity.progress_percent }}%"></i></span><em>{{ activity.progress_percent }}%</em></div></td>
-                    <td><div class="demand-board__deadline{% if activity.is_overdue %} is-late{% endif %}">{% include "_icon.html" with name="clock" %}<span>{% if activity.requested_deadline %}{{ activity.requested_deadline|date:'d/m/Y H:i' }}{% else %}Sem prazo{% endif %}</span></div></td>
-                    <td class="demand-board__status-cell"><span class="demand-board__status" style="--status-bg:{{ activity.stage_color }};--status-text:{{ activity.stage.text_color|default:'#FFFFFF' }};">{{ activity.stage_name }}</span></td>
-                    <td class="demand-board__status-cell"><span class="demand-board__status" style="--status-bg:{{ activity.condition_color }};--status-text:{{ activity.condition.text_color|default:'#FFFFFF' }};">{{ activity.condition_name }}</span></td>
+                    <td>{% if activity.inline.requested_deadline %}<div class="activity-inline-field" data-inline-field="requested_deadline" data-inline-date="{{ activity.inline.deadline_date }}" data-inline-time="{{ activity.inline.deadline_time }}" tabindex="0" role="button" aria-label="Editar prazo">{% endif %}<div class="demand-board__deadline{% if activity.is_overdue %} is-late{% endif %}">{% include "_icon.html" with name="clock" %}<span>{% if activity.requested_deadline %}{{ activity.inline_deadline_text }}{% else %}Sem prazo{% endif %}</span></div>{% if activity.inline.requested_deadline %}</div>{% endif %}</td>
+                    {% comment %}Estágio e Status: quem pode escolhe numa lista colorida na própria tela (static/js/activity-inline-options.js). O Status ganha uma segunda linha pequena "Vencida há N dias", derivada do prazo (a mesma regra da coluna Prazo), para todos.{% endcomment %}
+                    <td class="demand-board__status-cell{% if activity.inline.stage %} demand-board__inline-cell{% endif %}" data-column="stage" data-option-id="{{ activity.stage_id|default:'' }}"{% if activity.inline.stage %} data-inline-field="stage" tabindex="0" role="button" aria-label="Alterar o estágio da demanda {{ activity.title }}"{% endif %}><span class="demand-board__status" style="--status-bg:{{ activity.stage_color }};--status-text:{{ activity.stage.text_color|default:'#FFFFFF' }};">{{ activity.stage_name }}</span></td>
+                    <td class="demand-board__status-cell{% if activity.inline.condition %} demand-board__inline-cell{% endif %}" data-column="condition" data-option-id="{{ activity.condition_id|default:'' }}"{% if activity.inline.condition %} data-inline-field="condition" tabindex="0" role="button" aria-label="Alterar o status da demanda {{ activity.title }}"{% endif %}><span class="demand-board__status{% if activity.is_overdue %} has-late{% endif %}" style="--status-bg:{{ activity.condition_color }};--status-text:{{ activity.condition.text_color|default:'#FFFFFF' }};"{% if activity.is_overdue %} title="{{ activity.condition_name }} · Vencida há {{ activity.overdue_days }} dia{{ activity.overdue_days|pluralize }}"{% endif %}><span class="demand-board__status-name">{{ activity.condition_name }}</span>{% if activity.is_overdue %}<small class="demand-board__status-late">Vencida há {{ activity.overdue_days }} dia{{ activity.overdue_days|pluralize }}</small>{% endif %}</span></td>
                     <td class="demand-board__actions"><a href="{% url 'activity-detail' activity.pk %}?next={{ request.get_full_path|urlencode }}" aria-label="Abrir {{ activity.title }}">{% include "_icon.html" with name="more" %}</a></td>
                 </tr>
             {% empty %}
@@ -81,6 +85,7 @@
         </table>
         <footer class="demand-board__table-footer">Mostrando {{ activities|length }} demanda{{ activities|length|pluralize }}.</footer>
     </div>
+    <div id="activity-inline-overlay-root" class="activity-inline-overlay-root" aria-live="polite"></div>
 
     {% elif view_mode == 'kanban' %}
     <div class="demand-board__kanban" aria-label="Quadro de demandas por etapa">
@@ -118,3 +123,5 @@
     {% endif %}
 </section>
 {% endblock %}
+
+{% block scripts %}{% if view_mode == 'lista' %}<script src="{% static 'js/activity-inline-edit.js' %}?v=20261011b"></script><script src="{% static 'js/activity-inline-options.js' %}?v=20261011b"></script>{% endif %}{% endblock %}

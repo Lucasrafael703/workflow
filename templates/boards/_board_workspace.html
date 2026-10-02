@@ -1,0 +1,18 @@
+{% load lps_board %}
+<section class="board-page" data-board-page data-board-id="{{ board.id }}"{% if board.kind == "DEMAND" %} data-demand-board{% endif %}>
+    {% include "boards/_board_head.html" %}
+    {% include "boards/_board_view_tabs.html" %}
+    <form class="board-toolbar" method="get" data-board-toolbar>
+        {% if sort_column_id %}<input type="hidden" name="sort" value="{{ sort_column_id }}"><input type="hidden" name="dir" value="{{ sort_dir }}">{% endif %}
+        <label class="board-search">{% include "_icon.html" with name="search" %}<input type="search" name="q" value="{{ search }}" placeholder="Buscar neste quadro…" aria-label="Buscar neste quadro" maxlength="120"></label>
+        <label class="board-select"><span class="sr-only">Filtrar por pessoa</span><select name="pessoa" data-board-person-filter aria-label="Filtrar por pessoa"><option value="">Todas as pessoas</option>{% for person in people %}<option value="{{ person.pk }}"{% if person.pk == person_id %} selected{% endif %}>{{ person|person_name }}</option>{% endfor %}</select></label>
+        <button type="submit" class="btn btn--sm">Buscar</button>
+        {% if hidden_columns %}<details class="board-hidden"><summary class="board-tool">{% include "_icon.html" with name="eye-off" %} Colunas ocultas ({{ hidden_columns|length }})</summary><ul class="board-hidden__list">{% for column in hidden_columns %}<li><span>{{ column.name }}</span>{% if permissions.manage_columns %}<button type="button" class="btn btn--sm" data-column-show data-column-id="{{ column.id }}">Mostrar</button>{% endif %}</li>{% endfor %}</ul></details>{% endif %}
+        {% if filtering or sort_column_id %}<a class="board-clear" href="{% url 'board-detail' board.pk %}">Limpar busca e ordem</a>{% endif %}
+    </form>
+    {% with colspan=columns|length|add:2 %}<div class="board-scroll" data-board-scroll><table class="board-table" data-board-table style="width:{{ table_width }}px"><colgroup><col data-col-name style="width:280px">{% for column in columns %}<col data-col-id="{{ column.id }}" style="width:{{ column.width }}px">{% endfor %}<col data-col-add style="width:64px"></colgroup>{% for group in groups %}{% include "boards/_group.html" %}{% endfor %}</table></div>{% endwith %}
+    {% if permissions.edit %}<p class="board-foot"><button type="button" class="btn btn--sm" data-group-add>{% include "_icon.html" with name="plus" %} Novo grupo</button></p>{% endif %}
+    {% if not groups %}<p class="hint-bar board-hint">Este quadro não tem grupos. Crie um grupo para adicionar tarefas.</p>{% endif %}
+</section>
+<div class="board-toast-area" data-board-toasts role="status" aria-live="polite"></div>
+{{ meta|json_script:"board-meta" }}

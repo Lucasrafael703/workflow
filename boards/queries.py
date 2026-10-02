@@ -184,6 +184,7 @@ class BoardQueryService:
         template só lê, nunca consulta."""
         for item in items:
             item.cell_map = {}
+            item.display_name = item.name
             for cell in item.cells.all():
                 column = columns_by_id.get(cell.column_id)
                 if column is None:

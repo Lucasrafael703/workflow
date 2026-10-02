@@ -74,6 +74,23 @@ class BoardPermissionError(BoardError):
 
 
 def _require(user, action, resource):
+    # Quadros de Demanda possuem uma regra relacional adicional. O import é
+    # local para não criar ciclo durante o carregamento de models/services.
+    board = resource
+    if getattr(resource, "_meta", None) and resource._meta.model_name != "board":
+        board = getattr(resource, "board", None) or getattr(getattr(resource, "item", None), "board", None)
+    if board is not None and getattr(board, "kind", None) == Board.Kind.DEMAND:
+        from .demand_services import DemandBoardAccess
+
+        if action == catalog.QUADRO_VISUALIZAR:
+            DemandBoardAccess.require_view(user, board)
+            return
+        if action in {catalog.QUADRO_CRIAR_ITEM, catalog.QUADRO_EDITAR_ITEM}:
+            DemandBoardAccess.require_collaborate(user, board)
+            return
+        if action in {catalog.QUADRO_EDITAR, catalog.QUADRO_GERIR_COLUNAS, catalog.QUADRO_EXCLUIR}:
+            DemandBoardAccess.require_structure(user, board)
+            return
     try:
         AuthorizationService.require(user, action, resource)
     except AuthorizationError as exc:
@@ -170,12 +187,17 @@ class PositionService:
 class BoardService:
     @staticmethod
     @transaction.atomic
-    def create(*, user, organization, name, description=""):
+    def create(*, user, organization, name, description="", sector=None):
         _require(user, catalog.QUADRO_CRIAR, ResourceContext.for_new(organization))
+        if sector is not None and sector.organization_id != organization.id:
+            raise BoardError("O setor informado pertence a outra organização.")
         board = Board.objects.create(
             organization=organization,
             name=_clean_name(name, "board", required=False, fallback="Novo quadro"),
             description=(description or "").strip(),
+            item_label="Nome da Tarefa",
+            kind=Board.Kind.TEMPLATE,
+            sector=sector,
             created_by=user,
         )
         BoardGroup.objects.create(board=board, name="Grupo", position=POSITION_STEP)

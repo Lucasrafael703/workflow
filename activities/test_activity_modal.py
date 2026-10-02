@@ -321,6 +321,63 @@ class SubmitTests(ModalTestCase):
         self.assertNotIn('href="\\\\Servidor', html)
 
 
+class OpenAtStepTests(ModalTestCase):
+    """Clique em Cliente / Obra na lista de Demandas: a mesma janela "Editar demanda", direto na etapa 2."""
+
+    def setUp(self):
+        super().setUp()
+        grant_action(self.requester, catalog.ATIVIDADE_EDITAR, organization=self.org)
+        self.edit_url = reverse("activity-edit", args=[self.activity.pk])
+
+    def test_edit_opens_at_the_requested_step(self):
+        response = self.client.get(self.edit_url, {"passo": "2"})
+        self.assertEqual(response.context["initial_step"], 2)
+        self.assertIn('data-initial-step="2"', response.content.decode())
+        self.assertEqual(self.client.get(self.edit_url, {"passo": "3"}).context["initial_step"], 3)
+
+    def test_the_default_is_still_the_first_step(self):
+        self.assertEqual(self.client.get(self.edit_url).context["initial_step"], 1)
+
+    def test_invalid_values_fall_back_to_the_first_step(self):
+        for value in ("0", "4", "9", "-1", "abc", "", "2.5", "2 OR 1=1"):
+            response = self.client.get(self.edit_url, {"passo": value})
+            self.assertEqual(response.status_code, 200, value)
+            self.assertEqual(response.context["initial_step"], 1, value)
+
+    def test_creating_ignores_the_parameter(self):
+        self.assertEqual(self.client.get(reverse("activity-create"), {"passo": "2"}).context["initial_step"], 1)
+
+    def test_the_modal_answers_the_same_way_over_ajax(self):
+        response = self.client.get(self.edit_url, {"passo": "2"}, **AJAX)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('data-initial-step="2"', response.content.decode())
+
+    def test_a_sent_form_follows_the_step_with_the_error_not_the_parameter(self):
+        other = Site.objects.create(organization=self.org, name="Obra da Beta", client=self.outro_cliente)
+        wrong_site = self.client.post(f"{self.edit_url}?passo=3", self.payload(client=self.cliente.pk, site=other.pk))
+        self.assertEqual(wrong_site.context["initial_step"], 2)
+        no_title = self.client.post(f"{self.edit_url}?passo=2", self.payload(title=""))
+        self.assertEqual(no_title.context["initial_step"], 1)
+
+    def test_saving_from_step_two_changes_client_and_site_and_answers_json(self):
+        response = self.client.post(
+            f"{self.edit_url}?passo=2", self.payload(client=self.cliente.pk, site=self.obra.pk, cost_center=self.centro.pk), **AJAX,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(list(response.json()), ["redirect_url"])  # sem target/html: o link da lista só recarrega
+        self.activity.refresh_from_db()
+        self.assertEqual((self.activity.client_id, self.activity.site_id, self.activity.cost_center_id),
+                         (self.cliente.pk, self.obra.pk, self.centro.pk))
+
+    def test_editing_offers_save_on_every_step_and_creating_does_not(self):
+        edit_html = self.client.get(self.edit_url).content.decode()
+        self.assertIn(" data-submit-anywhere", edit_html)
+        self.assertRegex(edit_html, r'activity-btn-secondary" data-step-next hidden')  # um só botão primário por etapa
+        create_html = self.client.get(reverse("activity-create")).content.decode()
+        self.assertNotIn("data-submit-anywhere", create_html)
+        self.assertRegex(create_html, r'activity-btn-primary" data-step-next hidden')
+
+
 class DependentSearchTests(ModalTestCase):
     def names(self, name, **params):
         response = self.client.get(reverse(name), params)

@@ -172,6 +172,50 @@ class NotificationListViewTests(NotificationsTestCase):
         response = self.client.get(reverse("notification-list"))
         self.assertEqual(response.context["unread_count"], 0)
 
+    def test_table_groups_notifications_and_exposes_operational_columns(self):
+        notification = Notification.objects.create(
+            recipient=self.owner,
+            actor=self.executor,
+            activity=self.activity,
+            task=self.task,
+            event_type=Notification.EventType.TASK_OVERDUE,
+            title="Prazo da tarefa",
+            message="A tarefa precisa de atenção.",
+        )
+
+        response = self.client.get(reverse("notification-list"), {"filter": "todas"})
+
+        self.assertContains(response, "notification-grid")
+        self.assertContains(response, "Título / descrição")
+        self.assertContains(response, self.task.title)
+        self.assertTrue(any(notification in group["items"] for group in response.context["notification_groups"]))
+        rendered = next(item for item in response.context["notifications"] if item.pk == notification.pk)
+        self.assertEqual(rendered.context_activity, self.activity)
+        self.assertEqual(rendered.context_sector, self.sector)
+
+    def test_deadline_and_system_filters_are_available(self):
+        deadline = Notification.objects.create(
+            recipient=self.owner,
+            activity=self.activity,
+            task=self.task,
+            event_type=Notification.EventType.DEADLINE_ACCEPTED,
+            title="Prazo confirmado",
+            message="O prazo foi confirmado.",
+        )
+        system = Notification.objects.create(
+            recipient=self.owner,
+            activity=self.activity,
+            event_type=Notification.EventType.PROCESS_APPLIED,
+            title="Processo aplicado",
+            message="O processo foi aplicado.",
+        )
+
+        deadlines = self.client.get(reverse("notification-list"), {"filter": "prazos"})
+        systems = self.client.get(reverse("notification-list"), {"filter": "sistema"})
+
+        self.assertIn(deadline.pk, [item.pk for item in deadlines.context["notifications"]])
+        self.assertIn(system.pk, [item.pk for item in systems.context["notifications"]])
+
 
 class NotificationActionButtonTests(NotificationsTestCase):
     """A notificação de prazo proposto precisa levar direto ao botão de

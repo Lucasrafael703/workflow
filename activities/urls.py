@@ -2,8 +2,9 @@ from django.urls import include, path, re_path
 
 from core.legacy_redirects import MovedPrefixView
 
-from . import kanban, views
-from boards.work_views import DemandWorkBoardView, TaskWorkBoardView
+from . import inline_views, kanban, views
+from boards.work_views import DemandWorkBoardView
+from boards.views import DemandTaskBoardView
 
 urlpatterns = [
     path("", views.HomeView.as_view(), name="home"),
@@ -28,22 +29,28 @@ urlpatterns = [
     path("demandas/<int:pk>/cancelar/", views.ActivityCancelView.as_view(), name="activity-cancel"),
     path("demandas/<int:pk>/reabrir/", views.ActivityReopenView.as_view(), name="activity-reopen"),
     path("demandas/<int:pk>/dono/", views.ActivityChangeOwnerView.as_view(), name="activity-change-owner"),
+    re_path(r"^checklist/.+$", views.RetiredFeatureView.as_view(), name="task-checklist-legacy-retired"),
     path(
         "demandas/<int:pk>/prazo/",
         views.ActivityChangeDeadlineView.as_view(),
         name="activity-change-deadline",
     ),
+    # Edição inline da lista de Demandas (adapter fino sobre o ActivityService; só JSON)
+    path("demandas/<int:pk>/inline/", inline_views.ActivityInlineUpdateView.as_view(), name="activity-inline-update"),
+    path("demandas/<int:pk>/inline/opcoes/", inline_views.ActivityInlineOptionsView.as_view(), name="activity-inline-options"),
     path("demandas/<int:pk>/assumir/", views.ActivityClaimView.as_view(), name="activity-claim"),
     path("demandas/<int:pk>/finalizar/", views.ActivityFinalizeView.as_view(), name="activity-finalize"),
-    path("demandas/<int:pk>/processo/aplicar/", views.ActivityProcessApplyView.as_view(), name="activity-process-apply"),
+    path("demandas/<int:pk>/processo/aplicar/", views.RetiredFeatureView.as_view(), name="activity-process-apply"),
+    re_path(r"^prazos/.+$", views.RetiredFeatureView.as_view(), name="deadline-legacy-retired"),
+    re_path(r"^conflitos/.+$", views.RetiredFeatureView.as_view(), name="conflict-legacy-retired"),
     path(
         "demandas/<int:pk>/processo/inputs/<int:input_pk>/",
-        views.ActivityInputUpdateView.as_view(),
+        views.RetiredFeatureView.as_view(),
         name="activity-input-update",
     ),
     path(
         "demandas/<int:pk>/processo/criterios/<int:check_pk>/",
-        views.ActivityCriterionUpdateView.as_view(),
+        views.RetiredFeatureView.as_view(),
         name="activity-criterion-update",
     ),
     path("demandas/<int:pk>/pendente/", views.ActivityMarkPendingView.as_view(), name="activity-mark-pending"),
@@ -55,8 +62,13 @@ urlpatterns = [
     path("demandas/<int:pk>/mensagem/", views.ActivityMessageCreateView.as_view(), name="activity-message"),
     path("demandas/<int:pk>/continuar/", views.ActivityContinueView.as_view(), name="activity-continue"),
     path(
+        "demandas/<int:pk>/mensagens/<int:message_pk>/reagir/",
+        views.ActivityMessageReactionView.as_view(),
+        name="activity-message-reaction",
+    ),
+    path(
         "demandas/<int:activity_pk>/tarefas/rapida/",
-        views.TaskQuickCreateView.as_view(),
+        views.RetiredFeatureView.as_view(),
         name="task-quick-create",
     ),
     path("demandas/nova-rapida/", views.ActivityMiniCreateView.as_view(), name="activity-mini-create"),
@@ -73,11 +85,14 @@ urlpatterns = [
         name="activity-attachment-delete",
     ),
     # Tarefas
-    path("tarefas/", TaskWorkBoardView.as_view(), name="task-list"),
-    path("tarefas/lista-legada/", views.TaskListView.as_view(), name="task-list-legacy"),
-    path("tarefas/nova-rapida/", views.TaskQuickCreateStandaloneView.as_view(), name="task-quick-create-standalone"),
-    path("tarefas/kanban/", TaskWorkBoardView.as_view(forced_view_type="KANBAN"), name="task-kanban"),
-    path("tarefas/calendario/", TaskWorkBoardView.as_view(forced_view_type="CALENDAR"), name="task-calendar"),
+    path("tarefas/", DemandTaskBoardView.as_view(), name="task-list"),
+    path("tarefas/lista-legada/", views.RetiredFeatureView.as_view(), name="task-list-legacy"),
+    path("tarefas/nova-rapida/", views.RetiredFeatureView.as_view(), name="task-quick-create-standalone"),
+    path("tarefas/kanban/", DemandTaskBoardView.as_view(), name="task-kanban"),
+    path("tarefas/calendario/", DemandTaskBoardView.as_view(), name="task-calendar"),
+    # Todas as demais rotas de Task permanecem reconhecíveis, porém sem
+    # executar operações. A captura fica antes dos padrões históricos abaixo.
+    re_path(r"^tarefas/.+$", views.RetiredFeatureView.as_view(), name="task-legacy-retired"),
     path("tarefas/kanban-legado/", kanban.TaskKanbanView.as_view(), name="task-kanban-legacy"),
     path("tarefas/<int:pk>/mover-estagio/", views.TaskMoveStageView.as_view(), name="task-move-stage"),
     path("tarefas/<int:pk>/condicao/", views.TaskSetConditionView.as_view(), name="task-set-condition"),
@@ -161,6 +176,7 @@ urlpatterns = [
     ),
     path("conflitos/<int:pk>/resolver/", views.ConflictResolveView.as_view(), name="conflict-resolve"),
     # Fila, gestão e histórico
+    re_path(r"^fila(?:/.*)?$", views.RetiredFeatureView.as_view(), name="queue-legacy-retired"),
     path("fila/", views.QueueView.as_view(), name="queue"),
     path("fila/<int:sector_pk>/", views.QueueView.as_view(), name="queue-sector"),
     path("fila/entrada/<int:pk>/reordenar/", views.QueueReorderView.as_view(), name="queue-reorder"),

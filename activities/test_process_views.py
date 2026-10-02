@@ -2,6 +2,7 @@
 "Processo" da ficha, atualização de inputs e critérios, finalização e as
 telas de tarefa que esperam a etapa anterior."""
 
+import unittest
 import json
 
 from django.db import connection
@@ -22,6 +23,7 @@ from .testing import ProcessTestCase
 AJAX = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
 
 
+@unittest.skip("Processos foram desativados na centralização em Quadros (as rotas respondem 410); estes testes cobrem a tela antiga.")
 class ProcessViewCase(ProcessTestCase):
     def setUp(self):
         super().setUp()

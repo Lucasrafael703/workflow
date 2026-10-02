@@ -1,3 +1,4 @@
+from datetime import timedelta
 from urllib.parse import urlencode, urlsplit
 
 from django.contrib import messages
@@ -79,6 +80,22 @@ ACTION_REQUIRED_EVENTS = {
     Notification.EventType.TASK_ASSIGNMENT_PENDING,
     Notification.EventType.TASK_BLOCKED,
     Notification.EventType.ACTIVITY_APPROVAL_NEEDED,
+}
+
+# Filtros da grade de avisos. Mantemos os aliases antigos (``acao`` e
+# ``alertas``) para não quebrar links salvos, mas a interface nova usa nomes
+# que explicam a intenção da pessoa: Para mim, Prazos e Sistema.
+DEADLINE_EVENTS = {
+    Notification.EventType.DEADLINE_PROPOSED,
+    Notification.EventType.DEADLINE_ACCEPTED,
+    Notification.EventType.DEADLINE_REJECTED,
+    Notification.EventType.DEADLINE_CONFLICT,
+    Notification.EventType.TASK_OVERDUE,
+}
+SYSTEM_EVENTS = {
+    event_type
+    for event_type, category in EVENT_CATEGORY.items()
+    if category == INFORMATIVO
 }
 
 # A mensagem gravada já repete o que os campos estruturados (tarefa, setor,
@@ -231,6 +248,87 @@ def _decorate(notification):
 
     notification.show_message = notification.event_type in EVENTS_WITH_EXTRA_MESSAGE
     return notification
+
+
+def _decorate_table_notification(notification):
+    """Complementa a apresentação da grade sem alterar a regra do aviso.
+
+    A notificação continua sendo a fonte de verdade; estes atributos só
+    organizam os dados que já existem nas colunas da nova visualização.
+    """
+    task = notification.task
+    activity = notification.activity or (task.activity if task else None)
+    sector = task.sector if task else (activity.sector if activity else None)
+    notification.context_activity = activity
+    notification.context_sector = sector
+
+    if notification.category == MENCAO:
+        notification.table_action_label = "Responder"
+        notification.table_action_target = "mention"
+        notification.table_action_variant = "soft"
+    elif task is not None:
+        notification.table_action_label = "Abrir tarefa"
+        notification.table_action_target = "default"
+        notification.table_action_variant = "primary" if notification.needs_action else "outline"
+    elif activity is not None:
+        notification.table_action_label = "Abrir demanda" if notification.category == DELEGACAO else "Ver demanda"
+        notification.table_action_target = "default"
+        notification.table_action_variant = "primary" if notification.needs_action else "outline"
+    else:
+        notification.table_action_label = "Ver detalhes"
+        notification.table_action_target = "default"
+        notification.table_action_variant = "outline"
+
+    deadline = None
+    if task is not None:
+        deadline = task.committed_deadline or task.requested_deadline
+    if notification.event_type in DEADLINE_EVENTS and deadline:
+        local_deadline = timezone.localtime(deadline)
+        notification.table_date = local_deadline.strftime("%d/%m/%Y %H:%M")
+        remaining = deadline - timezone.now()
+        if remaining.total_seconds() < 0:
+            notification.table_date_meta = "Atrasada"
+            notification.table_date_is_urgent = True
+        elif remaining <= timedelta(hours=24):
+            hours = max(1, int(remaining.total_seconds() // 3600))
+            notification.table_date_meta = f"Vence em {hours}h"
+            notification.table_date_is_urgent = True
+        else:
+            notification.table_date_meta = "Prazo"
+            notification.table_date_is_urgent = False
+    else:
+        notification.table_date = timezone.localtime(notification.created_at).strftime("%d/%m/%Y %H:%M")
+        notification.table_date_meta = "Não lida" if not notification.is_read else notification.category_label
+        notification.table_date_is_urgent = False
+    return notification
+
+
+def _notification_groups(notifications):
+    """Agrupa a página atual em Hoje, Ontem, Esta semana e Anteriores."""
+    today = timezone.localdate()
+    week_start = today - timedelta(days=today.weekday())
+    labels = ("Hoje", "Ontem", "Esta semana", "Anteriores")
+    grouped = {label: [] for label in labels}
+    for notification in notifications:
+        day = timezone.localtime(notification.created_at).date()
+        if day == today:
+            label = "Hoje"
+        elif day == today - timedelta(days=1):
+            label = "Ontem"
+        elif day >= week_start:
+            label = "Esta semana"
+        else:
+            label = "Anteriores"
+        grouped[label].append(notification)
+
+    groups = [
+        {"label": label, "items": items, "is_open": label != "Anteriores"}
+        for label, items in grouped.items()
+        if items
+    ]
+    if len(groups) == 1:
+        groups[0]["is_open"] = True
+    return groups
 
 
 def _context_fields(n, category, task, activity, is_self):
@@ -396,12 +494,14 @@ class NotificationListView(LoginRequiredMixin, ListView):
         return Notification.objects.filter(recipient=self.request.user).select_related(
             "activity",
             "activity__owner",
+            "activity__sector",
             "actor",
             "task",
             "task__sector",
             "task__created_by",
             "task__activity",
             "task__activity__owner",
+            "task__activity__sector",
         )
 
     def _apply_search_and_order(self, queryset):
@@ -417,19 +517,17 @@ class NotificationListView(LoginRequiredMixin, ListView):
         return queryset.order_by("created_at" if ordem == "antigas" else "-created_at")
 
     def _active_filter(self):
-        """"Ação necessária" é a aba padrão: é o que precisa da atenção da
-        pessoa primeiro, não o feed completo. "Todas" continua existindo,
-        mas como uma escolha explícita (?filter=todas), não o ponto de
-        partida — evita a tela abrir parecendo um feed de tudo."""
-        return self.request.GET.get("filter") or "acao"
+        """"Para mim" é a aba padrão: reúne o que ainda pede atenção da
+        pessoa, em vez de abrir o feed completo. "Todas" continua existindo
+        como uma escolha explícita (?filter=todas)."""
+        return self.request.GET.get("filter") or "para-mim"
 
     def get_queryset(self):
-        """A aba "Ação necessária" não pode ser filtrada só pelo tipo do
-        evento no banco: um DEADLINE_PROPOSED já aceito continua sendo do
-        tipo DEADLINE_PROPOSED, mas não precisa mais de ação (ver
-        `_still_needs_action`). Por isso essa aba é decidida em Python, sobre
-        o conjunto pré-filtrado por tipo — o volume por pessoa é pequeno o
-        bastante (uma caixa pessoal, não um log) para isso ser barato.
+        """A aba "Para mim" não pode ser filtrada só pelo tipo do evento no
+        banco: um DEADLINE_PROPOSED já aceito continua sendo desse tipo, mas
+        não precisa mais de ação (ver `_still_needs_action`). Por isso essa
+        seleção é decidida em Python sobre o conjunto pré-filtrado por tipo —
+        o volume por pessoa é pequeno bastante para isso ser barato.
         """
         queryset = self._apply_search_and_order(self.get_base_queryset())
 
@@ -438,10 +536,14 @@ class NotificationListView(LoginRequiredMixin, ListView):
             return queryset.filter(is_read=False)
         if view == "mencoes":
             return queryset.filter(event_type=Notification.EventType.MENTIONED)
+        if view == "prazos":
+            return queryset.filter(event_type__in=DEADLINE_EVENTS)
+        if view == "sistema":
+            return queryset.filter(event_type__in=SYSTEM_EVENTS)
         if view == "alertas":
             alert_events = [e for e, c in EVENT_CATEGORY.items() if c == ALERTA]
             return queryset.filter(event_type__in=alert_events)
-        if view == "acao":
+        if view in ("para-mim", "acao"):
             candidatos = queryset.filter(event_type__in=ACTION_REQUIRED_EVENTS)
             ids = [n.pk for n in candidatos if _still_needs_action(n)]
             preserved = {pk: i for i, pk in enumerate(ids)}
@@ -450,8 +552,9 @@ class NotificationListView(LoginRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        notifications = [_decorate(n) for n in context["notifications"]]
+        notifications = [_decorate_table_notification(_decorate(n)) for n in context["notifications"]]
         context["notifications"] = notifications
+        context["notification_groups"] = _notification_groups(notifications)
 
         context["filter"] = self._active_filter()
         context["search"] = self.request.GET.get("q", "")
@@ -465,9 +568,12 @@ class NotificationListView(LoginRequiredMixin, ListView):
         context["unread_count"] = base.filter(is_read=False).count()
         context["mention_count"] = base.filter(event_type=Notification.EventType.MENTIONED, is_read=False).count()
         context["alert_count"] = base.filter(event_type__in=alert_events, is_read=False).count()
+        context["deadline_count"] = base.filter(event_type__in=DEADLINE_EVENTS).count()
+        context["system_count"] = base.filter(event_type__in=SYSTEM_EVENTS).count()
         context["action_count"] = sum(
             1 for n in base.filter(event_type__in=ACTION_REQUIRED_EVENTS) if _still_needs_action(n)
         )
+        context["for_me_count"] = context["action_count"]
         return context
 
 

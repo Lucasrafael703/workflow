@@ -26,7 +26,7 @@ ORCAMENTOS = {
     "label": "Orçamentos",
     "name": "Orçamentos",
     "description": "Gestão de orçamentos e oportunidades comerciais.",
-    "item_label": "Obra",
+    "item_label": "Nome da Tarefa",
     "groups": [
         ("Oportunidades", "#C4C4C4"),
         ("Em andamento", "#579BFC"),
@@ -93,17 +93,21 @@ def template_choices():
 
 
 @transaction.atomic
-def create_board_from_template(*, user, organization, key, name=None, with_examples=False):
+def create_board_from_template(*, user, organization, key, name=None, with_examples=False, sector=None):
     spec = TEMPLATES.get(key)
     if spec is None:
         raise BoardError("Modelo de quadro desconhecido.")
     _require(user, catalog.QUADRO_CRIAR, ResourceContext.for_new(organization))
+    if sector is not None and sector.organization_id != organization.id:
+        raise BoardError("Informe um setor válido para o modelo de quadro.")
 
     board = Board.objects.create(
         organization=organization,
         name=" ".join((name or "").split())[:160] or spec["name"],
         description=spec["description"],
         item_label=spec["item_label"],
+        kind=Board.Kind.TEMPLATE,
+        sector=sector,
         created_by=user,
     )
     groups = [

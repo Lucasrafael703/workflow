@@ -1,10 +1,11 @@
-{% load lps_board %}<tbody class="board-group" data-group data-group-id="{{ group.id }}" data-group-name="{{ group.name }}" data-group-color="{{ group.color }}" style="--group-color:{{ group.color }}">
+{% load lps_board %}
+<tbody class="board-group" data-group data-group-id="{{ group.id }}" data-group-name="{{ group.name }}" data-group-color="{{ group.color }}" style="--group-color:{{ group.color }}">
     <tr class="board-group-head">
         <td colspan="{{ colspan }}">
             <div class="board-group-head__inner">
                 <button type="button" class="board-group-toggle" data-group-toggle aria-expanded="true" aria-label="Recolher o grupo {{ group.name }}">{% include "_icon.html" with name="chevron-down" %}</button>
                 <span class="board-group-name" data-group-title{% if permissions.edit %} tabindex="0" role="textbox" aria-label="Nome do grupo"{% endif %}>{{ group.name }}</span>
-                <span class="board-group-count" data-group-count>{{ group.board_items|length }} ite{{ group.board_items|length|pluralize:"m,ns" }}</span>
+                <span class="board-group-count" data-group-count>{{ group.board_items|length }} tarefa{{ group.board_items|length|pluralize:"s" }}</span>
                 {% if permissions.edit %}<button type="button" class="board-group-menu" data-group-menu aria-haspopup="menu" aria-label="Opções do grupo {{ group.name }}">{% include "_icon.html" with name="more" %}</button>{% endif %}
             </div>
         </td>
@@ -12,15 +13,13 @@
     <tr class="board-cols-row" data-cols-row>
         <th class="board-th board-th--name" scope="col"><div class="board-th__inner"><span class="board-th__name">{{ board.item_label }}</span></div></th>
         {% for column in columns %}{% include "boards/_column_header.html" %}{% endfor %}
-        <th class="board-th board-th--add" scope="col" data-add-column-th>
-            {% if permissions.manage_columns %}<button type="button" class="board-add-column" data-column-add aria-haspopup="dialog" aria-label="Adicionar coluna" title="Adicionar coluna">{% include "_icon.html" with name="plus" %}</button>{% endif %}
-        </th>
+        <th class="board-th board-th--add" scope="col" data-add-column-th>{% if permissions.manage_columns %}<button type="button" class="board-add-column" data-column-add aria-haspopup="dialog" aria-label="Adicionar coluna" title="Adicionar coluna">{% include "_icon.html" with name="plus" %}</button>{% endif %}</th>
     </tr>
     {% for item in group.board_items %}{% include "boards/_item_row.html" %}{% endfor %}
     {% if permissions.create_item %}
     <tr class="board-add-row" data-add-row>
         <td colspan="{{ colspan }}">
-            <button type="button" class="board-add-item" data-item-add>{% include "_icon.html" with name="plus" %} Adicionar {{ board.item_label|lower }}</button>
+            <button type="button" class="board-add-item" data-item-add>{% include "_icon.html" with name="plus" %} Adicionar {% if board.kind == "DEMAND" %}tarefa{% else %}{{ board.item_label|lower }}{% endif %}</button>
         </td>
     </tr>
     {% endif %}

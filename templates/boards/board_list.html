@@ -27,6 +27,13 @@
                     {% for key, label in template_choices %}<option value="{{ key }}">Modelo: {{ label }}</option>{% endfor %}
                 </select>
             </label>
+            <label class="boards-create__field">
+                <span>Setor responsável</span>
+                <select name="sector_id" required>
+                    <option value="">Selecionar setor</option>
+                    {% for sector in sectors %}<option value="{{ sector.pk }}">{{ sector.name }}</option>{% endfor %}
+                </select>
+            </label>
             <button type="submit" class="btn btn--primary">{% include "_icon.html" with name="plus" %} Criar quadro</button>
         </div>
     </form>
@@ -39,6 +46,7 @@
             <a class="boards-card" href="{% url 'board-detail' board.pk %}">
                 <span class="boards-card__icon" aria-hidden="true">{% include "_icon.html" with name="list-ul" %}</span>
                 <span class="boards-card__name">{{ board.name }}</span>
+                <span class="boards-card__meta">{% if board.sector %}{{ board.sector.name }}{% else %}Sem setor{% endif %}</span>
                 {% if board.description %}<span class="boards-card__desc">{{ board.description }}</span>{% endif %}
                 <span class="boards-card__meta">Atualizado em {{ board.updated_at|date:"d/m/Y" }}</span>
             </a>

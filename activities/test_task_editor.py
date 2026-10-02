@@ -8,6 +8,7 @@ numa transação só; adicionar *outra* pessoa como participante cria um convite
 
 import datetime
 import json
+import unittest
 
 from django.urls import get_resolver, reverse
 from django.utils import timezone
@@ -819,6 +820,7 @@ class SideMenuTests(EditorTestCase):
         missing = sorted(task_pages - set(_NAV_BY_URL_NAME))
         self.assertEqual(missing, [], "rota de tarefa sem destaque no menu lateral")
 
+    @unittest.skip("As páginas de ação de tarefa saíram do fluxo ativo (centralização em Quadros).")
     def test_action_page_highlights_tasks(self):
         self.client.force_login(self.owner)
         grant_action(self.owner, catalog.TAREFA_EDITAR, organization=self.org)

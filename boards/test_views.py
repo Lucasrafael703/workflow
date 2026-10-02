@@ -133,9 +133,15 @@ class AccessTests(ViewTestCase):
 
 
 class CreateBoardTests(ViewTestCase):
+    def setor(self):
+        """Todo quadro nasce dentro de um setor da organização."""
+        from core.models import Sector
+
+        return Sector.objects.get_or_create(organization=self.org, name="Comercial")[0]
+
     def test_create_blank_board(self):
         self.login(self.admin)
-        response = self.client.post(reverse("board-create"), {"name": "Contratos"})
+        response = self.client.post(reverse("board-create"), {"name": "Contratos", "sector_id": self.setor().pk})
         board = Board.objects.get(name="Contratos")
         self.assertRedirects(response, reverse("board-detail", args=[board.pk]), fetch_redirect_response=False)
         self.assertEqual(board.organization, self.org)
@@ -143,13 +149,13 @@ class CreateBoardTests(ViewTestCase):
 
     def test_create_from_the_template(self):
         self.login(self.admin)
-        self.client.post(reverse("board-create"), {"name": "", "template": "orcamentos"})
+        self.client.post(reverse("board-create"), {"name": "", "template": "orcamentos", "sector_id": self.setor().pk})
         board = Board.objects.exclude(pk=self.board.pk).get(name="Orçamentos")
         self.assertEqual(board.columns.count(), 9)
 
     def test_unknown_template_shows_a_message(self):
         self.login(self.admin)
-        response = self.client.post(reverse("board-create"), {"name": "X", "template": "xyz"}, follow=True)
+        response = self.client.post(reverse("board-create"), {"name": "X", "template": "xyz", "sector_id": self.setor().pk}, follow=True)
         self.assertContains(response, "Modelo de quadro desconhecido")
         self.assertFalse(Board.objects.filter(name="X").exists())
 
@@ -157,7 +163,7 @@ class CreateBoardTests(ViewTestCase):
         before = Board.objects.count()
         for user in (self.editor, self.viewer, self.sem_acesso):
             self.login(user)
-            self.assertEqual(self.client.post(reverse("board-create"), {"name": "Nope"}).status_code, 403)
+            self.assertEqual(self.client.post(reverse("board-create"), {"name": "Nope", "sector_id": self.setor().pk}).status_code, 403)
         self.assertEqual(Board.objects.count(), before)
 
     def test_only_post(self):
@@ -186,8 +192,8 @@ class DetailContentTests(ViewTestCase):
         self.assertContains(response, "30,00")
         self.assertContains(response, "Em andamento")
         self.assertContains(response, "Ana Souza")
-        self.assertContains(response, "2 itens")
-        self.assertContains(response, "1 item")
+        self.assertContains(response, "2 tarefas")
+        self.assertContains(response, "1 tarefa")
         self.assertContains(response, 'id="board-meta"')
 
     def test_overdue_deadline_is_flagged_with_text(self):
@@ -351,7 +357,7 @@ class JsonContractTests(ViewTestCase):
         group = BoardGroup.objects.get(pk=created["group"]["id"])
         self.assertEqual((group.name, group.color), ("Concluídos", "#A25DDC"))
         self.assertIn('data-group-id="%d"' % group.pk, created["group_html"])
-        self.assertIn("0 itens", created["group_html"])
+        self.assertIn("0 tarefas", created["group_html"])
 
         updated = self.api("board-group-update", [group.pk], {"name": "Feitos", "color": "#00C875"}).json()
         self.assertEqual(updated["group"], {"id": group.pk, "name": "Feitos", "color": "#00C875"})
@@ -695,7 +701,7 @@ class ExampleDataTests(ViewTestCase):
         response = self.client.get(reverse("board-detail", args=[board.pk]))
         self.assertEqual(response.status_code, 200)
         for text in ("Arena Center Norte", "Hospital Vida Plena", "Proposta enviada", "R$ 2.500.000,00", "Probabilidade",
-                     "Propostas enviadas", "Obra"):
+                     "Propostas enviadas", "Nome da Tarefa"):
             self.assertContains(response, text)
         self.assertContains(response, "40 %")
         self.assertContains(response, 'placeholder="Buscar neste quadro…"')

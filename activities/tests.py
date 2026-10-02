@@ -12,6 +12,7 @@ from .models import (
     Activity,
     DeadlineConflict,
     DeadlineProposal,
+    MessageVisibility,
     QueueEntry,
     QueuePositionChange,
     ReturnReason,
@@ -690,6 +691,38 @@ class MessageTests(ActivitiesTestCase):
         )
         with self.assertRaises(ActivityError):
             MessageService.post_activity_message(activity, self.creator, "   ")
+
+    def test_reply_keeps_the_visibility_of_its_topic(self):
+        activity = ActivityService.create_activity(
+            organization=self.org, title="Demanda", owner=self.owner, created_by=self.creator
+        )
+        parent = MessageService.post_activity_message(
+            activity,
+            self.creator,
+            "Atualização para participantes.",
+            visibility=MessageVisibility.PARTICIPANTS,
+        )
+        reply = MessageService.post_activity_message(
+            activity,
+            self.owner,
+            "Resposta no mesmo tópico.",
+            visibility=MessageVisibility.ALL,
+            parent=parent,
+        )
+
+        self.assertEqual(reply.parent, parent)
+        self.assertEqual(reply.visibility, MessageVisibility.PARTICIPANTS)
+
+    def test_reaction_is_toggled_for_the_same_person_and_emoji(self):
+        activity = ActivityService.create_activity(
+            organization=self.org, title="Demanda", owner=self.owner, created_by=self.creator
+        )
+        message = MessageService.post_activity_message(activity, self.creator, "Conferido.")
+
+        self.assertTrue(MessageService.toggle_activity_message_reaction(message, self.owner, "👍"))
+        self.assertEqual(message.reactions.count(), 1)
+        self.assertFalse(MessageService.toggle_activity_message_reaction(message, self.owner, "👍"))
+        self.assertEqual(message.reactions.count(), 0)
 
     def test_task_message_reaches_executors(self):
         activity = ActivityService.create_activity(

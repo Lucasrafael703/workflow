@@ -1,8 +1,11 @@
-from django.urls import path
+from django.urls import path, re_path
 
 from . import views
 
 urlpatterns = [
+    # Os dados continuam preservados, porém não é mais permitido criar ou
+    # aplicar processos depois da centralização em Quadros.
+    re_path(r"^.*$", views.RetiredProcessView.as_view(), name="process-retired"),
     path("", views.ProcessListView.as_view(), name="process-list"),
     path("novo/", views.ProcessCreateView.as_view(), name="process-create"),
     path("<int:pk>/", views.ProcessEditView.as_view(), name="process-edit"),

@@ -265,6 +265,12 @@ class DemandWorkBoardView(DomainWorkBoardView):
             demand_lanes=self._lanes(context["activities"]),
             clear_filters_url=f"{reverse(url_name_by_mode[view_mode])}?tab={context['tab']}",
         )
+        if view_mode == "lista":
+            # Edição inline da tabela: o que cada linha mostra como editável (uma consulta de autorização para a
+            # lista toda). Só decide o afeto de clique; quem manda é o ActivityService a cada gravação.
+            from activities.inline_edit import inline_flags
+
+            inline_flags(self.request.user, context["activities"])
         return context
 
 

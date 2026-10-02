@@ -1,4 +1,5 @@
 import re
+from dataclasses import replace
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
@@ -17,15 +18,17 @@ from notifications.recipients import resolve_sector_and_admins, resolve_sector_m
 from notifications.services import EmailService, NotificationService
 
 from . import policies, process_state
-from .errors import ActivityError  # noqa: F401  (reexportado: `from .services import ActivityError`)
+from .errors import ActivityError, ActivityPermissionError  # noqa: F401  (reexportados: `from .services import ActivityError`)
 from .models import (
     Activity,
     ActivityAttachment,
     ActivityMessage,
+    ActivityMessageReaction,
     ActivityPendency,
     DeadlineConflict,
     DeadlineProposal,
     MessageKind,
+    MessageVisibility,
     OwnerChangeLog,
     QueueEntry,
     QueuePositionChange,
@@ -55,13 +58,14 @@ RETROACTIVE_JUSTIFICATION_DAYS = 7
 def require_action(user, action_key, resource=None):
     """Exige uma ação do catálogo dentro do escopo do recurso.
 
-    A negação vira ActivityError para as telas continuarem tratando erro de
-    autorização e erro de regra de negócio da mesma forma.
+    A negação vira ActivityPermissionError, que é um ActivityError: as telas que
+    tratam erro de autorização e de regra de negócio da mesma forma continuam
+    iguais, e quem precisa distinguir (JSON: 403 × 400) captura o subtipo.
     """
     try:
         AuthorizationService.require(user, action_key, resource)
     except AuthorizationError as exc:
-        raise ActivityError(str(exc)) from exc
+        raise ActivityPermissionError(str(exc)) from exc
 
 
 def _same_organization(*objects):
@@ -227,6 +231,11 @@ class ActivityService:
         if tags:
             activity.tags.set(tags)
 
+        # Todos os caminhos que criam uma Demanda publicada precisam deixar a
+        # mesma invariante: uma instância de quadro, mesmo fora do wizard.
+        from boards.demand_services import BoardInstantiationService
+
+        BoardInstantiationService.create_for_activity(user=created_by, activity=activity)
         ActivityService._finalize_creation(activity, created_by)
         return activity
 
@@ -300,6 +309,10 @@ class ActivityService:
                     activity.organization, activity.sector, "activity"
                 )
         activity.save(update_fields=["status", "stage", "condition"])
+        from boards.demand_services import BoardInstantiationService
+
+        template = activity.board_template if activity.board_setup_mode == Activity.BoardSetupMode.TEMPLATE else None
+        BoardInstantiationService.create_for_activity(user=user, activity=activity, template=template)
         ActivityService._finalize_creation(activity, user)
         return activity
 
@@ -322,6 +335,11 @@ class ActivityService:
     def change_owner(activity, new_owner, changed_by):
         require_action(changed_by, catalog.ATIVIDADE_ALTERAR_DONO, activity)
         ActivityTransitionPolicy.assert_allowed(activity, "change_owner", changed_by)
+        # Invariante do domínio (não só do formulário): o dono é uma pessoa ativa da mesma organização.
+        if new_owner is None or not User.objects.filter(
+            pk=new_owner.pk, is_active=True, profile__organization_id=activity.organization_id
+        ).exists():
+            raise ActivityError("O responsável escolhido não pertence à organização ou está inativo.")
         if new_owner.id == activity.owner_id:
             raise ActivityError("Este usuário já é o dono da demanda.")
 
@@ -405,6 +423,13 @@ class ActivityService:
                 raise ActivityError("Escolha o setor responsável.")
             if not _same_organization(activity, requested_sector):
                 raise ActivityError("O setor informado pertence a outra organização.")
+            if not requested_sector.is_active:
+                raise ActivityError("O setor escolhido está inativo.")
+            # Poder editar a demanda onde ela está não basta para entregá-la a um setor onde a pessoa não teria
+            # acesso: a autorização também vale no endereço de DESTINO, antes de qualquer gravação.
+            require_action(
+                user, catalog.ATIVIDADE_EDITAR, replace(ResourceContext.of(activity), sector_id=requested_sector.pk)
+            )
             old_sector, old_stage, old_condition = activity.sector, activity.stage, activity.condition
             activity.sector = requested_sector
             activity.stage = StageService.default_for(activity.organization, requested_sector, "demanda")
@@ -421,6 +446,17 @@ class ActivityService:
                     reason="Setor alterado; etapa e condição foram redefinidas para o fluxo do novo setor.",
                 )
             activity._sector_configuration_message = "Setor alterado. Etapa e condição foram redefinidas conforme o novo setor."
+
+        if "client" in fields or "site" in fields:
+            # Invariante do domínio (não só do formulário): a obra pertence ao cliente da demanda. Obra sem cliente vale
+            # para qualquer cliente. Só confere quando cliente ou obra MUDAM, para não travar a edição de dados antigos.
+            new_client = fields["client"] if "client" in fields else activity.client
+            new_site = fields["site"] if "site" in fields else activity.site
+            if getattr(new_client, "pk", None) != activity.client_id or getattr(new_site, "pk", None) != activity.site_id:
+                if not _same_organization(activity, new_client, new_site):
+                    raise ActivityError("O cliente ou a obra informados pertencem a outra organização.")
+                if new_client and new_site and new_site.client_id and new_site.client_id != new_client.pk:
+                    raise ActivityError("Esta obra pertence a outro cliente. Escolha uma obra do cliente selecionado.")
 
         editable = {
             "title",
@@ -441,11 +477,19 @@ class ActivityService:
         for field, value in fields.items():
             if field not in editable:
                 continue
+            if field == "title":
+                value = (value or "").strip()
             old_value = getattr(activity, field)
             if old_value == value:
                 continue
-            if field == "title" and not value:
-                raise ActivityError("Informe o resultado esperado da demanda.")
+            if field == "title":
+                # Invariante do domínio: vale para o formulário, o Kanban e a edição inline. Acima do limite o
+                # PostgreSQL recusa com DataError; aqui vira uma mensagem de negócio.
+                max_length = Activity._meta.get_field("title").max_length
+                if not value:
+                    raise ActivityError("Informe o resultado esperado da demanda.")
+                if len(value) > max_length:
+                    raise ActivityError(f"O título pode ter até {max_length} caracteres.")
             setattr(activity, field, value)
             changed.append(field)
             AuditService.log(
@@ -487,6 +531,7 @@ class ActivityService:
         # ampliar o escopo: a ação legada tinha exatamente o mesmo alcance.
         if not AuthorizationService.can(user, catalog.ATIVIDADE_DEFINIR_ETAPA, activity):
             require_action(user, catalog.ATIVIDADE_MOVER_ESTAGIO, activity)
+        ActivityTransitionPolicy.assert_allowed(activity, "set_stage", user)
         try:
             StageService.validate(stage, activity.organization, activity.sector, "demanda")
         except CadastroError as exc:
@@ -505,6 +550,7 @@ class ActivityService:
     @transaction.atomic
     def set_condition(activity, condition, user):
         require_action(user, catalog.ATIVIDADE_DEFINIR_CONDICAO, activity)
+        ActivityTransitionPolicy.assert_allowed(activity, "set_condition", user)
         try:
             ConditionService.validate(condition, activity.organization, activity.sector, "activity")
         except CadastroError as exc:
@@ -990,7 +1036,7 @@ class ActivityAttachmentService:
 
     @staticmethod
     @transaction.atomic
-    def add(activity, uploaded_file, uploaded_by):
+    def add(activity, uploaded_file, uploaded_by, message=None):
         is_own_draft = activity.status == Activity.Status.RASCUNHO and activity.created_by_id == uploaded_by.id
         if not is_own_draft:
             # Rascunho sem dono ainda não tem contexto para o escopo relacional
@@ -999,9 +1045,12 @@ class ActivityAttachmentService:
             require_action(uploaded_by, catalog.ATIVIDADE_EDITAR, activity)
         if not uploaded_file:
             raise ActivityError("Selecione um arquivo para anexar.")
+        if message is not None and message.activity_id != activity.id:
+            raise ActivityError("O anexo precisa pertencer à mesma demanda da mensagem.")
 
         attachment = ActivityAttachment.objects.create(
             activity=activity,
+            message=message,
             file=uploaded_file,
             original_name=getattr(uploaded_file, "name", "") or "",
             uploaded_by=uploaded_by,
@@ -1104,31 +1153,39 @@ class TaskService:
     def create_task(
         activity, sector, title, created_by, responsavel, description="", order=1, depends_on=None,
         requested_deadline=None, tags=None, participantes=None, stage=None, condition=None,
+        board=None, board_group=None,
     ):
-        # A tarefa nasce no setor informado: é esse o escopo que autoriza.
-        require_action(
-            created_by,
-            catalog.TAREFA_CRIAR,
-            ResourceContext.for_new(
-                activity.organization,
-                company=activity.company,
-                sector=sector,
-                site=activity.site,
-                cost_center=activity.cost_center,
-                owner=activity.owner,
-            ),
-        )
+        # Fora de um Quadro de Demanda a criação continua sendo autorizada
+        # pelo setor da tarefa. No Quadro, a colaboração explícita da Demanda
+        # é a autorização para delegar trabalho entre setores.
+        if board is None:
+            require_action(
+                created_by,
+                catalog.TAREFA_CRIAR,
+                ResourceContext.for_new(
+                    activity.organization,
+                    company=activity.company,
+                    sector=sector,
+                    site=activity.site,
+                    cost_center=activity.cost_center,
+                    owner=activity.owner,
+                ),
+            )
+        else:
+            from boards.demand_services import DemandBoardAccess
+
+            DemandBoardAccess.require_create_task(created_by, board, activity, sector)
         return TaskService._create_task_core(
             activity, sector, title, created_by, responsavel, description=description, order=order,
             depends_on=depends_on, requested_deadline=requested_deadline, tags=tags, participantes=participantes,
-            stage=stage, condition=condition,
+            stage=stage, condition=condition, board_group=board_group,
         )
 
     @staticmethod
     def _create_task_core(
         activity, sector, title, created_by, responsavel, description="", order=1, depends_on=None,
         requested_deadline=None, tags=None, participantes=None, process_step=None, enqueue=True, notify=True,
-        stage=None, condition=None,
+        stage=None, condition=None, board_group=None,
     ):
         """Validação e gravação de uma tarefa nova — **sem autorizar**.
 
@@ -1297,13 +1354,18 @@ class TaskService:
 
     @staticmethod
     @transaction.atomic
-    def update_task(task, user, **fields):
+    def update_task(task, user, *, board=None, **fields):
         """Edita campos não sensíveis da tarefa, auditando cada alteração.
 
         Setor, prazo comprometido, executores e transições de estado possuem
         serviços próprios e não passam por aqui.
         """
-        require_action(user, catalog.TAREFA_EDITAR, task)
+        if board is None:
+            require_action(user, catalog.TAREFA_EDITAR, task)
+        else:
+            from boards.demand_services import DemandBoardAccess
+
+            DemandBoardAccess.require_task(user, board, task)
         TaskTransitionPolicy.assert_allowed(task, "edit", user)
 
         editable = {"title", "description", "requested_deadline", "order"}
@@ -1876,8 +1938,13 @@ class TaskService:
 
     @staticmethod
     @transaction.atomic
-    def change_responsavel(task, new_responsavel, changed_by):
-        require_action(changed_by, catalog.TAREFA_ALTERAR_RESPONSAVEL, task)
+    def change_responsavel(task, new_responsavel, changed_by, *, board=None):
+        if board is None:
+            require_action(changed_by, catalog.TAREFA_ALTERAR_RESPONSAVEL, task)
+        else:
+            from boards.demand_services import DemandBoardAccess
+
+            DemandBoardAccess.require_task(changed_by, board, task)
         TaskTransitionPolicy.assert_allowed(task, "change_responsavel", changed_by)
         if new_responsavel.id == task.responsavel_id:
             raise ActivityError("Este usuário já é o responsável desta tarefa.")
@@ -2723,13 +2790,38 @@ class MessageService:
 
     @staticmethod
     @transaction.atomic
-    def post_activity_message(activity, author, body, kind=MessageKind.NORMAL):
+    def post_activity_message(
+        activity,
+        author,
+        body,
+        kind=MessageKind.NORMAL,
+        visibility=MessageVisibility.ALL,
+        parent=None,
+    ):
         require_action(author, catalog.COMUNICACAO_PARTICIPAR, activity)
         body = (body or "").strip()
         if not body:
             raise ActivityError("Escreva uma mensagem antes de enviar.")
+        if kind not in MessageKind.values:
+            kind = MessageKind.NORMAL
+        if visibility not in MessageVisibility.values:
+            raise ActivityError("Escolha quem pode ver esta atualização.")
+        if visibility == MessageVisibility.SECTOR and not activity.sector_id:
+            raise ActivityError("Defina o setor responsável antes de restringir a atualização ao setor.")
+        if parent is not None:
+            if parent.activity_id != activity.id:
+                raise ActivityError("A resposta precisa pertencer à mesma demanda.")
+            # Uma resposta não pode ampliar a audiência de sua mensagem de origem.
+            visibility = parent.visibility
 
-        message = ActivityMessage.objects.create(activity=activity, author=author, body=body, kind=kind)
+        message = ActivityMessage.objects.create(
+            activity=activity,
+            author=author,
+            body=body,
+            kind=kind,
+            visibility=visibility,
+            parent=parent,
+        )
 
         mentioned = find_mentioned_users(body, author, activity)
 
@@ -2749,6 +2841,23 @@ class MessageService:
             )
         notify_mentions(body, author, activity, activity=activity)
         return message
+
+    @staticmethod
+    @transaction.atomic
+    def toggle_activity_message_reaction(message, user, emoji):
+        """Adiciona ou remove uma reação; o retorno indica se ela ficou ativa."""
+        require_action(user, catalog.COMUNICACAO_PARTICIPAR, message.activity)
+        emoji = (emoji or "").strip()
+        allowed = {"👍", "👏", "🎉", "✅", "👀"}
+        if emoji not in allowed:
+            raise ActivityError("Escolha uma reação disponível.")
+
+        reaction = ActivityMessageReaction.objects.filter(message=message, user=user, emoji=emoji).first()
+        if reaction:
+            reaction.delete()
+            return False
+        ActivityMessageReaction.objects.create(message=message, user=user, emoji=emoji)
+        return True
 
     @staticmethod
     @transaction.atomic

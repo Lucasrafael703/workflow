@@ -1,5 +1,7 @@
 import json
 
+from unittest import mock
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
@@ -63,6 +65,22 @@ class SectorServiceTests(TestCase):
     def test_empty_name_is_rejected(self):
         with self.assertRaises(CadastroError):
             SectorService.create(self.org, "   ", self.user)
+
+    def test_a_race_on_the_name_becomes_a_business_error_and_the_transaction_stays_usable(self):
+        # Duas pessoas criando o mesmo nome ao mesmo tempo: a checagem prévia passa para as duas e a segunda cai na
+        # restrição de unicidade do banco. Isso vira CadastroError (400 na tela), não erro 500, e não derruba a transação.
+        Sector.objects.create(organization=self.org, name="Qualidade")
+        with mock.patch("core.services._assert_unique_name"):
+            with self.assertRaisesMessage(CadastroError, "Já existe um registro com o nome “Qualidade”"):
+                SectorService.create(self.org, "Qualidade", self.user)
+        self.assertEqual(Sector.objects.filter(organization=self.org, name="Qualidade").count(), 1)
+        SectorService.create(self.org, "Outro", self.user)  # a conexão continua utilizável
+
+    def test_name_longer_than_the_column_is_a_business_error(self):
+        limit = Sector._meta.get_field("name").max_length
+        with self.assertRaisesMessage(CadastroError, f"até {limit} caracteres"):
+            SectorService.create(self.org, "x" * (limit + 1), self.user)
+        SectorService.create(self.org, "x" * limit, self.user)
 
     def test_deactivate_preserves_the_record(self):
         sector = SectorService.create(self.org, "Compras", self.user)

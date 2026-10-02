@@ -14,6 +14,7 @@ from django.db import transaction
 
 from audit.models import AuditLog
 
+from . import catalog
 from .models import Action, Profile, Scope, UserAction, UserProfile
 
 
@@ -346,7 +347,28 @@ class AuthorizationService:
         """Permitido? Superusuário do Django administra a plataforma e passa direto."""
         if AuthorizationService.is_platform_admin(user):
             return True
-        return bool(AuthorizationService.grants_for(user, action_key, resource))
+        if AuthorizationService.grants_for(user, action_key, resource):
+            return True
+        return AuthorizationService._demand_relation_allows(user, action_key, resource)
+
+    @staticmethod
+    def _demand_relation_allows(user, action_key, resource):
+        """Dono, criador e responsáveis ativos podem ler a própria Demanda.
+
+        A regra é propositalmente limitada à leitura: transições, tempo e
+        demais ações operacionais de Task continuam sob suas regras atuais.
+        """
+        if action_key != catalog.ATIVIDADE_VISUALIZAR or getattr(resource, "_meta", None) is None:
+            return False
+        if resource._meta.model_name != "activity":
+            return False
+        if not getattr(user, "is_authenticated", False) or not user.is_active:
+            return False
+        if AuthorizationService._organization_of(user) != resource.organization_id:
+            return False
+        if resource.owner_id == user.id or resource.created_by_id == user.id:
+            return True
+        return resource.tasks.filter(responsavel=user).exclude(status="CANCELADA").exists()
 
     @staticmethod
     def can_many(user, actions, resources=None):
@@ -426,6 +448,8 @@ class AuthorizationService:
                 any(scope_contains(scope, context, user) for scope in profile_scopes.get(action_key, ()))
                 or any(scope_contains(scope, context, user) for scope in direct_scopes.get(action_key, ()))
             )
+            if not allowed:
+                allowed = AuthorizationService._demand_relation_allows(user, action_key, resource)
             result[(action_key, getattr(resource, "pk", None))] = allowed
         return result
 

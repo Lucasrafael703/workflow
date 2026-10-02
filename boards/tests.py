@@ -725,7 +725,7 @@ class StarterTemplateTests(BoardTestCase):
     def test_orcamentos_template(self):
         board = create_board_from_template(user=self.admin, organization=self.org, key="orcamentos")
         self.assertEqual(board.name, "Orçamentos")
-        self.assertEqual(board.item_label, "Obra")
+        self.assertEqual(board.item_label, "Nome da Tarefa")
         self.assertEqual([g.name for g in board.groups.order_by("position")],
                          ["Oportunidades", "Em andamento", "Propostas enviadas", "Concluídos"])
         names = [c.name for c in board.columns.order_by("position")]

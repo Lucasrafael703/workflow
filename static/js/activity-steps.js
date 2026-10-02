@@ -31,6 +31,8 @@
 
         var total = panels.length;
         var current = 1;
+        // Editar: tudo já vem preenchido, então "Salvar alterações" vale em qualquer etapa (criar continua só na última).
+        var submitAnywhere = root.hasAttribute("data-submit-anywhere");
 
         function groupsIn(panel) {
             return Array.prototype.slice.call(panel.querySelectorAll("[data-required]"));
@@ -92,7 +94,7 @@
             prev.hidden = false;
             prev.disabled = current === 1;
             next.hidden = current === total;
-            submit.hidden = current !== total;
+            submit.hidden = !submitAnywhere && current !== total;
             if (body) body.scrollTop = 0;
             if (options && options.focus) {
                 var first = panels[current - 1].querySelector("input:not([type=hidden]):not([type=radio]), textarea, .person-picker__trigger, [contenteditable]");
@@ -118,10 +120,10 @@
             }
         });
 
-        // Captura: roda antes do envio do LPSModal. Nas primeiras etapas o envio vira "continuar";
-        // na última, confere a etapa 1 de novo (Enter ou clique) antes de deixar seguir.
+        // Captura: roda antes do envio do LPSModal. Nas primeiras etapas o envio vira "continuar" (salvo ao editar,
+        // onde o botão salvar existe em toda etapa); ao enviar de verdade, confere todas as etapas antes de deixar seguir.
         root.addEventListener("submit", function (event) {
-            if (current < total) {
+            if (current < total && !submitAnywhere) {
                 event.preventDefault();
                 event.stopPropagation();
                 goNext();

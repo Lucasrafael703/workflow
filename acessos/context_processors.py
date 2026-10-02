@@ -61,6 +61,8 @@ _NAV_BY_URL_NAME = {
     "activity-cancel": "activities",
     "activity-reopen": "activities",
     "activity-change-owner": "activities",
+    "activity-inline-update": "activities",
+    "activity-inline-options": "activities",
     "intake-list": "intake",
     "intake-capture": "intake",
     "intake-detail": "intake",

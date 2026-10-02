@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Tarefas — LPS{% endblock %}
+{% block content %}
+<section class="boards-home">
+    <div class="page-head"><div class="page-head__text"><h1>Tarefas</h1><p class="sub">Escolha uma Demanda para trabalhar no respectivo Quadro.</p></div></div>
+    <form method="get" class="card boards-create" aria-label="Selecionar Demanda"><div class="boards-create__fields"><label class="boards-create__field"><span>Demanda</span><select name="demanda" onchange="this.form.submit()"><option value="">Selecionar Demanda</option>{% for demand in accessible_demands %}<option value="{{ demand.pk }}"{% if board and board.activity_id == demand.pk %} selected{% endif %}>{% if demand.code %}{{ demand.code }} — {% endif %}{{ demand.title }}</option>{% endfor %}</select></label><button class="btn btn--primary" type="submit">Abrir quadro</button></div></form>
+</section>
+{% if board %}{% include "boards/_board_workspace.html" %}{% else %}<div class="empty-state"><div class="empty-state__icon">{% include "_icon.html" with name="task" %}</div><h3>Selecione uma Demanda</h3><p>As tarefas ficam organizadas no Quadro da Demanda escolhida.</p></div>{% endif %}
+{% endblock %}
+{% block scripts %}<script src="{% static 'js/boards.js' %}?v=20261013a"></script>{% endblock %}

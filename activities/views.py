@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Avg, Count, Exists, F, OuterRef, Prefetch, Q
-from django.http import FileResponse, Http404, JsonResponse
+from django.http import FileResponse, Http404, HttpResponseGone, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -54,10 +54,13 @@ from .forms import (
 from .models import (
     Activity,
     ActivityAttachment,
+    ActivityMessage,
+    ActivityMessageReaction,
     ActivityPendency,
     DeadlineConflict,
     DeadlineProposal,
     MessageKind,
+    MessageVisibility,
     QueueEntry,
     Task,
     TaskAssignment,
@@ -90,6 +93,19 @@ User = get_user_model()
 def _is_ajax(request):
     """Requisição feita pelo modal via JS (LPSModal.open), não navegação de página."""
     return request.headers.get("X-Requested-With") == "XMLHttpRequest"
+
+
+class RetiredFeatureView(View):
+    """Resposta explícita para URLs operacionais removidas.
+
+    Mantemos a URL reconhecível para links e favoritos antigos, mas sem aceitar
+    novas mutações de Task, fila, cronômetro ou processo.
+    """
+
+    message = "Este fluxo operacional foi desativado. Use o quadro da Demanda."
+
+    def dispatch(self, request, *args, **kwargs):
+        return HttpResponseGone(self.message, content_type="text/plain; charset=utf-8")
 
 OPEN_TASK_STATUSES = [
     Task.Status.DISPONIVEL,
@@ -418,6 +434,77 @@ def can(user, action_key, resource=None):
     refeita na camada de serviço (Regras 05 §42).
     """
     return AuthorizationService.can(user, action_key, resource)
+
+
+def _conversation_participant_ids(activity, tasks=None):
+    """Pessoas diretamente envolvidas na entrega, para a conversa restrita.
+
+    O conjunto é calculado a partir dos papéis reais da demanda (dono,
+    solicitante, responsáveis e executores), sem transformar a visibilidade
+    da mensagem em uma nova permissão administrativa.
+    """
+    participant_ids = {
+        user_id
+        for user_id in (activity.owner_id, activity.created_by_id, getattr(activity, "requested_by_id", None))
+        if user_id
+    }
+    if tasks is None:
+        participant_ids.update(
+            task_user_id
+            for task_user_id in Task.objects.filter(activity=activity).values_list("responsavel_id", flat=True)
+            if task_user_id
+        )
+        participant_ids.update(
+            TaskExecutor.objects.filter(task__activity=activity, removed_at__isnull=True).values_list("user_id", flat=True)
+        )
+        return participant_ids
+
+    for task in tasks:
+        if task.responsavel_id:
+            participant_ids.add(task.responsavel_id)
+        participant_ids.update(executor.user_id for executor in getattr(task, "active_executors", []))
+    return participant_ids
+
+
+def _message_is_visible_to(message, user, participant_ids, user_sector_ids, activity=None):
+    """Aplica a audiência de uma mensagem também em ações diretas por URL."""
+    if message.author_id == user.id or message.visibility == MessageVisibility.ALL:
+        return True
+    if message.visibility == MessageVisibility.PARTICIPANTS:
+        return user.id in participant_ids
+    if message.visibility == MessageVisibility.SECTOR:
+        activity = activity or message.activity
+        return bool(activity.sector_id and activity.sector_id in user_sector_ids)
+    return False
+
+
+def _decorate_conversation_message(message, viewer_id):
+    """Agrupa as reações já pré-carregadas para a renderização sem N+1."""
+    grouped = {}
+    for reaction in message.reactions.all():
+        entry = grouped.setdefault(
+            reaction.emoji,
+            {"emoji": reaction.emoji, "count": 0, "names": [], "reacted_by_viewer": False},
+        )
+        entry["count"] += 1
+        entry["names"].append(reaction.user.get_full_name() or reaction.user.get_username())
+        if reaction.user_id == viewer_id:
+            entry["reacted_by_viewer"] = True
+    message.reaction_groups = list(grouped.values())
+    return message
+
+
+def _conversation_day_groups(messages):
+    """Separa a timeline por dia sem uma consulta para cada atualização."""
+    groups = []
+    current_date = None
+    for message in messages:
+        local_date = timezone.localtime(message.created_at).date()
+        if local_date != current_date:
+            groups.append({"date": local_date, "messages": []})
+            current_date = local_date
+        groups[-1]["messages"].append(message)
+    return groups
 
 
 def pending_items(user, organization):
@@ -767,7 +854,7 @@ def decorate_activity_cards(activities, organization):
             else 0
         )
         activity.progress_percent = int((activity.done_tasks / activity.total_tasks) * 100) if activity.total_tasks else 0
-        activity.stage_name = activity.stage.name if activity.stage else "Sem estagio"
+        activity.stage_name = activity.stage.name if activity.stage else "Sem estágio"
         activity.stage_color = activity.stage.color if activity.stage else "#94A3B8"
         activity.condition_name = activity.condition.name if activity.condition else "Sem condição"
         activity.condition_color = activity.condition.color if activity.condition else "#94A3B8"
@@ -1236,7 +1323,7 @@ class ActivityWizardStep3View(OrganizationRequiredMixin, FormView):
 
         if acao == "publicar_e_tarefas":
             messages.success(self.request, "Demanda criada. Agora defina a primeira tarefa.")
-            return redirect("task-quick-create", activity_pk=activity.pk)
+            return redirect(f"{reverse('task-list')}?demanda={activity.pk}")
 
         messages.success(self.request, "Demanda criada. Próximo passo: adicionar a primeira tarefa.")
         return redirect("activity-detail", pk=activity.pk)
@@ -1301,6 +1388,9 @@ class ActivityDetailView(OrganizationRequiredMixin, DetailView):
 
     def get(self, request, *args, **kwargs):
         activity = get_object_or_404(Activity, pk=kwargs["pk"], organization=self.organization)
+        from boards.demand_services import DemandBoardAccess
+        if not DemandBoardAccess.can_view_activity(request.user, activity):
+            raise PermissionDenied("Você não possui acesso a esta Demanda.")
         if activity.status == Activity.Status.RASCUNHO:
             return redirect(f"{reverse('activity-create')}?pk={activity.pk}")
         return super().get(request, *args, **kwargs)
@@ -1393,8 +1483,50 @@ class ActivityDetailView(OrganizationRequiredMixin, DetailView):
         process_panel = process_state.process_panel(activity, tasks=tasks)
         unmet_required_criteria = process_panel["unmet_required_criteria"] if process_panel else []
 
+        # A conversa é uma timeline de tópicos: respostas, reações e anexos
+        # são carregados de uma vez. A audiência continua sendo aplicada na
+        # leitura, não apenas no seletor do formulário.
+        reaction_queryset = ActivityMessageReaction.objects.select_related("user").order_by("created_at")
+        attachment_queryset = ActivityAttachment.objects.select_related("uploaded_by").order_by("uploaded_at")
+        replies_queryset = (
+            ActivityMessage.objects.select_related("author")
+            .order_by("created_at")
+            .prefetch_related(
+                Prefetch("reactions", queryset=reaction_queryset),
+                Prefetch("attachments", queryset=attachment_queryset),
+            )
+        )
+        conversation = list(
+            activity.messages.filter(parent__isnull=True)
+            .select_related("author")
+            .order_by("created_at")[:100]
+            .prefetch_related(
+                Prefetch("reactions", queryset=reaction_queryset),
+                Prefetch("attachments", queryset=attachment_queryset),
+                Prefetch("replies", queryset=replies_queryset, to_attr="thread_replies"),
+            )
+        )
+        participant_ids = _conversation_participant_ids(activity, tasks)
+        visible_conversation = []
+        for message in conversation:
+            if not _message_is_visible_to(message, user, participant_ids, my_sector_ids, activity):
+                continue
+            message.visible_replies = [
+                _decorate_conversation_message(reply, user.id)
+                for reply in message.thread_replies
+                if _message_is_visible_to(reply, user, participant_ids, my_sector_ids, activity)
+            ]
+            visible_conversation.append(_decorate_conversation_message(message, user.id))
+        conversation_days = _conversation_day_groups(visible_conversation)
+
+        visibility_choices = list(MessageVisibility.choices)
+        if not activity.sector_id:
+            visibility_choices = [choice for choice in visibility_choices if choice[0] != MessageVisibility.SECTOR]
+
         context.update(
             {
+                "task_board": getattr(activity, "task_board", None),
+                "task_board_url": f"{reverse('task-list')}?demanda={activity.pk}",
                 "process_panel": process_panel,
                 "can_apply_process": ProcessApplicationService.can_offer(user, activity),
                 "can_update_process": bool(process_panel) and ActivityProcessService.can_update(user, activity),
@@ -1416,8 +1548,10 @@ class ActivityDetailView(OrganizationRequiredMixin, DetailView):
                 # Tarefas terminadas, mas ainda faltam critérios obrigatórios: a
                 # atividade não está pronta para "Sucesso" (Regras 12 §14, §31).
                 "is_blocked_by_criteria": len(tasks) > 0 and not open_tasks and bool(unmet_required_criteria),
-                "conversation": activity.messages.select_related("author").order_by("-created_at")[:100],
-                "attachments": activity.attachments.select_related("uploaded_by").order_by("-uploaded_at"),
+                "conversation_days": conversation_days,
+                "orphan_attachments": activity.attachments.filter(message__isnull=True)
+                .select_related("uploaded_by")
+                .order_by("-uploaded_at"),
                 "history_entries": activity.audit_entries.select_related("user", "task").order_by("-timestamp")[
                     :100
                 ],
@@ -1456,6 +1590,7 @@ class ActivityDetailView(OrganizationRequiredMixin, DetailView):
                 "is_owner": activity.owner_id == user.id,
                 "can_manage_attachments": can_edit,
                 "message_kind_choices": MessageKind.choices,
+                "message_visibility_choices": visibility_choices,
                 "is_menu_active": (
                     (is_open and (can_edit or can_change_owner or can_mark_pending or can_finalize))
                     or (not is_open and can_reopen)
@@ -1891,19 +2026,57 @@ class ActivityContinueView(ServiceActionView):
         activity = get_object_or_404(Activity, pk=pk, organization=self.organization)
         body = (request.POST.get("body") or "").strip()
         uploaded = request.FILES.get("file")
+        parent_id = _int_or_none(request.POST.get("parent"))
         if not body and not uploaded:
             raise ActivityError("Escreva um comentário ou selecione um arquivo para continuar.")
+        if parent_id and not body:
+            raise ActivityError("Escreva uma resposta para anexar um arquivo a esta conversa.")
+
+        parent = None
+        if parent_id:
+            parent = get_object_or_404(ActivityMessage, pk=parent_id, activity=activity)
+
+        message = None
         if body:
             kind = request.POST.get("kind") or MessageKind.NORMAL
             if kind not in MessageKind.values:
                 kind = MessageKind.NORMAL
-            MessageService.post_activity_message(activity, request.user, body, kind=kind)
+            visibility = request.POST.get("visibility") or MessageVisibility.ALL
+            message = MessageService.post_activity_message(
+                activity,
+                request.user,
+                body,
+                kind=kind,
+                visibility=visibility,
+                parent=parent,
+            )
         if uploaded:
-            ActivityAttachmentService.add(activity, uploaded, uploaded_by=request.user)
+            ActivityAttachmentService.add(activity, uploaded, uploaded_by=request.user, message=message)
         messages.success(request, "Atualização adicionada ao histórico.")
 
     def redirect_to(self):
         return reverse("activity-detail", args=[self.kwargs["pk"]])
+
+
+class ActivityMessageReactionView(ServiceActionView):
+    """Alterna uma reação, respeitando a mesma audiência da mensagem."""
+
+    def perform(self, request, pk, message_pk):
+        activity = get_object_or_404(Activity, pk=pk, organization=self.organization)
+        message = get_object_or_404(
+            ActivityMessage.objects.select_related("activity"), pk=message_pk, activity=activity
+        )
+        participant_ids = _conversation_participant_ids(activity)
+        my_sector_ids = set(user_sectors(request.user).values_list("id", flat=True))
+        if not _message_is_visible_to(message, request.user, participant_ids, my_sector_ids, activity):
+            raise ActivityError("Você não pode reagir a esta atualização.")
+        active = MessageService.toggle_activity_message_reaction(
+            message, request.user, request.POST.get("emoji")
+        )
+        messages.success(request, "Reação adicionada." if active else "Reação removida.")
+
+    def redirect_to(self):
+        return f"{reverse('activity-detail', args=[self.kwargs['pk']])}#feed-panel"
 
 
 # ---------------------------------------------------------------------------
@@ -2669,13 +2842,24 @@ class ActivityAttachmentDownloadView(OrganizationRequiredMixin, View):
     """Entrega anexo apenas depois de validar login, tenant e recurso."""
     def get(self, request, pk, attachment_pk):
         attachment = get_object_or_404(
-            ActivityAttachment.objects.select_related("activity"),
+            ActivityAttachment.objects.select_related("activity", "message"),
             pk=attachment_pk,
             activity_id=pk,
             activity__organization=self.organization,
         )
         if not AuthorizationService.can(request.user, catalog.ATIVIDADE_VISUALIZAR, attachment.activity):
             raise PermissionDenied("Você não possui acesso a este anexo.")
+        if attachment.message_id:
+            participant_ids = _conversation_participant_ids(attachment.activity)
+            my_sector_ids = set(user_sectors(request.user).values_list("id", flat=True))
+            if not _message_is_visible_to(
+                attachment.message,
+                request.user,
+                participant_ids,
+                my_sector_ids,
+                attachment.activity,
+            ):
+                raise PermissionDenied("Você não possui acesso a este anexo.")
         if not attachment.file:
             raise Http404("Arquivo não encontrado.")
         return FileResponse(

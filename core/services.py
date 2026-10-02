@@ -1,4 +1,4 @@
-from django.db import models, transaction
+from django.db import IntegrityError, models, transaction
 
 from .colors import DEFAULTS, is_valid_palette_color, valid_codes_for
 from .models import ActivityStage, Client, Company, CostCenter, EnumColor, Sector, Site, Tag, TaskStage, WorkflowStatus
@@ -31,13 +31,21 @@ class SectorService:
         name = (name or "").strip()
         if not name:
             raise CadastroError("Informe o nome do setor.")
+        max_length = Sector._meta.get_field("name").max_length
+        if len(name) > max_length:
+            raise CadastroError(f"O nome do setor pode ter até {max_length} caracteres.")
         color = (color or "#3B82F6").upper()
         if not is_valid_palette_color(color):
             raise CadastroError("Escolha uma cor da paleta oficial.")
         _assert_unique_name(Sector, organization, name)
-        return Sector.objects.create(
-            organization=organization, name=name, description=description, color=color, created_by=created_by
-        )
+        try:
+            # Savepoint próprio: duas pessoas criando o mesmo nome ao mesmo tempo viram um aviso, não um erro 500.
+            with transaction.atomic():
+                return Sector.objects.create(
+                    organization=organization, name=name, description=description, color=color, created_by=created_by
+                )
+        except IntegrityError:
+            raise CadastroError(f"Já existe um registro com o nome “{name}” nesta organização.") from None
 
     @staticmethod
     @transaction.atomic

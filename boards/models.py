@@ -12,6 +12,7 @@ entre as vizinhas, nunca regravar a lista inteira.
 from decimal import Decimal
 
 from django.conf import settings as django_settings
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
@@ -26,6 +27,10 @@ def _position_field(verbose_name="posição"):
 
 
 class Board(models.Model):
+    class Kind(models.TextChoices):
+        TEMPLATE = "TEMPLATE", "Modelo"
+        DEMAND = "DEMAND", "Demanda"
+
     organization = models.ForeignKey(
         "core.Organization", verbose_name="organização", on_delete=models.CASCADE, related_name="boards"
     )
@@ -34,8 +39,34 @@ class Board(models.Model):
     item_label = models.CharField(
         "título da coluna principal",
         max_length=60,
-        default="Elemento",
-        help_text="Como a primeira coluna (o nome de cada item) se chama neste quadro, ex.: Obra, Contrato.",
+        default="Nome da Tarefa",
+        help_text="Como a primeira coluna (o nome de cada tarefa) se chama neste quadro.",
+    )
+    kind = models.CharField("tipo", max_length=16, choices=Kind.choices, default=Kind.TEMPLATE)
+    sector = models.ForeignKey(
+        "core.Sector",
+        verbose_name="setor do modelo",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="boards",
+        help_text="Obrigatório para novos modelos; quadros legados podem não ter setor.",
+    )
+    activity = models.OneToOneField(
+        "activities.Activity",
+        verbose_name="demanda",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="task_board",
+    )
+    source_template = models.ForeignKey(
+        "self",
+        verbose_name="modelo de origem",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="instances",
     )
     is_active = models.BooleanField("ativo", default=True)
     created_by = models.ForeignKey(
@@ -48,10 +79,28 @@ class Board(models.Model):
         verbose_name = "quadro"
         verbose_name_plural = "quadros"
         ordering = ["name", "id"]
-        indexes = [models.Index(fields=["organization", "is_active"])]
+        indexes = [
+            models.Index(fields=["organization", "is_active"]),
+            models.Index(fields=["organization", "kind", "is_active"], name="boards_boar_organiz_99861b_idx"),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(kind="TEMPLATE", activity__isnull=True)
+                    | models.Q(kind="DEMAND", activity__isnull=False)
+                ),
+                name="board_kind_matches_activity",
+            ),
+        ]
 
     def __str__(self):
         return self.name
+
+    def clean(self):
+        super().clean()
+        if self.kind == self.Kind.DEMAND and self.activity_id:
+            if self.sector_id != self.activity.sector_id:
+                raise ValidationError({"sector": "O setor do Quadro deve ser o setor da Demanda."})
 
 
 class BoardView(models.Model):

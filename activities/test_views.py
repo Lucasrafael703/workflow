@@ -1,3 +1,5 @@
+import unittest
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
@@ -8,8 +10,8 @@ from acessos.models import Scope
 from acessos.testing import grant_action, grant_actions
 from core.models import Organization, Sector
 
-from .models import Activity, QueueEntry, ReturnReason, Task
-from .services import ActivityService, TaskService
+from .models import Activity, MessageVisibility, QueueEntry, ReturnReason, Task
+from .services import ActivityService, MessageService, TaskService
 
 User = get_user_model()
 
@@ -395,6 +397,49 @@ class ActivityAuthorizationTests(ViewTestCase):
         self.assertEqual(self.activity.status, "CONCLUIDA")
 
 
+class ActivityConversationViewTests(ViewTestCase):
+    def setUp(self):
+        super().setUp()
+        self.activity.sector = self.sector
+        self.activity.save(update_fields=["sector"])
+        grant_actions(
+            self.requester,
+            [catalog.ATIVIDADE_EDITAR, catalog.COMUNICACAO_PARTICIPAR],
+            organization=self.org,
+        )
+
+    def test_detail_renders_threaded_conversation_and_visibility(self):
+        message = MessageService.post_activity_message(
+            self.activity,
+            self.requester,
+            "@membro revise o https://example.com",
+            visibility=MessageVisibility.PARTICIPANTS,
+        )
+        MessageService.post_activity_message(
+            self.activity,
+            self.requester,
+            "Vou revisar.",
+            parent=message,
+        )
+        self.client.force_login(self.requester)
+
+        response = self.client.get(reverse("activity-detail", args=[self.activity.pk]))
+
+        self.assertContains(response, "conversation-composer")
+        self.assertContains(response, "conversation-reply-form")
+        self.assertContains(response, "Somente participantes")
+        self.assertContains(response, "conversation-mention")
+
+    def test_reaction_endpoint_toggles_a_reaction(self):
+        message = MessageService.post_activity_message(self.activity, self.requester, "Pode seguir.")
+        self.client.force_login(self.requester)
+
+        self.client.post(
+            reverse("activity-message-reaction", args=[self.activity.pk, message.pk]), {"emoji": "👍"}
+        )
+        self.assertEqual(message.reactions.count(), 1)
+
+
 class CadastroAuthorizationTests(ViewTestCase):
     """Cadastro é ação administrativa: exige autorização explícita."""
 
@@ -653,6 +698,7 @@ class TaskFilterViewTests(ViewTestCase):
         self.assertEqual(response.context["view_mode"], "demanda")
         self.assertEqual(response.context["current_sort"], "demanda")
 
+    @unittest.skip("Tarefas agora é a entrada única que escolhe uma Demanda e abre o quadro dela; a lista de tarefas com ordenação saiu.")
     def test_sorting_by_demand_uses_the_demand_title(self):
         self.client.force_login(self.requester)
         response = self.client.get(reverse("task-list"), {"sort": "demanda"})
@@ -660,6 +706,7 @@ class TaskFilterViewTests(ViewTestCase):
         self.assertContains(response, "sort=demanda")
         self.assertNotContains(response, "sort=atividade")
 
+    @unittest.skip("Lista, Kanban e Calendário de tarefas foram substituídos pelo quadro de cada Demanda.")
     def test_all_task_views_render_the_same_search_label(self):
         self.client.force_login(self.requester)
         for url_name, params in (

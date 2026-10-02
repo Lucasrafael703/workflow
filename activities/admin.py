@@ -4,6 +4,7 @@ from .models import (
     Activity,
     ActivityAttachment,
     ActivityMessage,
+    ActivityMessageReaction,
     DeadlineConflict,
     DeadlineProposal,
     OwnerChangeLog,
@@ -53,8 +54,15 @@ class ActivityAdmin(admin.ModelAdmin):
 
 @admin.register(ActivityMessage)
 class ActivityMessageAdmin(admin.ModelAdmin):
-    list_display = ("activity", "author", "created_at")
+    list_display = ("activity", "author", "parent", "visibility", "created_at")
     search_fields = ("activity__title", "author__username", "body")
+
+
+@admin.register(ActivityMessageReaction)
+class ActivityMessageReactionAdmin(admin.ModelAdmin):
+    list_display = ("message", "user", "emoji", "created_at")
+    list_filter = ("emoji",)
+    search_fields = ("message__activity__title", "user__username")
 
 
 @admin.register(ReturnReason)

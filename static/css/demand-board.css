@@ -200,3 +200,127 @@
     .demand-board__filter-field { grid-column: 1 / -1; }
     .demand-board__calendar { grid-template-columns: 1fr; }
 }
+
+
+/* ==========================================================================
+   Edição inline da lista de Demandas (static/js/activity-inline-edit.js)
+   Em repouso a tabela é a mesma: o invólucro `.activity-inline-field` é um bloco sem padding, borda nem altura.
+   O que muda é só a interação: hover quase imperceptível, foco, editando/salvando/erro e o pop-over na camada global.
+   Nada de seta, lápis ou botão permanente; nenhuma medida da tabela é alterada.
+   ========================================================================== */
+
+.demand-board__title-wrap { display: grid; gap: 3px; min-width: 0; }
+.demand-board__title-wrap > a { display: grid; color: #15314e; text-decoration: none; }
+.demand-board__title-wrap > a:hover span { color: var(--primary); text-decoration: underline; }
+
+/* Cliente / Obra: o link só existe para quem pode editar; em repouso é idêntico à célula de sempre. */
+.demand-board__context-link { display: block; min-width: 0; color: inherit; text-decoration: none; border-radius: 4px; outline: 1px solid transparent; outline-offset: 2px; transition: background-color .12s ease, outline-color .12s ease; }
+.demand-board__context-link:hover { background: rgba(27, 98, 196, .045); }
+.demand-board__context-link:focus-visible { outline-color: rgba(27, 98, 196, .5); }
+@media (prefers-reduced-motion: reduce) { .demand-board__context-link { transition: none; } }
+
+.activity-inline-field {
+    display: block; min-width: 0; border-radius: 4px; outline: 1px solid transparent; outline-offset: 2px; cursor: pointer;
+    transition: background-color .12s ease, outline-color .12s ease;
+}
+.activity-inline-field[data-inline-field="title"] { cursor: text; }
+.activity-inline-field:hover { background: rgba(27, 98, 196, .045); }
+.activity-inline-field:focus-visible { outline-color: rgba(27, 98, 196, .5); }
+.activity-inline-field.is-editing { background: rgba(27, 98, 196, .06); outline-color: rgba(27, 98, 196, .7); }
+.activity-inline-field.is-saving { opacity: .72; }
+.activity-inline-field.is-saved { animation: activity-inline-saved 1.1s ease-out; }
+.activity-inline-field.is-error { outline-color: var(--danger); }
+@keyframes activity-inline-saved { from { background: rgba(24, 185, 129, .22); } to { background: transparent; } }
+@media (prefers-reduced-motion: reduce) {
+    .activity-inline-field { transition: none; }
+    .activity-inline-field.is-saved { animation: none; }
+}
+
+.activity-inline-text-input {
+    display: block; width: 100%; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid var(--primary);
+    border-radius: 4px; background: #fff; color: #163252; font: inherit; font-size: 12.5px; font-weight: 650;
+}
+.activity-inline-text-input[aria-invalid="true"] { border-color: var(--danger); }
+
+.activity-inline-overlay-root { position: fixed; inset: 0; z-index: 200; pointer-events: none; }
+.activity-inline-popover {
+    position: fixed; min-width: 240px; max-width: min(360px, calc(100vw - 24px)); max-height: min(420px, calc(100vh - 24px)); overflow: auto;
+    pointer-events: auto; background: #fff; border: 1px solid #dce6ef; border-radius: 8px; box-shadow: 0 12px 30px rgba(25, 45, 75, .18);
+}
+.activity-inline-popover__search { padding: 10px; border-bottom: 1px solid #edf2f6; }
+.activity-inline-popover__input { width: 100%; height: 34px; box-sizing: border-box; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 6px; font: inherit; }
+.activity-inline-popover__input:focus-visible,
+.activity-inline-popover__form input:focus-visible { border-color: var(--primary); outline: 2px solid rgba(27, 98, 196, .25); outline-offset: 0; }
+.activity-inline-popover__list { list-style: none; margin: 0; padding: 4px; }
+.activity-inline-popover__option {
+    display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 9px; border: 0; border-radius: 6px; background: transparent;
+    color: #314e6e; font: inherit; font-size: 12.5px; text-align: left; cursor: pointer;
+}
+.activity-inline-popover__option:hover, .activity-inline-popover__option:focus-visible { background: rgba(27, 98, 196, .07); outline: 0; }
+.activity-inline-popover__option[aria-current="true"] { background: rgba(27, 98, 196, .1); font-weight: 650; }
+.activity-inline-popover__option .avatar { width: 26px; height: 26px; flex: 0 0 26px; font-size: 10px; }
+.activity-inline-popover__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.activity-inline-popover__check { color: var(--primary); font-weight: 800; }
+.activity-inline-popover__hint { padding: 9px; color: #71839a; font-size: 12px; }
+.activity-inline-popover__form { display: grid; gap: 10px; padding: 12px; }
+.activity-inline-popover__form label { display: grid; gap: 4px; color: #425a76; font-size: 11.5px; font-weight: 650; }
+.activity-inline-popover__form input { height: 34px; box-sizing: border-box; padding: 0 8px; border: 1px solid var(--border-strong); border-radius: 6px; font: inherit; }
+.activity-inline-popover__foot { display: flex; justify-content: flex-end; gap: 6px; }
+.activity-inline-popover__error { margin: 0; color: var(--danger); font-size: 12px; }
+.activity-inline-popover__error[hidden] { display: none; }
+.lps-toast.is-error { border-color: #f3c6ca; border-left-color: var(--danger); }
+
+/* ==========================================================================
+   Células coloridas (Setor, Estágio, Status) e seus pop-overs (static/js/activity-inline-options.js)
+   O marcador de edição fica no próprio <td> (o selo/rótulo preenche a célula). Em repouso nada muda; só o cursor, um
+   escurecimento de ~6% ao passar o mouse e o foco do teclado.
+   ========================================================================== */
+
+.demand-board__inline-cell { cursor: pointer; }
+.demand-board__inline-cell:hover .sector-badge,
+.demand-board__inline-cell:hover .demand-board__status { filter: brightness(.94); }
+.demand-board__inline-cell:focus-visible { outline: 2px solid rgba(27, 98, 196, .6); outline-offset: -2px; }
+.demand-board__inline-cell.is-editing { box-shadow: inset 0 0 0 2px rgba(27, 98, 196, .7); }
+.demand-board__inline-cell.is-error { box-shadow: inset 0 0 0 2px var(--danger); }
+.demand-board__table td.is-saving > * { opacity: .72; }
+.demand-board__table td.is-saved { animation: demand-cell-saved 1.1s ease-out; }
+@keyframes demand-cell-saved { from { box-shadow: inset 0 0 0 3px rgba(24, 185, 129, .6); } to { box-shadow: inset 0 0 0 3px transparent; } }
+@media (prefers-reduced-motion: reduce) { .demand-board__table td.is-saved { animation: none; } }
+
+.demand-board__status.has-late { flex-direction: column; gap: 2px; }
+.demand-board__status.has-late .demand-board__status-name { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+.demand-board__status-late { display: block; font-size: 10px; font-weight: 600; line-height: 1.1; white-space: nowrap; opacity: .92; }
+
+.activity-inline-popover__body { min-width: 280px; }
+.activity-inline-popover__link { flex: 1 1 100%; padding: 4px 2px 0; color: var(--primary); font-size: 12px; text-align: center; text-decoration: none; }
+.activity-inline-popover__link:hover, .activity-inline-popover__link:focus-visible { text-decoration: underline; outline: 0; }
+.activity-inline-edit-list { display: grid; gap: 8px; max-height: 280px; overflow: auto; padding-right: 2px; }
+.activity-inline-edit-row { display: grid; gap: 6px; }
+.activity-inline-edit-line { display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: 6px; }
+.activity-inline-edit-dot { width: 28px; height: 28px; padding: 0; border: 2px solid #fff; border-radius: 6px; box-shadow: 0 0 0 1px #b8c6d6; cursor: pointer; }
+.activity-inline-edit-dot:hover { filter: brightness(.92); }
+.activity-inline-edit-dot:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.activity-inline-color-list { list-style: none; display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 6px; }
+.activity-inline-color-option {
+    display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 7px 10px; border: 0; border-radius: 4px;
+    background: var(--option-bg); color: var(--option-text); font: inherit; font-size: 13px; font-weight: 650; text-align: center; cursor: pointer;
+}
+.activity-inline-color-option:hover { filter: brightness(.94); }
+.activity-inline-color-option:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.activity-inline-color-option[aria-current="true"] { outline: 2px solid #163252; outline-offset: 1px; }
+.activity-inline-color-option__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.activity-inline-color-option__check { font-weight: 800; }
+.activity-inline-popover__tail { padding: 6px; border-top: 1px solid #edf2f6; display: flex; gap: 6px; flex-wrap: wrap; }
+.activity-inline-popover__more {
+    flex: 1; padding: 7px 10px; border: 1px dashed #b8c6d6; border-radius: 4px; background: #fff; color: #314e6e; font: inherit; font-size: 12.5px; font-weight: 650; cursor: pointer;
+}
+.activity-inline-popover__more:hover, .activity-inline-popover__more:focus-visible { background: rgba(27, 98, 196, .07); outline: 0; }
+.activity-inline-popover__field { display: grid; gap: 4px; }
+.activity-inline-popover__label { color: #425a76; font-size: 11.5px; font-weight: 650; }
+.activity-inline-swatches { display: grid; grid-template-columns: repeat(9, 1fr); gap: 4px; }
+.activity-inline-swatches[hidden] { display: none; }
+.activity-inline-swatch { width: 100%; aspect-ratio: 1; min-width: 0; padding: 0; border: 2px solid transparent; border-radius: 5px; cursor: pointer; }
+.activity-inline-swatch:hover { filter: brightness(.92); }
+.activity-inline-swatch:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.activity-inline-swatch[aria-checked="true"] { border-color: #fff; box-shadow: 0 0 0 2px #163252; }
+.activity-inline-preview { display: block; padding: 7px 10px; border-radius: 4px; font-size: 12.5px; font-weight: 650; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

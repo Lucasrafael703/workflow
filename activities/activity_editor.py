@@ -88,6 +88,18 @@ class ActivityEditorView(OrganizationRequiredMixin, FormView):
             return redirect(f"{reverse('activity-create')}?pk={activity.pk}")
         return super().post(request, *args, **kwargs)
 
+    def requested_step(self, total):
+        """Etapa em que a janela abre. `?passo=2` abre a edição direto em "Informações do cliente" (clique em
+        Cliente / Obra na lista de Demandas). Só vale para editar e para o GET; valor inválido cai na primeira
+        etapa. Com o formulário enviado, quem decide é `step_with_errors`."""
+        if not self.editing:
+            return 1
+        try:
+            step = int(self.request.GET.get("passo", ""))
+        except (TypeError, ValueError):
+            return 1
+        return step if 1 <= step <= total else 1
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         activity = self.get_activity()
@@ -105,7 +117,7 @@ class ActivityEditorView(OrganizationRequiredMixin, FormView):
             ),
             submit_label="Salvar alterações" if self.editing else "Criar demanda",
             steps=form.steps,
-            initial_step=form.step_with_errors() if form.is_bound else 1,
+            initial_step=form.step_with_errors() if form.is_bound else self.requested_step(len(form.steps)),
             # Anexos enviados antes desta tela perder o upload: continuam removíveis.
             attachments=activity.attachments.all() if activity else [],
         )

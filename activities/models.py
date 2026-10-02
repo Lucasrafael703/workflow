@@ -55,6 +55,10 @@ class Activity(models.Model):
         DECLINADO = "DECLINADO", "Declinado"
         CANCELADO = "CANCELADO", "Cancelado"
 
+    class BoardSetupMode(models.TextChoices):
+        BLANK = "BLANK", "Começar em branco"
+        TEMPLATE = "TEMPLATE", "Usar quadro existente"
+
     organization = models.ForeignKey(
         "core.Organization", verbose_name="organização", on_delete=models.PROTECT, related_name="activities"
     )
@@ -184,6 +188,20 @@ class Activity(models.Model):
     )
 
     requested_deadline = models.DateTimeField("prazo solicitado", null=True, blank=True)
+    board_setup_mode = models.CharField(
+        "modo de quadro de tarefas",
+        max_length=12,
+        choices=BoardSetupMode.choices,
+        default=BoardSetupMode.BLANK,
+    )
+    board_template = models.ForeignKey(
+        "boards.Board",
+        verbose_name="modelo de quadro selecionado",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="draft_activities",
+    )
 
     process_version = models.ForeignKey(
         "processes.ProcessVersion",
@@ -428,6 +446,18 @@ class MessageKind(models.TextChoices):
     IMPEDIMENTO = "IMPEDIMENTO", "Impedimento"
 
 
+class MessageVisibility(models.TextChoices):
+    """Quem pode ver uma atualização na conversa de uma demanda.
+
+    A regra é aplicada na leitura, e não só pelo seletor da interface. Assim,
+    uma URL copiada ou uma troca de usuário não expõe uma conversa restrita.
+    """
+
+    ALL = "ALL", "Todas as pessoas com acesso"
+    PARTICIPANTS = "PARTICIPANTS", "Somente participantes"
+    SECTOR = "SECTOR", "Somente meu setor"
+
+
 class ActivityMessage(models.Model):
     """Comunicação contextual ligada à atividade (Regras 06). Não altera dados oficiais."""
 
@@ -437,6 +467,20 @@ class ActivityMessage(models.Model):
     )
     body = models.TextField("mensagem")
     kind = models.CharField("tipo", max_length=12, choices=MessageKind.choices, default=MessageKind.NORMAL)
+    parent = models.ForeignKey(
+        "self",
+        verbose_name="mensagem de origem",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="replies",
+    )
+    visibility = models.CharField(
+        "visibilidade",
+        max_length=14,
+        choices=MessageVisibility.choices,
+        default=MessageVisibility.ALL,
+    )
     created_at = models.DateTimeField("enviada em", auto_now_add=True)
 
     class Meta:
@@ -478,6 +522,14 @@ class ActivityAttachment(models.Model):
     activity = models.ForeignKey(
         Activity, verbose_name="demanda", on_delete=models.CASCADE, related_name="attachments"
     )
+    message = models.ForeignKey(
+        ActivityMessage,
+        verbose_name="mensagem",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="attachments",
+    )
     file = models.FileField(
         "arquivo", upload_to=activity_attachment_upload_to, storage=activity_files_storage, max_length=255
     )
@@ -494,6 +546,43 @@ class ActivityAttachment(models.Model):
 
     def __str__(self):
         return self.original_name or self.file.name
+
+
+class ActivityMessageReaction(models.Model):
+    """Uma reação de uma pessoa a uma mensagem da demanda.
+
+    A unicidade por emoji mantém a ação idempotente: clicar no mesmo emoji
+    novamente remove a reação, sem criar contagens artificiais.
+    """
+
+    message = models.ForeignKey(
+        ActivityMessage,
+        verbose_name="mensagem",
+        on_delete=models.CASCADE,
+        related_name="reactions",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="pessoa",
+        on_delete=models.CASCADE,
+        related_name="activity_message_reactions",
+    )
+    emoji = models.CharField("reação", max_length=12)
+    created_at = models.DateTimeField("reagiu em", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "reação de mensagem da demanda"
+        verbose_name_plural = "reações de mensagens da demanda"
+        ordering = ["created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["message", "user", "emoji"],
+                name="unique_activity_message_reaction",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.emoji} {self.user} em {self.message_id}"
 
 
 # ---------------------------------------------------------------------------

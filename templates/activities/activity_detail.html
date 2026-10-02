@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load lps %}
+{% load lps static %}
 {% block title %}{{ activity.title }} — LPS{% endblock %}
 
 {% block content %}
@@ -182,8 +182,6 @@
 
             {% include "activities/_tasks_block.html" %}
 
-            {% include "activities/_process_panel.html" %}
-
             <div class="card card--flush ad-details-card">
                 <div class="card__head"><h2><span class="ad-section-icon">{% include "_icon.html" with name="info" %}</span> Detalhes da demanda</h2></div>
                 <div class="card__body">
@@ -232,77 +230,75 @@
         </div>
 
         <aside class="side-scroll" id="feed-panel">
-            <div class="card card--flush">
-                <div class="side-tabs js-side-tabs">
-                    <button type="button" class="side-tabs__tab is-active" data-tab="conversa">{% include "_icon.html" with name="at" %} Conversa</button>
-                    <button type="button" class="side-tabs__tab" data-tab="historico">{% include "_icon.html" with name="clock" %} Histórico</button>
+            <div class="card card--flush demand-conversation">
+                <div class="side-tabs js-side-tabs" role="tablist" aria-label="Atualizações da demanda">
+                    <button type="button" class="side-tabs__tab is-active" data-tab="conversa" role="tab" aria-selected="true">{% include "_icon.html" with name="chat" %} Conversa</button>
+                    <button type="button" class="side-tabs__tab" data-tab="historico" role="tab" aria-selected="false">{% include "_icon.html" with name="clock" %} Histórico</button>
                 </div>
 
                 <div class="card__body side-tabs__panel is-active" data-tab-panel="conversa">
                     {% if can_message or can_manage_attachments %}
-                    <form method="post" action="{% url 'activity-continue' activity.pk %}" enctype="multipart/form-data" class="continue-form">
+                    <form method="post" action="{% url 'activity-continue' activity.pk %}" enctype="multipart/form-data" class="conversation-composer">
                         {% csrf_token %}
-                        <textarea name="body" rows="3" placeholder="Escreva uma atualização… use @ para mencionar alguém" data-mention></textarea>
-                        <div class="continue-form__foot">
-                            <select name="kind" style="margin-right:auto">
-                                {% for value, label in message_kind_choices %}
-                                <option value="{{ value }}">{{ label }}</option>
-                                {% endfor %}
-                            </select>
-                            {% if can_manage_attachments %}
-                            <label class="btn btn--ghost btn--sm" for="continue-file">
-                                {% include "_icon.html" with name="archive" %} Anexar arquivo
-                            </label>
-                            <input type="file" id="continue-file" name="file" hidden>
-                            <span class="muted small" id="continue-file-name"></span>
-                            {% endif %}
-                            <button type="submit" class="btn btn--primary btn--sm">Publicar</button>
+                        <textarea name="body" rows="3" placeholder="Escreva uma atualização e mencione pessoas com @" data-mention data-conversation-textarea></textarea>
+                        <div class="conversation-composer__toolbar">
+                            <div class="conversation-composer__tools" aria-label="Ferramentas da mensagem">
+                                <button type="button" class="conversation-tool" data-conversation-mention title="Mencionar uma pessoa" aria-label="Mencionar uma pessoa">{% include "_icon.html" with name="at" %}</button>
+                                {% if can_manage_attachments %}
+                                <label class="conversation-tool" for="continue-file" title="Anexar arquivo" aria-label="Anexar arquivo">{% include "_icon.html" with name="archive" %}</label>
+                                <input type="file" id="continue-file" name="file" hidden data-conversation-file data-file-label="#continue-file-name">
+                                {% endif %}
+                                <details class="conversation-emoji-picker">
+                                    <summary class="conversation-tool" title="Inserir emoji" aria-label="Inserir emoji">☺</summary>
+                                    <div class="conversation-emoji-picker__menu">
+                                        <button type="button" data-conversation-insert="👍">👍</button><button type="button" data-conversation-insert="👏">👏</button><button type="button" data-conversation-insert="🎉">🎉</button><button type="button" data-conversation-insert="✅">✅</button><button type="button" data-conversation-insert="👀">👀</button>
+                                    </div>
+                                </details>
+                                <button type="button" class="conversation-tool" data-conversation-link title="Adicionar link" aria-label="Adicionar link">{% include "_icon.html" with name="link" %}</button>
+                                {% if can_manage_attachments %}<span class="conversation-file-name" id="continue-file-name" aria-live="polite"></span>{% endif %}
+                            </div>
+                            <div class="conversation-composer__submit">
+                                <select name="visibility" aria-label="Quem pode ver esta atualização">{% for value, label in message_visibility_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select>
+                                <select name="kind" class="conversation-kind-select" aria-label="Tipo da atualização">{% for value, label in message_kind_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select>
+                                <button type="submit" class="btn btn--primary btn--sm">Publicar</button>
+                            </div>
                         </div>
                     </form>
                     {% endif %}
 
-                    {% if conversation or attachments %}
-                    <ul class="feed">
-                        {% for message in conversation %}
-                        <li class="feed-item feed-item--message{% if message.kind == 'DECISAO' %} chat-item--decision{% endif %}">
-                            <span class="avatar">{{ message.author.get_username|slice:":2"|upper }}</span>
-                            <div>
-                                <div class="feed-item__meta">
-                                    <strong>{{ message.author.get_full_name|default:message.author.get_username }}</strong> comentou
-                                    {% if message.kind == "DECISAO" %}<span class="chat-item__kind">✓ Decisão registrada</span>{% endif %}
-                                    <span class="when">{{ message.created_at|date:"d/m/Y H:i" }}</span>
+                    {% if conversation_days %}
+                    <div class="conversation-timeline" aria-label="Conversa da demanda">
+                        {% for day in conversation_days %}
+                        <section class="conversation-day">
+                            <div class="conversation-day__label"><span>{{ day.date|date:"d/m/Y" }}</span></div>
+                            {% for message in day.messages %}
+                            <article class="conversation-message{% if message.kind == 'DECISAO' %} conversation-message--decision{% endif %}" id="message-{{ message.pk }}">
+                                <span class="avatar avatar--{{ message.author|avatar_color }} conversation-message__avatar">{{ message.author.get_username|slice:":2"|upper }}</span>
+                                <div class="conversation-message__content">
+                                    <header class="conversation-message__meta"><strong>{{ message.author.get_full_name|default:message.author.get_username }}</strong><span>{{ message.created_at|timesince }} atrás</span><time datetime="{{ message.created_at|date:'c' }}">{{ message.created_at|date:"d/m/Y H:i" }}</time></header>
+                                    <div class="conversation-message__badges">{% if message.kind != "NORMAL" %}<span class="conversation-badge conversation-badge--kind">{{ message.get_kind_display }}</span>{% endif %}{% if message.visibility != "ALL" %}<span class="conversation-badge">{{ message.get_visibility_display }}</span>{% endif %}</div>
+                                    <div class="conversation-message__body">{{ message.body|conversation_body }}</div>
+                                    {% if message.attachments.all %}<div class="conversation-attachments">{% for attachment in message.attachments.all %}<div class="conversation-attachment">{% include "_icon.html" with name="archive" %}<a href="{% url 'activity-attachment-download' activity.pk attachment.pk %}" target="_blank" rel="noopener">{{ attachment.original_name|default:attachment.file.name }}</a>{% if can_manage_attachments %}<form method="post" action="{% url 'activity-attachment-delete' activity.pk attachment.pk %}" onsubmit="return confirm('Remover este anexo?');">{% csrf_token %}<button type="submit" class="link-button">Remover</button></form>{% endif %}</div>{% endfor %}</div>{% endif %}
+                                    <footer class="conversation-message__actions">
+                                        {% if can_message %}<button type="button" class="conversation-action" data-reply-toggle="reply-{{ message.pk }}">Responder</button>{% endif %}
+                                        {% for reaction in message.reaction_groups %}<form method="post" action="{% url 'activity-message-reaction' activity.pk message.pk %}">{% csrf_token %}<input type="hidden" name="emoji" value="{{ reaction.emoji }}"><button type="submit" class="conversation-reaction{% if reaction.reacted_by_viewer %} is-active{% endif %}" title="{{ reaction.names|join:', ' }}">{{ reaction.emoji }} <span>{{ reaction.count }}</span></button></form>{% endfor %}
+                                        {% if can_message %}<details class="conversation-reaction-picker"><summary class="conversation-action" title="Reagir">Reagir</summary><div class="conversation-reaction-picker__menu"><form method="post" action="{% url 'activity-message-reaction' activity.pk message.pk %}">{% csrf_token %}<input type="hidden" name="emoji" value="👍"><button type="submit">👍</button></form><form method="post" action="{% url 'activity-message-reaction' activity.pk message.pk %}">{% csrf_token %}<input type="hidden" name="emoji" value="👏"><button type="submit">👏</button></form><form method="post" action="{% url 'activity-message-reaction' activity.pk message.pk %}">{% csrf_token %}<input type="hidden" name="emoji" value="🎉"><button type="submit">🎉</button></form><form method="post" action="{% url 'activity-message-reaction' activity.pk message.pk %}">{% csrf_token %}<input type="hidden" name="emoji" value="✅"><button type="submit">✅</button></form><form method="post" action="{% url 'activity-message-reaction' activity.pk message.pk %}">{% csrf_token %}<input type="hidden" name="emoji" value="👀"><button type="submit">👀</button></form></div></details>{% endif %}
+                                    </footer>
+
+                                    {% if message.visible_replies %}<div class="conversation-replies">{% for reply in message.visible_replies %}<article class="conversation-message conversation-message--reply" id="message-{{ reply.pk }}"><span class="avatar avatar--{{ reply.author|avatar_color }} conversation-message__avatar">{{ reply.author.get_username|slice:":2"|upper }}</span><div class="conversation-message__content"><header class="conversation-message__meta"><strong>{{ reply.author.get_full_name|default:reply.author.get_username }}</strong><span>{{ reply.created_at|timesince }} atrás</span><time datetime="{{ reply.created_at|date:'c' }}">{{ reply.created_at|date:"d/m/Y H:i" }}</time></header><div class="conversation-message__body">{{ reply.body|conversation_body }}</div>{% if reply.attachments.all %}<div class="conversation-attachments">{% for attachment in reply.attachments.all %}<div class="conversation-attachment">{% include "_icon.html" with name="archive" %}<a href="{% url 'activity-attachment-download' activity.pk attachment.pk %}" target="_blank" rel="noopener">{{ attachment.original_name|default:attachment.file.name }}</a></div>{% endfor %}</div>{% endif %}<footer class="conversation-message__actions">{% for reaction in reply.reaction_groups %}<form method="post" action="{% url 'activity-message-reaction' activity.pk reply.pk %}">{% csrf_token %}<input type="hidden" name="emoji" value="{{ reaction.emoji }}"><button type="submit" class="conversation-reaction{% if reaction.reacted_by_viewer %} is-active{% endif %}" title="{{ reaction.names|join:', ' }}">{{ reaction.emoji }} <span>{{ reaction.count }}</span></button></form>{% endfor %}</footer></div></article>{% endfor %}</div>{% endif %}
+
+                                    {% if can_message %}<form method="post" action="{% url 'activity-continue' activity.pk %}" enctype="multipart/form-data" class="conversation-reply-form" id="reply-{{ message.pk }}" hidden>{% csrf_token %}<input type="hidden" name="parent" value="{{ message.pk }}"><input type="hidden" name="visibility" value="{{ message.visibility }}"><input type="hidden" name="kind" value="NORMAL"><textarea name="body" rows="2" placeholder="Responder a {{ message.author.get_username }}" data-mention></textarea><div class="conversation-reply-form__foot">{% if can_manage_attachments %}<label class="conversation-action" for="reply-file-{{ message.pk }}">{% include "_icon.html" with name="archive" %} Anexar</label><input type="file" id="reply-file-{{ message.pk }}" name="file" hidden data-conversation-file data-file-label="#reply-file-name-{{ message.pk }}"><span class="conversation-file-name" id="reply-file-name-{{ message.pk }}"></span>{% endif %}<button type="submit" class="btn btn--primary btn--sm">Responder</button></div></form>{% endif %}
                                 </div>
-                                <div class="feed-item__body">{{ message.body|linebreaksbr }}</div>
-                            </div>
-                        </li>
+                            </article>
+                            {% endfor %}
+                        </section>
                         {% endfor %}
-                        {% for attachment in attachments %}
-                        <li class="feed-item feed-item--attachment">
-                            <span class="feed-item__icon">{% include "_icon.html" with name="archive" %}</span>
-                            <div>
-                                <div class="feed-item__meta">
-                                    <strong>{{ attachment.uploaded_by.get_full_name|default:attachment.uploaded_by.get_username }}</strong> anexou
-                                    <a href="{% url 'activity-attachment-download' activity.pk attachment.pk %}" target="_blank" rel="noopener">{{ attachment.original_name|default:attachment.file.name }}</a>
-                                    <span class="when">{{ attachment.uploaded_at|date:"d/m/Y H:i" }}</span>
-                                </div>
-                                {% if can_manage_attachments %}
-                                <form method="post" action="{% url 'activity-attachment-delete' activity.pk attachment.pk %}"
-                                      onsubmit="return confirm('Remover este anexo?');">
-                                    {% csrf_token %}
-                                    <button type="submit" class="link-button small">Remover</button>
-                                </form>
-                                {% endif %}
-                            </div>
-                        </li>
-                        {% endfor %}
-                    </ul>
-                    {% else %}
-                    <div class="empty-state" style="padding:24px 10px">
-                        <div class="empty-state__icon">{% include "_icon.html" with name="info" %}</div>
-                        <h3>Nada por aqui ainda</h3>
-                        <p style="margin-bottom:0">Comentários e anexos aparecem aqui.</p>
                     </div>
+                    {% elif not orphan_attachments %}
+                    <div class="empty-state conversation-empty"><div class="empty-state__icon">{% include "_icon.html" with name="chat" %}</div><h3>A conversa começa aqui</h3><p style="margin-bottom:0">Registre uma atualização, mencione alguém ou anexe um arquivo.</p></div>
                     {% endif %}
+
+                    {% if orphan_attachments %}<section class="conversation-legacy-files"><h3>Arquivos da demanda</h3>{% for attachment in orphan_attachments %}<div class="conversation-attachment">{% include "_icon.html" with name="archive" %}<div><a href="{% url 'activity-attachment-download' activity.pk attachment.pk %}" target="_blank" rel="noopener">{{ attachment.original_name|default:attachment.file.name }}</a><span>Enviado por {{ attachment.uploaded_by.get_full_name|default:attachment.uploaded_by.get_username }} em {{ attachment.uploaded_at|date:"d/m/Y H:i" }}</span></div>{% if can_manage_attachments %}<form method="post" action="{% url 'activity-attachment-delete' activity.pk attachment.pk %}" onsubmit="return confirm('Remover este anexo?');">{% csrf_token %}<button type="submit" class="link-button">Remover</button></form>{% endif %}</div>{% endfor %}</section>{% endif %}
                 </div>
 
                 <div class="card__body side-tabs__panel" data-tab-panel="historico">
@@ -315,6 +311,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{% static 'js/demand-conversation.js' %}?v=20261010a"></script>
 <script>
 (function () {
     "use strict";
@@ -358,8 +355,12 @@
         var container = tabs.closest(".card--flush");
         tabs.querySelectorAll(".side-tabs__tab").forEach(function (tab) {
             tab.addEventListener("click", function () {
-                tabs.querySelectorAll(".side-tabs__tab").forEach(function (t) { t.classList.remove("is-active"); });
+                tabs.querySelectorAll(".side-tabs__tab").forEach(function (t) {
+                    t.classList.remove("is-active");
+                    t.setAttribute("aria-selected", "false");
+                });
                 tab.classList.add("is-active");
+                tab.setAttribute("aria-selected", "true");
                 container.querySelectorAll(".side-tabs__panel").forEach(function (panel) {
                     panel.classList.toggle("is-active", panel.dataset.tabPanel === tab.dataset.tab);
                 });

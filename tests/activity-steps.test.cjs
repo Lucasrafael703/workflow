@@ -34,15 +34,18 @@ context = Context({
     'cancel_url': '/demandas/', 'return_url': '/demandas/', 'draft': None, 'activity': None, 'attachments': [],
     'csrf_token': 'test-csrf-token',
 })
-print(json.dumps(Template(body).render(context)))
+edit_context = Context({**context.flatten(), 'editing': True, 'initial_step': 2, 'editor_title': 'Editar demanda',
+    'submit_label': 'Salvar alterações'})
+print(json.dumps([Template(body).render(context), Template(body).render(edit_context)]))
 `], {cwd: root, encoding: "utf8"}).trim();
 
-const fixture = JSON.parse(html);
+// [janela de criar, janela de editar]: a edição abre pela lista de Demandas, direto na etapa 2.
+const [fixture, editFixture] = JSON.parse(html);
 const script = readFileSync(path.join(root, "static/js/activity-steps.js"), "utf8");
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
-function setup(t, {initialStep, withScript = true} = {}) {
-    const dom = new JSDOM("<!doctype html><body>" + fixture + "</body>", {url: "http://localhost/demandas/nova/", runScripts: "outside-only", pretendToBeVisual: true});
+function setup(t, {initialStep, withScript = true, edit = false} = {}) {
+    const dom = new JSDOM("<!doctype html><body>" + (edit ? editFixture : fixture) + "</body>", {url: "http://localhost/demandas/nova/", runScripts: "outside-only", pretendToBeVisual: true});
     t.after(() => dom.window.close());
     const {window} = dom;
     const {document} = window;
@@ -228,6 +231,54 @@ test("abre direto na etapa indicada pelo servidor", t => {
     assert.ok(indicator(2).classList.contains("is-active"));
 });
 
+test("editar: o servidor abre a janela direto na etapa 2 (clique em Cliente / Obra)", t => {
+    const {$, visiblePanels, indicator} = setup(t, {edit: true});
+    assert.equal($("[data-activity-stepper]").getAttribute("data-initial-step"), "2");
+    assert.deepEqual(visiblePanels(), ["2"]);
+    assert.ok(indicator(1).classList.contains("is-complete"));
+    assert.ok(indicator(2).classList.contains("is-active"));
+});
+
+test("editar: Salvar alterações existe em toda etapa e Continuar deixa de ser o botão principal", t => {
+    const {$, visiblePanels, next, prev, fillRequired} = setup(t, {edit: true, initialStep: 1});
+    assert.ok($("[data-activity-stepper]").hasAttribute("data-submit-anywhere"));
+    assert.match($("[data-step-submit]").textContent, /Salvar alterações/);
+    assert.ok($("[data-step-next]").classList.contains("activity-btn-secondary"));
+    assert.ok(!$("[data-step-next]").classList.contains("activity-btn-primary"));
+    fillRequired();
+    assert.deepEqual(visiblePanels(), ["1"]);
+    assert.equal($("[data-step-submit]").hidden, false);
+    assert.equal($("[data-step-next]").hidden, false);
+    next();
+    assert.deepEqual(visiblePanels(), ["2"]);
+    assert.equal($("[data-step-submit]").hidden, false, "salvar também na etapa 2");
+    assert.equal($("[data-step-next]").hidden, false);
+    next();
+    assert.deepEqual(visiblePanels(), ["3"]);
+    assert.equal($("[data-step-submit]").hidden, false);
+    assert.equal($("[data-step-next]").hidden, true);
+    prev();
+    assert.equal($("[data-step-submit]").hidden, false);
+});
+
+test("criar continua com o botão final só na última etapa", t => {
+    const {$, next, fillRequired} = setup(t);
+    assert.ok(!$("[data-activity-stepper]").hasAttribute("data-submit-anywhere"));
+    assert.ok($("[data-step-next]").classList.contains("activity-btn-primary"));
+    assert.equal($("[data-step-submit]").hidden, true);
+    fillRequired();
+    next();
+    assert.equal($("[data-step-submit]").hidden, true, "etapa 2 de uma demanda nova ainda não salva");
+});
+
+test("editar: Enter num campo continua avançando em vez de enviar", t => {
+    const {$, window, visiblePanels} = setup(t, {edit: true});
+    const event = new window.KeyboardEvent("keydown", {key: "Enter", bubbles: true, cancelable: true});
+    $("[name=external_requester]").dispatchEvent(event);
+    assert.equal(event.defaultPrevented, true);
+    assert.deepEqual(visiblePanels(), ["3"]);
+});
+
 test("erro devolvido pelo servidor em outra etapa abre essa etapa", async t => {
     const {$, document, visiblePanels, fillRequired, next} = setup(t);
     fillRequired();
@@ -346,6 +397,38 @@ test("LPSModal: a demanda só é enviada no botão final, com as três etapas ju
     assert.equal(sent.get("acao"), "publicar");
     assert.deepEqual(result, {redirect_url: "/demandas/9/"});
     assert.equal(ctx.$(".activity-modal"), null, "a janela fecha ao concluir");
+});
+
+test("LPSModal editar: abre na etapa 2 e salvar ali envia as três etapas juntas", async t => {
+    const ctx = modalSetup(t, [{html: editFixture}, {json: {redirect_url: "/demandas/9/"}}]);
+    let result = null;
+    await ctx.window.LPSModal.open("/demandas/9/editar/?passo=2&next=%2Fdemandas%2F", {onSuccess: value => { result = value; }});
+    assert.deepEqual(ctx.visiblePanels(), ["2"]);
+    ctx.$("[name=title]").value = "Material disponível na obra";
+    ctx.$("[name=owner]").value = "1";
+    ctx.$("[name=sector]").value = "2";
+    ctx.$("[name=external_requester]").value = "Maria Silva";
+    ctx.$("[name=files_location]").value = "https://drive.example.com/pasta";
+    ctx.$("[data-step-submit]").click();
+    await flush();
+    assert.equal(ctx.calls.length, 2);
+    assert.equal(ctx.calls[1].url, "/demandas/9/editar/?passo=2&next=%2Fdemandas%2F", "o envio usa o mesmo endereço da abertura");
+    const sent = ctx.calls[1].options.body;
+    assert.equal(sent.get("title"), "Material disponível na obra");
+    assert.equal(sent.get("external_requester"), "Maria Silva");
+    assert.equal(sent.get("files_location"), "https://drive.example.com/pasta", "campos de etapas sem visita também vão");
+    assert.deepEqual(result, {redirect_url: "/demandas/9/"});
+    assert.equal(ctx.$(".activity-modal"), null);
+});
+
+test("LPSModal editar: salvar na etapa 2 com obrigatório vazio volta à etapa 1 e não envia nada", async t => {
+    const ctx = modalSetup(t, [{html: editFixture}]);
+    await ctx.window.LPSModal.open("/demandas/9/editar/?passo=2", {});
+    ctx.$("[data-step-submit]").click();
+    await flush();
+    assert.equal(ctx.calls.length, 1, "nenhum POST");
+    assert.deepEqual(ctx.visiblePanels(), ["1"]);
+    assert.ok(ctx.$("[data-field=title]").classList.contains("has-error"));
 });
 
 test("LPSModal: Enter nas primeiras etapas não envia o formulário", async t => {

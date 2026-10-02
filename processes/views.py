@@ -1,5 +1,6 @@
 from django.contrib import messages
 from django.core.exceptions import ImproperlyConfigured
+from django.http import HttpResponseGone
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.generic import DetailView, ListView, View
@@ -24,6 +25,16 @@ from .services import (
     ProcessStepService,
     people_with_sector_members,
 )
+
+
+class RetiredProcessView(View):
+    """Mantém dados de processo históricos sem expor operações novas."""
+
+    def dispatch(self, request, *args, **kwargs):
+        return HttpResponseGone(
+            "Processos foram desativados. Use o quadro da Demanda.",
+            content_type="text/plain; charset=utf-8",
+        )
 
 
 class ProcessListView(OrganizationRequiredMixin, ListView):

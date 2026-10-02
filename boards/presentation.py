@@ -60,6 +60,22 @@ PERMISSION_KEYS = {
 
 def board_permissions(user, board):
     """O que esta pessoa pode fazer neste quadro, numa única consulta de autorização."""
+    if board.kind == board.Kind.DEMAND:
+        from .demand_services import DemandBoardAccess
+
+        can_collaborate = DemandBoardAccess.can_collaborate(user, board)
+        return {
+            "view": DemandBoardAccess.can_view(user, board),
+            "edit": DemandBoardAccess.can_manage_structure(user, board),
+            "delete": False,
+            "manage_columns": DemandBoardAccess.can_manage_structure(user, board),
+            "create_item": can_collaborate,
+            "edit_item": can_collaborate,
+            # A permissão efetiva é conferida sobre a Task no cancelamento
+            # (inclusive seu setor). Aqui só liberamos o menu; não usamos o
+            # setor da Demanda como aproximação que esconderia Tasks cruzadas.
+            "delete_item": can_collaborate,
+        }
     allowed = AuthorizationService.can_many(user, [(action, board) for action in PERMISSION_KEYS.values()])
     return {name: allowed.get((action, board.pk), False) for name, action in PERMISSION_KEYS.items()}
 
@@ -131,7 +147,7 @@ def column_meta(column):
 
 def board_meta(board, columns, groups, *, permissions, sort_column=None, direction="asc"):
     return {
-        "board": {"id": board.pk, "name": board.name, "item_label": board.item_label},
+        "board": {"id": board.pk, "name": board.name, "kind": board.kind, "item_label": board.item_label},
         "permissions": permissions,
         "urls": board_urls(board),
         "sentinels": {"id": SENTINEL, "column": SENTINEL_COLUMN},

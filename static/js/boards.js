@@ -235,6 +235,13 @@
             toast(error && error.message ? error.message : "Não foi possível salvar.", "error");
         }
 
+        function cancellationPayload() {
+            if (!meta.board || meta.board.kind !== "DEMAND") return {};
+            var reason = win.prompt("Informe o motivo do cancelamento da tarefa:", "");
+            reason = String(reason || "").trim();
+            return reason ? {reason: reason} : null;
+        }
+
         // -- pop-overs, menus e janelas ---------------------------------------------------------
 
         function closePopover(restoreFocus) {
@@ -925,7 +932,9 @@
                 message: "Excluir “" + (row.querySelector("[data-item-name]").textContent.trim()) + "”? Ele deixa de aparecer no quadro."
             }).then(function (yes) {
                 if (!yes) return;
-                request(url("item_delete", {id: row.dataset.itemId}), {}).then(function () {
+                var payload = cancellationPayload();
+                if (payload === null) return;
+                request(url("item_delete", {id: row.dataset.itemId}), payload).then(function () {
                     row.parentNode.removeChild(row);
                     updateGroupCount(group);
                 }, fail);
@@ -1493,7 +1502,9 @@
                 message: "Excluir “" + card.querySelector("[data-card-title]").textContent.trim() + "”? Ele deixa de aparecer no quadro."
             }).then(function (yes) {
                 if (!yes) return;
-                request(url("item_delete", {id: card.dataset.itemId}), {}).then(function () {
+                var payload = cancellationPayload();
+                if (payload === null) return;
+                request(url("item_delete", {id: card.dataset.itemId}), payload).then(function () {
                     card.parentNode.removeChild(card);
                     updateLaneCount(lane);
                     return refreshKanban();
@@ -1845,7 +1856,9 @@
                 message: "Excluir “" + name + "”? Ele deixa de aparecer no quadro."
             }).then(function (yes) {
                 if (!yes) return;
-                request(url("item_delete", {id: itemId}), {}).then(function () { closeDrawer(false); refreshCalendar(); }, fail);
+                var payload = cancellationPayload();
+                if (payload === null) return;
+                request(url("item_delete", {id: itemId}), payload).then(function () { closeDrawer(false); refreshCalendar(); }, fail);
             });
         }
 

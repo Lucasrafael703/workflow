@@ -1,94 +1,12 @@
-{% load lps %}
-{% comment %}Lista compacta de tarefas da atividade: clique abre o painel lateral sem
-navegar; href continua indo para task-detail como fallback (Ctrl+clique,
-nova aba, JS desabilitado).{% endcomment %}
 <div class="card card--flush">
     <div class="card__head">
         <h2><span class="ad-section-icon">{% include "_icon.html" with name="task" %}</span> Tarefas</h2>
-        {% if activity.status != "CONCLUIDA" and activity.status != "CANCELADA" and can_add_task %}
-        <a href="{% url 'task-quick-create' activity.pk %}" class="btn btn--sm btn--ghost js-task-quick-add">
-            {% include "_icon.html" with name="plus" %} Adicionar tarefa
-        </a>
-        {% endif %}
+        <a href="{{ task_board_url }}" class="btn btn--sm btn--primary">Abrir quadro</a>
     </div>
-
-    {% if tasks %}
-    <div class="card__body task-table">
-        <div class="task-table__head">
-            <span>Tarefa</span><span>Setor</span><span>Responsável</span><span>Prazo</span><span>Status</span><span>Fila</span>
-        </div>
-        {% for task in tasks %}
-        <a href="{% url 'task-detail' task.pk %}" class="task-table__row js-open-drawer" data-drawer-url="{% url 'task-drawer' task.pk %}">
-            <span class="task-table__title">
-                {% if task.status == "CONCLUIDA" or task.status == "EM_EXECUCAO" %}<span class="dot-state dot-state--success"></span>
-                {% elif task.status == "BLOQUEADA" %}<span class="dot-state dot-state--danger"></span>
-                {% elif task.status == "DEVOLVIDA" %}<span class="dot-state dot-state--warning"></span>
-                {% else %}<span class="dot-state"></span>{% endif %}
-                <span class="task-table__title-text">{{ task.title }}</span>
-                {% if task.process_step_id %}<span class="task-table__flag task-table__flag--neutral" title="Tarefa gerada pelo processo aplicado">Etapa {{ task.process_step.order }}</span>{% endif %}
-                {% if task.status == "BLOQUEADA" %}
-                <span class="task-table__flag task-table__flag--danger">{% include "_icon.html" with name="alert" %} Bloqueada</span>
-                {% elif task.is_overdue %}
-                <span class="task-table__flag task-table__flag--danger">{% include "_icon.html" with name="alert" %} Atrasada</span>
-                {% endif %}
-            </span>
-
-            {% include "_sector_badge.html" with sector=task.sector variant="compact" %}
-
-            <span class="executor-cell">
-                {% if task.responsavel %}
-                    <span class="avatar avatar--{{ task.responsavel|avatar_color }}" title="{{ task.responsavel.get_full_name|default:task.responsavel.get_username }}">
-                        {{ task.responsavel.get_full_name|default:task.responsavel.get_username|slice:":2"|upper }}
-                    </span>
-                    <span class="executor-cell__name">
-                        {{ task.responsavel.get_full_name|default:task.responsavel.get_username }}
-                    </span>
-                    {% if task.active_executors %}
-                    <span class="participants-popover">
-                        <button type="button" class="participants-popover__trigger">+{{ task.active_executors|length }}</button>
-                        <div class="participants-popover__menu" hidden>
-                            {% for executor in task.active_executors %}
-                            <div class="participants-popover__row">
-                                <span class="avatar avatar--{{ executor.user|avatar_color }}">{{ executor.user.get_username|slice:":2"|upper }}</span>
-                                {{ executor.user.get_full_name|default:executor.user.get_username }}
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </span>
-                    {% endif %}
-                {% else %}
-                    <span class="muted small">—</span>
-                {% endif %}
-            </span>
-
-            <span class="muted small">{% if task.requested_deadline %}{{ task.requested_deadline|date:"d/m/Y H:i" }}{% else %}—{% endif %}</span>
-            <span class="tag" style="--tag-bg: {{ task.status_color }}1A; --tag-fg: {{ task.status_color }};"{% if task.waiting_for and task.status == "DISPONIVEL" %} title="Entra na fila quando «{{ task.waiting_for.title }}» for concluída"{% endif %}>{{ task.status_label }}</span>
-            <span class="muted small">{% if task.queue_info %}{{ task.queue_info.position }}/{{ task.queue_info.total }}{% else %}—{% endif %}</span>
-        </a>
-        {% endfor %}
+    <div class="card__body">
+        <p class="muted">
+            As tarefas desta demanda são itens do quadro. Adicione, atribua pessoas,
+            altere o status e organize o trabalho diretamente nele.
+        </p>
     </div>
-    {% else %}
-    <div class="empty-state">
-        <div class="empty-state__icon">{% include "_icon.html" with name="task" %}</div>
-        <h3>Ainda sem tarefas</h3>
-        <p>As tarefas são os passos até o resultado. Cada uma tem um setor responsável e pode ter executores diferentes.</p>
-        {% if activity.status != "CONCLUIDA" and activity.status != "CANCELADA" and can_add_task %}
-        <a href="{% url 'task-quick-create' activity.pk %}" class="btn btn--primary js-task-quick-add">Adicionar primeira tarefa</a>
-        {% endif %}
-    </div>
-    {% endif %}
 </div>
-<script>
-(function () {
-    "use strict";
-    document.querySelectorAll(".js-task-quick-add").forEach(function (link) {
-        link.addEventListener("click", function (event) {
-            if (!window.LPSModal) return;
-            event.preventDefault();
-            window.LPSModal.open(link.getAttribute("href"), {
-                onSuccess: function () { window.location.reload(); }
-            });
-        });
-    });
-})();
-</script>
