@@ -8,6 +8,7 @@ from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
+from django.urls import reverse
 from django.views import View
 from django.views.generic import TemplateView
 
@@ -16,6 +17,7 @@ from acessos.services import AuthorizationService
 from activities.models import Activity, Task
 from core.colors import EnumColorResolver
 from core.mixins import OrganizationRequiredMixin
+from core.models import ActivityStage, Sector
 
 from .domain_defaults import ensure_domain_board
 from .domain_services import DomainBoardConflict, DomainBoardError, DomainBoardMutationService, build_cells
@@ -158,7 +160,112 @@ class DomainWorkBoardView(OrganizationRequiredMixin, TemplateView):
 
 
 class DemandWorkBoardView(DomainWorkBoardView):
+    """A superfície operacional de Demandas.
+
+    O ``DomainBoard`` continua sendo a fonte dos dados e das permissões, mas
+    Demandas é uma área de trabalho (não um quadro genérico). Por isso ela
+    tem as abas de escopo, os atalhos de prazo e a leitura de entrega que o
+    dia a dia pede.
+    """
+
     domain = DomainBoard.Domain.DEMAND
+    template_name = "boards/demand_work_board.html"
+
+    def _lanes(self, activities):
+        """Inclui etapas vazias para que o quadro mostre o fluxo completo."""
+        stages = list(
+            ActivityStage.objects.filter(
+                organization=self.organization, is_active=True
+            ).order_by("order", "name", "pk")
+        )
+        items_by_stage = {}
+        for activity in activities:
+            items_by_stage.setdefault(activity.stage_id, []).append(activity)
+
+        lanes = [{
+            "key": "empty",
+            "label": "Sem estágio",
+            "color": "#94A3B8",
+            "items": items_by_stage.pop(None, []),
+        }]
+        for stage in stages:
+            lanes.append({
+                "key": stage.pk,
+                "label": stage.name,
+                "color": stage.color,
+                "items": items_by_stage.pop(stage.pk, []),
+            })
+
+        # Uma etapa inativada não pode sumir enquanto ainda houver uma demanda
+        # nela: a pessoa precisa conseguir encontrá-la e corrigir o fluxo.
+        for stage_id, items in items_by_stage.items():
+            stage = next((item.stage for item in items if item.stage_id == stage_id), None)
+            lanes.append({
+                "key": stage_id,
+                "label": stage.name if stage else "Etapa indisponível",
+                "color": stage.color if stage else "#94A3B8",
+                "items": items,
+            })
+        return lanes
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from activities.views import (
+            activity_filter_context,
+            build_filter_toolbar_state,
+            visual_filter_choice_groups,
+        )
+
+        mode_by_type = {
+            DomainBoardView.Type.TABLE: "lista",
+            DomainBoardView.Type.KANBAN: "kanban",
+            DomainBoardView.Type.CALENDAR: "calendario",
+        }
+        view_mode = mode_by_type.get(context["work_view"].type, "lista")
+        sectors = Sector.objects.filter(
+            organization=self.organization, is_active=True
+        ).order_by("name")
+        selected_sector = self.request.GET.get("setor") or self.request.GET.get("sector") or self.request.GET.get("grupo")
+        stage_groups, condition_groups = visual_filter_choice_groups(
+            self.organization, "demanda", selected_sector
+        )
+
+        # Links de troca de visualização nunca levam um id de visualização
+        # anterior junto. A rota escolhida é que determina Lista/Kanban/Calendário.
+        switch_params = self.request.GET.copy()
+        for name in ("view", "visao", "page", "ano", "mes"):
+            switch_params.pop(name, None)
+
+        context.update(activity_filter_context(self.request, self.organization))
+        url_name_by_mode = {
+            "lista": "activity-list",
+            "kanban": "activity-kanban",
+            "calendario": "activity-calendar",
+        }
+        context.update(
+            view_mode=view_mode,
+            filter_querystring=switch_params.urlencode(),
+            sectors=sectors,
+            stage_choice_groups=stage_groups,
+            condition_choice_groups=condition_groups,
+            filter_state=build_filter_toolbar_state(
+                self.request,
+                self.organization,
+                domain="demanda",
+                view_mode=view_mode,
+                sectors=sectors,
+                stage_groups=stage_groups,
+                condition_groups=condition_groups,
+                orderings=[
+                    ("prazo", "Prazo mais próximo"),
+                    ("recentes", "Mais recentes"),
+                    ("titulo", "Demanda (A-Z)"),
+                ],
+            ),
+            demand_lanes=self._lanes(context["activities"]),
+            clear_filters_url=f"{reverse(url_name_by_mode[view_mode])}?tab={context['tab']}",
+        )
+        return context
 
 
 class TaskWorkBoardView(DomainWorkBoardView):

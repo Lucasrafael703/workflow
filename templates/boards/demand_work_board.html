@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% load lps %}
+{% block title %}Demandas — LPS{% endblock %}
+
+{% block content %}
+<section class="demand-board" aria-labelledby="demand-board-title">
+    <header class="demand-board__head">
+        <div>
+            <h1 id="demand-board-title">Demandas</h1>
+            <p>Acompanhe cada entrega e abra uma demanda para ver suas tarefas, prazos e conversas.</p>
+        </div>
+        {% if can_create %}
+        <a class="btn btn--primary demand-board__create" href="{% url 'activity-create' %}?next={{ request.get_full_path|urlencode }}" data-activity-action data-activity-navigate>
+            {% include "_icon.html" with name="plus" %} Criar demanda
+        </a>
+        {% endif %}
+    </header>
+
+    <nav class="demand-board__view-tabs" aria-label="Como visualizar as demandas">
+        <a href="{% url 'activity-list' %}{% if filter_querystring %}?{{ filter_querystring }}{% endif %}" class="{% if view_mode == 'lista' %}is-active{% endif %}"{% if view_mode == 'lista' %} aria-current="page"{% endif %}>
+            {% include "_icon.html" with name="menu" %} Lista
+        </a>
+        <a href="{% url 'activity-kanban' %}{% if filter_querystring %}?{{ filter_querystring }}{% endif %}" class="{% if view_mode == 'kanban' %}is-active{% endif %}"{% if view_mode == 'kanban' %} aria-current="page"{% endif %}>
+            {% include "_icon.html" with name="queue" %} Quadro por etapas
+        </a>
+        <a href="{% url 'activity-calendar' %}{% if filter_querystring %}?{{ filter_querystring }}{% endif %}" class="{% if view_mode == 'calendario' %}is-active{% endif %}"{% if view_mode == 'calendario' %} aria-current="page"{% endif %}>
+            {% include "_icon.html" with name="clock" %} Calendário de prazos
+        </a>
+    </nav>
+
+    <nav class="demand-board__scope-tabs" aria-label="Quais demandas mostrar">
+        <a href="{% querystring tab='minhas' page=None %}" class="{% if tab == 'minhas' %}is-active{% endif %}"{% if tab == 'minhas' %} aria-current="page"{% endif %}>Sob minha responsabilidade</a>
+        <a href="{% querystring tab='grupo' page=None %}" class="{% if tab == 'grupo' %}is-active{% endif %}"{% if tab == 'grupo' %} aria-current="page"{% endif %}>Do meu setor</a>
+        <a href="{% querystring tab='participando' page=None %}" class="{% if tab == 'participando' %}is-active{% endif %}"{% if tab == 'participando' %} aria-current="page"{% endif %}>Em que participo</a>
+        <a href="{% querystring tab='concluidas' page=None %}" class="{% if tab == 'concluidas' %}is-active{% endif %}"{% if tab == 'concluidas' %} aria-current="page"{% endif %}>Concluídas</a>
+        {% if can_view_all %}<a href="{% querystring tab='todas' page=None %}" class="{% if tab == 'todas' %}is-active{% endif %}"{% if tab == 'todas' %} aria-current="page"{% endif %}>Todas as demandas</a>{% endif %}
+    </nav>
+
+    {% with fs=filter_state %}
+    <form class="demand-board__filters" method="get" role="search" aria-label="Filtros de demandas">
+        <input type="hidden" name="tab" value="{{ fs.tab }}">
+        <label class="demand-board__search">
+            <span>Buscar demanda</span>
+            <span class="demand-board__search-control">{% include "_icon.html" with name="search" %}<input type="search" name="q" value="{{ fs.q }}" placeholder="Digite o nome, cliente ou obra..."><button class="btn" type="submit">Buscar</button></span>
+        </label>
+        <div class="demand-board__quick-filters" aria-label="Filtros rápidos">
+            <a href="{% querystring prazo='atrasadas' filtro=None page=None %}" class="is-late{% if fs.prazo == 'atrasadas' %} is-active{% endif %}">{% include "_icon.html" with name="clock" %} Atrasadas</a>
+            <a href="{% querystring prazo='hoje' filtro=None page=None %}" class="is-today{% if fs.prazo == 'hoje' %} is-active{% endif %}">{% include "_icon.html" with name="clock" %} Vencem hoje</a>
+            <a href="{% querystring filtro='bloqueadas' prazo=None page=None %}" class="is-blocked{% if fs.filtro == 'bloqueadas' or fs.bloqueio %} is-active{% endif %}">{% include "_icon.html" with name="info" %} Bloqueadas</a>
+        </div>
+        <label class="demand-board__filter-field"><span>Situação</span><select name="condicao"><option value="">Todas as situações</option>{% for sector_name, conditions in condition_choice_groups %}<optgroup label="{{ sector_name }}">{% for condition in conditions %}<option value="{{ condition.pk }}"{% if fs.condicao == condition.pk|stringformat:'s' %} selected{% endif %}>{{ condition.name }}</option>{% endfor %}</optgroup>{% endfor %}</select></label>
+        {% if view_mode == 'lista' %}<label class="demand-board__filter-field"><span>Etapa do quadro</span><select name="estagio"><option value="">Todas as etapas</option>{% for sector_name, stages in stage_choice_groups %}<optgroup label="{{ sector_name }}">{% for stage in stages %}<option value="{{ stage.pk }}"{% if fs.estagio == stage.pk|stringformat:'s' %} selected{% endif %}>{{ stage.name }}</option>{% endfor %}</optgroup>{% endfor %}</select></label>{% endif %}
+        <label class="demand-board__filter-field"><span>Setor responsável</span><select name="setor"><option value="">Todos os setores</option>{% for sector in sectors %}<option value="{{ sector.pk }}"{% if fs.setor == sector.pk|stringformat:'s' %} selected{% endif %}>{{ sector.name }}</option>{% endfor %}</select></label>
+        <label class="demand-board__filter-field"><span>Mostrar primeiro</span><select name="ordem"><option value="prazo"{% if fs.ordem == 'prazo' %} selected{% endif %}>Prazo mais próximo</option><option value="recentes"{% if fs.ordem == 'recentes' %} selected{% endif %}>Mais recentes</option><option value="titulo"{% if fs.ordem == 'titulo' %} selected{% endif %}>Demanda (A-Z)</option></select></label>
+        {% if fs.active_count %}<a class="demand-board__clear" href="{{ clear_filters_url }}">Limpar filtros</a>{% endif %}
+    </form>
+    {% endwith %}
+
+    {% if view_mode == 'lista' %}
+    <div class="demand-board__table-card">
+        <table class="demand-board__table" aria-label="Lista de demandas">
+            <colgroup><col class="demand-board__col-title"><col class="demand-board__col-context"><col class="demand-board__col-sector"><col class="demand-board__col-owner"><col class="demand-board__col-progress"><col class="demand-board__col-deadline"><col class="demand-board__col-stage"><col class="demand-board__col-condition"><col class="demand-board__col-actions"></colgroup>
+            <thead><tr><th>Demanda</th><th>Cliente / Obra</th><th>Setor</th><th>Responsável</th><th>Tarefas</th><th>Prazo</th><th>Estágio</th><th>Status</th><th><span class="sr-only">Ações</span></th></tr></thead>
+            <tbody>
+            {% for activity in activities %}
+                <tr>
+                    <td class="demand-board__title-cell"><a href="{% url 'activity-detail' activity.pk %}?next={{ request.get_full_path|urlencode }}"><strong>{{ activity.title }}</strong><span>{% if activity.code %}{{ activity.code }} · {% endif %}{% if activity.client %}{{ activity.client.name }}{% else %}Sem cliente{% endif %}{% if activity.site %} · {{ activity.site.name }}{% endif %}</span></a></td>
+                    <td class="demand-board__context-cell"><strong>{{ activity.client.name|default:'Sem cliente' }}</strong>{% if activity.site %}<span>{{ activity.site.name }}</span>{% endif %}</td>
+                    <td>{% if activity.sector %}{% include "_sector_badge.html" with sector=activity.sector variant="table" %}{% else %}<span class="demand-board__muted">Sem setor</span>{% endif %}</td>
+                    <td>{% if activity.owner %}<span class="demand-board__owner"><span class="avatar avatar--{{ activity.owner|avatar_color }}">{{ activity.owner.get_full_name|default:activity.owner.get_username|slice:':2'|upper }}</span><span>{{ activity.owner.get_full_name|default:activity.owner.get_username }}</span></span>{% else %}<span class="demand-board__muted">Sem responsável</span>{% endif %}</td>
+                    <td><div class="demand-board__progress"><strong>{{ activity.done_tasks }} de {{ activity.total_tasks }}</strong><span><i style="width:{{ activity.progress_percent }}%"></i></span><em>{{ activity.progress_percent }}%</em></div></td>
+                    <td><div class="demand-board__deadline{% if activity.is_overdue %} is-late{% endif %}">{% include "_icon.html" with name="clock" %}<span>{% if activity.requested_deadline %}{{ activity.requested_deadline|date:'d/m/Y H:i' }}{% else %}Sem prazo{% endif %}</span></div></td>
+                    <td class="demand-board__status-cell"><span class="demand-board__status" style="--status-bg:{{ activity.stage_color }};--status-text:{{ activity.stage.text_color|default:'#FFFFFF' }};">{{ activity.stage_name }}</span></td>
+                    <td class="demand-board__status-cell"><span class="demand-board__status" style="--status-bg:{{ activity.condition_color }};--status-text:{{ activity.condition.text_color|default:'#FFFFFF' }};">{{ activity.condition_name }}</span></td>
+                    <td class="demand-board__actions"><a href="{% url 'activity-detail' activity.pk %}?next={{ request.get_full_path|urlencode }}" aria-label="Abrir {{ activity.title }}">{% include "_icon.html" with name="more" %}</a></td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="9" class="demand-board__empty"><strong>Nenhuma demanda encontrada.</strong><span>Ajuste os filtros ou crie uma nova demanda.</span></td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <footer class="demand-board__table-footer">Mostrando {{ activities|length }} demanda{{ activities|length|pluralize }}.</footer>
+    </div>
+
+    {% elif view_mode == 'kanban' %}
+    <div class="demand-board__kanban" aria-label="Quadro de demandas por etapa">
+        {% for lane in demand_lanes %}
+        <section class="demand-board__lane" style="--lane-color:{{ lane.color }}">
+            <header><strong>{{ lane.label }}</strong><span>{{ lane.items|length }}</span></header>
+            <div class="demand-board__cards">
+                {% for activity in lane.items %}
+                <article class="demand-board__card">
+                    <div class="demand-board__card-head"><a href="{% url 'activity-detail' activity.pk %}?next={{ request.get_full_path|urlencode }}">{{ activity.title }}</a><a href="{% url 'activity-detail' activity.pk %}?next={{ request.get_full_path|urlencode }}" aria-label="Abrir {{ activity.title }}">{% include "_icon.html" with name="more" %}</a></div>
+                    <p>{% if activity.client %}{{ activity.client.name }}{% else %}Sem cliente{% endif %}{% if activity.site %} · {{ activity.site.name }}{% endif %}</p>
+                    <div class="demand-board__card-tags">{% if activity.sector %}{% include "_sector_badge.html" with sector=activity.sector variant="compact" %}{% endif %}<span class="demand-board__card-condition" style="--card-condition:{{ activity.condition_color }}">{{ activity.condition_name }}</span></div>
+                    <div class="demand-board__card-facts"><span>{% if activity.owner %}<i class="avatar avatar--{{ activity.owner|avatar_color }}">{{ activity.owner.get_full_name|default:activity.owner.get_username|slice:':2'|upper }}</i>{{ activity.owner.get_full_name|default:activity.owner.get_username }}{% else %}Sem responsável{% endif %}</span><span class="{% if activity.is_overdue %}is-late{% endif %}">{% include "_icon.html" with name="clock" %}{% if activity.requested_deadline %}{{ activity.requested_deadline|date:'d/m/Y' }}{% else %}Sem prazo{% endif %}</span></div>
+                    <div class="demand-board__card-progress"><strong>{{ activity.done_tasks }} de {{ activity.total_tasks }} tarefas</strong><span><i style="width:{{ activity.progress_percent }}%"></i></span><em>{{ activity.progress_percent }}%</em></div>
+                </article>
+                {% empty %}
+                <div class="demand-board__lane-empty">Nenhuma demanda nesta etapa.</div>
+                {% endfor %}
+            </div>
+            {% if can_create %}<a class="demand-board__lane-add" href="{% url 'activity-create' %}?next={{ request.get_full_path|urlencode }}">{% include "_icon.html" with name="plus" %} Adicionar demanda</a>{% endif %}
+        </section>
+        {% endfor %}
+    </div>
+
+    {% else %}
+    <div class="demand-board__calendar" aria-label="Demandas por prazo">
+        {% for activity in activities %}
+        <article class="demand-board__calendar-card{% if activity.is_overdue %} is-late{% endif %}">
+            <time datetime="{% if activity.requested_deadline %}{{ activity.requested_deadline|date:'c' }}{% endif %}">{% include "_icon.html" with name="clock" %}{% if activity.requested_deadline %}{{ activity.requested_deadline|date:'d/m/Y H:i' }}{% else %}Sem prazo{% endif %}</time>
+            <a href="{% url 'activity-detail' activity.pk %}?next={{ request.get_full_path|urlencode }}">{{ activity.title }}</a>
+            <span>{% if activity.client %}{{ activity.client.name }}{% else %}Sem cliente{% endif %}{% if activity.sector %} · {{ activity.sector.name }}{% endif %}</span>
+        </article>
+        {% empty %}<div class="demand-board__calendar-empty">Nenhuma demanda encontrada para este período.</div>{% endfor %}
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

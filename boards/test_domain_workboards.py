@@ -70,8 +70,12 @@ class DomainWorkBoardTests(TestCase):
     def test_primary_routes_render_the_new_views(self):
         self.client.force_login(self.user)
         response = self.client.get(reverse("activity-list"))
-        self.assertContains(response, "Quadro principal")
+        self.assertContains(response, "Sob minha responsabilidade")
+        self.assertContains(response, "Criar demanda")
         self.assertContains(response, "Conferir proposta")
+        response = self.client.get(reverse("activity-kanban"))
+        self.assertContains(response, "Quadro por etapas")
+        self.assertContains(response, "Sem estágio")
         response = self.client.get(reverse("task-kanban"))
         self.assertContains(response, "Revisar escopo")
         self.assertContains(response, "data-work-kanban")
