@@ -177,7 +177,7 @@ class OrganizationScopedFormMixin:
                 fields["sector"].widget.queryset = fields["sector"].queryset
                 if can_create_sector:
                     fields["sector"].widget.create_url = reverse("sector-create")
-        # Etapa e condição só podem aparecer para o setor selecionado. O
+        # Etapa e status só podem aparecer para o setor selecionado. O
         # serviço repete a validação no POST; o filtro aqui evita combinações
         # inválidas já na interface.
         selected_sector_id = None
@@ -353,7 +353,7 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
             "board_setup_mode": "Quadro de tarefas",
             "board_template": "Modelo de quadro",
             "stage": "Etapa",
-            "condition": "Condição",
+            "condition": "Status",
             "urgency": "Urgência",
             "company": "Organização",
             "client": "Cliente",
@@ -371,7 +371,7 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
             "board_setup_mode": "Escolha como as tarefas desta Demanda serão organizadas.",
             "board_template": "Modelos de qualquer setor podem ser usados; a cópia será independente.",
             "stage": "Etapa visual deste setor.",
-            "condition": "Condição manual deste setor; não muda o status operacional.",
+            "condition": "Status manual deste setor; não muda o status operacional.",
             "urgency": "Indique o quanto esta demanda precisa de atenção.",
             "company": "Ex.: Comercial, Engenharia, Operações, etc.",
             "client": "Selecione o cliente relacionado a esta demanda.",
@@ -551,7 +551,7 @@ TASK_LABELS = {
     "title": "O que precisa ser feito?",
     "sector": "Setor",
     "stage": "Etapa",
-    "condition": "Condição",
+    "condition": "Status",
     "responsavel": "Responsável",
     "participantes": "Participantes",
     "requested_deadline": "Data do prazo",
@@ -562,7 +562,7 @@ TASK_HELP = {
     "title": "Comece com uma ação. Ex.: Conferir os preços da planilha.",
     "sector": "Equipe que recebe a tarefa na fila de trabalho.",
     "stage": "Etapa visual do setor selecionado.",
-    "condition": "Condição manual do setor; não altera o status operacional.",
+    "condition": "Status manual do setor; não altera o status operacional.",
     "responsavel": "Quem acompanha a tarefa até a conclusão.",
     "participantes": "Quem ajuda a executar a tarefa. Uma pessoa que você convida só entra depois de aceitar.",
     "requested_deadline": "Quando quem pediu precisa receber a entrega. O prazo que a equipe se compromete a "

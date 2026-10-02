@@ -128,7 +128,7 @@ class ResourceContext:
             return cls(organization_id=resource.organization_id, sector_id=resource.pk)
 
         if model_name in {"activitystage", "taskstage", "workflowstatus"}:
-            # Etapas e condições são cadastros do setor. Sem este endereço,
+            # Etapas e status são cadastros do setor. Sem este endereço,
             # uma concessão por setor acabaria negada ou, pior, precisaria ser
             # substituída por uma concessão ampla da organização.
             return cls(organization_id=resource.organization_id, sector_id=resource.sector_id)

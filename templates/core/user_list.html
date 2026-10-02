@@ -28,7 +28,7 @@
 <div class="card card--flush">
     <div class="table-wrap">
         <table class="responsive lps-sheet lps-sheet--compact">
-            <thead><tr><th>Usuário</th><th>E-mail</th><th>Perfis</th><th>Situação</th><th class="col-actions">Ações</th></tr></thead>
+            <thead><tr><th>Usuário</th><th>E-mail</th><th>Perfis</th><th>Etapa</th><th class="col-actions">Ações</th></tr></thead>
             <tbody>
             {% for item in users %}
             <tr>
@@ -42,7 +42,7 @@
                         {{ assignment.profile.name }} <span class="muted small">({{ assignment.scope.label }})</span>{% if not forloop.last %}<br>{% endif %}
                     {% endif %}{% empty %}<span class="muted">—</span>{% endfor %}
                 </td>
-                <td data-label="Situação">
+                <td data-label="Etapa">
                     {% if item.is_active %}<span class="dot-state dot-state--success"></span>Ativo
                     {% else %}<span class="dot-state"></span><span class="muted">Inativo</span>{% endif %}
                 </td>

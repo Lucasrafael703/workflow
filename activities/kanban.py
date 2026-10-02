@@ -1,9 +1,9 @@
 """Quadro Kanban de Demandas e de Tarefas, sempre de um setor por vez.
 
-As colunas são as **Etapas do setor** (`ActivityStage` / `TaskStage`); a **Condição** (`WorkflowStatus`) é a
+As colunas são as **Etapas do setor** (`ActivityStage` / `TaskStage`); a **Status** (`WorkflowStatus`) é a
 leitura manual de "o que está acontecendo". O `status` operacional (fila, cronômetro, bloqueio, conclusão…)
 continua exclusivo dos services de Demanda e de Tarefa: arrastar um cartão muda **somente** a etapa
-(`set_stage`), e escolher uma condição nunca executa nada (`set_condition`).
+(`set_stage`), e escolher um status nunca executa nada (`set_condition`).
 
 Este módulo não decide regra de negócio. Ele resolve o setor, filtra o que a pessoa pode ver, monta colunas e
 cartões e devolve fragmentos; quem autoriza e grava são os services que já existem (`ActivityService`,
@@ -681,7 +681,7 @@ BOARDS = {DemandBoard.slug: DemandBoard, TaskBoard.slug: TaskBoard}
 
 
 def workflow_context(item, user, slug):
-    """Etapa, Condição e o que a pessoa pode mexer, para os seletores da gaveta de uma Demanda/Tarefa."""
+    """Etapa, Status e o que a pessoa pode mexer, para os seletores da gaveta de uma Demanda/Tarefa."""
     permissions = DemandBoard.card_permissions if slug == "demandas" else TaskBoard.card_permissions
     checks = [(action, item) for name in ("set_stage", "set_condition") for action in permissions[name]]
     access = AuthorizationService.can_many(user, checks)
@@ -801,7 +801,7 @@ class KanbanSetConditionView(KanbanActionView):
         return JsonResponse(
             {
                 "success": True,
-                "message": f"Condição alterada para {condition.name}." if condition else "Condição removida.",
+                "message": f"Status alterada para {condition.name}." if condition else "Status removida.",
                 "condition_name": condition.name if condition else "",
                 "card_html": board.render_card(item),
             }
@@ -882,7 +882,7 @@ class KanbanColumnLimitView(KanbanActionView):
 
 
 class KanbanCreateOptionView(KanbanActionView):
-    """Nova Etapa ou nova Condição do setor, criada sem sair do quadro (quem gere o catálogo)."""
+    """Nova Etapa ou nova Status do setor, criada sem sair do quadro (quem gere o catálogo)."""
 
     http_method_names = ["post"]
 
@@ -899,7 +899,7 @@ class KanbanCreateOptionView(KanbanActionView):
         elif kind == "condition":
             action = catalog.CONDICAO_GERIR
         else:
-            return _failure("Informe se é uma etapa ou uma condição.")
+            return _failure("Informe se é uma etapa ou um status.")
         if not AuthorizationService.can(request.user, action, sector):
             return _failure("Você não pode gerir as opções deste setor.", status=403)
         try:
@@ -915,7 +915,7 @@ class KanbanCreateOptionView(KanbanActionView):
         return JsonResponse(
             {
                 "success": True,
-                "message": "Etapa criada." if kind == "stage" else "Condição criada.",
+                "message": "Etapa criada." if kind == "stage" else "Status criada.",
                 "item": {"id": option.pk, "name": option.name, "color": option.color, "is_default": option.is_default},
             },
             status=201,

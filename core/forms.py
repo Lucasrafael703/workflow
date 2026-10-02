@@ -102,9 +102,9 @@ class ActivityStageForm(SectorScopedVisualForm):
 
 class WorkflowStatusForm(SectorScopedVisualForm):
     name = forms.CharField(label="Nome", max_length=150)
-    description = forms.CharField(label="O que esta condição indica", max_length=255, required=False)
+    description = forms.CharField(label="O que este status indica", max_length=255, required=False)
 
-    # ``domain`` é aceito por compatibilidade com as URLs antigas; condição
+    # ``domain`` é aceito por compatibilidade com as URLs antigas; status
     # não recebe comportamento operacional.
     def __init__(self, *args, domain=None, organization=None, **kwargs):
         super().__init__(*args, organization=organization, **kwargs)

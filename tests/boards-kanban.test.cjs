@@ -393,7 +393,7 @@ test("a failed field save brings the old value back on the card", async t => {
     assert.match(card(101).querySelector('[data-column-id="15"]').textContent, /R\$ 2\.500\.000,00/);
 });
 
-test("changing the group column from a card (a status field) redistributes the lanes", async t => {
+test("changing the group column from a card (o status field) redistributes the lanes", async t => {
     const respond = call => call.url.endsWith("/lanes/") ? jsonResponse(lanesPayload()) : jsonResponse({ok: true, display: "Ganho", cell_html: ""});
     const {$$, click, card, calls} = setup(t, {respond, fixture: FULL});
     const field = card(101).querySelector('[data-column-id="13"]'); // o Status também é um campo do cartão

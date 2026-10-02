@@ -182,6 +182,6 @@ urlpatterns = [
     path("fila/entrada/<int:pk>/reordenar/", views.QueueReorderView.as_view(), name="queue-reorder"),
     path("gestao/", views.ManagementView.as_view(), name="management"),
     path("historico/", views.HistoryView.as_view(), name="history"),
-    # Ações do quadro Kanban (mover etapa, condição, criar na coluna, limite, gaveta da demanda).
+    # Ações do quadro Kanban (mover etapa, status, criar na coluna, limite, gaveta da demanda).
     path("", include("activities.kanban_urls")),
 ]

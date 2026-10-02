@@ -645,7 +645,7 @@ class WorkflowStatusFormView(OrganizationRequiredMixin, ActionRequiredMixin, For
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         domain = self.kwargs["domain"]
-        context["title"] = "Condição de demanda" if domain == "activity" else "Condição de tarefa"
+        context["title"] = "Status de demanda" if domain == "activity" else "Status de tarefa"
         context["instance"] = self.get_instance()
         context["tab"] = "condicoes-demanda" if domain == "activity" else "condicoes-tarefa"
         view_domain = "demandas" if domain == "activity" else "tarefas"
@@ -940,7 +940,7 @@ class FlowConfigToggleActiveView(OrganizationRequiredMixin, ActionRequiredMixin,
 
 
 class FlowConfigReorderView(OrganizationRequiredMixin, ActionRequiredMixin, View):
-    """Persiste a ordem de uma lista setorial de etapas ou condições."""
+    """Persiste a ordem de uma lista setorial de etapas ou status."""
 
     models_by_kind = FlowConfigDeleteView.models_by_kind
 
@@ -983,7 +983,7 @@ class EtapasEStatusView(OrganizationRequiredMixin, ActionRequiredMixin, Template
 
     def dispatch(self, request, *args, **kwargs):
         # A antiga URL continua sendo a mesma, mas a tela não expõe mais o
-        # status operacional. Etapas e condições são mantidas com permissões
+        # status operacional. Etapas e status são mantidas com permissões
         # próprias e sempre no setor selecionado.
         organization = getattr(getattr(request.user, "profile", None), "organization", None)
         if organization is not None:

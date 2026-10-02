@@ -1,7 +1,7 @@
-"""Quadro Kanban de Demandas e de Tarefas: sempre de um setor, com as Etapas e Condições desse setor.
+"""Quadro Kanban de Demandas e de Tarefas: sempre de um setor, com as Etapas e Status desse setor.
 
 Cobre: setor obrigatório e visibilidade, colunas (inclusive "Sem etapa" e o limite), filtros e ordenação, o que o
-arraste e os seletores gravam (só etapa / só condição, nunca o status operacional), criação na coluna, limite,
+arraste e os seletores gravam (só etapa / só status, nunca o status operacional), criação na coluna, limite,
 criação de opções, gaveta da demanda e da tarefa, isolamento entre organizações e consultas por cartão.
 """
 
@@ -48,7 +48,7 @@ class KanbanTestCase(TestCase):
         cls.financeiro = Sector.objects.create(organization=cls.org, name="Financeiro")
         cls.foreign_sector = Sector.objects.create(organization=cls.other_org, name="Alheio")
 
-        cls.ana = make_user("ana", cls.org, WORK_ACTIONS)  # membro de Orçamento, pode mexer em etapa e condição
+        cls.ana = make_user("ana", cls.org, WORK_ACTIONS)  # membro de Orçamento, pode mexer em etapa e status
         cls.gestor = make_user("gestor", cls.org, MANAGER_ACTIONS)  # gestor de Orçamento
         cls.bia = make_user("bia", cls.org, WORK_ACTIONS)  # membro de Financeiro
         cls.duo = make_user("duo", cls.org, WORK_ACTIONS)  # membro dos dois setores
@@ -62,7 +62,7 @@ class KanbanTestCase(TestCase):
         ):
             UserSector.objects.create(user=user, sector=sector)
 
-        # Etapas e condições, por setor e por tipo
+        # Etapas e status, por setor e por tipo
         cls.d_afazer = cls._stage(ActivityStage, cls.orcamento, "A fazer", 1, default=True)
         cls.d_levant = cls._stage(ActivityStage, cls.orcamento, "Levantamento", 2)
         cls.d_cotacao = cls._stage(ActivityStage, cls.orcamento, "Cotação", 3)

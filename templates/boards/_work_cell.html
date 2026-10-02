@@ -7,5 +7,5 @@
     {% elif cell.progress is not None %}<span class="work-progress"><span><i style="width:{{ cell.progress }}%"></i></span>{{ cell.text }}</span>
     {% else %}{{ cell.text }}{% endif %}
     </span>
-    {% if cell.options %}<template data-work-options>{% if cell.key == "stage" or cell.key == "condition" %}<option value="">{% if cell.key == "stage" %}Sem etapa{% else %}Sem condição{% endif %}</option>{% endif %}{% for option in cell.options %}<option value="{{ option.pk }}"{% if option.pk|stringformat:"s" == cell.raw|stringformat:"s" %} selected{% endif %}>{{ option }}</option>{% endfor %}</template>{% endif %}
+    {% if cell.options %}<template data-work-options>{% if cell.key == "stage" or cell.key == "condition" %}<option value="">{% if cell.key == "stage" %}Sem etapa{% else %}Sem status{% endif %}</option>{% endif %}{% for option in cell.options %}<option value="{{ option.pk }}"{% if option.pk|stringformat:"s" == cell.raw|stringformat:"s" %} selected{% endif %}>{{ option }}</option>{% endfor %}</template>{% endif %}
 </td>

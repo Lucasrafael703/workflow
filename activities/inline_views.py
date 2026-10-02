@@ -50,7 +50,7 @@ class ActivityInlineUpdateView(InlineActivityMixin, OrganizationRequiredMixin, V
 class ActivityInlineOptionsView(InlineActivityMixin, OrganizationRequiredMixin, View):
     """GET `?campo=sector|stage|condition`: lista de opções do pop-over, no contexto da demanda (o setor vem dela, nunca
     do cliente). POST `campo`, `acao=criar|editar`, `name`, `color`, `option_id`: cria ou edita (nome e cor) uma etapa ou
-    condição do setor da demanda; exige a permissão de gerir etapas/condições no setor."""
+    status do setor da demanda; exige a permissão de gerir etapas/status no setor."""
 
     http_method_names = ["get", "post"]
 

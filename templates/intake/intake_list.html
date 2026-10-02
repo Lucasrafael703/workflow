@@ -22,7 +22,7 @@
 </div>
 
 <div class="section-head">
-    <nav class="tabs" aria-label="Situação das solicitações">
+    <nav class="tabs" aria-label="Etapa das solicitações">
         {% for item_tab in tabs %}
         <a href="?status={{ item_tab.key }}{% if search %}&q={{ search|urlencode }}{% endif %}" class="{% if tab == item_tab.key %}is-active{% endif %}">{{ item_tab.label }} <span class="count">({{ item_tab.count }})</span></a>
         {% endfor %}

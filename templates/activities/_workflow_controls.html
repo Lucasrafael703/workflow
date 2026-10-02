@@ -1,4 +1,4 @@
-{% comment %}Etapa e Condição de uma Demanda/Tarefa na gaveta, com os mesmos seletores do quadro.
+{% comment %}Etapa e Status de uma Demanda/Tarefa na gaveta, com os mesmos seletores do quadro.
 Espera: item, workflow (de `kanban.workflow_context`). Sem setor ou sem permissão, os dois ficam só para leitura.{% endcomment %}
 <div class="drawer__facts workflow-controls">
     <div class="form-row">
@@ -12,13 +12,13 @@ Espera: item, workflow (de `kanban.workflow_context`). Sem setor ou sem permiss�
         {% else %}<div class="field-static muted">Defina o setor para escolher a etapa.</div>{% endif %}
     </div>
     <div class="form-row">
-        <label>Condição</label>
+        <label>Status</label>
         {% if workflow.sector %}
         <button type="button" class="workflow-value" style="--option-color: {{ workflow.condition.color|default:'#94A3B8' }};"
                 {% if workflow.can_set_condition %}{% include "activities/_workflow_picker_attrs.html" with kind="condition" kanban_domain=workflow.domain can_manage=workflow.can_manage_conditions %}{% else %}disabled{% endif %}>
-            <span class="option-dot"></span><span data-workflow-label>{{ workflow.condition.name|default:"Sem condição" }}</span>
+            <span class="option-dot"></span><span data-workflow-label>{{ workflow.condition.name|default:"Sem status" }}</span>
             {% if workflow.can_set_condition %}{% include "_icon.html" with name="chevron-down" %}{% endif %}
         </button>
-        {% else %}<div class="field-static muted">Defina o setor para escolher a condição.</div>{% endif %}
+        {% else %}<div class="field-static muted">Defina o setor para escolher o status.</div>{% endif %}
     </div>
 </div>

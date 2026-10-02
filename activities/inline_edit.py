@@ -58,7 +58,7 @@ def person_initials(user):
 
 
 def option_data(obj):
-    """Setor, etapa ou condição para a tela: dados estruturados com a cor e a cor do texto calculadas no servidor
+    """Setor, etapa ou status para a tela: dados estruturados com a cor e a cor do texto calculadas no servidor
     (mesma fórmula WCAG do resto do sistema). `None` quando não há valor."""
     if obj is None:
         return None
@@ -241,7 +241,7 @@ def inline_options(user, activity, field):
 
 
 def manage_option(user, activity, data):
-    """Criar ou editar (nome e cor) uma etapa ou condição do setor da demanda, sem sair da lista.
+    """Criar ou editar (nome e cor) uma etapa ou status do setor da demanda, sem sair da lista.
 
     Autoridade única: `ETAPA_GERIR` / `CONDICAO_GERIR` no setor da demanda, conferida aqui; nome, cor da paleta e nome
     repetido são validados pelos Services de cadastro (`CadastroError` vira 400). Inativar, ordenar e definir o padrão
@@ -289,7 +289,7 @@ def manage_option(user, activity, data):
 
 
 def _find_option(model, activity, raw, message, **filters):
-    """Etapa ou condição escolhida pela tela, sempre dentro da organização da demanda; o Service confere o setor."""
+    """Etapa ou status escolhida pela tela, sempre dentro da organização da demanda; o Service confere o setor."""
     try:
         pk = int(raw)
     except (TypeError, ValueError):
@@ -369,7 +369,7 @@ class ActivityInlineService:
     def _condition(user, activity, data):
         raw = (data.get("value") or "").strip()
         condition = None
-        if raw:  # vazio = "Sem condição"
+        if raw:  # vazio = "Sem status"
             condition = _find_option(
                 WorkflowStatus, activity, raw, "Escolha o status.", domain=WorkflowStatus.Domain.ACTIVITY
             )
@@ -383,7 +383,7 @@ class ActivityInlineService:
         """Trocar de setor (`value` = id) ou criar um setor novo e já aplicá-lo (`new_name` + `new_color`).
 
         Criar e aplicar é UMA transação: se a troca for recusada (destino sem permissão, pendência aberta, demanda
-        concluída...), o setor também não fica criado. A etapa e a condição passam para os padrões do novo setor dentro
+        concluída...), o setor também não fica criado. A etapa e o status passam para os padrões do novo setor dentro
         do `ActivityService` (que audita as três mudanças)."""
         new_name = (data.get("new_name") or "").strip()
         if new_name or (data.get("new_color") or "").strip():
@@ -436,7 +436,7 @@ class ActivityInlineService:
             return {
                 "value": activity.sector_id or "",
                 "display": option_data(activity.sector),
-                # Trocar o setor redefine etapa e condição: a tela redesenha as duas células com estes dados.
+                # Trocar o setor redefine etapa e status: a tela redesenha as duas células com estes dados.
                 "derived": {"stage": option_data(activity.stage), "condition": option_data(activity.condition)},
             }
         if field == "requested_deadline":

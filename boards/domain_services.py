@@ -73,7 +73,7 @@ def _condition_for(item, value):
     try:
         return WorkflowStatus.objects.get(pk=int(value), organization=organization, domain=domain)
     except (WorkflowStatus.DoesNotExist, TypeError, ValueError) as exc:
-        raise DomainBoardError("Condição inválida para esta demanda ou tarefa.") from exc
+        raise DomainBoardError("Status inválida para esta demanda ou tarefa.") from exc
 
 
 def _sector_for(item, value):
@@ -221,7 +221,7 @@ def build_cells(items, fields, organization):
                     options = (demand_stages if isinstance(item, Activity) else task_stages).get(item.sector_id, [])
                 else:
                     options = (demand_conditions if isinstance(item, Activity) else task_conditions).get(item.sector_id, [])
-                cell.update(raw=getattr(choice, "pk", ""), text=choice.name if choice else ("Sem etapa" if key == "stage" else "Sem condição"), choice=choice, options=options)
+                cell.update(raw=getattr(choice, "pk", ""), text=choice.name if choice else ("Sem etapa" if key == "stage" else "Sem status"), choice=choice, options=options)
             elif key in {"urgency", "priority"}:
                 code = getattr(item, key)
                 resolver = demand_priority if key == "urgency" else task_priority

@@ -887,9 +887,9 @@ test("setor: criar um setor novo no pop-over (nome + cor) grava e aplica numa ú
     assert.equal($(".activity-inline-popover"), null, "fecha ao concluir");
     assert.equal(sectorCell(101).querySelector(".sector-badge").textContent, "Qualidade 2");
     assert.equal(sectorCell(101).querySelector(".sector-badge").dataset.sectorId, "9");
-    // setor novo nasce sem etapas e sem condições: as células mostram os rótulos neutros
+    // setor novo nasce sem etapas e sem status: as células mostram os rótulos neutros
     assert.equal(chip(stageCell(101)).textContent, "Sem estágio");
-    assert.equal(chip(conditionCell(101)).textContent, "Sem condição");
+    assert.equal(chip(conditionCell(101)).textContent, "Sem status");
     assert.match(chip(stageCell(101)).getAttribute("style"), /--status-bg:#94A3B8;--status-text:#FFFFFF;/);
     assert.equal(stageCell(101).dataset.optionId, "");
     assert.deepEqual(toasts(), []);
@@ -1037,12 +1037,12 @@ test("estágio: recusa do servidor volta ao estágio confirmado e avisa", async 
     assert.ok(stageCell(101).classList.contains("is-error"));
 });
 
-test("status: a lista tem 'Sem condição' no topo (marcada quando não há valor), escolher grava e limpar manda vazio", async t => {
+test("status: a lista tem 'Sem status' no topo (marcada quando não há valor), escolher grava e limpar manda vazio", async t => {
     const {click, conditionCell, optionButtons, saves, chip, toasts} = setup(t);
     click(conditionCell(101));
     await flush();
     const buttons = optionButtons();
-    assert.deepEqual(buttons.map(b => b.querySelector(".activity-inline-color-option__name").textContent), ["Sem condição", "Normal", "Em análise"]);
+    assert.deepEqual(buttons.map(b => b.querySelector(".activity-inline-color-option__name").textContent), ["Sem status", "Normal", "Em análise"]);
     assert.equal(buttons[0].hasAttribute("aria-current"), false);
     assert.equal(buttons[1].getAttribute("aria-current"), "true");
     click(buttons[2]);
@@ -1054,15 +1054,15 @@ test("status: a lista tem 'Sem condição' no topo (marcada quando não há valo
 
     click(conditionCell(101));
     await flush();
-    click(optionButtons()[0]); // Sem condição
+    click(optionButtons()[0]); // Sem status
     assert.equal(saves()[1].body.get("value"), "");
-    assert.equal(chip(conditionCell(101)).textContent, "Sem condição", "otimista");
+    assert.equal(chip(conditionCell(101)).textContent, "Sem status", "otimista");
     await flush();
     assert.equal(conditionCell(101).dataset.optionId, "");
     assert.match(chip(conditionCell(101)).getAttribute("style"), /--status-bg:#94A3B8;--status-text:#FFFFFF;/);
     click(conditionCell(101));
     await flush();
-    assert.equal(optionButtons()[0].getAttribute("aria-current"), "true", "agora o 'Sem condição' é o atual");
+    assert.equal(optionButtons()[0].getAttribute("aria-current"), "true", "agora o 'Sem status' é o atual");
     click(optionButtons()[0]);
     assert.equal(saves().length, 2, "escolher o que já está não envia");
     assert.deepEqual(toasts(), []);

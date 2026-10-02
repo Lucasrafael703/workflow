@@ -1,7 +1,7 @@
 """Políticas de transição: "dado este objeto e o estado em que ele está, o que
 pode acontecer com ele?".
 
-Uma só fonte para a regra de **estado** (e para as pré-condições que dependem
+Uma só fonte para a regra de **estado** (e para as pré-status que dependem
 do objeto: dependência pendente, inputs do processo, ser responsável ou
 participante, pendência aberta...). Os *services* continuam executando e
 autorizando (`require_action`), mas perguntam aqui antes de gravar; as telas
@@ -59,7 +59,7 @@ ACTIVITY_PERMISSIONS = {
 
 
 # ---------------------------------------------------------------------------
-# Pré-condições compartilhadas
+# Pré-status compartilhadas
 # ---------------------------------------------------------------------------
 
 

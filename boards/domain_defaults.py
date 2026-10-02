@@ -20,7 +20,7 @@ DEFAULT_FIELDS = {
         ("urgency", "Prioridade", "PRIORITY"),
         ("requested_deadline", "Prazo", "DATETIME"),
         ("stage", "Status", "STAGE"),
-        ("condition", "Condição", "SELECT"),
+        ("condition", "Status", "SELECT"),
         ("tasks", "Tarefas", "CHECKLIST"),
     ),
     DomainBoard.Domain.TASK: (

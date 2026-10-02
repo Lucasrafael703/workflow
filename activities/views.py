@@ -158,7 +158,7 @@ def filtered_tasks_queryset(request, organization):
     else:
         queryset = queryset.filter(status__in=OPEN_TASK_STATUSES)
 
-    # Visões salvas por condição operacional, no lugar de segmentações
+    # Visões salvas por status operacional, no lugar de segmentações
     # comerciais (Benchmark §3: atrasadas, bloqueadas, devolvidas).
     view = filters["filtro"]
     if view == "atrasadas":
@@ -856,7 +856,7 @@ def decorate_activity_cards(activities, organization):
         activity.progress_percent = int((activity.done_tasks / activity.total_tasks) * 100) if activity.total_tasks else 0
         activity.stage_name = activity.stage.name if activity.stage else "Sem estágio"
         activity.stage_color = activity.stage.color if activity.stage else "#94A3B8"
-        activity.condition_name = activity.condition.name if activity.condition else "Sem condição"
+        activity.condition_name = activity.condition.name if activity.condition else "Sem status"
         activity.condition_color = activity.condition.color if activity.condition else "#94A3B8"
     return activities
 
@@ -1095,7 +1095,7 @@ class ActivityMoveStageView(OrganizationRequiredMixin, View):
 
 
 class ActivitySetConditionView(OrganizationRequiredMixin, View):
-    """Altera somente a condição manual da demanda, após validação do serviço."""
+    """Altera somente o status manual da demanda, após validação do serviço."""
 
     def post(self, request, pk):
         activity = get_object_or_404(Activity, pk=pk, organization=self.organization)
@@ -1116,7 +1116,7 @@ class ActivitySetConditionView(OrganizationRequiredMixin, View):
         if _is_ajax(request):
             activity = activity_row_for_request(activity.pk, request.user, self.organization)
             return JsonResponse({
-                "success": True, "message": "Condição da demanda atualizada.",
+                "success": True, "message": "Status da demanda atualizada.",
                 "target": f"activity-{activity.pk}", "html": render_to_string(
                     "activities/_activity_row.html", {"activity": activity}, request=request
                 ), "errors": {},
@@ -2169,7 +2169,7 @@ class TaskListView(OrganizationRequiredMixin, ListView):
             task.can_set_condition = list_access[(catalog.TAREFA_DEFINIR_CONDICAO, task.pk)]
             task.stage_name = task.stage.name if task.stage else "Sem etapa"
             task.stage_color = task.stage.color if task.stage else "#94A3B8"
-            task.condition_name = task.condition.name if task.condition else "Sem condição"
+            task.condition_name = task.condition.name if task.condition else "Sem status"
             task.condition_color = task.condition.color if task.condition else "#94A3B8"
         sector_ids = {task.sector_id for task in tasks if task.sector_id}
         stages_by_sector, conditions_by_sector = {}, {}
@@ -2204,7 +2204,7 @@ class TaskListView(OrganizationRequiredMixin, ListView):
                 ("prazo", "Prazo"),
                 ("tarefa", "Tarefa (A-Z)"),
                 ("demanda", "Demanda (A-Z)"),
-                ("condicao", "Condição"),
+                ("condicao", "Status"),
             ],
         )
         context["object_list"] = tasks
@@ -2254,7 +2254,7 @@ def task_row_for_request(task_id, user, organization):
     task.can_set_condition = permissions[(catalog.TAREFA_DEFINIR_CONDICAO, task.pk)]
     task.stage_name = task.stage.name if task.stage else "Sem etapa"
     task.stage_color = task.stage.color if task.stage else "#94A3B8"
-    task.condition_name = task.condition.name if task.condition else "Sem condição"
+    task.condition_name = task.condition.name if task.condition else "Sem status"
     task.condition_color = task.condition.color if task.condition else "#94A3B8"
     task.stage_options = list(TaskStage.objects.filter(
         organization=organization, sector=task.sector, is_active=True
@@ -2314,7 +2314,7 @@ class TaskSetConditionView(OrganizationRequiredMixin, View):
         if _is_ajax(request):
             task = task_row_for_request(task.pk, request.user, self.organization)
             return JsonResponse({
-                "success": True, "message": "Condição da tarefa atualizada.", "target": f"task-{task.pk}",
+                "success": True, "message": "Status da tarefa atualizada.", "target": f"task-{task.pk}",
                 "html": render_to_string("activities/_task_row.html", {"task": task}, request=request), "errors": {},
             })
         return redirect("task-list")
@@ -2350,7 +2350,7 @@ class TaskCalendarView(OrganizationRequiredMixin, TemplateView):
         for task in tasks:
             task._status_color = status_colors.color_for(task.status)
             task._status_label = status_colors.label_for(task.status, task.get_status_display())
-            task.condition_name = task.condition.name if task.condition else "Sem condição"
+            task.condition_name = task.condition.name if task.condition else "Sem status"
             task.condition_color = task.condition.color if task.condition else "#94A3B8"
             deadline = task.committed_deadline or task.requested_deadline
             if deadline is None:
@@ -2415,7 +2415,7 @@ class TaskCalendarView(OrganizationRequiredMixin, TemplateView):
                         ("prazo", "Prazo"),
                         ("tarefa", "Tarefa (A-Z)"),
                         ("demanda", "Demanda (A-Z)"),
-                        ("condicao", "Condição"),
+                        ("condicao", "Status"),
                     ],
                 ),
             }

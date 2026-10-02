@@ -114,7 +114,7 @@ título das outras tarefas (doc 09 §97-99).
                 </div>
                 <p style="margin:10px 0"><span class="position-pill">Posição: {{ entry.position }} de {{ total }}</span></p>
                 <div class="muted small">
-                    Situação: {{ entry.task.status_label }}
+                    Etapa: {{ entry.task.status_label }}
                     {% if entry.task.committed_deadline %} · Prazo comprometido: {{ entry.task.committed_deadline|date:"d/m/Y H:i" }}{% endif %}
                 </div>
                 {% if entry.position_changes.exists %}

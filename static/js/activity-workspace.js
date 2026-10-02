@@ -81,7 +81,7 @@
             replaceOptions(condition, {items: []}, "Selecione o setor primeiro");
             return;
         }
-        [[stage, "etapas", "Sem etapa"], [condition, "condicoes", "Sem condição"]].forEach(function (entry) {
+        [[stage, "etapas", "Sem etapa"], [condition, "condicoes", "Sem status"]].forEach(function (entry) {
             if (!entry[0]) return;
             fetch("/api/setores/" + encodeURIComponent(sectorId) + "/" + entry[1] + "/?dominio=" + domain,
                 {headers: {"X-Requested-With": "XMLHttpRequest"}})
@@ -115,7 +115,7 @@
 
     document.querySelectorAll("[data-activity-filters]").forEach(setupActivityFilters);
 
-    // As células de etapa/condição ficam dentro de tabelas com overflow-x:auto.
+    // As células de etapa/status ficam dentro de tabelas com overflow-x:auto.
     // Um popup absoluto seria cortado pelo container da tabela; ao abrir,
     // posicionamos o menu em relação à janela para ele sobrepor cards, linhas
     // e demais containers sem alterar a rolagem horizontal da planilha.

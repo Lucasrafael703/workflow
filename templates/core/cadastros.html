@@ -59,13 +59,13 @@
 <div class="card card--flush">
     <div class="table-wrap">
         <table class="responsive lps-sheet lps-sheet--compact">
-            <thead><tr><th>Nome</th><th>CNPJ/CPF</th><th>Situação</th><th class="col-actions">Ações</th></tr></thead>
+            <thead><tr><th>Nome</th><th>CNPJ/CPF</th><th>Etapa</th><th class="col-actions">Ações</th></tr></thead>
             <tbody>
             {% for item in companies %}
             <tr>
                 <td data-label="Nome"><span class="title">{{ item.name }}</span></td>
                 <td data-label="CNPJ/CPF">{{ item.document|default:"—" }}</td>
-                <td data-label="Situação">
+                <td data-label="Etapa">
                     {% if item.is_active %}<span class="dot-state dot-state--success"></span>Ativa
                     {% else %}<span class="dot-state"></span><span class="muted">Inativa</span>{% endif %}
                 </td>
@@ -93,13 +93,13 @@
 <div class="card card--flush">
     <div class="table-wrap">
         <table class="responsive lps-sheet lps-sheet--compact">
-            <thead><tr><th>Nome</th><th>Cliente</th><th>Situação</th><th class="col-actions">Ações</th></tr></thead>
+            <thead><tr><th>Nome</th><th>Cliente</th><th>Etapa</th><th class="col-actions">Ações</th></tr></thead>
             <tbody>
             {% for item in sites %}
             <tr>
                 <td data-label="Nome"><span class="title">{{ item.name }}</span></td>
                 <td data-label="Cliente">{{ item.client.name|default:"—" }}</td>
-                <td data-label="Situação">
+                <td data-label="Etapa">
                     {% if item.is_active %}<span class="dot-state dot-state--success"></span>Ativa
                     {% else %}<span class="dot-state"></span><span class="muted">Inativa</span>{% endif %}
                 </td>
@@ -127,13 +127,13 @@
 <div class="card card--flush">
     <div class="table-wrap">
         <table class="responsive lps-sheet lps-sheet--compact">
-            <thead><tr><th>Nome</th><th>Obra</th><th>Situação</th><th class="col-actions">Ações</th></tr></thead>
+            <thead><tr><th>Nome</th><th>Obra</th><th>Etapa</th><th class="col-actions">Ações</th></tr></thead>
             <tbody>
             {% for item in cost_centers %}
             <tr>
                 <td data-label="Nome"><span class="title">{{ item.name }}</span></td>
                 <td data-label="Obra">{{ item.site.name|default:"—" }}</td>
-                <td data-label="Situação">
+                <td data-label="Etapa">
                     {% if item.is_active %}<span class="dot-state dot-state--success"></span>Ativo
                     {% else %}<span class="dot-state"></span><span class="muted">Inativo</span>{% endif %}
                 </td>
@@ -161,14 +161,14 @@
 <div class="card card--flush">
     <div class="table-wrap">
         <table class="responsive lps-sheet lps-sheet--compact">
-            <thead><tr><th>Nome</th><th>CNPJ/CPF</th><th>Telefone</th><th>Situação</th><th class="col-actions">Ações</th></tr></thead>
+            <thead><tr><th>Nome</th><th>CNPJ/CPF</th><th>Telefone</th><th>Etapa</th><th class="col-actions">Ações</th></tr></thead>
             <tbody>
             {% for item in clients %}
             <tr>
                 <td data-label="Nome"><span class="title">{{ item.name }}</span></td>
                 <td data-label="CNPJ/CPF">{{ item.document|default:"—" }}</td>
                 <td data-label="Telefone">{{ item.phone|default:"—" }}</td>
-                <td data-label="Situação">
+                <td data-label="Etapa">
                     {% if item.is_active %}<span class="dot-state dot-state--success"></span>Ativo
                     {% else %}<span class="dot-state"></span><span class="muted">Inativo</span>{% endif %}
                 </td>
@@ -196,12 +196,12 @@
 <div class="card card--flush">
     <div class="table-wrap">
         <table class="responsive lps-sheet lps-sheet--compact">
-            <thead><tr><th>Motivo</th><th>Situação</th><th class="col-actions">Ações</th></tr></thead>
+            <thead><tr><th>Motivo</th><th>Etapa</th><th class="col-actions">Ações</th></tr></thead>
             <tbody>
             {% for item in return_reasons %}
             <tr>
                 <td data-label="Motivo"><span class="title">{{ item.name }}</span></td>
-                <td data-label="Situação">
+                <td data-label="Etapa">
                     {% if item.is_active %}<span class="dot-state dot-state--success"></span>Ativo
                     {% else %}<span class="dot-state"></span><span class="muted">Inativo</span>{% endif %}
                 </td>
@@ -233,7 +233,7 @@
 <div class="card card--flush">
     <div class="table-wrap">
         <table class="responsive lps-sheet lps-sheet--compact">
-            <thead><tr><th>Nome</th><th>Cor</th><th>Situação</th><th class="col-actions">Ações</th></tr></thead>
+            <thead><tr><th>Nome</th><th>Cor</th><th>Etapa</th><th class="col-actions">Ações</th></tr></thead>
             <tbody>
             {% for item in tags %}
             <tr>
@@ -245,7 +245,7 @@
                             data-current-color="{{ item.color }}"
                             aria-haspopup="true" aria-label="Cor de {{ item.name }}: clique para mudar."></button>
                 </td>
-                <td data-label="Situação">
+                <td data-label="Etapa">
                     {% if item.is_active %}<span class="dot-state dot-state--success"></span>Ativo
                     {% else %}<span class="dot-state"></span><span class="muted">Inativo</span>{% endif %}
                 </td>
@@ -292,7 +292,7 @@
 <div class="card card--flush">
     <div class="table-wrap">
         <table class="responsive lps-sheet lps-sheet--compact">
-            <thead><tr><th>Nome</th><th>Cor</th><th>Descrição</th><th>Tarefas abertas</th><th>Situação</th><th class="col-actions">Ações</th></tr></thead>
+            <thead><tr><th>Nome</th><th>Cor</th><th>Descrição</th><th>Tarefas abertas</th><th>Etapa</th><th class="col-actions">Ações</th></tr></thead>
             <tbody>
             {% for item in sectors %}
             <tr>
@@ -300,7 +300,7 @@
                 <td data-label="Cor"><span class="color-swatch" style="--swatch-color: {{ item.color }};" title="{{ item.color }}"></span></td>
                 <td data-label="Descrição">{{ item.description|default:"—" }}</td>
                 <td data-label="Tarefas abertas">{{ item.open_tasks }}</td>
-                <td data-label="Situação">
+                <td data-label="Etapa">
                     {% if item.is_active %}<span class="dot-state dot-state--success"></span>Ativo
                     {% else %}<span class="dot-state"></span><span class="muted">Inativo</span>{% endif %}
                 </td>

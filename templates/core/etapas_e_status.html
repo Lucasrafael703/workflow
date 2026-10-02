@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Etapas e condições - Configurações - LPS{% endblock %}
+{% block title %}Etapas e status - Configurações - LPS{% endblock %}
 
 {% block content %}
 <div class="flow-config-page">
     <div class="page-head flow-config-head">
         <div class="page-head__text">
-            <h1>Etapas e condições</h1>
-            <p class="sub">Organize a leitura do trabalho por setor. Etapa e condição não alteram fila, prazo, bloqueio, cronômetro ou conclusão.</p>
+            <h1>Etapas e status</h1>
+            <p class="sub">Organize a leitura do trabalho por setor. Etapa e status não alteram fila, prazo, bloqueio, cronômetro ou conclusão.</p>
         </div>
     </div>
 
@@ -15,7 +15,7 @@
         <span class="flow-principle__icon">{% include "_icon.html" with name="info" %}</span>
         <div>
             <strong>O status operacional continua protegido pelas regras da LPS.</strong>
-            <span>Etapa organiza o fluxo visual; condição registra a leitura manual atual do trabalho.</span>
+            <span>Etapa organiza o fluxo visual; status registra a leitura manual atual do trabalho.</span>
         </div>
     </div>
 
@@ -32,7 +32,7 @@
     </form>
 
     {% if not sector %}
-    <section class="empty-state"><h2>Cadastre um setor para configurar o fluxo</h2><p>Etapas e condições existem dentro de um setor.</p></section>
+    <section class="empty-state"><h2>Cadastre um setor para configurar o fluxo</h2><p>Etapas e status existem dentro de um setor.</p></section>
     {% else %}
     <div class="flow-config-columns">
         <section class="flow-config-panel">
@@ -61,8 +61,8 @@
 
         <section class="flow-config-panel">
             <header class="flow-config-panel__head">
-                <div><h2>Condições</h2><p>Leitura manual, independente do status operacional.</p></div>
-                {% if can_manage_conditions %}<a class="btn btn--primary js-flow-modal" href="{{ condition_create_url }}">{% include "_icon.html" with name="plus" %} Nova condição</a>{% endif %}
+                <div><h2>Status</h2><p>Leitura manual, independente do status operacional.</p></div>
+                {% if can_manage_conditions %}<a class="btn btn--primary js-flow-modal" href="{{ condition_create_url }}">{% include "_icon.html" with name="plus" %} Nova status</a>{% endif %}
             </header>
             <ul class="flow-stage-list"{% if can_manage_conditions %} data-flow-reorder data-reorder-url="{% url 'flow-config-reorder' kind='workflow-status' %}"{% endif %}>
                 {% for condition in conditions %}
@@ -72,14 +72,14 @@
                     <div class="flow-row-copy"><strong>{{ condition.name }}</strong><span>{{ condition.description|default:"Sem descrição" }} · {% if condition.is_default %}Padrão deste setor{% elif condition.is_active %}Ativa{% else %}Inativa{% endif %}</span></div>
                     <span class="tag" style="--tag-bg: {{ condition.color }}1A; --tag-fg: {{ condition.color }};">{{ condition.name }}</span>
                     {% if can_manage_conditions %}
-                    <details class="flow-row-menu"><summary aria-label="Ações da condição {{ condition.name }}">{% include "_icon.html" with name="more" %}</summary><div class="flow-row-menu__popup">
+                    <details class="flow-row-menu"><summary aria-label="Ações do status {{ condition.name }}">{% include "_icon.html" with name="more" %}</summary><div class="flow-row-menu__popup">
                         <a class="js-flow-modal" href="{% url 'workflowstatus-edit' domain=model_domain pk=condition.pk %}?sector={{ sector.pk }}">Editar</a>
                         <form method="post" action="{% url 'flow-config-toggle' kind='workflow-status' pk=condition.pk %}">{% csrf_token %}<button type="submit">{% if condition.is_active %}Inativar{% else %}Reativar{% endif %}</button></form>
-                        <form method="post" action="{% url 'flow-config-delete' kind='workflow-status' pk=condition.pk %}" onsubmit="return confirm('Remover esta condição? Se já tiver sido usada, ela será apenas inativada.')">{% csrf_token %}<button type="submit" class="is-danger">Excluir</button></form>
+                        <form method="post" action="{% url 'flow-config-delete' kind='workflow-status' pk=condition.pk %}" onsubmit="return confirm('Remover este status? Se já tiver sido usada, ela será apenas inativada.')">{% csrf_token %}<button type="submit" class="is-danger">Excluir</button></form>
                     </div></details>
                     {% endif %}
                 </li>
-                {% empty %}<li class="flow-empty-row"><p>Nenhuma condição neste setor.</p></li>{% endfor %}
+                {% empty %}<li class="flow-empty-row"><p>Nenhum status neste setor.</p></li>{% endfor %}
             </ul>
         </section>
     </div>

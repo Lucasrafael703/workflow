@@ -555,7 +555,7 @@ class SectorServiceTests(SectorBase):
         self.assertEqual((activity.sector_id, activity.stage_id, activity.condition_id), (self.destino.pk, self.stage_b.pk, self.cond_b.pk))
         entries = {entry.field_name: (entry.old_value, entry.new_value) for entry in self.audit(activity, reason__startswith="Setor alterado")}
         self.assertEqual(entries, {
-            "setor": ("Comercial", "Engenharia"), "etapa": ("Triagem", "Projeto"), "condição": ("Normal", "Em análise"),
+            "setor": ("Comercial", "Engenharia"), "etapa": ("Triagem", "Projeto"), "status": ("Normal", "Em análise"),
         })
 
     def test_destination_authorization_is_checked_before_any_write(self):
@@ -588,12 +588,12 @@ class SectorServiceTests(SectorBase):
         self.untouched()
 
     def test_a_failure_in_the_middle_rolls_everything_back(self):
-        # a 2ª auditoria falha: setor, etapa, condição e as auditorias já gravadas voltam juntos
+        # a 2ª auditoria falha: setor, etapa, status e as auditorias já gravadas voltam juntos
         with mock.patch("activities.services.AuditService.log", side_effect=[None, RuntimeError("falha no meio")]):
             with self.assertRaisesMessage(RuntimeError, "falha no meio"):
                 self.move()
         self.untouched()
-        self.assertFalse(AuditLog.objects.filter(activity=self.a1, field_name__in=("etapa", "condição")).exists())
+        self.assertFalse(AuditLog.objects.filter(activity=self.a1, field_name__in=("etapa", "status")).exists())
 
     def test_the_other_organizations_demand_cannot_be_moved_by_name(self):
         with self.assertRaises(ActivityError):
@@ -682,7 +682,7 @@ class SectorEndpointTests(SectorBase):
         self.assertEqual((novo.color, novo.created_by_id, novo.is_active), ("#16A34A", self.admin.pk, True))
         self.assertEqual(body["created_sector"], {"id": novo.pk, "name": "Qualidade", "color": "#16A34A", "text_color": novo.text_color})
         self.assertEqual(body["display"]["id"], novo.pk)
-        self.assertEqual(body["derived"], {"stage": None, "condition": None})  # setor novo nasce sem etapas nem condições
+        self.assertEqual(body["derived"], {"stage": None, "condition": None})  # setor novo nasce sem etapas nem status
         self.assertEqual(self.state(), (novo.pk, None, None))
         self.assertEqual(self.audit(self.a1, reason__startswith="Setor alterado").count(), 3)
 
@@ -785,13 +785,13 @@ class OptionsEndpointTests(SectorBase):
         self.client.force_login(self.editor)
         self.assertEqual(self.client.put(url).status_code, 405)
         self.assertEqual(self.client.delete(url).status_code, 405)
-        # POST existe (criar e editar etapas/condições), mas não para o setor: o setor é criado pelo próprio campo
+        # POST existe (criar e editar etapas/status), mas não para o setor: o setor é criado pelo próprio campo
         refused = self.client.post(url, {"campo": "sector", "acao": "criar", "name": "X"}, **AJAX)
         self.assertEqual((refused.status_code, refused.json()["error"]), (400, "Este campo não tem opções para gerir."))
 
 
 # ---------------------------------------------------------------------------
-# Entrega 2C: estágio e status (condição) + opções criadas/editadas ali mesmo
+# Entrega 2C: estágio e status (status) + opções criadas/editadas ali mesmo
 # ---------------------------------------------------------------------------
 
 
@@ -813,7 +813,7 @@ class OptionBase(SectorBase):
             "gestor", cls.org,
             see + [catalog.ATIVIDADE_DEFINIR_ETAPA, catalog.ATIVIDADE_DEFINIR_CONDICAO, catalog.ETAPA_GERIR, catalog.CONDICAO_GERIR],
         )
-        # Gere etapas e condições SÓ do setor Engenharia: não vale para uma demanda do Comercial.
+        # Gere etapas e status SÓ do setor Engenharia: não vale para uma demanda do Comercial.
         cls.gestor_destino = make_user("gdestino", cls.org, see)
         for action in (catalog.ETAPA_GERIR, catalog.CONDICAO_GERIR, catalog.ATIVIDADE_DEFINIR_ETAPA, catalog.ATIVIDADE_DEFINIR_CONDICAO):
             grant_action(cls.gestor_destino, action, organization=cls.org, sector=cls.destino)
@@ -887,16 +887,16 @@ class StageConditionEndpointTests(OptionBase):
     def test_the_same_stage_or_condition_is_a_no_op_without_audit(self):
         self.assertEqual(self.set("stage", self.stage_a.pk).status_code, 200)
         self.assertEqual(self.set("condition", self.cond_a.pk).status_code, 200)
-        self.assertFalse(self.audit(self.a1, field_name__in=("etapa", "condição")).exists())
+        self.assertFalse(self.audit(self.a1, field_name__in=("etapa", "status")).exists())
 
     def test_choosing_a_condition_and_clearing_it(self):
         body = self.set("condition", self.cond_a2.pk).json()
         self.assertEqual((body["value"], body["display"]["name"]), (self.cond_a2.pk, "Aguardando cliente"))
-        self.assertEqual(self.audit(self.a1, field_name="condição").get().new_value, "Aguardando cliente")
+        self.assertEqual(self.audit(self.a1, field_name="status").get().new_value, "Aguardando cliente")
         cleared = self.set("condition", "").json()
         self.assertEqual((cleared["value"], cleared["display"]), ("", None))
         self.assertIsNone(self.fresh().condition_id)
-        self.assertEqual(self.audit(self.a1, field_name="condição").order_by("-id").first().new_value, "Sem condição")
+        self.assertEqual(self.audit(self.a1, field_name="status").order_by("-id").first().new_value, "Sem status")
 
     def test_the_stage_cannot_be_cleared(self):
         for value in ("", "  "):
@@ -914,7 +914,7 @@ class StageConditionEndpointTests(OptionBase):
             ("stage", 999999, "não existe nesta organização"),
             ("condition", self.cond_b.pk, "não pertence ao setor atual"),
             ("condition", self.cond_off.pk, "inativa"),
-            ("condition", self.cond_task.pk, "não existe nesta organização"),  # condição de TAREFA não serve para demanda
+            ("condition", self.cond_task.pk, "não existe nesta organização"),  # status de TAREFA não serve para demanda
             ("condition", "abc", "Escolha o status."),
         )
         for field, value, text in cases:
@@ -1132,7 +1132,7 @@ class OverdueLineTests(OptionBase):
             self.assertIn("Vencida há 5 dias", cell, user.username)
             self.assertIn("demand-board__status-late", cell)
             self.assertIn("has-late", cell)
-            self.assertIn('class="demand-board__status-name">Normal</span>', cell)  # o nome da condição segue como estava
+            self.assertIn('class="demand-board__status-name">Normal</span>', cell)  # o nome do status segue como estava
 
     def test_singular_and_plural(self):
         Activity.objects.filter(pk=self.a1.pk).update(requested_deadline=timezone.now() - datetime.timedelta(days=1, hours=1))

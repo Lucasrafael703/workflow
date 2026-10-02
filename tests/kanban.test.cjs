@@ -463,7 +463,7 @@ test('changing the sector or an auto-apply popover submits the filters; other po
     assert.equal(submits, 2);
 });
 
-// -- seletor de etapa/condição ---------------------------------------------------------------------------------
+// -- seletor de etapa/status ---------------------------------------------------------------------------------
 
 const PICKER_PAGE = `${PAGE}
 <div class="drawer-backdrop"><button type="button" id="etapa" class="workflow-value" data-workflow-picker data-kind="stage" data-domain="demandas"
@@ -533,15 +533,15 @@ test('a refused choice shows the reason and leaves the button as it was', async 
 
 test('a condition can be cleared', async t => {
     const k = pickerSetup(t);
-    k.route('/kanban/demandas/1/condicao/', () => ({status: 200, body: {success: true, message: 'Condição removida.', condition_name: '', card_html: card(1, 10)}}));
+    k.route('/kanban/demandas/1/condicao/', () => ({status: 200, body: {success: true, message: 'Status removida.', condition_name: '', card_html: card(1, 10)}}));
     k.click(k.$('#condicao'));
     await settle();
-    const clear = k.$$('.workflow-pop__option').find(o => /Sem condição/.test(o.textContent));
-    assert.ok(clear, 'oferece "Sem condição"');
+    const clear = k.$$('.workflow-pop__option').find(o => /Sem status/.test(o.textContent));
+    assert.ok(clear, 'oferece "Sem status"');
     k.click(clear);
     await settle();
     assert.deepEqual(k.body(k.calls.find(c => c.method === 'POST')), {condition_id: ''});
-    assert.equal(k.$('#condicao [data-workflow-label]').textContent, 'Sem condição');
+    assert.equal(k.$('#condicao [data-workflow-label]').textContent, 'Sem status');
 });
 
 test('a stage cannot be cleared: there is no empty option', async t => {
@@ -560,7 +560,7 @@ test('who manages the catalog sees "+ Nova etapa" and "Gerenciar"; others do not
     k.w.LPSWorkflowPicker.close();
     k.click(k.$('#condicao'));
     await settle();
-    assert.equal(k.$$('.workflow-pop__option').some(o => /Nova condição/.test(o.textContent)), false);
+    assert.equal(k.$$('.workflow-pop__option').some(o => /Nova status/.test(o.textContent)), false);
     assert.equal(k.$('.workflow-pop__link'), null);
 });
 
@@ -637,7 +637,7 @@ test('the card condition chip opens the same picker from inside the board', asyn
     const html = PAGE.replace(card(1, 10), card(1, 10).replace('<span class="meta">texto</span>', `<span class="meta">texto</span>${chip}`));
     const k = setup(t, {html});
     k.route('/api/setores/1/condicoes/', () => ({status: 200, body: CONDITIONS}));
-    k.route('/kanban/demandas/1/condicao/', () => ({status: 200, body: {success: true, message: 'Condição alterada para Aguardando cliente.', condition_name: 'Aguardando cliente', card_html: movedCard(1, 10)}}));
+    k.route('/kanban/demandas/1/condicao/', () => ({status: 200, body: {success: true, message: 'Status alterada para Aguardando cliente.', condition_name: 'Aguardando cliente', card_html: movedCard(1, 10)}}));
     k.click(k.$('#chip'));
     await settle();
     assert.equal(k.drawers.length, 0, 'o clique no chip não abre a gaveta');

@@ -89,7 +89,7 @@
             <div class="table-wrap">
                 <table class="responsive lps-sheet lps-sheet--home-tasks">
                     <thead>
-                        <tr><th>Tarefa</th><th>Setor</th><th>Prazo</th><th>Situação</th></tr>
+                        <tr><th>Tarefa</th><th>Setor</th><th>Prazo</th><th>Etapa</th></tr>
                     </thead>
                     <tbody>
                         {% for task in next_tasks %}
@@ -104,7 +104,7 @@
                                 {% elif task.requested_deadline %}<span class="muted">{{ task.requested_deadline|date:"d/m/Y H:i" }}</span>
                                 {% else %}<span class="muted">Sem prazo</span>{% endif %}
                             </td>
-                            <td data-label="Situação" class="lps-sheet-status-cell">{% include "_sheet_status.html" with color=task.status_color text_color=task.status_text_color label=task.status_label %}</td>
+                            <td data-label="Etapa" class="lps-sheet-status-cell">{% include "_sheet_status.html" with color=task.status_color text_color=task.status_text_color label=task.status_label %}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -129,7 +129,7 @@
             <div class="table-wrap">
                 <table class="responsive lps-sheet lps-sheet--home-demands">
                     <thead>
-                        <tr><th>Demanda</th><th>Progresso</th><th>Prazo</th><th>Situação</th></tr>
+                        <tr><th>Demanda</th><th>Progresso</th><th>Prazo</th><th>Etapa</th></tr>
                     </thead>
                     <tbody>
                         {% for activity in followed_activities %}
@@ -144,7 +144,7 @@
                                 {% if activity.requested_deadline %}{{ activity.requested_deadline|date:"d/m/Y" }}
                                 {% else %}<span class="muted">Sem prazo</span>{% endif %}
                             </td>
-                            <td data-label="Situação" class="lps-sheet-status-cell">{% include "_sheet_status.html" with color=activity.status_color text_color=activity.status_text_color label=activity.status_label %}</td>
+                            <td data-label="Etapa" class="lps-sheet-status-cell">{% include "_sheet_status.html" with color=activity.status_color text_color=activity.status_text_color label=activity.status_label %}</td>
                         </tr>
                         {% endfor %}
                     </tbody>

@@ -1,9 +1,9 @@
-{% comment %}Etiqueta da Condição no cartão. Com permissão abre o seletor; sem, é só leitura.
+{% comment %}Etiqueta do Status no cartão. Com permissão abre o seletor; sem, é só leitura.
 Espera: item, kanban_domain, can_manage_conditions.{% endcomment %}
 {% if item.condition_name %}
 <button type="button" class="condition-chip" style="--condition-color: {{ item.condition_color }};"
-        {% if item.perm.set_condition %}{% include "activities/_workflow_picker_attrs.html" with kind="condition" can_manage=can_manage_conditions %} title="Alterar a condição"{% else %}disabled{% endif %}>{{ item.condition_name }}</button>
+        {% if item.perm.set_condition %}{% include "activities/_workflow_picker_attrs.html" with kind="condition" can_manage=can_manage_conditions %} title="Alterar o status"{% else %}disabled{% endif %}>{{ item.condition_name }}</button>
 {% elif item.perm.set_condition %}
 <button type="button" class="condition-chip condition-chip--empty"
-        {% include "activities/_workflow_picker_attrs.html" with kind="condition" can_manage=can_manage_conditions %}>+ Condição</button>
+        {% include "activities/_workflow_picker_attrs.html" with kind="condition" can_manage=can_manage_conditions %}>+ Status</button>
 {% endif %}

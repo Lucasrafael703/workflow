@@ -438,14 +438,14 @@ class ActivityService:
             for field_name, old_value, new_value in (
                 ("setor", old_sector.name if old_sector else "Sem setor", requested_sector.name),
                 ("etapa", old_stage.name if old_stage else "Sem etapa", activity.stage.name if activity.stage else "Sem etapa"),
-                ("condição", old_condition.name if old_condition else "Sem condição", activity.condition.name if activity.condition else "Sem condição"),
+                ("status", old_condition.name if old_condition else "Sem status", activity.condition.name if activity.condition else "Sem status"),
             ):
                 AuditService.log(
                     user=user, action=AuditLog.Action.UPDATE, activity=activity,
                     field_name=field_name, old_value=old_value, new_value=new_value,
-                    reason="Setor alterado; etapa e condição foram redefinidas para o fluxo do novo setor.",
+                    reason="Setor alterado; etapa e status foram redefinidas para o fluxo do novo setor.",
                 )
-            activity._sector_configuration_message = "Setor alterado. Etapa e condição foram redefinidas conforme o novo setor."
+            activity._sector_configuration_message = "Setor alterado. Etapa e status foram redefinidas conforme o novo setor."
 
         if "client" in fields or "site" in fields:
             # Invariante do domínio (não só do formulário): a obra pertence ao cliente da demanda. Obra sem cliente vale
@@ -559,8 +559,8 @@ class ActivityService:
         activity.condition = condition
         activity.save(update_fields=["condition"])
         AuditService.log(
-            user=user, action=AuditLog.Action.UPDATE, activity=activity, field_name="condição",
-            old_value=old.name if old else "Sem condição", new_value=condition.name if condition else "Sem condição",
+            user=user, action=AuditLog.Action.UPDATE, activity=activity, field_name="status",
+            old_value=old.name if old else "Sem status", new_value=condition.name if condition else "Sem status",
         )
         return activity
 
@@ -1457,8 +1457,8 @@ class TaskService:
         task.save(update_fields=["condition"])
         AuditService.log(
             user=user, action=AuditLog.Action.UPDATE, activity=task.activity, task=task,
-            field_name="condição", old_value=old.name if old else "Sem condição",
-            new_value=condition.name if condition else "Sem condição",
+            field_name="status", old_value=old.name if old else "Sem status",
+            new_value=condition.name if condition else "Sem status",
         )
         return task
 
@@ -2349,14 +2349,14 @@ class TaskService:
         )
         for field_name, old_value, new_value in (
             ("etapa", old_stage.name if old_stage else "Sem etapa", task.stage.name if task.stage else "Sem etapa"),
-            ("condição", old_condition.name if old_condition else "Sem condição", task.condition.name if task.condition else "Sem condição"),
+            ("status", old_condition.name if old_condition else "Sem status", task.condition.name if task.condition else "Sem status"),
         ):
             AuditService.log(
                 user=user, action=AuditLog.Action.UPDATE, activity=task.activity, task=task,
                 field_name=field_name, old_value=old_value, new_value=new_value,
-                reason="Setor alterado; etapa e condição foram redefinidas para o fluxo do novo setor.",
+                reason="Setor alterado; etapa e status foram redefinidas para o fluxo do novo setor.",
             )
-        task._sector_configuration_message = "Setor alterado. Etapa e condição foram redefinidas conforme o novo setor."
+        task._sector_configuration_message = "Setor alterado. Etapa e status foram redefinidas conforme o novo setor."
         recipients = resolve_sector_and_admins(new_sector)
         NotificationService.notify(
             users=recipients,

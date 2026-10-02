@@ -265,7 +265,7 @@
         return true;
     }
 
-    // Quando a gaveta fecha, o cartão pode ter mudado (condição, etapa, conclusão): relê só ele.
+    // Quando a gaveta fecha, o cartão pode ter mudado (status, etapa, conclusão): relê só ele.
     new MutationObserver(function () {
         if (!drawerItemId) return;
         if (document.querySelector(".drawer-backdrop")) { drawerSeen = true; return; }

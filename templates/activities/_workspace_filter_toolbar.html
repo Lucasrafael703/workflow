@@ -43,16 +43,16 @@
 
         <details class="workspace-filter-popover" data-workspace-popover>
             <summary class="workspace-filter-button{% if fs.condicao %} is-active{% endif %}" aria-expanded="false">
-                {% include "_icon.html" with name="info" %}<span>Condição</span>
+                {% include "_icon.html" with name="info" %}<span>Status</span>
                 {% if fs.condicao %}<span class="workspace-filter-badge" aria-label="filtro ativo">1</span>{% endif %}
                 <span class="workspace-filter-chevron" aria-hidden="true">{% include "_icon.html" with name="chevron-down" %}</span>
             </summary>
             <div class="workspace-filter-popover__panel">
-                <p class="workspace-filter-popover__title">Condição da {{ fs.noun }}</p>
-                <label><input type="radio" name="condicao" value=""{% if not fs.condicao %} checked{% endif %}> Todas as condições</label>
+                <p class="workspace-filter-popover__title">Status da {{ fs.noun }}</p>
+                <label><input type="radio" name="condicao" value=""{% if not fs.condicao %} checked{% endif %}> Todos os status</label>
                 {% for sector_name, conditions in fs.condition_groups %}
                     {% for condition in conditions %}<label><input type="radio" name="condicao" value="{{ condition.pk }}"{% if fs.condicao == condition.pk|stringformat:"s" %} checked{% endif %}> <span class="workspace-filter-dot" style="--option-color: {{ condition.color }};"></span>{{ condition.name }}{% if fs.is_board and sector_name %} <small>{{ sector_name }}</small>{% endif %}</label>{% endfor %}
-                {% empty %}<p class="muted small">Nenhuma condição cadastrada.</p>{% endfor %}
+                {% empty %}<p class="muted small">Nenhum status cadastrada.</p>{% endfor %}
                 <button type="submit" class="btn btn--sm workspace-filter-popover__apply">Aplicar</button>
             </div>
         </details>
@@ -73,7 +73,7 @@
                 <label class="workspace-filter-field"><span>Cliente</span><select name="cliente"><option value="">Todos</option>{% for client in fs.clients %}<option value="{{ client.pk }}"{% if fs.cliente == client.pk|stringformat:"s" %} selected{% endif %}>{{ client.name }}</option>{% endfor %}</select></label>
                 <label class="workspace-filter-field"><span>Obra</span><select name="obra"><option value="">Todas</option>{% for site in fs.sites %}<option value="{{ site.pk }}"{% if fs.obra == site.pk|stringformat:"s" %} selected{% endif %}>{{ site.name }}</option>{% endfor %}</select></label>
                 <label class="workspace-filter-field"><span>Prazo</span><select name="prazo"><option value="">Qualquer prazo</option><option value="atrasadas"{% if fs.prazo == "atrasadas" %} selected{% endif %}>Atrasadas</option><option value="hoje"{% if fs.prazo == "hoje" %} selected{% endif %}>Vencem hoje</option><option value="7_dias"{% if fs.prazo == "7_dias" %} selected{% endif %}>Próximos 7 dias</option><option value="30_dias"{% if fs.prazo == "30_dias" %} selected{% endif %}>Próximos 30 dias</option><option value="sem_prazo"{% if fs.prazo == "sem_prazo" %} selected{% endif %}>Sem prazo</option></select></label>
-                <label class="workspace-filter-field"><span>Situação rápida</span><select name="filtro"><option value="">Qualquer situação</option><option value="atrasadas"{% if fs.filtro == "atrasadas" %} selected{% endif %}>Atrasadas</option><option value="hoje"{% if fs.filtro == "hoje" %} selected{% endif %}>Vencem hoje</option><option value="bloqueadas"{% if fs.filtro == "bloqueadas" %} selected{% endif %}>Bloqueadas</option>{% if fs.domain == "tarefa" %}<option value="em-fila"{% if fs.filtro == "em-fila" %} selected{% endif %}>Em fila</option><option value="em-execucao"{% if fs.filtro == "em-execucao" %} selected{% endif %}>Em execução</option><option value="devolvidas"{% if fs.filtro == "devolvidas" %} selected{% endif %}>Devolvidas</option>{% endif %}</select></label>
+                <label class="workspace-filter-field"><span>Etapa rápida</span><select name="filtro"><option value="">Qualquer etapa</option><option value="atrasadas"{% if fs.filtro == "atrasadas" %} selected{% endif %}>Atrasadas</option><option value="hoje"{% if fs.filtro == "hoje" %} selected{% endif %}>Vencem hoje</option><option value="bloqueadas"{% if fs.filtro == "bloqueadas" %} selected{% endif %}>Bloqueadas</option>{% if fs.domain == "tarefa" %}<option value="em-fila"{% if fs.filtro == "em-fila" %} selected{% endif %}>Em fila</option><option value="em-execucao"{% if fs.filtro == "em-execucao" %} selected{% endif %}>Em execução</option><option value="devolvidas"{% if fs.filtro == "devolvidas" %} selected{% endif %}>Devolvidas</option>{% endif %}</select></label>
                 <label class="workspace-filter-field"><span>Marcador</span><select name="tag"><option value="">Todos</option>{% for tag in fs.tags %}<option value="{{ tag.pk }}"{% if fs.tag == tag.pk|stringformat:"s" %} selected{% endif %}>{{ tag.name }}</option>{% endfor %}</select></label>
                 {% if fs.domain == "tarefa" %}<label class="workspace-filter-field"><span>Participante</span><select name="participante"><option value="">Qualquer pessoa</option>{% for person in fs.people %}<option value="{{ person.pk }}"{% if fs.participante == person.pk|stringformat:"s" %} selected{% endif %}>{{ person.get_full_name|default:person.get_username }}</option>{% endfor %}</select></label>{% endif %}
                 <label class="workspace-filter-check"><input type="checkbox" name="bloqueio" value="1"{% if fs.bloqueio %} checked{% endif %}> Somente bloqueadas</label>

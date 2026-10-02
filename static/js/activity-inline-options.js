@@ -10,7 +10,7 @@
      e são redesenhadas com o `derived` que o servidor devolve;
    - Estágio e Status: escolher, criar uma opção nova ("Criar e aplicar") e, para quem gere as opções do setor, editar
      nome e cor ali mesmo; a edição vale para todas as linhas da página que mostram a mesma opção. Status ainda pode ser
-     limpo ("Sem condição"). Inativar, ordenar e definir o padrão continuam na tela de configuração (link no rodapé);
+     limpo ("Sem status"). Inativar, ordenar e definir o padrão continuam na tela de configuração (link no rodapé);
    - a segunda linha "Vencida há N dias" do Status é derivada do prazo e acompanha o Prazo editado na própria tela.
    Todo texto de usuário entra por textContent; cores só entram se forem #RRGGBB. As opções vêm sempre do servidor, no
    contexto da demanda (o cliente nunca informa o setor das etapas). */
@@ -27,7 +27,7 @@
         "#EC4899", "#9333EA", "#4F46E5", "#3B82F6", "#38BDF8", "#64748B"
     ].map(function (hex) { return {hex: hex, name: hex}; });
 
-    // Textos de cada campo. "Status" é a coluna da tela; no servidor é a condição manual do setor.
+    // Textos de cada campo. "Status" é a coluna da tela; no servidor é o status manual do setor.
     var KINDS = {
         sector: {
             title: "Escolher o setor", create: "+ Novo setor", nameLabel: "Nome do setor", namePlaceholder: "Nome do setor",
@@ -44,7 +44,7 @@
             title: "Escolher o status", create: "+ Novo status", nameLabel: "Nome do status", namePlaceholder: "Nome do status",
             preview: "Novo status", search: "Pesquisar status...", loading: "Carregando status...",
             empty: "Este setor ainda não tem status.", noMatch: "Nenhum status encontrado.", defaultColor: DEFAULT_BG,
-            edit: "Editar status", editTitle: "Editar status", placeholder: "Sem condição", clear: "Sem condição"
+            edit: "Editar status", editTitle: "Editar status", placeholder: "Sem status", clear: "Sem status"
         }
     };
 
@@ -396,7 +396,7 @@
             });
         }
 
-        /** Cria a etapa/condição no setor da demanda e, em seguida, a aplica à demanda pelo caminho normal de gravação. */
+        /** Cria a etapa/status no setor da demanda e, em seguida, a aplica à demanda pelo caminho normal de gravação. */
         function createOption(cell, field, name, hex, box, pop, onFailure) {
             var form = new win.FormData();
             form.append("campo", field);

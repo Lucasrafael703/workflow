@@ -36,7 +36,7 @@
                         <a href="?{% if filter_querystring %}{{ filter_querystring }}&amp;{% endif %}ordem=prazo">Prazo {% include "_icon.html" with name="chevron-down" %}</a>
                     </th>
                     <th>Etapa</th>
-                    <th>Condição</th>
+                    <th>Status</th>
                     <th aria-label="Acoes"></th>
                 </tr>
             </thead>
@@ -88,10 +88,10 @@
                         </div></details>
                         {% else %}{% include "_sheet_status.html" with color=activity.stage_color text_color=activity.stage.text_color label=activity.stage_name %}{% endif %}
                     </td>
-                    <td data-label="Condição" class="lps-sheet-status-cell">
+                    <td data-label="Status" class="lps-sheet-status-cell">
                         {% if activity.can_set_condition and activity.sector %}
                         <details class="workspace-value-menu"><summary>{% include "_sheet_status.html" with color=activity.condition_color text_color=activity.condition.text_color label=activity.condition_name %}</summary><div class="workspace-value-menu__options">
-                            <form method="post" action="{% url 'activity-set-condition' activity.pk %}" data-workspace-choice>{% csrf_token %}<input type="hidden" name="condition_id" value=""><button type="submit">Sem condição</button></form>
+                            <form method="post" action="{% url 'activity-set-condition' activity.pk %}" data-workspace-choice>{% csrf_token %}<input type="hidden" name="condition_id" value=""><button type="submit">Sem status</button></form>
                             {% for option in activity.condition_options %}<form method="post" action="{% url 'activity-set-condition' activity.pk %}" data-workspace-choice>{% csrf_token %}<input type="hidden" name="condition_id" value="{{ option.pk }}"><button type="submit">{{ option.name }}</button></form>{% endfor %}
                         </div></details>
                         {% else %}{% include "_sheet_status.html" with color=activity.condition_color text_color=activity.condition.text_color label=activity.condition_name %}{% endif %}

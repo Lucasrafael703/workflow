@@ -430,7 +430,7 @@ class StageService:
 
 
 class WorkflowStatusService(SectorScopedVisualService):
-    """Nome técnico legado; a interface utiliza o termo Condição."""
+    """Nome técnico legado; a interface utiliza o termo Status."""
 
     model = WorkflowStatus
 
@@ -445,9 +445,9 @@ class WorkflowStatusService(SectorScopedVisualService):
         description="", color="#94A3B8", is_default=False,
     ):
         if domain not in (WorkflowStatus.Domain.ACTIVITY, WorkflowStatus.Domain.TASK):
-            raise CadastroError("Domínio de condição desconhecido.")
+            raise CadastroError("Domínio de status desconhecido.")
         if sector is None or sector.organization_id != organization.id:
-            raise CadastroError("Escolha o setor desta condição.")
+            raise CadastroError("Escolha o setor deste status.")
         name = (name or "").strip()
         if not name:
             raise CadastroError("Informe o nome.")
@@ -456,7 +456,7 @@ class WorkflowStatusService(SectorScopedVisualService):
         if cls.model.objects.filter(
             organization=organization, sector=sector, domain=domain, name__iexact=name
         ).exists():
-            raise CadastroError("Já existe uma condição com este nome neste setor.")
+            raise CadastroError("Já existe um status com este nome neste setor.")
         if is_default:
             cls.model.objects.filter(organization=organization, sector=sector, domain=domain, is_default=True).update(is_default=False)
         last_order = cls.model.objects.filter(organization=organization, sector=sector, domain=domain).aggregate(models.Max("order"))["order__max"] or 0
@@ -478,7 +478,7 @@ class WorkflowStatusService(SectorScopedVisualService):
                 domain=instance.domain, name__iexact=name,
             ).exclude(pk=instance.pk)
             if duplicate.exists():
-                raise CadastroError("Já existe uma condição com este nome neste setor.")
+                raise CadastroError("Já existe um status com este nome neste setor.")
             instance.name = name
             fields.append("name")
         if description is not None:
@@ -535,9 +535,9 @@ class ConditionService:
             or condition.sector_id != getattr(sector, "id", None)
             or condition.domain != domain
         ):
-            raise CadastroError("A condição escolhida não pertence ao setor atual.")
+            raise CadastroError("O status escolhido não pertence ao setor atual.")
         if not condition.is_active and not allow_inactive_current:
-            raise CadastroError("A condição escolhida está inativa.")
+            raise CadastroError("O status escolhido está inativa.")
         return condition
 
     @staticmethod

@@ -1,7 +1,7 @@
-/* Seletor de Etapa e de Condição de uma Demanda/Tarefa (cartão do quadro, menu "Mover para etapa" e gaveta).
+/* Seletor de Etapa e de Status de uma Demanda/Tarefa (cartão do quadro, menu "Mover para etapa" e gaveta).
    Um botão com `data-workflow-picker` abre uma lista ancorada nele com as opções DO SETOR do item
    (GET em `data-options-url`); escolher uma opção grava só ela (POST em `data-set-url`). Quem gere o catálogo
-   também vê "+ Nova etapa/condição" (cria sem sair da tela) e "Gerenciar". O servidor decide tudo de novo:
+   também vê "+ Nova etapa/status" (cria sem sair da tela) e "Gerenciar". O servidor decide tudo de novo:
    aqui só se mostra o que ele devolve.
 
    Depois de gravar, dispara `lps:workflow-changed` no document com {domain, itemId, kind, response}; o quadro
@@ -95,7 +95,7 @@
     }
 
     function noun(button) {
-        return button.dataset.kind === "stage" ? "etapa" : "condição";
+        return button.dataset.kind === "stage" ? "etapa" : "status";
     }
 
     function renderOptions(state, items) {
