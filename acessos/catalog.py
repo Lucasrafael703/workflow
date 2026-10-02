@@ -23,6 +23,8 @@ ATIVIDADE_REABRIR = "demanda.reabrir"
 ATIVIDADE_MARCAR_PENDENTE = "demanda.marcar_pendente"
 ATIVIDADE_APROVAR_PENDENCIA = "demanda.aprovar_pendencia"
 ATIVIDADE_MOVER_ESTAGIO = "demanda.mover_estagio"
+ATIVIDADE_DEFINIR_ETAPA = "demanda.definir_etapa"
+ATIVIDADE_DEFINIR_CONDICAO = "demanda.definir_condicao"
 
 # Tarefas
 TAREFA_VISUALIZAR = "tarefa.visualizar"
@@ -43,6 +45,8 @@ TAREFA_REABRIR = "tarefa.reabrir"
 TAREFA_BLOQUEAR = "tarefa.bloquear"
 TAREFA_MOVER_SETOR = "tarefa.mover_setor"
 TAREFA_MOVER_ESTAGIO = "tarefa.mover_estagio"
+TAREFA_DEFINIR_ETAPA = "tarefa.definir_etapa"
+TAREFA_DEFINIR_CONDICAO = "tarefa.definir_condicao"
 TEMPO_LANCAR_MANUAL = "tempo.lancar_manual"
 
 # Filas
@@ -70,6 +74,8 @@ CENTRO_CUSTO_GERIR = "centro_custo.gerir"
 CLIENTE_GERIR = "cliente.gerir"
 MOTIVO_DEVOLUCAO_GERIR = "motivo_devolucao.gerir"
 ESTAGIO_TAREFA_GERIR = "estagio_tarefa.gerir"
+ETAPA_GERIR = "etapa.gerir"
+CONDICAO_GERIR = "condicao.gerir"
 TAG_GERIR = "tag.gerir"
 COR_STATUS_GERIR = "cor_status.gerir"
 COR_PRIORIDADE_GERIR = "cor_prioridade.gerir"
@@ -119,6 +125,8 @@ GROUPS = [
             (ATIVIDADE_MARCAR_PENDENTE, "Marcar demanda como pendente", "Permite pausar a demanda registrando o motivo da pendência, com comentário obrigatório.", False),
             (ATIVIDADE_APROVAR_PENDENCIA, "Aprovar pendência da demanda", "Permite decidir uma pendência que aguarda aprovação do gestor, devolvendo a demanda para quem a designou.", True),
             (ATIVIDADE_MOVER_ESTAGIO, "Mover estágio da demanda", "Permite alterar o estágio visual de uma demanda no Kanban.", False),
+            (ATIVIDADE_DEFINIR_ETAPA, "Definir etapa da demanda", "Permite selecionar a etapa visual da demanda dentro do seu setor.", False),
+            (ATIVIDADE_DEFINIR_CONDICAO, "Definir condição da demanda", "Permite selecionar a condição manual da demanda dentro do seu setor.", False),
         ],
     ),
     (
@@ -143,6 +151,8 @@ GROUPS = [
             (TAREFA_BLOQUEAR, "Bloquear e desbloquear tarefa", "Permite registrar e resolver impedimentos.", False),
             (TAREFA_MOVER_SETOR, "Enviar tarefa para outro setor", "Permite movimentar a tarefa no fluxo entre setores.", False),
             (TAREFA_MOVER_ESTAGIO, "Mover estágio da tarefa", "Permite alterar o estágio visual de uma tarefa no Kanban.", False),
+            (TAREFA_DEFINIR_ETAPA, "Definir etapa da tarefa", "Permite selecionar a etapa visual da tarefa dentro do seu setor.", False),
+            (TAREFA_DEFINIR_CONDICAO, "Definir condição da tarefa", "Permite selecionar a condição manual da tarefa dentro do seu setor.", False),
             (TEMPO_LANCAR_MANUAL, "Lançar tempo manualmente", "Permite apropriar tempo trabalhado fora do cronômetro.", True),
         ],
     ),
@@ -186,6 +196,8 @@ GROUPS = [
             (CLIENTE_GERIR, "Gerir clientes", "Permite criar, editar e inativar clientes da organização.", False),
             (MOTIVO_DEVOLUCAO_GERIR, "Gerir motivos de devolução", "Permite manter a lista de motivos usada nas devoluções.", False),
             (ESTAGIO_TAREFA_GERIR, "Gerir estágios de tarefa", "Permite criar, editar, reordenar e inativar os estágios (colunas do Kanban) de tarefa da organização.", False),
+            (ETAPA_GERIR, "Gerir etapas", "Permite criar, editar, reordenar e inativar etapas de demandas e tarefas por setor.", False),
+            (CONDICAO_GERIR, "Gerir condições", "Permite criar, editar, reordenar e inativar condições manuais por setor.", False),
             (TAG_GERIR, "Gerir marcadores", "Permite criar, editar e inativar os marcadores (tags) usados em demandas e tarefas da organização.", False),
             (COR_STATUS_GERIR, "Gerir cores de status", "Permite customizar a cor visual dos status de demanda e de tarefa da organização.", False),
             (COR_PRIORIDADE_GERIR, "Gerir cores de prioridade", "Permite customizar a cor visual das prioridades (urgência) das demandas da organização.", False),
@@ -263,6 +275,8 @@ SUGGESTED_PROFILES = {
         ATIVIDADE_ASSUMIR,
         ATIVIDADE_MARCAR_PENDENTE,
         ATIVIDADE_MOVER_ESTAGIO,
+        ATIVIDADE_DEFINIR_ETAPA,
+        ATIVIDADE_DEFINIR_CONDICAO,
         ENTRADA_REGISTRAR,
     ],
     "Gestor de Setor": [
@@ -288,6 +302,8 @@ SUGGESTED_PROFILES = {
         TAREFA_BLOQUEAR,
         TAREFA_MOVER_SETOR,
         TAREFA_MOVER_ESTAGIO,
+        TAREFA_DEFINIR_ETAPA,
+        TAREFA_DEFINIR_CONDICAO,
         TAREFA_REABRIR,
         TEMPO_LANCAR_MANUAL,
         FILA_VISUALIZAR_POSICAO_PROPRIA,
@@ -310,6 +326,8 @@ SUGGESTED_PROFILES = {
         PROCESSO_APLICAR,
         CLIENTE_GERIR,
         ESTAGIO_TAREFA_GERIR,
+        ETAPA_GERIR,
+        CONDICAO_GERIR,
         TAG_GERIR,
         COR_STATUS_GERIR,
         COR_PRIORIDADE_GERIR,

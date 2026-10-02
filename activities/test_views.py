@@ -553,8 +553,12 @@ class ActivityKanbanAndCalendarViewTests(ViewTestCase):
         from core.models import ActivityStage
 
         self.stage = ActivityStage.objects.create(
-            organization=self.org, name="Em análise", order=1, color="#3B82F6", created_by=self.requester
+            organization=self.org, sector=self.sector, name="Em análise", order=1, color="#3B82F6", created_by=self.requester
         )
+        # Etapas são setoriais. A demanda de base deste cenário foi criada
+        # antes da configuração visual e precisa pertencer ao setor do quadro.
+        self.activity.sector = self.sector
+        self.activity.save(update_fields=["sector"])
 
     def test_kanban_shows_stage_columns_and_unassigned_activities(self):
         self.client.force_login(self.requester)
@@ -562,7 +566,7 @@ class ActivityKanbanAndCalendarViewTests(ViewTestCase):
         self.assertEqual(response.status_code, 200)
         stages = [column["stage"] for column in response.context["columns"]]
         self.assertIn(self.stage, stages)
-        unassigned_ids = [a.pk for a in response.context["unassigned_column"]["activities"]]
+        unassigned_ids = [a.pk for a in response.context["unassigned"]["items"]]
         self.assertIn(self.activity.pk, unassigned_ids)
 
     def test_calendar_returns_ok_with_week_grid(self):
@@ -603,7 +607,7 @@ class ActivityKanbanAndCalendarViewTests(ViewTestCase):
         from core.models import ActivityStage
 
         other_stage = ActivityStage.objects.create(
-            organization=self.other_org, name="Externo", order=1, created_by=self.outsider
+            organization=self.other_org, sector=Sector.objects.create(organization=self.other_org, name="Externo"), name="Externo", order=1, created_by=self.outsider
         )
         self.client.force_login(self.requester)
         response = self.client.post(
@@ -634,12 +638,12 @@ class TaskFilterViewTests(ViewTestCase):
             {"visao": "demanda", "q": "cotação", "filtro": "em-fila", "sector": self.sector.pk},
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'class="activities-filters task-filters"')
+        self.assertContains(response, 'class="activities-filters task-filters workspace-filters"')
         self.assertContains(response, "Buscar tarefa")
         self.assertNotContains(response, "Buscar demanda")
         self.assertContains(response, "activities-search__submit")
         self.assertContains(response, 'name="filtro"')
-        self.assertContains(response, 'name="sector"')
+        self.assertContains(response, 'name="setor"')
 
     def test_old_visao_and_sort_values_still_work(self):
         """Endereços de antes da troca de "atividade" por "demanda" (favoritos, links) continuam valendo."""

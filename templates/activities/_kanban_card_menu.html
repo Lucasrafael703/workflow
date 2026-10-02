@@ -1,0 +1,27 @@
+{% comment %}Menu "•••" do cartão. Só aparece o que a pessoa pode e o estado permite; o servidor decide de novo ao executar.
+Espera: item, kanban_domain, can_manage_stages.{% endcomment %}
+<details class="kanban-menu" data-kanban-menu>
+    <summary class="icon-button" aria-label="Ações de {{ item.title }}" title="Ações">{% include "_icon.html" with name="more" %}</summary>
+    <div class="kanban-menu__panel" role="menu">
+        {% if kanban_domain == "demandas" %}
+        <button type="button" role="menuitem" data-open-drawer data-drawer-url="{% url 'activity-kanban-drawer' item.pk %}">Abrir</button>
+        <a role="menuitem" href="{% url 'activity-detail' item.pk %}">Abrir ficha completa</a>
+        {% else %}
+        <button type="button" role="menuitem" data-open-drawer data-drawer-url="{% url 'task-drawer' item.pk %}">Abrir</button>
+        <a role="menuitem" href="{% url 'task-detail' item.pk %}">Abrir ficha completa</a>
+        {% endif %}
+        {% if item.perm.set_stage %}
+        <button type="button" role="menuitem" {% include "activities/_workflow_picker_attrs.html" with kind="stage" can_manage=can_manage_stages %}>Mover para etapa…</button>
+        {% endif %}
+        <button type="button" role="menuitem" data-copy-text="{{ item.title }}">Copiar nome</button>
+        <button type="button" role="menuitem" data-copy-text="{{ request.scheme }}://{{ request.get_host }}{% if kanban_domain == 'demandas' %}{% url 'activity-detail' item.pk %}{% else %}{% url 'task-detail' item.pk %}{% endif %}">Copiar link</button>
+        {% if kanban_domain == "tarefas" %}
+            {% if item.can_complete %}<button type="button" role="menuitem" data-kanban-post data-url="{% url 'task-complete-ajax' item.pk %}">Concluir tarefa</button>{% endif %}
+            {% if item.can_move_sector %}<a role="menuitem" href="{% url 'task-move' item.pk %}" data-activity-action>Mover para outro setor</a>{% endif %}
+            {% if item.can_block %}<a role="menuitem" href="{% url 'task-block' item.pk %}" data-activity-action>Bloquear</a>{% elif item.can_unblock %}<a role="menuitem" href="{% url 'task-unblock' item.pk %}">Resolver bloqueio</a>{% endif %}
+            {% if item.can_cancel %}<a role="menuitem" class="is-danger" href="{% url 'task-cancel' item.pk %}" data-activity-action>Cancelar tarefa</a>{% endif %}
+        {% elif item.can_cancel %}
+            <a role="menuitem" class="is-danger" href="{% url 'activity-cancel' item.pk %}" data-activity-action>Cancelar demanda</a>
+        {% endif %}
+    </div>
+</details>

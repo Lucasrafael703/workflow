@@ -1,0 +1,30 @@
+{% load lps %}{% comment %}Cartão compacto de Tarefa. Ações operacionais ficam no menu e na gaveta, nunca soltas no cartão.
+Espera: item, kanban_domain, can_manage_stages, can_manage_conditions.{% endcomment %}
+<article class="kanban-card{% if item.is_stale %} kanban-card--stale{% endif %}" id="kanban-card-{{ item.pk }}" data-kanban-card
+         data-item-id="{{ item.pk }}" data-stage-id="{{ item.stage_id|default:'' }}" data-can-move="{% if item.perm.set_stage %}1{% endif %}"
+         draggable="{% if item.perm.set_stage %}true{% else %}false{% endif %}">
+    <div class="kanban-card__topline">
+        <a class="kanban-card__title" href="{% url 'task-detail' item.pk %}" data-open-drawer data-drawer-url="{% url 'task-drawer' item.pk %}">{{ item.title }}</a>
+        {% include "activities/_kanban_card_menu.html" %}
+    </div>
+    <div class="kanban-card__meta">
+        <div class="kanban-card__meta-row">{% include "_icon.html" with name="activity" %}<span class="truncate">Demanda: {{ item.activity.title }}</span></div>
+        <div class="kanban-card__meta-row">
+            {% if item.person %}
+            <span class="avatar avatar--{{ item.person|avatar_color }}">{{ item.person.get_full_name|default:item.person.get_username|slice:":2"|upper }}</span>
+            <span class="truncate">{{ item.person.get_full_name|default:item.person.get_username }}</span>
+            {% else %}
+            {% include "_icon.html" with name="user" %}<span class="truncate muted">Sem responsável</span>
+            {% endif %}
+        </div>
+        <div class="kanban-card__meta-row{% if item.is_overdue %} is-overdue{% endif %}">
+            {% include "_icon.html" with name="calendar" %}
+            <span>{% if item.deadline %}{{ item.deadline|date:"d/m/Y" }}{% if item.is_overdue %} · atrasada{% endif %}{% else %}Sem prazo{% endif %}</span>
+        </div>
+    </div>
+    <div class="kanban-card__foot">
+        {% include "activities/_kanban_condition_chip.html" %}
+        {% if item.is_blocked %}<span class="kanban-card__flag" title="Esta tarefa está bloqueada">{% include "_icon.html" with name="lock" %} Bloqueada</span>{% endif %}
+        {% if item.days_in_stage >= 1 %}<span class="kanban-card__age" title="Nesta etapa há {{ item.days_in_stage }} dia{{ item.days_in_stage|pluralize }}">{{ item.days_in_stage }}d</span>{% endif %}
+    </div>
+</article>

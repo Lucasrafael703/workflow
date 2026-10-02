@@ -59,8 +59,30 @@ def _is_ajax(request):
     return request.headers.get("X-Requested-With") == "XMLHttpRequest"
 
 
+def _workflow_sector_from_request(request, organization):
+    """Resolve um setor válido para a ação de configuração setorial."""
+    sector_id = request.POST.get("sector") or request.GET.get("sector")
+    if not sector_id:
+        return None
+    return Sector.objects.filter(
+        pk=sector_id, organization=organization, is_active=True
+    ).first()
+
+
 class CadastroHomeView(OrganizationRequiredMixin, TemplateView):
     template_name = "core/cadastros.html"
+
+    def get(self, request, *args, **kwargs):
+        """Keep old bookmarks working without keeping the legacy editor alive."""
+        legacy_flow_tabs = {
+            "estagios-de-demanda": "demandas",
+            "estagios-de-tarefa": "tarefas",
+            "status-configuravel": "demandas",
+        }
+        domain = legacy_flow_tabs.get(request.GET.get("tab"))
+        if domain:
+            return redirect(f"{reverse('config-etapas-status')}?domain={domain}")
+        return super().get(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         from activities.models import ReturnReason
@@ -81,7 +103,6 @@ class CadastroHomeView(OrganizationRequiredMixin, TemplateView):
         cost_centers = CostCenter.objects.filter(organization=org).select_related("site")
         clients = Client.objects.filter(organization=org)
         reasons = ReturnReason.objects.filter(organization=org)
-        task_stages = TaskStage.objects.filter(organization=org).order_by("order")
         tags = Tag.objects.filter(organization=org)
 
         if search:
@@ -91,7 +112,6 @@ class CadastroHomeView(OrganizationRequiredMixin, TemplateView):
             cost_centers = cost_centers.filter(name__icontains=search)
             clients = clients.filter(name__icontains=search)
             reasons = reasons.filter(name__icontains=search)
-            task_stages = task_stages.filter(name__icontains=search)
             tags = tags.filter(name__icontains=search)
 
         context.update(
@@ -104,11 +124,42 @@ class CadastroHomeView(OrganizationRequiredMixin, TemplateView):
                 "cost_centers": cost_centers,
                 "clients": clients,
                 "return_reasons": reasons,
-                "task_stages": task_stages,
                 "tags": tags,
             }
         )
         return context
+
+
+class SectorWorkflowOptionsView(OrganizationRequiredMixin, View):
+    """Opções do editor dependentes de setor, sem expor configuração global."""
+
+    kind = "stage"
+
+    def get(self, request, sector_pk):
+        sector = get_object_or_404(Sector, pk=sector_pk, organization=self.organization, is_active=True)
+        domain = request.GET.get("dominio")
+        if domain not in {"demanda", "tarefa"}:
+            return JsonResponse({"detail": "Informe dominio=demanda ou dominio=tarefa."}, status=400)
+        if self.kind == "stage":
+            model = ActivityStage if domain == "demanda" else TaskStage
+            rows = model.objects.filter(organization=self.organization, sector=sector, is_active=True).order_by("order", "name")
+        else:
+            workflow_domain = WorkflowStatus.Domain.ACTIVITY if domain == "demanda" else WorkflowStatus.Domain.TASK
+            rows = WorkflowStatus.objects.filter(
+                organization=self.organization, sector=sector, domain=workflow_domain, is_active=True
+            ).order_by("order", "name")
+        return JsonResponse({
+            "sector": sector.pk,
+            "items": [{"id": row.pk, "name": row.name, "color": row.color, "is_default": row.is_default} for row in rows],
+        })
+
+
+class SectorStageOptionsView(SectorWorkflowOptionsView):
+    kind = "stage"
+
+
+class SectorConditionOptionsView(SectorWorkflowOptionsView):
+    kind = "condition"
 
 
 class PersonSearchView(OrganizationRequiredMixin, View):
@@ -284,7 +335,7 @@ class CadastroFormView(OrganizationRequiredMixin, ActionRequiredMixin, FormView)
         instance = self.get_instance()
         if instance is not None and not self.request.POST:
             kwargs["initial"] = self.initial_from(instance)
-        if self.form_class in (SiteForm, CostCenterForm):
+        if self.form_class in (SiteForm, CostCenterForm, ActivityStageForm, TaskStageForm, WorkflowStatusForm):
             kwargs["organization"] = self.organization
         return kwargs
 
@@ -462,53 +513,83 @@ class ActivityStageFormView(CadastroFormView):
     form_class = ActivityStageForm
     model = ActivityStage
     tab = "estagios-demanda"
-    title = "Estagio de demanda"
-    required_action = catalog.ESTAGIO_TAREFA_GERIR
+    title = "Etapa de demanda"
+    required_action = catalog.ETAPA_GERIR
+
+    def get_scope_object(self):
+        instance = self.get_instance()
+        return instance or _workflow_sector_from_request(self.request, self.organization)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        if self.get_instance() is None and not self.request.POST:
+            sector = _workflow_sector_from_request(self.request, self.organization)
+            if sector is not None:
+                kwargs["initial"] = {**kwargs.get("initial", {}), "sector": sector.pk}
+        return kwargs
 
     def initial_from(self, instance):
-        return {"name": instance.name, "color": instance.color}
+        return {"sector": instance.sector_id, "name": instance.name, "color": instance.color, "is_default": instance.is_default}
 
     def success_url_for_tab(self):
-        return f"{reverse('config-etapas-status')}?tab=estagios-demanda"
+        return f"{reverse('config-etapas-status')}?domain=demandas&sector={self.request.GET.get('sector', '')}"
 
     def create(self, data):
         return ActivityStageService.create(
-            self.organization, data["name"], created_by=self.request.user, color=data.get("color", "#94A3B8")
+            self.organization, data["sector"], data["name"], created_by=self.request.user,
+            color=data.get("color", "#94A3B8"), is_default=data.get("is_default", False)
         )
 
     def update(self, instance, data):
-        return ActivityStageService.update(instance, name=data["name"], color=data.get("color", "#94A3B8"))
+        return ActivityStageService.update(instance, name=data["name"], color=data.get("color", "#94A3B8"), is_default=data.get("is_default", False))
 
 
 class TaskStageFormView(CadastroFormView):
     form_class = TaskStageForm
     model = TaskStage
     tab = "estagios-de-tarefa"
-    title = "Estágio de tarefa"
-    required_action = catalog.ESTAGIO_TAREFA_GERIR
+    title = "Etapa de tarefa"
+    required_action = catalog.ETAPA_GERIR
+
+    def get_scope_object(self):
+        instance = self.get_instance()
+        return instance or _workflow_sector_from_request(self.request, self.organization)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        if self.get_instance() is None and not self.request.POST:
+            sector = _workflow_sector_from_request(self.request, self.organization)
+            if sector is not None:
+                kwargs["initial"] = {**kwargs.get("initial", {}), "sector": sector.pk}
+        return kwargs
 
     def initial_from(self, instance):
-        return {"name": instance.name, "color": instance.color}
+        return {"sector": instance.sector_id, "name": instance.name, "color": instance.color, "is_default": instance.is_default}
 
     def success_url_for_tab(self):
         referer = self.request.META.get("HTTP_REFERER", "")
         if "etapas-e-status" in referer:
-            return f"{reverse('config-etapas-status')}?tab=estagios-tarefa"
+            return f"{reverse('config-etapas-status')}?domain=tarefas&sector={self.request.GET.get('sector', '')}"
         return f"{reverse('cadastros')}?tab={self.tab}"
 
     def create(self, data):
         return TaskStageService.create(
-            self.organization, data["name"], created_by=self.request.user, color=data.get("color", "#94A3B8")
+            self.organization, data["sector"], data["name"], created_by=self.request.user,
+            color=data.get("color", "#94A3B8"), is_default=data.get("is_default", False)
         )
 
     def update(self, instance, data):
-        return TaskStageService.update(instance, name=data["name"], color=data.get("color", "#94A3B8"))
+        return TaskStageService.update(instance, name=data["name"], color=data.get("color", "#94A3B8"), is_default=data.get("is_default", False))
 
 
 class WorkflowStatusFormView(OrganizationRequiredMixin, ActionRequiredMixin, FormView):
     template_name = "core/cadastro_form.html"
     form_class = WorkflowStatusForm
-    required_action = catalog.COR_STATUS_GERIR
+    required_action = catalog.CONDICAO_GERIR
+
+    def get_scope_object(self):
+        instance = self.get_instance()
+        return instance or _workflow_sector_from_request(self.request, self.organization)
 
     def dispatch(self, request, *args, **kwargs):
         if kwargs.get("domain") not in ("activity", "task"):
@@ -529,23 +610,30 @@ class WorkflowStatusFormView(OrganizationRequiredMixin, ActionRequiredMixin, For
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["domain"] = self.kwargs["domain"]
+        kwargs["organization"] = self.organization
         instance = self.get_instance()
         if instance is not None and not self.request.POST:
             kwargs["initial"] = {
                 "name": instance.name,
                 "description": instance.description,
-                "behavior": instance.behavior,
                 "color": instance.color,
+                "sector": instance.sector_id,
+                "is_default": instance.is_default,
             }
+        elif not self.request.POST:
+            sector = _workflow_sector_from_request(self.request, self.organization)
+            if sector is not None:
+                kwargs["initial"] = {"sector": sector.pk}
         return kwargs
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         domain = self.kwargs["domain"]
-        context["title"] = "Status de demanda" if domain == "activity" else "Status de tarefa"
+        context["title"] = "Condição de demanda" if domain == "activity" else "Condição de tarefa"
         context["instance"] = self.get_instance()
-        context["tab"] = "status-demanda" if domain == "activity" else "status-tarefa"
-        context["return_url"] = f"{reverse('config-etapas-status')}?tab={context['tab']}"
+        context["tab"] = "condicoes-demanda" if domain == "activity" else "condicoes-tarefa"
+        view_domain = "demandas" if domain == "activity" else "tarefas"
+        context["return_url"] = f"{reverse('config-etapas-status')}?domain={view_domain}&sector={self.request.GET.get('sector', '')}"
         return context
 
     def form_valid(self, form):
@@ -557,10 +645,11 @@ class WorkflowStatusFormView(OrganizationRequiredMixin, ActionRequiredMixin, For
                     self.organization,
                     form.cleaned_data["name"],
                     domain=domain,
-                    behavior=form.cleaned_data["behavior"],
+                    sector=form.cleaned_data["sector"],
                     created_by=self.request.user,
                     description=form.cleaned_data.get("description", ""),
                     color=form.cleaned_data["color"],
+                    is_default=form.cleaned_data.get("is_default", False),
                 )
                 messages.success(self.request, "Status criado.")
             else:
@@ -568,8 +657,8 @@ class WorkflowStatusFormView(OrganizationRequiredMixin, ActionRequiredMixin, For
                     instance,
                     name=form.cleaned_data["name"],
                     description=form.cleaned_data.get("description", ""),
-                    behavior=form.cleaned_data["behavior"],
                     color=form.cleaned_data["color"],
+                    is_default=form.cleaned_data.get("is_default", False),
                 )
                 messages.success(self.request, "Status atualizado.")
         except CadastroError as exc:
@@ -577,8 +666,10 @@ class WorkflowStatusFormView(OrganizationRequiredMixin, ActionRequiredMixin, For
             return self.form_invalid(form)
         if _is_ajax(self.request):
             return JsonResponse({"id": instance.pk, "name": instance.name})
-        tab = "status-demanda" if domain == "activity" else "status-tarefa"
-        return redirect(f"{reverse('config-etapas-status')}?tab={tab}")
+        view_domain = "demandas" if domain == "activity" else "tarefas"
+        return redirect(
+            f"{reverse('config-etapas-status')}?domain={view_domain}&sector={instance.sector_id}"
+        )
 
     def form_invalid(self, form):
         if _is_ajax(self.request):
@@ -650,11 +741,19 @@ class TaskStageReorderView(OrganizationRequiredMixin, ActionRequiredMixin, View)
     """Recebe a ordem final das colunas do Kanban (drag-and-drop na tela de
     cadastro) e renumera — nunca expõe `order` como campo editável à mão."""
 
-    required_action = catalog.ESTAGIO_TAREFA_GERIR
+    required_action = catalog.ETAPA_GERIR
+
+    def get_scope_object(self):
+        ordered_ids = [int(value) for value in self.request.POST.getlist("stage_id") if value.isdigit()]
+        return TaskStage.objects.filter(
+            organization=self.organization, pk__in=ordered_ids
+        ).first()
 
     def post(self, request):
         ordered_ids = [int(value) for value in request.POST.getlist("stage_id") if value.isdigit()]
-        TaskStageService.reorder(self.organization, ordered_ids)
+        first = TaskStage.objects.filter(organization=self.organization, pk__in=ordered_ids).first()
+        if first:
+            TaskStageService.reorder(self.organization, first.sector, ordered_ids)
         if _is_ajax(request):
             return JsonResponse({"ok": True})
         messages.success(request, "Ordem dos estágios atualizada.")
@@ -686,8 +785,8 @@ class SwatchColorSaveView(OrganizationRequiredMixin, ActionRequiredMixin, View):
 
     swatch_models = {
         "tags": (Tag, TagService, catalog.TAG_GERIR),
-        "estagios-de-demanda": (ActivityStage, ActivityStageService, catalog.ESTAGIO_TAREFA_GERIR),
-        "estagios-de-tarefa": (TaskStage, TaskStageService, catalog.ESTAGIO_TAREFA_GERIR),
+        "estagios-de-demanda": (ActivityStage, ActivityStageService, catalog.ETAPA_GERIR),
+        "estagios-de-tarefa": (TaskStage, TaskStageService, catalog.ETAPA_GERIR),
     }
 
     def dispatch(self, request, *args, **kwargs):
@@ -721,9 +820,9 @@ class CadastroToggleActiveView(OrganizationRequiredMixin, View):
         "obras": (Site, catalog.OBRA_GERIR),
         "centros-de-custo": (CostCenter, catalog.CENTRO_CUSTO_GERIR),
         "clientes": (Client, catalog.CLIENTE_GERIR),
-        "estagios-de-demanda": (ActivityStage, catalog.ESTAGIO_TAREFA_GERIR),
-        "estagios-de-tarefa": (TaskStage, catalog.ESTAGIO_TAREFA_GERIR),
-        "status-configuravel": (WorkflowStatus, catalog.COR_STATUS_GERIR),
+        "estagios-de-demanda": (ActivityStage, catalog.ETAPA_GERIR),
+        "estagios-de-tarefa": (TaskStage, catalog.ETAPA_GERIR),
+        "status-configuravel": (WorkflowStatus, catalog.CONDICAO_GERIR),
         "tags": (Tag, catalog.TAG_GERIR),
     }
 
@@ -751,9 +850,9 @@ class CadastroToggleActiveView(OrganizationRequiredMixin, View):
 
 class FlowConfigDeleteView(OrganizationRequiredMixin, ActionRequiredMixin, View):
     models_by_kind = {
-        "activity-stage": (ActivityStage, catalog.ESTAGIO_TAREFA_GERIR),
-        "task-stage": (TaskStage, catalog.ESTAGIO_TAREFA_GERIR),
-        "workflow-status": (WorkflowStatus, catalog.COR_STATUS_GERIR),
+        "activity-stage": (ActivityStage, catalog.ETAPA_GERIR),
+        "task-stage": (TaskStage, catalog.ETAPA_GERIR),
+        "workflow-status": (WorkflowStatus, catalog.CONDICAO_GERIR),
     }
 
     def dispatch(self, request, *args, **kwargs):
@@ -763,18 +862,101 @@ class FlowConfigDeleteView(OrganizationRequiredMixin, ActionRequiredMixin, View)
         self.required_action = action
         return super().dispatch(request, *args, **kwargs)
 
+    def get_scope_object(self):
+        model, _action = self.models_by_kind.get(self.kwargs.get("kind"), (None, None))
+        if model is None:
+            return None
+        return model.objects.filter(
+            pk=self.kwargs.get("pk"), organization=self.organization
+        ).first()
+
     def post(self, request, kind, pk):
         model, _action = self.models_by_kind[kind]
         instance = get_object_or_404(model, pk=pk, organization=self.organization)
-        if isinstance(instance, WorkflowStatus):
-            tab = "status-demanda" if instance.domain == WorkflowStatus.Domain.ACTIVITY else "status-tarefa"
-        elif isinstance(instance, ActivityStage):
-            tab = "estagios-demanda"
+        service = WorkflowStatusService if isinstance(instance, WorkflowStatus) else (
+            ActivityStageService if isinstance(instance, ActivityStage) else TaskStageService
+        )
+        sector_id = instance.sector_id
+        domain = "demandas" if isinstance(instance, ActivityStage) or (
+            isinstance(instance, WorkflowStatus) and instance.domain == WorkflowStatus.Domain.ACTIVITY
+        ) else "tarefas"
+        deleted = service.delete_if_unused(instance)
+        messages.success(
+            request,
+            "Item excluído." if deleted else "Item já usado foi inativado para preservar o histórico.",
+        )
+        return redirect(f"{reverse('config-etapas-status')}?domain={domain}&sector={sector_id}")
+
+
+class FlowConfigToggleActiveView(OrganizationRequiredMixin, ActionRequiredMixin, View):
+    """Ativa/inativa uma opção sem apagar referências históricas."""
+
+    models_by_kind = FlowConfigDeleteView.models_by_kind
+
+    def dispatch(self, request, *args, **kwargs):
+        _model, action = self.models_by_kind.get(kwargs.get("kind"), (None, None))
+        if action is None:
+            raise Http404("Item desconhecido.")
+        self.required_action = action
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_scope_object(self):
+        model, _action = self.models_by_kind.get(self.kwargs.get("kind"), (None, None))
+        if model is None:
+            return None
+        return model.objects.filter(
+            pk=self.kwargs.get("pk"), organization=self.organization
+        ).first()
+
+    def post(self, request, kind, pk):
+        model, _action = self.models_by_kind[kind]
+        instance = get_object_or_404(model, pk=pk, organization=self.organization)
+        service = WorkflowStatusService if isinstance(instance, WorkflowStatus) else (
+            ActivityStageService if isinstance(instance, ActivityStage) else TaskStageService
+        )
+        sector_id = instance.sector_id
+        domain = "demandas" if isinstance(instance, ActivityStage) or (
+            isinstance(instance, WorkflowStatus) and instance.domain == WorkflowStatus.Domain.ACTIVITY
+        ) else "tarefas"
+        service.update(instance, is_active=not instance.is_active)
+        messages.success(request, "Item reativado." if instance.is_active else "Item inativado.")
+        return redirect(f"{reverse('config-etapas-status')}?domain={domain}&sector={sector_id}")
+
+
+class FlowConfigReorderView(OrganizationRequiredMixin, ActionRequiredMixin, View):
+    """Persiste a ordem de uma lista setorial de etapas ou condições."""
+
+    models_by_kind = FlowConfigDeleteView.models_by_kind
+
+    def dispatch(self, request, *args, **kwargs):
+        _model, action = self.models_by_kind.get(kwargs.get("kind"), (None, None))
+        if action is None:
+            raise Http404("Item desconhecido.")
+        self.required_action = action
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_scope_object(self):
+        model, _action = self.models_by_kind.get(self.kwargs.get("kind"), (None, None))
+        if model is None:
+            return None
+        item_ids = [int(value) for value in self.request.POST.getlist("item_id") if value.isdigit()]
+        return model.objects.filter(organization=self.organization, pk__in=item_ids).first()
+
+    def post(self, request, kind):
+        model, _action = self.models_by_kind[kind]
+        item_ids = [int(value) for value in request.POST.getlist("item_id") if value.isdigit()]
+        first = model.objects.filter(organization=self.organization, pk__in=item_ids).first()
+        if first is None:
+            return JsonResponse({"success": False, "message": "Nenhum item válido foi informado."}, status=400)
+        # Ignorar IDs fora do setor é defesa adicional; a autorização já foi
+        # avaliada no recurso do próprio setor antes de chegar aqui.
+        if isinstance(first, WorkflowStatus):
+            WorkflowStatusService.reorder(self.organization, first.sector, first.domain, item_ids)
+        elif isinstance(first, ActivityStage):
+            ActivityStageService.reorder(self.organization, first.sector, item_ids)
         else:
-            tab = "estagios-tarefa"
-        instance.delete()
-        messages.success(request, "Item excluido.")
-        return redirect(f"{reverse('config-etapas-status')}?tab={tab}")
+            TaskStageService.reorder(self.organization, first.sector, item_ids)
+        return JsonResponse({"success": True, "message": "Ordem atualizada."})
 
 
 class EtapasEStatusView(OrganizationRequiredMixin, ActionRequiredMixin, TemplateView):
@@ -784,19 +966,95 @@ class EtapasEStatusView(OrganizationRequiredMixin, ActionRequiredMixin, Template
     template_name = "core/etapas_e_status.html"
 
     def dispatch(self, request, *args, **kwargs):
-        tab = request.GET.get("tab", "estagios-demanda")
-        self.required_action = catalog.ESTAGIO_TAREFA_GERIR if tab.startswith("estagios") or tab == "etapas" else catalog.COR_STATUS_GERIR
+        # A antiga URL continua sendo a mesma, mas a tela não expõe mais o
+        # status operacional. Etapas e condições são mantidas com permissões
+        # próprias e sempre no setor selecionado.
+        organization = getattr(getattr(request.user, "profile", None), "organization", None)
+        if organization is not None:
+            # ActionRequiredMixin is reached after this method, while the
+            # organization mixin has not populated ``self.organization`` yet.
+            self.organization = organization
+            scope = self.get_scope_object()
+            self.required_action = (
+                catalog.ETAPA_GERIR
+                if AuthorizationService.can(request.user, catalog.ETAPA_GERIR, scope)
+                else catalog.CONDICAO_GERIR
+            )
+        else:
+            self.required_action = catalog.ETAPA_GERIR
         return super().dispatch(request, *args, **kwargs)
 
-    def get_context_data(self, **kwargs):
-        from activities.models import Activity, Task
+    def get_scope_object(self):
+        requested = _workflow_sector_from_request(self.request, self.organization)
+        if requested is not None:
+            return requested
+        for sector in Sector.objects.filter(organization=self.organization, is_active=True).order_by("name"):
+            if (
+                AuthorizationService.can(self.request.user, catalog.ETAPA_GERIR, sector)
+                or AuthorizationService.can(self.request.user, catalog.CONDICAO_GERIR, sector)
+            ):
+                return sector
+        return None
 
+    def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        tab = self.request.GET.get("tab", "estagios-demanda")
-        # Endereços de antes da troca de "atividade" por "demanda" (01/10/2026) continuam abrindo a aba certa.
-        legacy_tabs = {"atividade": "status-demanda", "estagios-atividade": "estagios-demanda", "status-atividade": "status-demanda"}
-        tab = {**legacy_tabs, "tarefa": "status-tarefa", "etapas": "estagios-tarefa"}.get(tab, tab)
-        context["tab"] = tab
+        domain = self.request.GET.get("domain", "demandas")
+        # Aceita links da versão anterior sem manter as antigas quatro abas.
+        legacy_tab = self.request.GET.get("tab", "")
+        if legacy_tab in {"estagios-tarefa", "status-tarefa", "tarefa"}:
+            domain = "tarefas"
+        elif legacy_tab in {"estagios-demanda", "status-demanda", "atividade"}:
+            domain = "demandas"
+        if domain not in {"demandas", "tarefas"}:
+            domain = "demandas"
+        model_domain = WorkflowStatus.Domain.ACTIVITY if domain == "demandas" else WorkflowStatus.Domain.TASK
+        sectors = [
+            item for item in Sector.objects.filter(organization=self.organization, is_active=True).order_by("name")
+            if AuthorizationService.can(self.request.user, catalog.ETAPA_GERIR, item)
+            or AuthorizationService.can(self.request.user, catalog.CONDICAO_GERIR, item)
+        ]
+        selected_id = self.request.GET.get("sector")
+        sector = next((item for item in sectors if str(item.pk) == str(selected_id)), sectors[0] if sectors else None)
+        stages = (
+            (ActivityStage if domain == "demandas" else TaskStage).objects.filter(
+                organization=self.organization, sector=sector
+            ).order_by("order", "name")
+            if sector else []
+        )
+        conditions = (
+            WorkflowStatus.objects.filter(
+                organization=self.organization, sector=sector, domain=model_domain
+            ).order_by("order", "name")
+            if sector else []
+        )
+        context.update(
+            {
+                "domain": domain,
+                "model_domain": model_domain,
+                "sector": sector,
+                "sectors": sectors,
+                "stages": stages,
+                "conditions": conditions,
+                "stage_kind": "activity-stage" if domain == "demandas" else "task-stage",
+                "can_manage_stages": AuthorizationService.can(
+                    self.request.user, catalog.ETAPA_GERIR, sector
+                ) if sector else False,
+                "can_manage_conditions": AuthorizationService.can(
+                    self.request.user, catalog.CONDICAO_GERIR, sector
+                ) if sector else False,
+                "stage_create_url": reverse(
+                    "activitystage-create" if domain == "demandas" else "taskstage-create"
+                ) + (f"?sector={sector.pk}" if sector else ""),
+                "condition_create_url": reverse(
+                    "workflowstatus-create", kwargs={"domain": model_domain}
+                ) + (f"?sector={sector.pk}" if sector else ""),
+            }
+        )
+        return context
+
+        # Histórico da configuração anterior preservado abaixo para referência
+        # de migração; o retorno acima deliberadamente não exibe status nativo.
+        from activities.models import Activity, Task
         activity_status_meta = {
             Activity.Status.ABERTA: {
                 "description": "Item aberto e pronto para entrar no fluxo.",

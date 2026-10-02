@@ -7,6 +7,8 @@
 > mesmos formulários que já existem na página. Identidade visual em
 > `Telas/Elementos/` e `Telas/MENU_E_SUBMENUS_LPS.md`.
 
+O `package.json` desta etapa Ã© somente para os testes JavaScript com jsdom; o Render continua sem bundler ou etapa Node de build.
+
 ---
 
 ## 1. Templates (`templates/`)
@@ -26,7 +28,7 @@
 
 Convenção: arquivos que começam com `_` são **parciais** incluídos em outras
 telas ou devolvidos por Ajax — ex.: `activities/_task_drawer.html`, `_task_checklist.html`, `_timeline.html`,
-`_tasks_block.html`, `_activity_kanban_card.html`, `_process_panel.html`.
+`_tasks_block.html`, `_process_panel.html`, os parciais do quadro `_kanban_*.html` e `_workflow_*.html`.
 
 Processo aplicado: `activities/_process_panel.html` é o cartão **Processo** da
 ficha (entradas, etapas, critérios; sem processo, o convite "Aplicar processo") e
@@ -75,7 +77,8 @@ Todos são **filtros**, em `activities/templatetags/lps.py`:
 | `checklist.js` | Checklist da tarefa (página e painel), sem recarregar |
 | `timer.js` | Cronômetro da sessão; conta localmente, o servidor é a referência |
 | `queue.js` | Arrastar para reordenar a fila (preenche o formulário de posição existente) |
-| `task-kanban.js`, `activity-kanban.js` | Kanban com arrastar; ao soltar, só atualiza `stage` |
+| `kanban.js` | Quadro Kanban (só nas telas do quadro): filtros que se aplicam ao escolher, menus, arrastar entre etapas (grava só a etapa), criar demanda na coluna, limite da coluna, gaveta ao clicar no cartão e cartões/contadores sempre em dia |
+| `workflow-picker.js` | Seletor de Etapa e de Condição (cartão, menu "Mover para etapa", gaveta; carregado em todas as telas): opções do setor, "+ Nova etapa/condição" para quem gere o catálogo; avisa o quadro com `lps:workflow-changed` |
 | `task-stage-reorder.js` | Reordenar estágios de tarefa |
 | `person-picker.js`, `person-multi-picker.js` | Seletor de pessoa (responsável) e de várias pessoas (participantes), usando `api/pessoas/` |
 | `tag-picker.js` | Seletor de tags com chips |
@@ -106,6 +109,9 @@ Ao mudar a paleta, altere **os dois**: `core/colors.py` e
   (classes `activity-*`); a Caixa de Entrada reaproveita o casco e os campos.
 - `static/css/task-modal.css`: janela de tarefa (`.task-*`: seções numeradas, cartão da atividade,
   grade de prazo, participantes); o casco vem de `activity-workspace.css`.
+- `static/css/kanban.css`: quadro Kanban (`.kanban-*`, `.condition-chip`) e o seletor de Etapa/Condição (`.workflow-*`); carregado em
+  todas as telas porque a gaveta também usa o seletor. O CSS do quadro antigo (`.activities-kanban-*`, `.tasks-kanban-*`,
+  `.kanban-*` antigos) saiu do `app.css`.
 - `static/css/intake.css`: Caixa de Entrada (`intake-*`, selos `tag--NOVO|CONVERTIDO|IGNORADO` e
   `intake-confidence--alta|media|baixa`). Estado nunca é só cor: todo selo traz texto.
 - Ícones novos no sprite (`_icons.html`): `mail` e `chat`.

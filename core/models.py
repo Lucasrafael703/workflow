@@ -76,6 +76,13 @@ class TaskStage(models.Model):
     organization = models.ForeignKey(
         Organization, verbose_name="organização", on_delete=models.CASCADE, related_name="task_stages"
     )
+    sector = models.ForeignKey(
+        Sector,
+        verbose_name="setor",
+        on_delete=models.CASCADE,
+        related_name="task_stages",
+        help_text="Cada etapa pertence ao fluxo visual de um único setor.",
+    )
     name = models.CharField("nome", max_length=150)
     order = models.PositiveIntegerField("ordem", default=1)
     color = models.CharField(
@@ -85,17 +92,31 @@ class TaskStage(models.Model):
         help_text="Só decoração da coluna do Kanban — nunca afeta o status operacional da tarefa.",
     )
     is_active = models.BooleanField("ativo", default=True)
+    is_default = models.BooleanField("etapa padrão", default=False)
+    column_limit = models.PositiveSmallIntegerField(
+        "limite da coluna",
+        null=True,
+        blank=True,
+        help_text="Máximo de itens esperado nesta etapa no quadro Kanban. Só avisa: nunca impede de mover ou criar.",
+    )
     created_by = models.ForeignKey(
         "auth.User", verbose_name="criado por", null=True, on_delete=models.SET_NULL, related_name="+"
     )
     created_at = models.DateTimeField("criado em", auto_now_add=True)
 
     class Meta:
-        verbose_name = "estágio de tarefa"
-        verbose_name_plural = "estágios de tarefa"
-        ordering = ["organization", "order", "name"]
+        verbose_name = "etapa de tarefa"
+        verbose_name_plural = "etapas de tarefa"
+        ordering = ["organization", "sector", "order", "name"]
         constraints = [
-            models.UniqueConstraint(fields=["organization", "name"], name="unique_taskstage_name_per_org"),
+            models.UniqueConstraint(
+                fields=["organization", "sector", "name"], name="unique_taskstage_name_per_org_sector"
+            ),
+            models.UniqueConstraint(
+                fields=["organization", "sector"],
+                condition=models.Q(is_default=True),
+                name="one_default_taskstage_per_org_sector",
+            ),
         ]
 
     def __str__(self):
@@ -118,6 +139,13 @@ class ActivityStage(models.Model):
     organization = models.ForeignKey(
         Organization, verbose_name="organizacao", on_delete=models.CASCADE, related_name="activity_stages"
     )
+    sector = models.ForeignKey(
+        Sector,
+        verbose_name="setor",
+        on_delete=models.CASCADE,
+        related_name="activity_stages",
+        help_text="Cada etapa pertence ao fluxo visual de um único setor.",
+    )
     name = models.CharField("nome", max_length=150)
     order = models.PositiveIntegerField("ordem", default=1)
     color = models.CharField(
@@ -127,17 +155,31 @@ class ActivityStage(models.Model):
         help_text="So decoracao do fluxo visual; nunca afeta o status operacional da demanda.",
     )
     is_active = models.BooleanField("ativo", default=True)
+    is_default = models.BooleanField("etapa padrão", default=False)
+    column_limit = models.PositiveSmallIntegerField(
+        "limite da coluna",
+        null=True,
+        blank=True,
+        help_text="Máximo de itens esperado nesta etapa no quadro Kanban. Só avisa: nunca impede de mover ou criar.",
+    )
     created_by = models.ForeignKey(
         "auth.User", verbose_name="criado por", null=True, on_delete=models.SET_NULL, related_name="+"
     )
     created_at = models.DateTimeField("criado em", auto_now_add=True)
 
     class Meta:
-        verbose_name = "estagio de demanda"
-        verbose_name_plural = "estagios de demanda"
-        ordering = ["organization", "order", "name"]
+        verbose_name = "etapa de demanda"
+        verbose_name_plural = "etapas de demanda"
+        ordering = ["organization", "sector", "order", "name"]
         constraints = [
-            models.UniqueConstraint(fields=["organization", "name"], name="unique_activitystage_name_per_org"),
+            models.UniqueConstraint(
+                fields=["organization", "sector", "name"], name="unique_activitystage_name_per_org_sector"
+            ),
+            models.UniqueConstraint(
+                fields=["organization", "sector"],
+                condition=models.Q(is_default=True),
+                name="one_default_activitystage_per_org_sector",
+            ),
         ]
 
     def __str__(self):
@@ -151,11 +193,11 @@ class ActivityStage(models.Model):
 
 
 class WorkflowStatus(models.Model):
-    """Status configuravel exibido no editor de fluxo.
+    """Condição manual configurável por setor.
 
-    Os status nativos continuam no codigo porque carregam regras internas.
-    Status criados pela organizacao informam qual comportamento nativo devem
-    seguir quando forem usados por telas futuras.
+    O nome técnico foi mantido para preservar dados e integrações. Ao contrário
+    de ``Activity.status`` e ``Task.status``, uma condição jamais movimenta
+    fila, cronômetro, bloqueio, conclusão ou transições. ``behavior`` é legado.
     """
 
     class Domain(models.TextChoices):
@@ -165,27 +207,45 @@ class WorkflowStatus(models.Model):
     organization = models.ForeignKey(
         Organization, verbose_name="organizacao", on_delete=models.CASCADE, related_name="workflow_statuses"
     )
+    sector = models.ForeignKey(
+        Sector,
+        verbose_name="setor",
+        on_delete=models.CASCADE,
+        related_name="conditions",
+        help_text="A condição só pode ser usada no setor a que pertence.",
+    )
     domain = models.CharField("tipo", max_length=12, choices=Domain.choices)
     name = models.CharField("nome", max_length=150)
     description = models.CharField("descricao", max_length=255, blank=True)
     behavior = models.CharField(
         "comportamento base",
         max_length=32,
-        help_text="Codigo operacional que este status visual segue.",
+        blank=True,
+        help_text="Legado: não é usado pela condição nem pelo motor operacional.",
     )
     color = models.CharField("cor", max_length=7, default="#94A3B8")
+    order = models.PositiveIntegerField("ordem", default=1)
     is_active = models.BooleanField("ativo", default=True)
+    is_default = models.BooleanField("condição padrão", default=False)
     created_by = models.ForeignKey(
         "auth.User", verbose_name="criado por", null=True, on_delete=models.SET_NULL, related_name="+"
     )
     created_at = models.DateTimeField("criado em", auto_now_add=True)
 
     class Meta:
-        verbose_name = "status configuravel"
-        verbose_name_plural = "status configuraveis"
-        ordering = ["organization", "domain", "name"]
+        verbose_name = "condição"
+        verbose_name_plural = "condições"
+        ordering = ["organization", "sector", "domain", "order", "name"]
         constraints = [
-            models.UniqueConstraint(fields=["organization", "domain", "name"], name="unique_workflowstatus_name_per_org_domain"),
+            models.UniqueConstraint(
+                fields=["organization", "sector", "domain", "name"],
+                name="unique_condition_name_per_org_sector_domain",
+            ),
+            models.UniqueConstraint(
+                fields=["organization", "sector", "domain"],
+                condition=models.Q(is_default=True),
+                name="one_default_condition_per_org_sector_domain",
+            ),
         ]
 
     def __str__(self):

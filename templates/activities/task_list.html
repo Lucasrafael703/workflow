@@ -45,7 +45,7 @@
         <div class="table-wrap">
             <h3 style="padding: 14px 16px 0;"><a href="{% url 'activity-detail' group.activity.pk %}">{{ group.activity.title }}</a></h3>
             <table class="responsive lps-sheet lps-sheet--grouped">
-                <thead><tr><th>Tarefa</th><th>Setor</th><th>Prazo</th><th>Situação</th></tr></thead>
+                <thead><tr><th>Tarefa</th><th>Setor</th><th>Prazo</th><th>Condição</th></tr></thead>
                 <tbody>
                 {% for task in group.tasks %}
                 <tr>
@@ -56,7 +56,7 @@
                         {% elif task.requested_deadline %}<span class="muted">{{ task.requested_deadline|date:"d/m/Y H:i" }} (solicitado)</span>
                         {% else %}<span class="muted">Sem prazo</span>{% endif %}
                     </td>
-                    <td data-label="Situação" class="lps-sheet-status-cell">{% include "_sheet_status.html" with color=task.status_color text_color=task.status_text_color label=task.status_label %}</td>
+                    <td data-label="Condição" class="lps-sheet-status-cell">{% include "_sheet_status.html" with color=task.condition_color text_color=task.condition.text_color label=task.condition_name %}</td>
                 </tr>
                 {% endfor %}
                 </tbody>
@@ -81,12 +81,12 @@
             <thead>
                 <tr>
                     <th class="is-sortable{% if current_sort == 'tarefa' %} is-sorted{% if current_dir == 'desc' %} is-sorted-desc{% endif %}{% endif %}">
-                        <a href="?{{ filter_querystring }}&sort=tarefa&dir={% if current_sort == 'tarefa' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                        <a href="?{% if filter_querystring %}{{ filter_querystring }}&amp;{% endif %}ordem=tarefa&amp;dir={% if current_sort == 'tarefa' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
                             Tarefa {% include "_icon.html" with name="chevron-down" %}
                         </a>
                     </th>
                     <th class="is-sortable{% if current_sort == 'demanda' %} is-sorted{% if current_dir == 'desc' %} is-sorted-desc{% endif %}{% endif %}">
-                        <a href="?{{ filter_querystring }}&sort=demanda&dir={% if current_sort == 'demanda' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                        <a href="?{% if filter_querystring %}{{ filter_querystring }}&amp;{% endif %}ordem=demanda&amp;dir={% if current_sort == 'demanda' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
                             Demanda {% include "_icon.html" with name="chevron-down" %}
                         </a>
                     </th>
@@ -95,13 +95,14 @@
                     <th>Setor</th>
                     <th>Responsável</th>
                     <th class="is-sortable{% if current_sort == 'prazo' %} is-sorted{% if current_dir == 'desc' %} is-sorted-desc{% endif %}{% endif %}">
-                        <a href="?{{ filter_querystring }}&sort=prazo&dir={% if current_sort == 'prazo' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                        <a href="?{% if filter_querystring %}{{ filter_querystring }}&amp;{% endif %}ordem=prazo&amp;dir={% if current_sort == 'prazo' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
                             Prazo {% include "_icon.html" with name="chevron-down" %}
                         </a>
                     </th>
-                    <th class="is-sortable{% if current_sort == 'situacao' %} is-sorted{% if current_dir == 'desc' %} is-sorted-desc{% endif %}{% endif %}">
-                        <a href="?{{ filter_querystring }}&sort=situacao&dir={% if current_sort == 'situacao' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
-                            Situação {% include "_icon.html" with name="chevron-down" %}
+                    <th>Etapa</th>
+                    <th class="is-sortable{% if current_sort == 'condicao' %} is-sorted{% if current_dir == 'desc' %} is-sorted-desc{% endif %}{% endif %}">
+                        <a href="?{% if filter_querystring %}{{ filter_querystring }}&amp;{% endif %}ordem=condicao&amp;dir={% if current_sort == 'condicao' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                            Condição {% include "_icon.html" with name="chevron-down" %}
                         </a>
                     </th>
                     <th class="col-menu"></th>
@@ -149,7 +150,12 @@
                         </span>
                         {% else %}<span class="muted">—</span>{% endif %}
                     </td>
-                    <td data-label="Situação" class="lps-sheet-status-cell">{% include "_sheet_status.html" with color=task.status_color text_color=task.status_text_color label=task.status_label %}</td>
+                    <td data-label="Etapa" class="lps-sheet-status-cell">
+                        {% if task.can_set_stage %}<details class="workspace-value-menu"><summary>{% include "_sheet_status.html" with color=task.stage_color text_color=task.stage.text_color label=task.stage_name %}</summary><div class="workspace-value-menu__options"><form method="post" action="{% url 'task-move-stage' task.pk %}" data-workspace-choice>{% csrf_token %}<input type="hidden" name="stage_id" value=""><button type="submit">Sem etapa</button></form>{% for option in task.stage_options %}<form method="post" action="{% url 'task-move-stage' task.pk %}" data-workspace-choice>{% csrf_token %}<input type="hidden" name="stage_id" value="{{ option.pk }}"><button type="submit">{{ option.name }}</button></form>{% endfor %}</div></details>{% else %}{% include "_sheet_status.html" with color=task.stage_color text_color=task.stage.text_color label=task.stage_name %}{% endif %}
+                    </td>
+                    <td data-label="Condição" class="lps-sheet-status-cell">
+                        {% if task.can_set_condition %}<details class="workspace-value-menu"><summary>{% include "_sheet_status.html" with color=task.condition_color text_color=task.condition.text_color label=task.condition_name %}</summary><div class="workspace-value-menu__options"><form method="post" action="{% url 'task-set-condition' task.pk %}" data-workspace-choice>{% csrf_token %}<input type="hidden" name="condition_id" value=""><button type="submit">Sem condição</button></form>{% for option in task.condition_options %}<form method="post" action="{% url 'task-set-condition' task.pk %}" data-workspace-choice>{% csrf_token %}<input type="hidden" name="condition_id" value="{{ option.pk }}"><button type="submit">{{ option.name }}</button></form>{% endfor %}</div></details>{% else %}{% include "_sheet_status.html" with color=task.condition_color text_color=task.condition.text_color label=task.condition_name %}{% endif %}
+                    </td>
                     <td data-label="" class="col-menu">
                         <div class="menu-dots js-menu-dots">
                             <button type="button" class="menu-dots__trigger" title="Mais ações">{% include "_icon.html" with name="more" %}</button>
@@ -190,11 +196,11 @@
 {% if is_paginated %}
 <div class="pagination">
     {% if page_obj.has_previous %}
-    <a class="btn btn--sm" href="?{{ filter_querystring }}&sort={{ current_sort }}&dir={{ current_dir }}&page={{ page_obj.previous_page_number }}">{% include "_icon.html" with name="back" %}</a>
+    <a class="btn btn--sm" href="?{% if filter_querystring %}{{ filter_querystring }}&amp;{% endif %}ordem={{ current_sort }}&amp;dir={{ current_dir }}&amp;page={{ page_obj.previous_page_number }}">{% include "_icon.html" with name="back" %}</a>
     {% endif %}
     <span class="muted small">Mostrando {{ page_obj.start_index }}–{{ page_obj.end_index }} de {{ page_obj.paginator.count }} tarefas</span>
     {% if page_obj.has_next %}
-    <a class="btn btn--sm" href="?{{ filter_querystring }}&sort={{ current_sort }}&dir={{ current_dir }}&page={{ page_obj.next_page_number }}">{% include "_icon.html" with name="arrow-right" %}</a>
+    <a class="btn btn--sm" href="?{% if filter_querystring %}{{ filter_querystring }}&amp;{% endif %}ordem={{ current_sort }}&amp;dir={{ current_dir }}&amp;page={{ page_obj.next_page_number }}">{% include "_icon.html" with name="arrow-right" %}</a>
     {% endif %}
 </div>
 {% else %}
@@ -210,7 +216,7 @@
         {% if has_filters %}
         <h3>Nenhuma tarefa encontrada</h3>
         <p>Ajuste a busca ou a visão para localizar outra tarefa.</p>
-        <a href="{% querystring q=None status=None filtro=None sector=None sort=None dir=None page=None %}" class="btn">Limpar filtros</a>
+        <a href="{{ filter_state.clear_url }}" class="btn">Limpar filtros</a>
         {% else %}
         <h3>Nenhuma tarefa nesta visão</h3>
         <p>Quando uma tarefa for atribuída a você — ou chegar na fila do seu setor — ela aparece aqui.</p>

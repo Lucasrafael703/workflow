@@ -1,58 +1,17 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Demandas - Kanban - LPS{% endblock %}
+{% block title %}Demandas - Quadro por etapas - LPS{% endblock %}
 
 {% block content %}
-<section class="activities-page" aria-labelledby="activities-title">
+<section class="activities-page kanban-page" aria-labelledby="activities-title">
     {% include "activities/_activity_page_head.html" %}
-    {% include "activities/_activity_view_tabs.html" %}
-    {% include "activities/_activity_scope_tabs.html" %}
-    {% include "activities/_activity_toolbar.html" %}
-
-    <div class="activities-kanban-scroll">
-        <div class="activities-kanban-board">
-            <div class="activities-kanban-column" data-stage-id="" style="--stage-color: var(--brand-green);">
-                <div class="activities-kanban-column__head">
-                    <span class="activities-kanban-column__dot"></span>
-                    <h2>Sem estagio</h2>
-                    <span>{{ unassigned_column.activities|length }}</span>
-                </div>
-                <div class="activities-kanban-column__body" data-drop-zone>
-                    {% for activity in unassigned_column.activities %}
-                        {% include "activities/_activity_kanban_card.html" %}
-                    {% empty %}
-                    <div class="activities-kanban-empty">Nenhuma demanda sem estagio</div>
-                    {% endfor %}
-                </div>
-            </div>
-
-            {% for column in columns %}
-            <div class="activities-kanban-column" data-stage-id="{{ column.stage.pk }}" style="--stage-color: {{ column.stage.color }};">
-                <div class="activities-kanban-column__head">
-                    <span class="activities-kanban-column__dot"></span>
-                    <h2>{{ column.stage.name }}</h2>
-                    <span>{{ column.activities|length }}</span>
-                </div>
-                <div class="activities-kanban-column__body" data-drop-zone>
-                    {% for activity in column.activities %}
-                        {% include "activities/_activity_kanban_card.html" %}
-                    {% empty %}
-                    <div class="activities-kanban-empty">Nenhuma demanda em {{ column.stage.name|lower }}</div>
-                    {% endfor %}
-                </div>
-            </div>
-            {% empty %}
-            <div class="activities-empty">
-                <h2>Nenhum estagio cadastrado</h2>
-                <p>Configure as colunas do Kanban em Cadastros.</p>
-                <a href="{% url 'cadastros' %}?tab=estagios-de-demanda" class="btn btn--primary">Configurar estagios</a>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
+    {% include "activities/_kanban_view_tabs.html" %}
+    {% include "activities/_kanban_toolbar.html" %}
+    {% include "activities/_kanban_board.html" %}
 </section>
-
-<div id="activity-kanban-config" data-move-url="{% url 'activity-move-stage' pk=999999999 %}" hidden></div>
-<script src="{% static 'js/activity-kanban.js' %}?v=20260928b"></script>
+{% include "activities/_kanban_config.html" %}
 {% endblock %}
 
+{% block scripts %}
+<script src="{% static 'js/kanban.js' %}?v=20261003a"></script>
+{% endblock %}

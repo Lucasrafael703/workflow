@@ -9,7 +9,7 @@ from accounts.models import UserSector
 from acessos import catalog
 from acessos.testing import grant_action
 
-from .models import EnumColor, Organization, Sector
+from .models import EnumColor, Organization, Sector, WorkflowStatus
 from .services import CadastroError, EnumColorService, SectorService, UserSectorService
 
 User = get_user_model()
@@ -270,6 +270,8 @@ class EnumColorLabelFormViewTests(TestCase):
         self.admin.profile.organization = self.org
         self.admin.profile.save(update_fields=["organization"])
         grant_action(self.admin, catalog.COR_STATUS_GERIR, organization=self.org)
+        grant_action(self.admin, catalog.ETAPA_GERIR, organization=self.org)
+        grant_action(self.admin, catalog.CONDICAO_GERIR, organization=self.org)
         self.client.force_login(self.admin)
 
     def test_post_saves_override_and_redirects_to_settings_tab(self):
@@ -281,27 +283,31 @@ class EnumColorLabelFormViewTests(TestCase):
         self.assertEqual(description, "Impedimento")
         self.assertTrue(is_hidden)
 
-    def test_old_tab_addresses_still_open_the_right_tab(self):
-        grant_action(self.admin, catalog.ESTAGIO_TAREFA_GERIR, organization=self.org)
-        for old, new in (
-            ("status-atividade", "status-demanda"),
-            ("estagios-atividade", "estagios-demanda"),
-            ("atividade", "status-demanda"),
-        ):
+    def test_old_tab_addresses_still_open_the_demand_flow(self):
+        for old in ("status-atividade", "estagios-atividade", "atividade"):
             with self.subTest(old=old):
                 response = self.client.get(reverse("config-etapas-status"), {"tab": old})
                 self.assertEqual(response.status_code, 200)
-                self.assertEqual(response.context["tab"], new)
+                self.assertEqual(response.context["domain"], "demandas")
 
     def test_unknown_code_is_404(self):
         url = reverse("enumcolor-label-edit", kwargs={"domain": "activity_status", "code": "NAO_EXISTE"})
         response = self.client.get(url)
         self.assertEqual(response.status_code, 404)
 
-    def test_settings_page_reflects_custom_label(self):
-        EnumColorService.set_overrides(self.org, "activity_status", "BLOQUEADA", label="Travada")
-        response = self.client.get(f"{reverse('config-etapas-status')}?tab=status-demanda")
+    def test_settings_page_reflects_custom_condition(self):
+        sector = Sector.objects.create(organization=self.org, name="Comercial")
+        WorkflowStatus.objects.create(
+            organization=self.org,
+            sector=sector,
+            domain=WorkflowStatus.Domain.ACTIVITY,
+            name="Travada",
+            description="Aguardando retorno externo",
+            color="#ef4444",
+        )
+        response = self.client.get(
+            reverse("config-etapas-status"), {"domain": "demandas", "sector": sector.pk}
+        )
         self.assertContains(response, "Travada")
-        self.assertContains(response, 'class="lps-sheet-status"')
-        self.assertContains(response, 'data-color-swatch')
-        self.assertFalse(User.objects.filter(email="nova@example.com").exists())
+        self.assertContains(response, "Aguardando retorno externo")
+        self.assertContains(response, "flow-stage-marker")

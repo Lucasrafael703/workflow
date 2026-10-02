@@ -1,0 +1,108 @@
+{% load lps %}{% comment %}Gaveta da Demanda aberta a partir do quadro (usa o mesmo LPSDrawer da gaveta da tarefa).
+O essencial para decidir sem sair do quadro; a ficha completa continua a um clique ("Abrir ficha completa").{% endcomment %}
+<div class="drawer-backdrop js-drawer-backdrop">
+    <div class="drawer">
+        <div class="drawer__head">
+            <div>
+                {% if activity.code %}<div class="muted small"><span class="id-badge">{{ activity.code }}</span></div>{% endif %}
+                <h2>{{ activity.title }}</h2>
+                <span class="tag tag--{{ activity.status }}">{{ activity.get_status_display }}</span>
+            </div>
+            <div class="drawer__head-actions">
+                {% if can_edit and is_open %}<a href="{% url 'activity-edit' activity.pk %}" data-activity-action class="btn btn--sm">Editar</a>{% endif %}
+                <a href="{% url 'activity-detail' activity.pk %}" class="btn btn--sm">Abrir ficha completa</a>
+                <button type="button" class="modal__close js-drawer-close" title="Fechar painel" aria-label="Fechar painel da demanda">&times;</button>
+            </div>
+        </div>
+
+        <div class="drawer__body" data-activity-id="{{ activity.pk }}">
+            {% include "activities/_workflow_controls.html" with item=activity %}
+
+            <div class="drawer__section">
+                <h3>Dados da demanda</h3>
+                <div class="drawer__facts">
+                    <div class="form-row"><label>Cliente</label><div class="field-static">{% include "_icon.html" with name="building" %}<span>{{ activity.client.name|default:"—" }}</span></div></div>
+                    <div class="form-row"><label>Obra</label><div class="field-static">{% include "_icon.html" with name="hardhat" %}<span>{{ activity.site.name|default:"—" }}</span></div></div>
+                    <div class="form-row"><label>Setor</label><div class="field-static">{% include "_icon.html" with name="users" %}<span>{{ activity.sector.name|default:"—" }}</span></div></div>
+                    <div class="form-row"><label>Responsável</label><div class="field-static">{% include "_icon.html" with name="user" %}<span>{{ activity.owner.get_full_name|default:activity.owner.get_username|default:"Sem responsável" }}</span></div></div>
+                    <div class="form-row"><label>Prazo</label><div class="field-static">{% include "_icon.html" with name="calendar" %}<span>{% if activity.requested_deadline %}{{ activity.requested_deadline|date:"d/m/Y H:i" }}{% else %}<span class="muted">Sem prazo</span>{% endif %}</span></div></div>
+                </div>
+            </div>
+
+            <div class="drawer__section">
+                <h3>Tarefas ({{ tasks|length }})</h3>
+                {% if tasks %}
+                <ul class="list-rows">
+                    {% for task in tasks %}
+                    <li>
+                        <a href="{% url 'task-detail' task.pk %}">{{ task.title }}</a>
+                        <span class="muted small">{{ task.responsavel.get_full_name|default:task.responsavel.get_username|default:"Sem responsável" }} · {{ task.sector.name }}</span>
+                        <span class="tag tag--{{ task.status }}">{{ task.get_status_display }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="muted" style="margin:0">Esta demanda ainda não tem tarefas.</p>
+                {% endif %}
+            </div>
+
+            {% if attachments %}
+            <div class="drawer__section">
+                <h3>Anexos</h3>
+                <ul class="list-rows">
+                    {% for attachment in attachments %}
+                    <li><a href="{{ attachment.file.url }}" target="_blank" rel="noopener">{{ attachment.original_name|default:attachment.file.name }}</a></li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
+            <div class="drawer__section" id="drawer-conversa">
+                <h3>Conversa</h3>
+                {% if activity_messages %}
+                <ul class="chat">
+                    {% for message in activity_messages %}
+                    <li{% if message.kind == "DECISAO" %} class="chat-item--decision"{% endif %}>
+                        <span class="avatar">{{ message.author.get_username|slice:":2"|upper }}</span>
+                        <div>
+                            <span class="who">{{ message.author.get_username }}</span>
+                            <span class="when">{{ message.created_at|date:"d/m/Y H:i" }}</span>
+                            {% if message.kind == "DECISAO" %}<span class="chat-item__kind">✓ Decisão registrada</span>{% endif %}
+                            <div class="body">{{ message.body|linebreaksbr }}</div>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="muted">Ainda não há mensagens nesta demanda.</p>
+                {% endif %}
+                {% if can_message %}
+                <form class="js-drawer-message" data-url="{% url 'activity-message' activity.pk %}">
+                    <div class="form-row">
+                        <label for="drawer-message-body">Sua mensagem</label>
+                        <textarea id="drawer-message-body" name="body" rows="2" placeholder="Escreva aqui. Use @ para mencionar alguém." data-mention></textarea>
+                    </div>
+                    <div class="form-foot form-foot--split">
+                        <label for="drawer-message-kind">Tipo</label>
+                        <select id="drawer-message-kind" name="kind">
+                            {% for value, label in message_kind_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                        </select>
+                        <button type="submit" class="btn btn--primary">Enviar</button>
+                    </div>
+                </form>
+                {% endif %}
+            </div>
+
+            {% if history %}
+            <div class="drawer__section">
+                <h3>Últimas atualizações</h3>
+                <ul class="list-rows">
+                    {% for entry in history %}
+                    <li><span>{{ entry|audit_phrase }}</span> <span class="muted small">{{ entry.user.get_username|default:"sistema" }} · {{ entry.timestamp|date:"d/m/Y H:i" }}</span></li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>

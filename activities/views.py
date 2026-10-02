@@ -17,7 +17,7 @@ from audit.models import AuditLog
 from acessos import catalog
 from acessos.services import AuthorizationService
 from core.mixins import ActionRequiredMixin, OrganizationRequiredMixin, user_sectors
-from core.models import ActivityStage, Client, CostCenter, Sector, TaskStage
+from core.models import ActivityStage, Client, CostCenter, Sector, Site, Tag, TaskStage, WorkflowStatus
 from notifications.models import Notification
 from notifications.services import NotificationService
 from processes.models import ActivityCriterionCheck, ActivityInputValue
@@ -67,6 +67,7 @@ from .models import (
     code_search_term,
 )
 from .activity_editor import ActivityCreateView, ActivityEditView, ActivityMiniCreateView
+from .filtering import canonical_filter_querystring, filter_state_for_template, normalize_workspace_filters
 from .navigation import activity_return_url
 from . import process_state
 from .process_application import ActivityProcessService, ProcessApplicationService
@@ -104,13 +105,21 @@ WAITING_ON_DEPENDENCY = Q(status=Task.Status.DISPONIVEL, depends_on__isnull=Fals
 )
 
 
+def _int_or_none(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def filtered_tasks_queryset(request, organization):
     """Filtro de tarefas compartilhado entre Lista, Kanban, Calendário e
     visão por Atividade — mesmos parâmetros GET (tab/status/filtro/q/sector),
     para as 4 visualizações sempre mostrarem exatamente o mesmo subconjunto,
     só reagrupado/re-renderizado de formas diferentes."""
     user = request.user
-    tab = request.GET.get("tab", "minhas")
+    filters = normalize_workspace_filters(request)
+    tab = filters["tab"]
     queryset = Task.objects.filter(activity__organization=organization)
 
     if tab == "setor":
@@ -126,18 +135,20 @@ def filtered_tasks_queryset(request, organization):
     else:
         queryset = queryset.filter(responsavel=user)
 
-    if request.GET.get("status") == "concluidas":
-        queryset = queryset.filter(status=Task.Status.CONCLUIDA)
+    if filters["concluidas"] or tab == "concluidas":
+        queryset = queryset.filter(status__in=[Task.Status.CONCLUIDA, Task.Status.CANCELADA])
+    elif filters["status"]:
+        queryset = queryset.filter(status=filters["status"])
     else:
         queryset = queryset.filter(status__in=OPEN_TASK_STATUSES)
 
     # Visões salvas por condição operacional, no lugar de segmentações
     # comerciais (Benchmark §3: atrasadas, bloqueadas, devolvidas).
-    view = request.GET.get("filtro")
+    view = filters["filtro"]
     if view == "atrasadas":
-        queryset = queryset.filter(committed_deadline__lt=timezone.now()).exclude(
-            status=Task.Status.CONCLUIDA
-        )
+        queryset = queryset.filter(
+            Q(committed_deadline__lt=timezone.now()) | Q(requested_deadline__lt=timezone.now())
+        ).exclude(status__in=[Task.Status.CONCLUIDA, Task.Status.CANCELADA])
     elif view == "bloqueadas":
         queryset = queryset.filter(status=Task.Status.BLOQUEADA)
     elif view == "devolvidas":
@@ -151,8 +162,29 @@ def filtered_tasks_queryset(request, organization):
         queryset = queryset.filter(
             Q(committed_deadline__date=today) | Q(requested_deadline__date=today)
         )
+    elif filters["prazo"] == "atrasadas":
+        queryset = queryset.filter(
+            Q(committed_deadline__lt=timezone.now()) | Q(requested_deadline__lt=timezone.now())
+        ).exclude(status__in=[Task.Status.CONCLUIDA, Task.Status.CANCELADA])
+    elif filters["prazo"] == "hoje":
+        today = timezone.localdate()
+        queryset = queryset.filter(
+            Q(committed_deadline__date=today) | Q(requested_deadline__date=today)
+        )
+    elif filters["prazo"] == "7_dias":
+        queryset = queryset.filter(
+            Q(committed_deadline__gte=timezone.now(), committed_deadline__lte=timezone.now() + timedelta(days=7))
+            | Q(requested_deadline__gte=timezone.now(), requested_deadline__lte=timezone.now() + timedelta(days=7))
+        )
+    elif filters["prazo"] == "30_dias":
+        queryset = queryset.filter(
+            Q(committed_deadline__gte=timezone.now(), committed_deadline__lte=timezone.now() + timedelta(days=30))
+            | Q(requested_deadline__gte=timezone.now(), requested_deadline__lte=timezone.now() + timedelta(days=30))
+        )
+    elif filters["prazo"] == "sem_prazo":
+        queryset = queryset.filter(committed_deadline__isnull=True, requested_deadline__isnull=True)
 
-    search = request.GET.get("q", "").strip()
+    search = filters["q"]
     if search:
         queryset = queryset.filter(
             Q(title__icontains=search)
@@ -161,9 +193,31 @@ def filtered_tasks_queryset(request, organization):
             | Q(activity__site__name__icontains=search)
         )
 
-    sector = request.GET.get("sector")
+    sector = filters["setor"]
     if sector:
         queryset = queryset.filter(sector_id=sector)
+    condition = filters["condicao"]
+    if condition:
+        queryset = queryset.filter(condition_id=condition)
+    stage = filters["estagio"]
+    if stage:
+        queryset = queryset.filter(stage_id=stage)
+    if filters["cliente"]:
+        queryset = queryset.filter(activity__client_id=filters["cliente"])
+    if filters["obra"]:
+        queryset = queryset.filter(activity__site_id=filters["obra"])
+    if filters["tag"]:
+        queryset = queryset.filter(tags__pk=filters["tag"])
+    if filters["pessoa"] == "sem":
+        queryset = queryset.filter(responsavel__isnull=True)
+    elif filters["pessoa"] == "eu":
+        queryset = queryset.filter(responsavel=user)
+    elif _int_or_none(filters["pessoa"]) is not None:
+        queryset = queryset.filter(responsavel_id=_int_or_none(filters["pessoa"]))
+    if filters["participante"]:
+        queryset = queryset.filter(
+            executors__user_id=filters["participante"], executors__removed_at__isnull=True
+        )
 
     return (
         queryset.select_related(
@@ -173,6 +227,7 @@ def filtered_tasks_queryset(request, organization):
             "activity__cost_center",
             "sector",
             "stage",
+            "condition",
             "responsavel",
             "depends_on",
         )
@@ -223,21 +278,71 @@ def task_filter_context(request, organization):
     querystring atual sem `visao`/`page`/`sort`/`dir` — usada por cada aba do
     seletor de visão e por cada cabeçalho de coluna ordenável para montar seu
     link preservando os demais filtros ativos, sem duplicar `sort`/`dir`."""
-    params = request.GET.copy()
-    params.pop("visao", None)
-    params.pop("page", None)
-    params.pop("sort", None)
-    params.pop("dir", None)
+    filters = normalize_workspace_filters(request)
     return {
-        "tab": request.GET.get("tab", "minhas"),
-        "status": request.GET.get("status", "abertas"),
-        "view_filter": request.GET.get("filtro", ""),
-        "search": request.GET.get("q", ""),
-        "has_filters": any(request.GET.get(key) for key in ("q", "status", "filtro", "sector")),
+        "tab": filters["tab"],
+        "status": "concluidas" if filters["concluidas"] else filters["status"] or "abertas",
+        "view_filter": filters["filtro"],
+        "search": filters["q"],
+        "has_filters": any(filters[key] for key in ("q", "pessoa", "setor", "condicao", "estagio", "filtro", "cliente", "obra", "tag", "participante", "prazo", "bloqueio", "concluidas", "status", "dir")) or filters["ordem"] != "prazo",
         "sectors": Sector.objects.filter(organization=organization, is_active=True),
-        "selected_sector": request.GET.get("sector", ""),
-        "filter_querystring": params.urlencode(),
+        "selected_sector": filters["setor"],
+        "selected_stage": filters["estagio"],
+        "filter_querystring": canonical_filter_querystring(
+            request, keep_calendar=bool(filters["ano"] or filters["mes"])
+        ),
+        "workspace_filters": filters,
     }
+
+
+def visual_filter_choice_groups(organization, domain, selected_sector_id=None):
+    """Agrupa opções visuais por setor para não confundir nomes iguais."""
+    stage_model = ActivityStage if domain == "demanda" else TaskStage
+    condition_domain = WorkflowStatus.Domain.ACTIVITY if domain == "demanda" else WorkflowStatus.Domain.TASK
+    sectors = Sector.objects.filter(organization=organization, is_active=True).order_by("name")
+    if selected_sector_id:
+        sectors = sectors.filter(pk=selected_sector_id)
+    sectors = list(sectors)
+    sector_ids = [sector.pk for sector in sectors]
+    stage_map, condition_map = {}, {}
+    for stage in stage_model.objects.filter(
+        organization=organization, sector_id__in=sector_ids, is_active=True
+    ).order_by("sector__name", "order", "name"):
+        stage_map.setdefault(stage.sector_id, []).append(stage)
+    for condition in WorkflowStatus.objects.filter(
+        organization=organization, sector_id__in=sector_ids, domain=condition_domain, is_active=True
+    ).order_by("sector__name", "order", "name"):
+        condition_map.setdefault(condition.sector_id, []).append(condition)
+    return (
+        [(sector.name, stage_map[sector.pk]) for sector in sectors if stage_map.get(sector.pk)],
+        [(sector.name, condition_map[sector.pk]) for sector in sectors if condition_map.get(sector.pk)],
+    )
+
+
+def build_filter_toolbar_state(request, organization, *, domain, view_mode, sectors, stage_groups=None, condition_groups=None, board=False, sector=None, orderings=None, default_order="prazo", year="", month=""):
+    state = filter_state_for_template(
+        request,
+        domain=domain,
+        view_mode=view_mode,
+        sectors=sectors,
+        people=User.objects.filter(profile__organization=organization, is_active=True).order_by("first_name", "username"),
+        clients=Client.objects.filter(organization=organization, is_active=True).order_by("name"),
+        sites=Site.objects.filter(organization=organization, is_active=True).order_by("name"),
+        tags=Tag.objects.filter(organization=organization, is_active=True).order_by("name"),
+        stage_groups=stage_groups,
+        condition_groups=condition_groups,
+        board=board,
+        orderings=orderings,
+        default_order=default_order,
+        year=year,
+        month=month,
+    )
+    if sector is not None:
+        state["sector_obj"] = sector
+        state["setor"] = str(sector.pk)
+    else:
+        state["sector_obj"] = None
+    return state
 
 
 # ---------------------------------------------------------------------------
@@ -452,6 +557,7 @@ class HomeView(OrganizationRequiredMixin, TemplateView):
 ACTIVITY_FILTER_KEYS = (
     "status",
     "estagio",
+    "condicao",
     "prazo",
     "urgencia",
     "cliente",
@@ -477,7 +583,8 @@ def filtered_activities_queryset(request, organization, *, order=True):
     exatamente o mesmo subconjunto, só reagrupado/re-renderizado de formas
     diferentes."""
     user = request.user
-    tab = request.GET.get("tab", "minhas")
+    filters = normalize_workspace_filters(request)
+    tab = filters["tab"]
     queryset = Activity.objects.filter(organization=organization)
 
     if tab == "grupo":
@@ -504,7 +611,7 @@ def filtered_activities_queryset(request, organization, *, order=True):
         # e retomado depois fica sem nenhuma tela que o encontre de volta.
         queryset = queryset.filter(Q(owner=user) | Q(created_by=user, status=Activity.Status.RASCUNHO))
 
-    search = request.GET.get("q", "").strip()
+    search = filters["q"]
     if search:
         queryset = queryset.filter(
             Q(title__icontains=search)
@@ -513,15 +620,20 @@ def filtered_activities_queryset(request, organization, *, order=True):
             | Q(site__name__icontains=search)
         )
 
-    status = request.GET.get("status", "")
-    if status:
+    status = filters["status"]
+    if filters["concluidas"]:
+        queryset = queryset.filter(status__in=[Activity.Status.CONCLUIDA, Activity.Status.CANCELADA])
+    elif status:
         queryset = queryset.filter(status=status)
     elif tab != "concluidas":
         # Sem filtro explícito de status, cada visão esconde o que já
         # terminou — quem quiser ver concluída/cancelada escolhe o status.
         queryset = queryset.exclude(status__in=[Activity.Status.CONCLUIDA, Activity.Status.CANCELADA])
 
-    deadline = request.GET.get("prazo", "")
+    if filters["filtro"] == "bloqueadas" or filters["bloqueio"]:
+        queryset = queryset.filter(status=Activity.Status.BLOQUEADA)
+
+    deadline = filters["prazo"]
     now = timezone.now()
     if deadline == "atrasadas":
         queryset = queryset.filter(requested_deadline__lt=now).exclude(
@@ -542,21 +654,37 @@ def filtered_activities_queryset(request, organization, *, order=True):
     elif deadline == "sem_prazo":
         queryset = queryset.filter(requested_deadline__isnull=True)
 
-    stage_id = request.GET.get("estagio", "")
+    stage_id = filters["estagio"]
     if stage_id:
         queryset = queryset.filter(stage_id=stage_id)
+
+    condition_id = filters["condicao"]
+    if condition_id:
+        queryset = queryset.filter(condition_id=condition_id)
 
     urgency = request.GET.get("urgencia", "")
     if urgency:
         queryset = queryset.filter(urgency=urgency)
 
-    client_id = request.GET.get("cliente", "")
+    client_id = filters["cliente"]
     if client_id:
         queryset = queryset.filter(client_id=client_id)
 
-    sector_id = request.GET.get("grupo", "")
+    sector_id = filters["setor"]
     if sector_id:
         queryset = queryset.filter(sector_id=sector_id)
+
+    if filters["pessoa"] == "sem":
+        queryset = queryset.filter(owner__isnull=True)
+    elif filters["pessoa"] == "eu":
+        queryset = queryset.filter(owner=user)
+    elif _int_or_none(filters["pessoa"]) is not None:
+        queryset = queryset.filter(owner_id=_int_or_none(filters["pessoa"]))
+
+    if filters["obra"]:
+        queryset = queryset.filter(site_id=filters["obra"])
+    if filters["tag"]:
+        queryset = queryset.filter(tags__pk=filters["tag"])
 
     cost_center_id = request.GET.get("centro_custo", "")
     if cost_center_id:
@@ -577,7 +705,7 @@ def filtered_activities_queryset(request, organization, *, order=True):
         queryset = queryset.filter(requested_deadline__date__lte=deadline_to)
 
     queryset = (
-        queryset.select_related("owner", "company", "site", "client", "sector", "cost_center")
+        queryset.select_related("owner", "company", "site", "client", "sector", "cost_center", "stage", "condition")
         .annotate(
             total_tasks=Count("tasks", distinct=True),
             done_tasks=Count("tasks", filter=Q(tasks__status=Task.Status.CONCLUIDA), distinct=True),
@@ -591,7 +719,7 @@ def filtered_activities_queryset(request, organization, *, order=True):
         .distinct()
     )
     if order:
-        orderings = ACTIVITY_ORDERINGS.get(request.GET.get("ordem"), ACTIVITY_ORDERINGS["prazo"])
+        orderings = ACTIVITY_ORDERINGS.get(filters["ordem"], ACTIVITY_ORDERINGS["prazo"])
         queryset = queryset.order_by(*orderings)
     return queryset
 
@@ -601,21 +729,21 @@ def activity_filter_context(request, organization):
     Kanban/Calendário) das 3 telas de atividade — `filter_querystring` some
     com `page`/`ano`/`mes` para não duplicar paginação/navegação de mês ao
     trocar de visão."""
-    params = request.GET.copy()
-    params.pop("page", None)
-    params.pop("ano", None)
-    params.pop("mes", None)
-    filter_keys = ("q",) + ACTIVITY_FILTER_KEYS
+    filters = normalize_workspace_filters(request)
     return {
-        "tab": request.GET.get("tab", "minhas"),
-        "filter_querystring": params.urlencode(),
-        "search": request.GET.get("q", ""),
-        "f_status": request.GET.get("status", ""),
-        "f_stage": request.GET.get("estagio", ""),
-        "f_group": request.GET.get("grupo", ""),
-        "ordem": request.GET.get("ordem", "prazo"),
-        "has_filters": any(request.GET.get(key) for key in filter_keys),
+        "tab": filters["tab"],
+        "filter_querystring": canonical_filter_querystring(
+            request, keep_calendar=bool(filters["ano"] or filters["mes"])
+        ),
+        "search": filters["q"],
+        "f_status": filters["status"],
+        "f_stage": filters["estagio"],
+        "f_condition": filters["condicao"],
+        "f_group": filters["setor"],
+        "ordem": filters["ordem"],
+        "has_filters": any(filters[key] for key in ("q", "pessoa", "setor", "condicao", "estagio", "filtro", "cliente", "obra", "tag", "participante", "prazo", "bloqueio", "concluidas", "status", "dir")) or filters["ordem"] != "prazo",
         "can_view_all": can(request.user, catalog.ATIVIDADE_VISUALIZAR_TODAS),
+        "workspace_filters": filters,
     }
 
 
@@ -641,6 +769,8 @@ def decorate_activity_cards(activities, organization):
         activity.progress_percent = int((activity.done_tasks / activity.total_tasks) * 100) if activity.total_tasks else 0
         activity.stage_name = activity.stage.name if activity.stage else "Sem estagio"
         activity.stage_color = activity.stage.color if activity.stage else "#94A3B8"
+        activity.condition_name = activity.condition.name if activity.condition else "Sem condição"
+        activity.condition_color = activity.condition.color if activity.condition else "#94A3B8"
     return activities
 
 
@@ -659,7 +789,7 @@ def activity_row_for_request(activity_id, user, organization):
     """Re-render one activity row after a confirmed contextual action."""
     activity = (
         Activity.objects.filter(pk=activity_id, organization=organization)
-        .select_related("client", "site", "cost_center", "sector", "stage", "owner")
+        .select_related("client", "site", "cost_center", "sector", "stage", "condition", "owner")
         .annotate(
             total_tasks=Count("tasks", distinct=True),
             done_tasks=Count("tasks", filter=Q(tasks__status=Task.Status.CONCLUIDA), distinct=True),
@@ -674,6 +804,9 @@ def activity_row_for_request(activity_id, user, organization):
         catalog.ATIVIDADE_CONCLUIR,
         catalog.ATIVIDADE_CANCELAR,
         catalog.ATIVIDADE_REABRIR,
+        catalog.ATIVIDADE_DEFINIR_ETAPA,
+        catalog.ATIVIDADE_DEFINIR_CONDICAO,
+        catalog.ATIVIDADE_MOVER_ESTAGIO,
     ]
     access = AuthorizationService.can_many(user, [(action, activity) for action in actions])
     activity.can_assumir = (
@@ -693,6 +826,22 @@ def activity_row_for_request(activity_id, user, organization):
     activity.can_reopen = activity.status == Activity.Status.CONCLUIDA and access[
         (catalog.ATIVIDADE_REABRIR, activity.pk)
     ]
+    activity.can_set_stage = (
+        access[(catalog.ATIVIDADE_DEFINIR_ETAPA, activity.pk)]
+        or access[(catalog.ATIVIDADE_MOVER_ESTAGIO, activity.pk)]
+    )
+    activity.can_set_condition = access[(catalog.ATIVIDADE_DEFINIR_CONDICAO, activity.pk)]
+    activity.stage_options = list(
+        ActivityStage.objects.filter(
+            organization=organization, sector_id=activity.sector_id, is_active=True
+        ).order_by("order", "name")
+    ) if activity.sector_id else []
+    activity.condition_options = list(
+        WorkflowStatus.objects.filter(
+            organization=organization, sector_id=activity.sector_id,
+            domain=WorkflowStatus.Domain.ACTIVITY, is_active=True,
+        ).order_by("order", "name")
+    ) if activity.sector_id else []
     return activity
 
 
@@ -718,14 +867,12 @@ class ActivityListView(OrganizationRequiredMixin, ListView):
 
         context["view_mode"] = "lista"
         context["search"] = self.request.GET.get("q", "")
-        context["ordem"] = self.request.GET.get("ordem", "prazo")
+        context["ordem"] = normalize_workspace_filters(self.request)["ordem"]
         context["can_view_all"] = can(user, catalog.ATIVIDADE_VISUALIZAR_TODAS)
 
         # Opções dos filtros: mesmos campos criados na Regra 1-13.
-        params = self.request.GET.copy()
-        params.pop("page", None)
-        context["querystring"] = params.urlencode()
         context.update(activity_filter_context(self.request, self.organization))
+        context["querystring"] = context["filter_querystring"]
 
         from core.colors import EnumColorResolver
 
@@ -740,7 +887,24 @@ class ActivityListView(OrganizationRequiredMixin, ListView):
         context["urgency_choices"] = Activity.Urgency.choices
         context["clients"] = Client.objects.filter(organization=self.organization, is_active=True)
         context["sectors"] = Sector.objects.filter(organization=self.organization, is_active=True)
-        context["stage_choices"] = ActivityStage.objects.filter(organization=self.organization, is_active=True).order_by("order")
+        selected_sector = normalize_workspace_filters(self.request)["setor"]
+        stage_groups, condition_groups = visual_filter_choice_groups(
+            self.organization, "demanda", selected_sector
+        )
+        context["stage_choice_groups"] = stage_groups
+        context["condition_choice_groups"] = condition_groups
+        context["stage_choices"] = [item for _sector, items in stage_groups for item in items]
+        context["condition_choices"] = [item for _sector, items in condition_groups for item in items]
+        context["filter_state"] = build_filter_toolbar_state(
+            self.request,
+            self.organization,
+            domain="demanda",
+            view_mode="lista",
+            sectors=context["sectors"],
+            stage_groups=stage_groups,
+            condition_groups=condition_groups,
+            orderings=[("prazo", "Prazo"), ("recentes", "Mais recentes"), ("titulo", "Demanda (A-Z)")],
+        )
         context["cost_centers"] = CostCenter.objects.filter(organization=self.organization, is_active=True)
         for key in self.FILTER_KEYS:
             context[f"f_{key}"] = self.request.GET.get(key, "")
@@ -757,6 +921,9 @@ class ActivityListView(OrganizationRequiredMixin, ListView):
             catalog.ATIVIDADE_CONCLUIR,
             catalog.ATIVIDADE_CANCELAR,
             catalog.ATIVIDADE_REABRIR,
+            catalog.ATIVIDADE_DEFINIR_ETAPA,
+            catalog.ATIVIDADE_DEFINIR_CONDICAO,
+            catalog.ATIVIDADE_MOVER_ESTAGIO,
         ]
         access = AuthorizationService.can_many(
             user, [(action, activity) for activity in activities for action in action_keys]
@@ -786,53 +953,26 @@ class ActivityListView(OrganizationRequiredMixin, ListView):
             activity.can_reopen = activity.status == Activity.Status.CONCLUIDA and access[
                 (catalog.ATIVIDADE_REABRIR, activity.pk)
             ]
-        context["activities"] = activities
-        return context
-
-
-class ActivityKanbanView(OrganizationRequiredMixin, TemplateView):
-    """Kanban de atividades: colunas são `ActivityStage` (camada visual
-    configurável por organização) — nunca `Activity.status`, que continua
-    orientando o fluxo operacional exatamente como antes."""
-
-    template_name = "activities/activity_kanban.html"
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        activities = filtered_activities_queryset(self.request, self.organization, order=False).order_by(
-            "stage__order", "requested_deadline"
-        )
-        stages = list(
-            ActivityStage.objects.filter(organization=self.organization, is_active=True).order_by("order")
-        )
-        columns = [{"stage": stage, "activities": []} for stage in stages]
-        unassigned_activities = []
-        by_stage = {stage.pk: column["activities"] for stage, column in zip(stages, columns)}
-        now = timezone.now()
-
-        from core.colors import EnumColorResolver
-
+            activity.can_set_stage = (
+                access[(catalog.ATIVIDADE_DEFINIR_ETAPA, activity.pk)]
+                or access[(catalog.ATIVIDADE_MOVER_ESTAGIO, activity.pk)]
+            )
+            activity.can_set_condition = access[(catalog.ATIVIDADE_DEFINIR_CONDICAO, activity.pk)]
+        sector_ids = {activity.sector_id for activity in activities if activity.sector_id}
+        stages_by_sector, conditions_by_sector = {}, {}
+        for stage in ActivityStage.objects.filter(
+            organization=self.organization, sector_id__in=sector_ids, is_active=True
+        ).order_by("order", "name"):
+            stages_by_sector.setdefault(stage.sector_id, []).append(stage)
+        for condition in WorkflowStatus.objects.filter(
+            organization=self.organization, sector_id__in=sector_ids,
+            domain=WorkflowStatus.Domain.ACTIVITY, is_active=True,
+        ).order_by("order", "name"):
+            conditions_by_sector.setdefault(condition.sector_id, []).append(condition)
         for activity in activities:
-            # Indicador de "parado": tempo desde a última troca de estágio,
-            # ou desde a criação se nunca mudou — nunca persiste, só exibe.
-            reference = activity.stage_changed_at or activity.created_at
-            activity.days_in_stage = (now - reference).days
-            bucket = by_stage.get(activity.stage_id) if activity.stage_id else None
-            (bucket if bucket is not None else unassigned_activities).append(activity)
-
-        decorate_activity_cards(activities, self.organization)
-        status_colors = EnumColorResolver(self.organization, "activity_status")
-        context.update(activity_filter_context(self.request, self.organization))
-        context["status_choices"] = [
-            (code, status_colors.label_for(code, label))
-            for code, label in Activity.Status.choices
-            if not status_colors.is_hidden(code)
-        ]
-        context["sectors"] = Sector.objects.filter(organization=self.organization, is_active=True)
-        context["stage_choices"] = stages
-        context["columns"] = columns
-        context["unassigned_column"] = {"stage": None, "activities": unassigned_activities}
-        context["view_mode"] = "kanban"
+            activity.stage_options = stages_by_sector.get(activity.sector_id, [])
+            activity.condition_options = conditions_by_sector.get(activity.sector_id, [])
+        context["activities"] = activities
         return context
 
 
@@ -843,15 +983,17 @@ class ActivityMoveStageView(OrganizationRequiredMixin, View):
 
     def post(self, request, pk):
         activity = get_object_or_404(Activity, pk=pk, organization=self.organization)
-        if not AuthorizationService.can(request.user, catalog.ATIVIDADE_MOVER_ESTAGIO, activity):
-            raise PermissionDenied("Você não possui autorização para mover o estágio desta demanda.")
         stage_id = request.POST.get("stage_id") or None
         stage = None
         if stage_id:
             stage = get_object_or_404(ActivityStage, pk=stage_id, organization=self.organization)
-        activity.stage = stage
-        activity.stage_changed_at = timezone.now()
-        activity.save(update_fields=["stage", "stage_changed_at"])
+        try:
+            ActivityService.set_stage(activity, stage, request.user)
+        except ActivityError as exc:
+            if _is_ajax(request):
+                return JsonResponse({"success": False, "message": str(exc), "errors": {"stage_id": [str(exc)]}}, status=403)
+            messages.error(request, str(exc))
+            return redirect("activity-list")
         if _is_ajax(request):
             activity = activity_row_for_request(activity.pk, request.user, self.organization)
             return JsonResponse({
@@ -863,6 +1005,36 @@ class ActivityMoveStageView(OrganizationRequiredMixin, View):
                 "html": render_to_string("activities/_activity_row.html", {"activity": activity}, request=request),
             })
         return redirect("activity-kanban")
+
+
+class ActivitySetConditionView(OrganizationRequiredMixin, View):
+    """Altera somente a condição manual da demanda, após validação do serviço."""
+
+    def post(self, request, pk):
+        activity = get_object_or_404(Activity, pk=pk, organization=self.organization)
+        condition_id = request.POST.get("condition_id") or None
+        condition = None
+        if condition_id:
+            condition = get_object_or_404(
+                WorkflowStatus, pk=condition_id, organization=self.organization,
+                domain=WorkflowStatus.Domain.ACTIVITY,
+            )
+        try:
+            ActivityService.set_condition(activity, condition, request.user)
+        except ActivityError as exc:
+            if _is_ajax(request):
+                return JsonResponse({"success": False, "message": str(exc), "errors": {"condition_id": [str(exc)]}}, status=403)
+            messages.error(request, str(exc))
+            return redirect("activity-list")
+        if _is_ajax(request):
+            activity = activity_row_for_request(activity.pk, request.user, self.organization)
+            return JsonResponse({
+                "success": True, "message": "Condição da demanda atualizada.",
+                "target": f"activity-{activity.pk}", "html": render_to_string(
+                    "activities/_activity_row.html", {"activity": activity}, request=request
+                ), "errors": {},
+            })
+        return redirect("activity-list")
 
 
 class ActivityCalendarView(OrganizationRequiredMixin, TemplateView):
@@ -925,6 +1097,10 @@ class ActivityCalendarView(OrganizationRequiredMixin, TemplateView):
             next_year, next_month = year, month + 1
 
         context.update(activity_filter_context(self.request, self.organization))
+        selected_sector = normalize_workspace_filters(self.request)["setor"]
+        stage_groups, condition_groups = visual_filter_choice_groups(
+            self.organization, "demanda", selected_sector
+        )
         context.update(
             {
                 "weeks": weeks,
@@ -945,7 +1121,22 @@ class ActivityCalendarView(OrganizationRequiredMixin, TemplateView):
                     if not status_colors.is_hidden(code)
                 ],
                 "sectors": Sector.objects.filter(organization=self.organization, is_active=True),
-                "stage_choices": ActivityStage.objects.filter(organization=self.organization, is_active=True).order_by("order"),
+                "stage_choices": [item for _sector, items in stage_groups for item in items],
+                "condition_choices": [item for _sector, items in condition_groups for item in items],
+                "stage_choice_groups": stage_groups,
+                "condition_choice_groups": condition_groups,
+                "filter_state": build_filter_toolbar_state(
+                    self.request,
+                    self.organization,
+                    domain="demanda",
+                    view_mode="calendario",
+                    sectors=Sector.objects.filter(organization=self.organization, is_active=True),
+                    stage_groups=stage_groups,
+                    condition_groups=condition_groups,
+                    year=year,
+                    month=month,
+                    orderings=[("prazo", "Prazo"), ("recentes", "Mais recentes"), ("titulo", "Demanda (A-Z)")],
+                ),
             }
         )
         return context
@@ -1728,14 +1919,16 @@ class TaskListView(OrganizationRequiredMixin, ListView):
         "tarefa": ["title"],
         "demanda": ["activity__title"],
         "prazo": ["requested_deadline", "created_at"],
-        "situacao": ["status"],
+        "condicao": ["condition__name", "title"],
+        # URL antiga: mantida como alias para não invalidar links salvos.
+        "situacao": ["condition__name", "title"],
     }
 
     # Endereços de antes da troca de "atividade" por "demanda" (01/10/2026) continuam valendo.
     LEGACY_VALUES = {"atividade": "demanda"}
 
     def current_sort(self):
-        sort = self.request.GET.get("sort", "prazo")
+        sort = self.request.GET.get("ordem") or self.request.GET.get("sort", "prazo")
         return self.LEGACY_VALUES.get(sort, sort)
 
     def current_view_mode(self):
@@ -1769,6 +1962,9 @@ class TaskListView(OrganizationRequiredMixin, ListView):
             catalog.TAREFA_ALTERAR_RESPONSAVEL,
             catalog.TAREFA_MOVER_SETOR,
             catalog.PRAZO_PROPOR,
+            catalog.TAREFA_DEFINIR_ETAPA,
+            catalog.TAREFA_DEFINIR_CONDICAO,
+            catalog.TAREFA_MOVER_ESTAGIO,
         ]
         list_access = AuthorizationService.can_many(
             self.request.user,
@@ -1790,6 +1986,51 @@ class TaskListView(OrganizationRequiredMixin, ListView):
             task.can_change_responsavel = list_access[(catalog.TAREFA_ALTERAR_RESPONSAVEL, task.pk)]
             task.can_move_sector = list_access[(catalog.TAREFA_MOVER_SETOR, task.pk)]
             task.can_propose_deadline = list_access[(catalog.PRAZO_PROPOR, task.pk)]
+            task.can_set_stage = (
+                list_access[(catalog.TAREFA_DEFINIR_ETAPA, task.pk)]
+                or list_access[(catalog.TAREFA_MOVER_ESTAGIO, task.pk)]
+            )
+            task.can_set_condition = list_access[(catalog.TAREFA_DEFINIR_CONDICAO, task.pk)]
+            task.stage_name = task.stage.name if task.stage else "Sem etapa"
+            task.stage_color = task.stage.color if task.stage else "#94A3B8"
+            task.condition_name = task.condition.name if task.condition else "Sem condição"
+            task.condition_color = task.condition.color if task.condition else "#94A3B8"
+        sector_ids = {task.sector_id for task in tasks if task.sector_id}
+        stages_by_sector, conditions_by_sector = {}, {}
+        for stage in TaskStage.objects.filter(
+            organization=self.organization, sector_id__in=sector_ids, is_active=True
+        ).order_by("order", "name"):
+            stages_by_sector.setdefault(stage.sector_id, []).append(stage)
+        for condition in WorkflowStatus.objects.filter(
+            organization=self.organization, sector_id__in=sector_ids,
+            domain=WorkflowStatus.Domain.TASK, is_active=True,
+        ).order_by("order", "name"):
+            conditions_by_sector.setdefault(condition.sector_id, []).append(condition)
+        for task in tasks:
+            task.stage_options = stages_by_sector.get(task.sector_id, [])
+            task.condition_options = conditions_by_sector.get(task.sector_id, [])
+        stage_groups, condition_groups = visual_filter_choice_groups(
+            self.organization, "tarefa", normalize_workspace_filters(self.request)["setor"]
+        )
+        context["stage_choice_groups"] = stage_groups
+        context["condition_choice_groups"] = condition_groups
+        context["stage_choices"] = [item for _sector, items in stage_groups for item in items]
+        context["condition_choices"] = [item for _sector, items in condition_groups for item in items]
+        context["filter_state"] = build_filter_toolbar_state(
+            self.request,
+            self.organization,
+            domain="tarefa",
+            view_mode=context["view_mode"],
+            sectors=context["sectors"],
+            stage_groups=stage_groups,
+            condition_groups=condition_groups,
+            orderings=[
+                ("prazo", "Prazo"),
+                ("tarefa", "Tarefa (A-Z)"),
+                ("demanda", "Demanda (A-Z)"),
+                ("condicao", "Condição"),
+            ],
+        )
         context["object_list"] = tasks
 
         if context["view_mode"] == "demanda":
@@ -1804,43 +2045,48 @@ class TaskListView(OrganizationRequiredMixin, ListView):
         return context
 
 
-class TaskKanbanView(OrganizationRequiredMixin, TemplateView):
-    """Kanban de tarefas: colunas são `TaskStage` (camada visual configurável
-    por organização) — nunca `Task.status`, que continua orientando fila,
-    bloqueio e timer exatamente como antes."""
-
-    template_name = "activities/task_kanban.html"
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        tasks = filtered_tasks_queryset(self.request, self.organization).order_by(
-            "stage__order", "requested_deadline"
+def task_row_for_request(task_id, user, organization):
+    """Re-renderiza uma única linha sem recarregar filtros, scroll ou drawer."""
+    task = Task.objects.select_related(
+        "activity", "activity__client", "activity__site", "sector", "stage", "condition", "responsavel"
+    ).prefetch_related(
+        Prefetch(
+            "executors",
+            queryset=TaskExecutor.objects.filter(removed_at__isnull=True).select_related("user"),
+            to_attr="active_executors",
         )
-        stages = list(TaskStage.objects.filter(organization=self.organization, is_active=True).order_by("order"))
-        columns = [{"stage": stage, "tasks": []} for stage in stages]
-        unassigned_tasks = []
-        by_stage = {stage.pk: column["tasks"] for stage, column in zip(stages, columns)}
-        now = timezone.now()
+    ).get(pk=task_id, activity__organization=organization)
+    from core.colors import EnumColorResolver
 
-        from core.colors import EnumColorResolver
-
-        status_colors = EnumColorResolver(self.organization, "task_status")
-
-        for task in tasks:
-            task._status_color = status_colors.color_for(task.status)
-            task._status_label = status_colors.label_for(task.status, task.get_status_display())
-            # Indicador de "parado": tempo desde a última troca de estágio,
-            # ou desde a criação se nunca mudou — nunca persiste, só exibe.
-            reference = task.stage_changed_at or task.created_at
-            task.days_in_stage = (now - reference).days
-            bucket = by_stage.get(task.stage_id) if task.stage_id else None
-            (bucket if bucket is not None else unassigned_tasks).append(task)
-
-        context.update(task_filter_context(self.request, self.organization))
-        context["columns"] = columns
-        context["unassigned_column"] = {"stage": None, "tasks": unassigned_tasks}
-        context["view_mode"] = "kanban"
-        return context
+    resolver = EnumColorResolver(organization, "task_status")
+    task._status_color = resolver.color_for(task.status)
+    task._status_label = resolver.label_for(task.status, task.get_status_display())
+    task.effective_deadline = task.committed_deadline or task.requested_deadline
+    task.is_overdue = bool(task.effective_deadline and task.effective_deadline < timezone.now())
+    permissions = AuthorizationService.can_many(user, [
+        (catalog.TAREFA_ALTERAR_RESPONSAVEL, task), (catalog.TAREFA_MOVER_SETOR, task),
+        (catalog.PRAZO_PROPOR, task), (catalog.TAREFA_DEFINIR_ETAPA, task),
+        (catalog.TAREFA_DEFINIR_CONDICAO, task), (catalog.TAREFA_MOVER_ESTAGIO, task),
+    ])
+    task.can_change_responsavel = permissions[(catalog.TAREFA_ALTERAR_RESPONSAVEL, task.pk)]
+    task.can_move_sector = permissions[(catalog.TAREFA_MOVER_SETOR, task.pk)]
+    task.can_propose_deadline = permissions[(catalog.PRAZO_PROPOR, task.pk)]
+    task.can_set_stage = (
+        permissions[(catalog.TAREFA_DEFINIR_ETAPA, task.pk)]
+        or permissions[(catalog.TAREFA_MOVER_ESTAGIO, task.pk)]
+    )
+    task.can_set_condition = permissions[(catalog.TAREFA_DEFINIR_CONDICAO, task.pk)]
+    task.stage_name = task.stage.name if task.stage else "Sem etapa"
+    task.stage_color = task.stage.color if task.stage else "#94A3B8"
+    task.condition_name = task.condition.name if task.condition else "Sem condição"
+    task.condition_color = task.condition.color if task.condition else "#94A3B8"
+    task.stage_options = list(TaskStage.objects.filter(
+        organization=organization, sector=task.sector, is_active=True
+    ).order_by("order", "name"))
+    task.condition_options = list(WorkflowStatus.objects.filter(
+        organization=organization, sector=task.sector, domain=WorkflowStatus.Domain.TASK, is_active=True
+    ).order_by("order", "name"))
+    return task
 
 
 class TaskMoveStageView(OrganizationRequiredMixin, View):
@@ -1851,18 +2097,51 @@ class TaskMoveStageView(OrganizationRequiredMixin, View):
 
     def post(self, request, pk):
         task = get_object_or_404(Task, pk=pk, activity__organization=self.organization)
-        if not AuthorizationService.can(request.user, catalog.TAREFA_MOVER_ESTAGIO, task):
-            raise PermissionDenied("Você não possui autorização para mover o estágio desta tarefa.")
         stage_id = request.POST.get("stage_id") or None
         stage = None
         if stage_id:
             stage = get_object_or_404(TaskStage, pk=stage_id, organization=self.organization)
-        task.stage = stage
-        task.stage_changed_at = timezone.now()
-        task.save(update_fields=["stage", "stage_changed_at"])
+        try:
+            TaskService.set_stage(task, stage, request.user)
+        except ActivityError as exc:
+            if _is_ajax(request):
+                return JsonResponse({"success": False, "message": str(exc), "errors": {"stage_id": [str(exc)]}}, status=403)
+            messages.error(request, str(exc))
+            return redirect("task-list")
         if _is_ajax(request):
-            return JsonResponse({"success": True, "message": "Estágio da tarefa atualizado.", "task_id": task.pk, "stage_id": stage.pk if stage else None})
+            task = task_row_for_request(task.pk, request.user, self.organization)
+            return JsonResponse({
+                "success": True, "message": "Etapa da tarefa atualizada.", "task_id": task.pk,
+                "stage_id": stage.pk if stage else None, "target": f"task-{task.pk}",
+                "html": render_to_string("activities/_task_row.html", {"task": task}, request=request), "errors": {},
+            })
         return redirect("task-kanban")
+
+
+class TaskSetConditionView(OrganizationRequiredMixin, View):
+    def post(self, request, pk):
+        task = get_object_or_404(Task, pk=pk, activity__organization=self.organization)
+        condition_id = request.POST.get("condition_id") or None
+        condition = None
+        if condition_id:
+            condition = get_object_or_404(
+                WorkflowStatus, pk=condition_id, organization=self.organization,
+                domain=WorkflowStatus.Domain.TASK,
+            )
+        try:
+            TaskService.set_condition(task, condition, request.user)
+        except ActivityError as exc:
+            if _is_ajax(request):
+                return JsonResponse({"success": False, "message": str(exc), "errors": {"condition_id": [str(exc)]}}, status=403)
+            messages.error(request, str(exc))
+            return redirect("task-list")
+        if _is_ajax(request):
+            task = task_row_for_request(task.pk, request.user, self.organization)
+            return JsonResponse({
+                "success": True, "message": "Condição da tarefa atualizada.", "target": f"task-{task.pk}",
+                "html": render_to_string("activities/_task_row.html", {"task": task}, request=request), "errors": {},
+            })
+        return redirect("task-list")
 
 
 class TaskCalendarView(OrganizationRequiredMixin, TemplateView):
@@ -1895,6 +2174,8 @@ class TaskCalendarView(OrganizationRequiredMixin, TemplateView):
         for task in tasks:
             task._status_color = status_colors.color_for(task.status)
             task._status_label = status_colors.label_for(task.status, task.get_status_display())
+            task.condition_name = task.condition.name if task.condition else "Sem condição"
+            task.condition_color = task.condition.color if task.condition else "#94A3B8"
             deadline = task.committed_deadline or task.requested_deadline
             if deadline is None:
                 undated.append(task)
@@ -1925,6 +2206,9 @@ class TaskCalendarView(OrganizationRequiredMixin, TemplateView):
             next_year, next_month = year, month + 1
 
         context.update(task_filter_context(self.request, self.organization))
+        stage_groups, condition_groups = visual_filter_choice_groups(
+            self.organization, "tarefa", normalize_workspace_filters(self.request)["setor"]
+        )
         context.update(
             {
                 "weeks": weeks,
@@ -1937,6 +2221,27 @@ class TaskCalendarView(OrganizationRequiredMixin, TemplateView):
                 "next_year": next_year,
                 "next_month": next_month,
                 "view_mode": "calendario",
+                "stage_choice_groups": stage_groups,
+                "condition_choice_groups": condition_groups,
+                "stage_choices": [item for _sector, items in stage_groups for item in items],
+                "condition_choices": [item for _sector, items in condition_groups for item in items],
+                "filter_state": build_filter_toolbar_state(
+                    self.request,
+                    self.organization,
+                    domain="tarefa",
+                    view_mode="calendario",
+                    sectors=Sector.objects.filter(organization=self.organization, is_active=True),
+                    stage_groups=stage_groups,
+                    condition_groups=condition_groups,
+                    year=year,
+                    month=month,
+                    orderings=[
+                        ("prazo", "Prazo"),
+                        ("tarefa", "Tarefa (A-Z)"),
+                        ("demanda", "Demanda (A-Z)"),
+                        ("condicao", "Condição"),
+                    ],
+                ),
             }
         )
         return context
@@ -2076,6 +2381,9 @@ class TaskDrawerView(TaskDetailView):
         context = super().get_context_data(**kwargs)
         context["checklist_items"] = self.object.checklist_items.select_related("created_by", "done_by")
         context["message_kind_choices"] = MessageKind.choices
+        from .kanban import workflow_context
+
+        context["workflow"] = workflow_context(self.object, self.request.user, "tarefas")
         return context
 
 
@@ -2225,6 +2533,8 @@ class TaskQuickCreateView(OrganizationRequiredMixin, FormView):
                 requested_deadline=data.get("requested_deadline"),
                 tags=merged_tags,
                 participantes=data.get("participantes"),
+                stage=data.get("stage"),
+                condition=data.get("condition"),
             )
         except ActivityError as exc:
             form.add_error(None, str(exc))
@@ -2249,6 +2559,15 @@ class TaskQuickCreateStandaloneView(OrganizationRequiredMixin, FormView):
 
     template_name = "activities/task_quick_form_standalone.html"
     form_class = TaskQuickCreateStandaloneForm
+
+    def get_initial(self):
+        initial = super().get_initial()
+        # O quadro Kanban abre esta janela já no setor e na etapa da coluna (o formulário valida de novo).
+        for key in ("sector", "stage"):
+            value = self.request.GET.get(key, "")
+            if value.isdigit():
+                initial[key] = int(value)
+        return initial
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -2280,6 +2599,8 @@ class TaskQuickCreateStandaloneView(OrganizationRequiredMixin, FormView):
                 requested_deadline=data.get("requested_deadline"),
                 tags=merged_tags,
                 participantes=data.get("participantes"),
+                stage=data.get("stage"),
+                condition=data.get("condition"),
             )
         except ActivityError as exc:
             form.add_error(None, str(exc))

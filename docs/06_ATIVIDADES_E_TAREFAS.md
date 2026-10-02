@@ -174,13 +174,34 @@ em…" da ficha (e no menu ⋮ e no menu da lista, aba "concluídas") para quem 
 
 ### 1.6 Kanban e calendário
 
-- Colunas do Kanban (`/demandas/kanban/`) são os `ActivityStage` da
-  organização, mais "sem estágio". Mover o card (`mover-estagio/`) altera só
-  `stage` e `stage_changed_at` (usado para "dias no estágio") — **não** mexe
-  em `status`, não passa por serviço e não é auditado.
-- Lista, Kanban e calendário usam o mesmo filtro
-  (`filtered_activities_queryset`). Rascunhos nunca aparecem; concluídas e
-  canceladas só na aba "concluídas" ou filtrando.
+- **Quadro por etapas** (`/demandas/kanban/`, código em `activities/kanban.py`): sempre de **um setor** por vez
+  (`?setor=`; sem o parâmetro vale o último usado, o setor principal da pessoa ou o primeiro em que ela passou a
+  atuar). As colunas são as **etapas ativas do setor** (`ActivityStage`), na ordem do cadastro. "Sem etapa" não é uma
+  etapa: só aparece quando sobra demanda sem etapa (ou com etapa já inativada), para ser classificada.
+- **Quem vê o quê:** quem participa do setor, ou tem `demanda.visualizar_todas` nele, vê todas as demandas do setor; as
+  demais pessoas veem só as demandas em que atuam (dono, ou responsável/participante de alguma tarefa). Rascunhos nunca
+  aparecem; concluídas e canceladas só com "Incluir concluídas e canceladas" em *Filtro*.
+- **Barra:** busca (título, código — aceita o prefixo antigo `ATV-` —, cliente e obra), *Pessoa*, *Condição*, *Setor*,
+  *Filtro* (cliente, obra, prazo, marcador, só com bloqueio, concluídas) e *Ordenar* (prazo, criação, título,
+  responsável; prazo vazio sempre por último). Parâmetros: `setor` (também aceita `grupo`), `q`, `pessoa` (`eu`, `sem`
+  ou id), `condicao`, `cliente`, `obra`, `prazo`, `bloqueio`, `tag`, `concluidas`, `ordem`, `dir`. Valor inválido é
+  ignorado.
+- **Cartão:** título, cliente/obra, dono, prazo (vermelho se atrasado), **Condição** (etiqueta que abre o seletor) e há
+  quantos dias a demanda está na etapa. O menu "•••" oferece só o que a pessoa pode: abrir, ficha completa, mover para
+  etapa, copiar nome/link e cancelar.
+- **O que cada gesto grava:** arrastar o cartão, ou escolher a etapa num seletor, grava **só** a etapa
+  (`ActivityService.set_stage`: exige `demanda.definir_etapa`, valida setor e organização, audita e atualiza
+  `stage_changed_at`). Escolher a condição grava **só** a condição (`set_condition`). Nenhum dos dois toca em `status`,
+  fila ou cronômetro. Etapa de outro setor ou inativa é recusada (403) e o cartão volta para onde estava.
+- **Criar na coluna:** o "+" do cabeçalho ou "Nova demanda" no rodapé pede só o nome. A demanda nasce no setor do
+  quadro, na etapa da coluna, com a condição padrão do setor e a pessoa como dona (`create_activity`; sem
+  `demanda.definir_etapa` ela fica na etapa padrão e o aviso diz isso).
+- **Limite da coluna:** `ActivityStage.column_limit`, definido por quem tem `etapa.gerir` no setor. É só informativo: o
+  contador vira "3 de 2" em vermelho, nada é bloqueado.
+- **Gaveta:** clicar no cartão abre a gaveta da demanda (`activity-kanban-drawer`: dados, Etapa e Condição, tarefas, anexos,
+  conversa e últimas atualizações); ao fechar, só o cartão é relido (`kanban-card`). A ficha completa continua a um clique.
+- A lista e o calendário continuam em `filtered_activities_queryset` (rascunhos nunca aparecem; concluídas e canceladas só
+  na aba "concluídas" ou filtrando).
 - Abas da lista: minhas (padrão), grupo, participando, concluídas, todas
   (esta depende de `demanda.visualizar_todas`).
 
@@ -330,9 +351,20 @@ Precisa ser agendado externamente (não há Celery/worker).
 
 ### 2.10 Kanban de tarefas
 
-Mesma ideia das atividades: colunas = `TaskStage` da organização, mover
-altera só `stage`. A ordem das colunas é arrastável em Cadastros → Estágios
-(`TaskStageReorderView`).
+Mesma estrutura do quadro de demandas (`/tarefas/kanban/`, `TaskBoard` em `activities/kanban.py`): um setor por vez, colunas =
+`TaskStage` ativas do setor, arrastar grava só a etapa (`TaskService.set_stage`, exige `tarefa.definir_etapa`) e a condição
+grava só a condição (`tarefa.definir_condicao`). Diferenças:
+
+- **Quem vê o quê:** quem participa do setor (ou tem `tarefa.visualizar` nele) vê todas as tarefas do setor; as demais pessoas,
+  só as tarefas de que são responsáveis ou participantes. Concluídas e canceladas só com *Incluir concluídas e canceladas*.
+- **Cartão:** título, "Demanda: …", responsável, prazo comprometido (ou o solicitado), Condição, "Bloqueada" quando for o caso.
+- **Menu "•••":** além de abrir, mover para etapa e copiar: **Concluir tarefa** (`task-complete-ajax`), **Mover para outro setor**,
+  **Bloquear / Resolver bloqueio** e **Cancelar** — cada um só aparece se a pessoa pode e o estado permite; o servidor valida de
+  novo (dependência, inputs do processo etc.) e a recusa aparece no aviso.
+- **Criar:** uma tarefa precisa de uma demanda, então o "+" da coluna abre a janela *Nova tarefa* já com setor e etapa
+  (`?sector=&stage=`), em vez do campo de nome na coluna.
+- A gaveta da tarefa (`task-drawer`) ganhou os seletores de **Etapa** e **Condição**, iguais aos do quadro; *Filtro* ganhou
+  "Participante".
 
 ### 2.10.1 “Já realizei este trabalho”
 

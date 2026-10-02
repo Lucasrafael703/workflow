@@ -20,8 +20,6 @@
         <a href="{% url 'client-create' %}" class="btn btn--primary js-cadastro-modal">{% include "_icon.html" with name="plus" %} Novo cliente</a>
         {% elif tab == "motivos" %}
         <a href="{% url 'returnreason-create' %}" class="btn btn--primary js-cadastro-modal">{% include "_icon.html" with name="plus" %} Novo motivo</a>
-        {% elif tab == "estagios-de-tarefa" %}
-        <a href="{% url 'taskstage-create' %}" class="btn btn--primary js-taskstage-modal">{% include "_icon.html" with name="plus" %} Novo estágio</a>
         {% elif tab == "tags" %}
         <a href="{% url 'tag-create' %}" class="btn btn--primary js-cadastro-modal">{% include "_icon.html" with name="plus" %} Novo marcador</a>
         {% elif tab == "setores" %}
@@ -39,7 +37,6 @@
     <a href="?tab=clientes" class="{% if tab == 'clientes' %}is-active{% endif %}">Clientes</a>
     <a href="?tab=tipos-de-demanda" class="{% if tab == 'tipos-de-demanda' %}is-active{% endif %}">Tipos de demanda</a>
     <a href="?tab=tipos-de-tarefa" class="{% if tab == 'tipos-de-tarefa' %}is-active{% endif %}">Tipos de tarefa</a>
-    <a href="?tab=estagios-de-tarefa" class="{% if tab == 'estagios-de-tarefa' %}is-active{% endif %}">Estágios de tarefa</a>
     <a href="?tab=tags" class="{% if tab == 'tags' %}is-active{% endif %}">Tags</a>
     <a href="?tab=motivos" class="{% if tab == 'motivos' %}is-active{% endif %}">Motivos</a>
 </nav>
@@ -231,64 +228,6 @@
     {% include "_icon.html" with name="info" %}
     <span>Toda devolução exige um motivo estruturado — é o que permite descobrir retrabalho recorrente.</span>
 </div>
-
-{% elif tab == "estagios-de-tarefa" %}
-<div class="flow-config-panel cadastro-stage-panel">
-    <header class="flow-config-panel__head">
-        <div>
-            <h2>Estagios de tarefa</h2>
-            <p>Arraste para definir a ordem padrao das colunas do Kanban. Isso nao altera o status operacional da tarefa.</p>
-        </div>
-        <span class="flow-config-panel__note">Configuracao visual</span>
-    </header>
-    <div class="table-wrap">
-        <ul class="flow-stage-list flow-stage-list--draggable" id="taskstage-list">
-        {% for item in task_stages %}
-            <li class="flow-stage-row" data-stage-id="{{ item.pk }}" draggable="true">
-                <span class="queue-item__main">
-                    <button type="button" class="color-swatch" data-color-swatch
-                            data-save-url="{% url 'cadastro-color-save' tab='estagios-de-tarefa' pk=item.pk %}"
-                            style="--swatch-color: {{ item.color }};"
-                            data-current-color="{{ item.color }}"
-                            aria-haspopup="true" aria-label="Cor de {{ item.name }}: clique para mudar."></button>
-                    <span class="title">{{ item.name }}</span>
-                    {% if not item.is_active %}<span class="muted"> — Inativo</span>{% endif %}
-                </span>
-                <a href="{% url 'taskstage-edit' item.pk %}" class="js-taskstage-modal">Editar</a>
-                {% include "core/_toggle_form.html" with tab="estagios-de-tarefa" item=item %}
-            </li>
-        {% empty %}
-            <li class="flow-empty-row">
-                <div class="empty-state">
-                    <div class="empty-state__icon">{% include "_icon.html" with name="folder" %}</div>
-                    <h3>Nenhum estágio cadastrado</h3>
-                    <p>Estágios são as colunas do Kanban de tarefas — livres para criar, renomear e reordenar, sem afetar o status operacional da tarefa.</p>
-                    <a href="{% url 'taskstage-create' %}" class="btn btn--primary js-taskstage-modal">Cadastrar estágio</a>
-                </div>
-            </li>
-        {% endfor %}
-        </ul>
-    </div>
-</div>
-<div class="hint-bar">
-    {% include "_icon.html" with name="info" %}
-    <span>Arraste para reordenar as colunas do Kanban. Isso não altera o status da tarefa, só a organização visual.</span>
-</div>
-<form id="taskstage-reorder-form" method="post" action="{% url 'taskstage-reorder' %}" hidden>
-    {% csrf_token %}
-</form>
-<script src="{% static 'js/task-stage-reorder.js' %}?v=20260919c"></script>
-<script>
-document.querySelectorAll(".js-taskstage-modal").forEach(function (link) {
-    link.addEventListener("click", function (event) {
-        if (!window.LPSModal) return;
-        event.preventDefault();
-        window.LPSModal.open(link.getAttribute("href"), {
-            onSuccess: function () { window.location.reload(); }
-        });
-    });
-});
-</script>
 
 {% elif tab == "tags" %}
 <div class="card card--flush">

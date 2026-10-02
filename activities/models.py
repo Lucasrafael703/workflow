@@ -111,6 +111,15 @@ class Activity(models.Model):
         blank=True,
         help_text="Quando o estagio visual mudou pela ultima vez.",
     )
+    condition = models.ForeignKey(
+        "core.WorkflowStatus",
+        verbose_name="condição",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="activities",
+        help_text="Leitura manual do trabalho; nunca altera o status operacional da demanda.",
+    )
 
     code = models.CharField(
         "código",
@@ -544,6 +553,15 @@ class Task(models.Model):
         null=True,
         blank=True,
         help_text="Quando `stage` mudou pela última vez — usado só para o indicador de tempo parado no Kanban.",
+    )
+    condition = models.ForeignKey(
+        "core.WorkflowStatus",
+        verbose_name="condição",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="tasks",
+        help_text="Leitura manual do trabalho; nunca altera o status operacional da tarefa.",
     )
     order = models.PositiveIntegerField("ordem", default=1)
     title = models.CharField("título", max_length=200)

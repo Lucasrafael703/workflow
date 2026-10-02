@@ -112,7 +112,7 @@
 | `demandas/<pk>/nova/contexto/`, `.../detalhes/`, `.../descartar/` | GET das etapas antigas redireciona ao editor; POST legado compatível; descartar rascunho |
 | `demandas/nova-rapida/` | Mesmo editor no seletor; resposta JSON em Ajax |
 | `demandas/busca/` | Busca de atividades abertas (JSON) |
-| `demandas/kanban/`, `demandas/calendario/` | Kanban por estágio, calendário por prazo |
+| `demandas/kanban/` (`activity-kanban`), `demandas/calendario/` | Quadro por etapas de um setor (`activities/kanban.py`), calendário por prazo |
 | `demandas/<pk>/` (`activity-detail`) | Ficha da atividade (rascunho redireciona ao editor) |
 | `demandas/<pk>/painel/` | Compatibilidade: redireciona à ficha completa |
 | `demandas/<pk>/editar/`, `prazo/`, `dono/`, `assumir/` | Editar (a mesma janela de 3 etapas), prazo, trocar dono, assumir |
@@ -124,13 +124,14 @@
 | `demandas/<pk>/mensagem/`, `continuar/` | Mensagem; comentário + anexo num envio |
 | `demandas/<pk>/anexos/`, `anexos/<attachment_pk>/remover/` | Anexos |
 | `demandas/<pk>/mover-estagio/` | Mudar coluna do Kanban (só `stage`) |
+| `demandas/<pk>/gaveta/` (`activity-kanban-drawer`) | Gaveta da demanda aberta a partir do quadro (fragmento; rascunho e outra organização dão 404) |
 | `demandas/<activity_pk>/tarefas/rapida/` (`task-quick-create`) | Nova tarefa na atividade (Ajax) |
 
 **Tarefas**
 
 | Caminho | Função |
 |---|---|
-| `tarefas/` (`task-list`), `tarefas/kanban/`, `tarefas/calendario/` | Lista, Kanban, calendário |
+| `tarefas/` (`task-list`), `tarefas/kanban/` (`task-kanban`), `tarefas/calendario/` | Lista, quadro por etapas de um setor, calendário |
 | `tarefas/nova-rapida/` | Nova tarefa com seletor de atividade (a busca `demandas/busca/`, `activity-search`, devolve também `summary`: título e "Cliente • Setor • N tarefas", que a janela mostra como cartão) |
 | `tarefas/<pk>/` (`task-detail`), `tarefas/<pk>/painel/` | Ficha, painel lateral |
 | `tarefas/<pk>/editar/` (`task-edit`) | Editor único: dados, prazo pedido, marcadores, responsável e participantes (`tarefa.editar` na view, já no GET; responsável e participantes exigem as suas ações no serviço). Janela (JSON no Ajax) ou página |
@@ -149,6 +150,18 @@
 | `tarefas/<pk>/tempo/` | “Adicionar tempo trabalhado” (`tempo.lancar_manual`): só acrescenta tempo, não conclui |
 | `tarefas/<pk>/mensagem/` | Mensagem |
 | `tarefas/<pk>/mover-estagio/` | Mudar coluna do Kanban (só `stage`) |
+
+**Quadro Kanban — ações** (`activities/kanban_urls.py`; `<dom>` é `demandas` ou `tarefas`, outro valor dá 404). Todas exigem login e organização e respondem JSON; as que gravam passam pelos services e devolvem o cartão novo em `card_html`:
+
+| Caminho | Nome | Função |
+|---|---|---|
+| `kanban/<dom>/<pk>/cartao/` | `kanban-card` | GET: o cartão como está agora, ou `{"visible": false}` se saiu do quadro. Usa a consulta da URL (setor e filtros) |
+| `kanban/<dom>/<pk>/etapa/` | `kanban-set-stage` | POST `stage_id`: grava só a etapa. 403 se o serviço recusa (outro setor, inativa, sem ação); 400 se vazio; 404 se a etapa é de outro tipo ou organização |
+| `kanban/<dom>/<pk>/condicao/` | `kanban-set-condition` | POST `condition_id` (vazio remove a condição): grava só a condição |
+| `kanban/demandas/criar/` | `kanban-create-card` | POST `title`, `sector_id`, `stage_id`: cria a demanda na coluna (201). Tarefa não se cria aqui (400) |
+| `kanban/<dom>/limite/` | `kanban-column-limit` | POST `stage_id`, `limit` (1 a 999; vazio remove): exige `etapa.gerir` no setor |
+| `kanban/<dom>/opcoes/` | `kanban-create-option` | POST `kind` (`stage` \| `condition`), `name`, `color`, `sector_id`: nova etapa/condição do setor; exige `etapa.gerir` / `condicao.gerir` |
+| `api/setores/<pk>/etapas/`, `.../condicoes/` | `sector-stage-options`, `sector-condition-options` | GET `?dominio=demanda\|tarefa`: as opções do setor que alimentam os seletores |
 | `tarefas/<pk>/checklist/`, `checklist/<pk>/alternar/`, `checklist/<pk>/remover/` | Checklist |
 | `tarefas/<pk>/prazo/propor/`, `prazos/<pk>/aceitar/`, `prazos/<pk>/recusar/`, `conflitos/<pk>/resolver/` | Prazo e conflito |
 

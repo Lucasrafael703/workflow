@@ -7,6 +7,8 @@ urlpatterns = [
     path("api/pessoas/", views.PersonSearchView.as_view(), name="person-search"),
     path("api/clientes/", views.ClientSearchView.as_view(), name="client-search"),
     path("api/setores/", views.SectorSearchView.as_view(), name="sector-search"),
+    path("api/setores/<int:sector_pk>/etapas/", views.SectorStageOptionsView.as_view(), name="sector-stage-options"),
+    path("api/setores/<int:sector_pk>/condicoes/", views.SectorConditionOptionsView.as_view(), name="sector-condition-options"),
     path("api/empresas/", views.CompanySearchView.as_view(), name="company-search"),
     path("api/obras/", views.SiteSearchView.as_view(), name="site-search"),
     path("api/centros-de-custo/", views.CostCenterSearchView.as_view(), name="costcenter-search"),
@@ -37,6 +39,8 @@ urlpatterns = [
     path("configuracoes/status/<str:domain>/novo/", views.WorkflowStatusFormView.as_view(), name="workflowstatus-create"),
     path("configuracoes/status/<str:domain>/<int:pk>/", views.WorkflowStatusFormView.as_view(), name="workflowstatus-edit"),
     path("configuracoes/fluxo/<str:kind>/<int:pk>/excluir/", views.FlowConfigDeleteView.as_view(), name="flow-config-delete"),
+    path("configuracoes/fluxo/<str:kind>/<int:pk>/situacao/", views.FlowConfigToggleActiveView.as_view(), name="flow-config-toggle"),
+    path("configuracoes/fluxo/<str:kind>/reordenar/", views.FlowConfigReorderView.as_view(), name="flow-config-reorder"),
     path(
         "cadastros/estagios-de-tarefa/reordenar/",
         views.TaskStageReorderView.as_view(),

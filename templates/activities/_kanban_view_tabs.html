@@ -1,0 +1,15 @@
+{% comment %}Abas de visão do quadro. Espera `kanban_domain` ("demandas" | "tarefas").{% endcomment %}
+{% if kanban_domain == "demandas" %}
+<nav class="tabs task-view-tabs kanban-view-tabs" aria-label="Como ver as demandas">
+    <a href="{% url 'activity-list' %}?{{ filter_querystring }}">{% include "_icon.html" with name="menu" %} Lista</a>
+    <a href="{% url 'activity-kanban' %}?{{ filter_querystring }}" class="is-active" aria-current="page">{% include "_icon.html" with name="queue" %} Quadro por etapas</a>
+    <a href="{% url 'activity-calendar' %}?{{ filter_querystring }}">{% include "_icon.html" with name="calendar" %} Calendário de prazos</a>
+</nav>
+{% else %}
+<nav class="tabs task-view-tabs kanban-view-tabs" aria-label="Como ver as tarefas">
+    <a href="{% url 'task-list' %}?{{ filter_querystring }}">{% include "_icon.html" with name="menu" %} Lista</a>
+    <a href="{% url 'task-list' %}?visao=demanda{% if filter_querystring %}&amp;{{ filter_querystring }}{% endif %}">{% include "_icon.html" with name="activity" %} Por demanda</a>
+    <a href="{% url 'task-kanban' %}?{{ filter_querystring }}" class="is-active" aria-current="page">{% include "_icon.html" with name="queue" %} Quadro (Kanban)</a>
+    <a href="{% url 'task-calendar' %}?{{ filter_querystring }}">{% include "_icon.html" with name="calendar" %} Calendário</a>
+</nav>
+{% endif %}

@@ -16,6 +16,13 @@ $env:NODE_PATH = Join-Path $checklistDeps 'node_modules'
 node --test tests/checklist.test.cjs
 ```
 
+Barra compartilhada de filtros de Demandas e Tarefas:
+
+```powershell
+$env:NODE_PATH = Join-Path $checklistDeps 'node_modules'
+node --test tests/workspace-filters.test.cjs
+```
+
 Os testes renderizam o template Django real e exercitam eventos de formulário,
 requisições, permissões visuais e preservação do DOM. Use `PYTHON` para informar
 outro interpretador se o ambiente virtual não estiver em `.venv`.

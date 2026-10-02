@@ -84,6 +84,7 @@ _task_editor_fields.html).{% endcomment %}
             </div>
 
             <div class="drawer__section">
+                {% include "activities/_workflow_controls.html" with item=task %}
                 <div class="drawer__facts">
                     <div class="form-row">
                         <label>Setor</label>

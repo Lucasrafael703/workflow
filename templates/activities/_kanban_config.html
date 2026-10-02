@@ -1,0 +1,12 @@
+{% comment %}Endereços do quadro para o JavaScript. O número 999999999 é um marcador: o script troca pelo id real.{% endcomment %}
+{% if sector %}
+<div id="kanban-config" hidden
+     data-domain="{{ kanban_domain }}"
+     data-noun="{{ noun_singular }}"
+     data-sector-id="{{ sector.pk }}"
+     data-set-stage-url="{% url 'kanban-set-stage' kanban_domain 999999999 %}"
+     data-card-url="{% url 'kanban-card' kanban_domain 999999999 %}"
+     data-create-url="{% url 'kanban-create-card' kanban_domain %}"
+     data-limit-url="{% url 'kanban-column-limit' kanban_domain %}"
+     data-drawer-url="{% if kanban_domain == 'demandas' %}{% url 'activity-kanban-drawer' 999999999 %}{% else %}{% url 'task-drawer' 999999999 %}{% endif %}"></div>
+{% endif %}

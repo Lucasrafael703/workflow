@@ -68,6 +68,8 @@ Não há upload: a etapa 3 só tem as observações e o link/caminho dos arquivo
                         {% include "activities/_activity_modal_field.html" with field=form.owner required=True %}
                         {% endif %}
                         {% include "activities/_activity_modal_field.html" with field=form.sector required=True %}
+                        {% include "activities/_activity_modal_field.html" with field=form.stage %}
+                        {% include "activities/_activity_modal_field.html" with field=form.condition %}
                         {% include "activities/_activity_modal_field.html" with field=form.requested_deadline %}
                         <div class="activity-form-group form-row{% if form.urgency.errors %} has-error{% endif %}" data-field="urgency">
                             <span class="activity-label" id="urgency-label">{{ form.urgency.label }}</span>

@@ -1,195 +1,100 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Fluxo e status - Configuracoes - LPS{% endblock %}
+{% block title %}Etapas e condições - Configurações - LPS{% endblock %}
 
 {% block content %}
 <div class="flow-config-page">
     <div class="page-head flow-config-head">
         <div class="page-head__text">
-            <h1>Fluxo e status</h1>
-            <p class="sub">Configure como o trabalho aparece nas telas sem confundir estagio visual com status operacional.</p>
-        </div>
-        <div class="page-head__actions">
-            {% if tab == "estagios-demanda" %}
-            <a href="{% url 'activitystage-create' %}" class="btn btn--primary js-flow-modal">{% include "_icon.html" with name="plus" %} Novo estagio</a>
-            {% elif tab == "estagios-tarefa" %}
-            <a href="{% url 'taskstage-create' %}" class="btn btn--primary js-flow-modal">{% include "_icon.html" with name="plus" %} Novo estagio</a>
-            {% elif tab == "status-demanda" %}
-            <a href="{% url 'workflowstatus-create' domain='activity' %}" class="btn btn--primary js-flow-modal">{% include "_icon.html" with name="plus" %} Novo status</a>
-            {% if domain %}
-            <button type="button" class="btn" data-restore-defaults data-restore-url="{% url 'enumcolor-reset' domain=domain %}">
-                {% include "_icon.html" with name="back" %} Restaurar padrao
-            </button>
-            {% endif %}
-            {% elif tab == "status-tarefa" %}
-            <a href="{% url 'workflowstatus-create' domain='task' %}" class="btn btn--primary js-flow-modal">{% include "_icon.html" with name="plus" %} Novo status</a>
-            {% if domain %}
-            <button type="button" class="btn" data-restore-defaults data-restore-url="{% url 'enumcolor-reset' domain=domain %}">
-                {% include "_icon.html" with name="back" %} Restaurar padrao
-            </button>
-            {% endif %}
-            {% endif %}
+            <h1>Etapas e condições</h1>
+            <p class="sub">Organize a leitura do trabalho por setor. Etapa e condição não alteram fila, prazo, bloqueio, cronômetro ou conclusão.</p>
         </div>
     </div>
 
     <div class="flow-principle">
         <span class="flow-principle__icon">{% include "_icon.html" with name="info" %}</span>
         <div>
-            <strong>Estagio organiza a visualizacao. Status representa o estado real.</strong>
-            <span>Mudar cor ou coluna visual nao muda automaticamente fila, bloqueio, timer ou conclusao.</span>
+            <strong>O status operacional continua protegido pelas regras da LPS.</strong>
+            <span>Etapa organiza o fluxo visual; condição registra a leitura manual atual do trabalho.</span>
         </div>
     </div>
 
-    <nav class="tabs flow-config-tabs" aria-label="Fluxo e status">
-        <a href="?tab=estagios-demanda" class="{% if tab == 'estagios-demanda' %}is-active{% endif %}">
-            {% include "_icon.html" with name="activity" %} Estagios de demandas
-        </a>
-        <a href="?tab=estagios-tarefa" class="{% if tab == 'estagios-tarefa' %}is-active{% endif %}">
-            {% include "_icon.html" with name="queue" %} Estagios de tarefas
-        </a>
-        <a href="?tab=status-demanda" class="{% if tab == 'status-demanda' %}is-active{% endif %}">
-            {% include "_icon.html" with name="check" %} Status de demandas
-        </a>
-        <a href="?tab=status-tarefa" class="{% if tab == 'status-tarefa' %}is-active{% endif %}">
-            {% include "_icon.html" with name="task" %} Status de tarefas
-        </a>
-    </nav>
+    <form class="activities-toolbar flow-config-selector" method="get" aria-label="Escolher fluxo">
+        <label>
+            <span>Setor</span>
+            <select name="sector" onchange="this.form.submit()">
+                {% for item in sectors %}<option value="{{ item.pk }}"{% if sector.pk == item.pk %} selected{% endif %}>{{ item.name }}</option>{% endfor %}
+            </select>
+        </label>
+        <nav class="tabs flow-config-tabs" aria-label="Domínio do fluxo">
+            <a href="?domain=demandas{% if sector %}&sector={{ sector.pk }}{% endif %}"{% if domain == "demandas" %} class="is-active" aria-current="page"{% endif %}>Demandas</a>
+            <a href="?domain=tarefas{% if sector %}&sector={{ sector.pk }}{% endif %}"{% if domain == "tarefas" %} class="is-active" aria-current="page"{% endif %}>Tarefas</a>
+        </nav>
+        <noscript><button class="btn" type="submit">Aplicar</button></noscript>
+    </form>
 
-    <section class="flow-config-panel">
-        <header class="flow-config-panel__head">
-            <div>
-                <h2>{{ section_title }}</h2>
-                <p>{{ section_description }}</p>
-            </div>
-            {% if tab == "estagios-demanda" or tab == "estagios-tarefa" %}
-            <span class="flow-config-panel__note">Camada visual</span>
-            {% else %}
-            <span class="flow-config-panel__note">Sistema + personalizados</span>
-            {% endif %}
-        </header>
+    {% if not sector %}
+    <section class="empty-state"><h2>Cadastre um setor para configurar o fluxo</h2><p>Etapas e condições existem dentro de um setor.</p></section>
+    {% else %}
+    <div class="flow-config-columns">
+        <section class="flow-config-panel">
+            <header class="flow-config-panel__head">
+                <div><h2>Etapas</h2><p>Colunas e leitura visual do fluxo de {{ sector.name }}.</p></div>
+                {% if can_manage_stages %}<a class="btn btn--primary js-flow-modal" href="{{ stage_create_url }}">{% include "_icon.html" with name="plus" %} Nova etapa</a>{% endif %}
+            </header>
+            <ul class="flow-stage-list"{% if can_manage_stages %} data-flow-reorder data-reorder-url="{% url 'flow-config-reorder' kind=stage_kind %}"{% endif %}>
+                {% for stage in stages %}
+                <li class="flow-stage-row" data-item-id="{{ stage.pk }}"{% if can_manage_stages %} draggable="true"{% endif %}>
+                    <span class="flow-row-grip" aria-hidden="true">{% include "_icon.html" with name="grip" %}</span>
+                    <span class="flow-stage-marker" style="--stage-color: {{ stage.color }};"></span>
+                    <div class="flow-row-copy"><strong>{{ stage.name }}</strong><span>{% if stage.is_default %}Padrão deste setor{% elif stage.is_active %}Ativa{% else %}Inativa{% endif %}</span></div>
+                    <span class="tag" style="--tag-bg: {{ stage.color }}1A; --tag-fg: {{ stage.color }};">{{ stage.name }}</span>
+                    {% if can_manage_stages %}
+                    <details class="flow-row-menu"><summary aria-label="Ações da etapa {{ stage.name }}">{% include "_icon.html" with name="more" %}</summary><div class="flow-row-menu__popup">
+                        <a class="js-flow-modal" href="{% if domain == 'demandas' %}{% url 'activitystage-edit' stage.pk %}{% else %}{% url 'taskstage-edit' stage.pk %}{% endif %}?sector={{ sector.pk }}">Editar</a>
+                        <form method="post" action="{% url 'flow-config-toggle' kind=stage_kind pk=stage.pk %}">{% csrf_token %}<button type="submit">{% if stage.is_active %}Inativar{% else %}Reativar{% endif %}</button></form>
+                        <form method="post" action="{% url 'flow-config-delete' kind=stage_kind pk=stage.pk %}" onsubmit="return confirm('Remover esta etapa? Se já tiver sido usada, ela será apenas inativada.')">{% csrf_token %}<button type="submit" class="is-danger">Excluir</button></form>
+                    </div></details>
+                    {% endif %}
+                </li>
+                {% empty %}<li class="flow-empty-row"><p>Nenhuma etapa neste setor.</p></li>{% endfor %}
+            </ul>
+        </section>
 
-        {% if tab == "estagios-demanda" or tab == "estagios-tarefa" %}
-        <ul class="flow-stage-list">
-            {% for stage in stages %}
-            <li class="flow-stage-row">
-                <span class="flow-row-grip" aria-hidden="true">{% include "_icon.html" with name="grip" %}</span>
-                <span class="flow-stage-marker" style="--stage-color: {{ stage.color }};"></span>
-                <div class="flow-row-copy">
-                    <strong>{{ stage.name }}</strong>
-                    <span>{% if stage.is_active %}Ativo no fluxo visual{% else %}Inativo, preservado para historico{% endif %}</span>
-                </div>
-                <span class="tag" style="--tag-bg: {{ stage.color }}1A; --tag-fg: {{ stage.color }};">{{ stage.name }}</span>
-                <button type="button" class="color-swatch flow-color-swatch" data-color-swatch
-                        data-save-url="{% url 'cadastro-color-save' tab=stage_color_tab pk=stage.pk %}"
-                        style="--swatch-color: {{ stage.color }};"
-                        data-current-color="{{ stage.color }}"
-                        aria-haspopup="true" aria-label="Cor de {{ stage.name }}: clique para mudar."></button>
-                {% if stage_kind == "activity-stage" %}
-                <a href="{% url 'activitystage-edit' stage.pk %}" class="btn btn--ghost js-flow-modal">{% include "_icon.html" with name="settings" %} Editar</a>
-                {% else %}
-                <a href="{% url 'taskstage-edit' stage.pk %}" class="btn btn--ghost js-flow-modal">{% include "_icon.html" with name="settings" %} Editar</a>
-                {% endif %}
-                <form method="post" action="{% url 'flow-config-delete' kind=stage_kind pk=stage.pk %}" onsubmit="return confirm('Excluir {{ stage.name|escapejs }}? Itens que usam este estagio ficam sem estagio visual.');">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn--ghost flow-danger-action">{% include "_icon.html" with name="trash" %} Excluir</button>
-                </form>
-            </li>
-            {% empty %}
-            <li class="flow-empty-row">
-                <div class="empty-state">
-                    <div class="empty-state__icon">{% include "_icon.html" with name="folder" %}</div>
-                    <h3>Nenhum estagio cadastrado</h3>
-                    <p>Crie as etapas visuais que organizam o trabalho nas telas.</p>
-                    <a href="{{ stage_create_url }}" class="btn btn--primary js-flow-modal">{% include "_icon.html" with name="plus" %} Cadastrar estagio</a>
-                </div>
-            </li>
-            {% endfor %}
-        </ul>
-        {% else %}
-        <div class="flow-status-table-wrap">
-            <table class="flow-status-table lps-sheet lps-sheet--compact">
-                <thead>
-                    <tr>
-                        <th>Status</th>
-                        <th>Preview</th>
-                        <th>Comportamento</th>
-                        <th>Tipo</th>
-                        <th>Acoes</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in rows %}
-                    <tr{% if row.is_hidden %} class="flow-row-hidden"{% endif %}>
-                        <td>
-                            <div class="flow-row-copy">
-                                <strong>{{ row.label }}</strong>
-                                <span>{{ row.description }}</span>
-                                {% if row.is_hidden %}<span class="flow-hidden-badge">Oculto</span>{% endif %}
-                            </div>
-                        </td>
-                        <td class="lps-sheet-status-cell">{% include "_sheet_status.html" with color=row.color text_color=row.text_color label=row.label %}</td>
-                        <td><span class="flow-behavior">{{ row.behavior }}</span></td>
-                        <td><span class="flow-lock-note">Nativo</span></td>
-                        <td class="flow-table-actions">
-                            <button type="button" class="color-swatch flow-color-swatch" data-color-swatch
-                                    data-save-url="{% url 'enumcolor-save' domain=domain %}"
-                                    data-code="{{ row.code }}"
-                                    style="--swatch-color: {{ row.color }};"
-                                    data-current-color="{{ row.color }}"
-                                    aria-haspopup="true" aria-label="Cor de {{ row.label }}: clique para mudar."></button>
-                            <a href="{% url 'enumcolor-label-edit' domain=row.enum_domain code=row.code %}" class="btn btn--ghost js-flow-modal">{% include "_icon.html" with name="settings" %} Editar</a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                    {% for row in custom_rows %}
-                    <tr>
-                        <td>
-                            <div class="flow-row-copy">
-                                <strong>{{ row.name }}</strong>
-                                <span>{{ row.description|default:"Status personalizado." }}</span>
-                            </div>
-                        </td>
-                        <td class="lps-sheet-status-cell">{% include "_sheet_status.html" with color=row.color text_color=row.text_color label=row.name %}</td>
-                        <td><span class="flow-behavior">{{ row.behavior }}</span></td>
-                        <td><span class="flow-custom-note">Personalizado</span></td>
-                        <td class="flow-table-actions">
-                            <a href="{% url 'workflowstatus-edit' domain=status_domain pk=row.pk %}" class="btn btn--ghost js-flow-modal">{% include "_icon.html" with name="settings" %} Editar</a>
-                            <form method="post" action="{% url 'flow-config-delete' kind='workflow-status' pk=row.pk %}" onsubmit="return confirm('Excluir {{ row.name|escapejs }}?');">
-                                {% csrf_token %}
-                                <button type="submit" class="btn btn--ghost flow-danger-action">{% include "_icon.html" with name="trash" %} Excluir</button>
-                            </form>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% endif %}
-    </section>
+        <section class="flow-config-panel">
+            <header class="flow-config-panel__head">
+                <div><h2>Condições</h2><p>Leitura manual, independente do status operacional.</p></div>
+                {% if can_manage_conditions %}<a class="btn btn--primary js-flow-modal" href="{{ condition_create_url }}">{% include "_icon.html" with name="plus" %} Nova condição</a>{% endif %}
+            </header>
+            <ul class="flow-stage-list"{% if can_manage_conditions %} data-flow-reorder data-reorder-url="{% url 'flow-config-reorder' kind='workflow-status' %}"{% endif %}>
+                {% for condition in conditions %}
+                <li class="flow-stage-row" data-item-id="{{ condition.pk }}"{% if can_manage_conditions %} draggable="true"{% endif %}>
+                    <span class="flow-row-grip" aria-hidden="true">{% include "_icon.html" with name="grip" %}</span>
+                    <span class="flow-stage-marker" style="--stage-color: {{ condition.color }};"></span>
+                    <div class="flow-row-copy"><strong>{{ condition.name }}</strong><span>{{ condition.description|default:"Sem descrição" }} · {% if condition.is_default %}Padrão deste setor{% elif condition.is_active %}Ativa{% else %}Inativa{% endif %}</span></div>
+                    <span class="tag" style="--tag-bg: {{ condition.color }}1A; --tag-fg: {{ condition.color }};">{{ condition.name }}</span>
+                    {% if can_manage_conditions %}
+                    <details class="flow-row-menu"><summary aria-label="Ações da condição {{ condition.name }}">{% include "_icon.html" with name="more" %}</summary><div class="flow-row-menu__popup">
+                        <a class="js-flow-modal" href="{% url 'workflowstatus-edit' domain=model_domain pk=condition.pk %}?sector={{ sector.pk }}">Editar</a>
+                        <form method="post" action="{% url 'flow-config-toggle' kind='workflow-status' pk=condition.pk %}">{% csrf_token %}<button type="submit">{% if condition.is_active %}Inativar{% else %}Reativar{% endif %}</button></form>
+                        <form method="post" action="{% url 'flow-config-delete' kind='workflow-status' pk=condition.pk %}" onsubmit="return confirm('Remover esta condição? Se já tiver sido usada, ela será apenas inativada.')">{% csrf_token %}<button type="submit" class="is-danger">Excluir</button></form>
+                    </div></details>
+                    {% endif %}
+                </li>
+                {% empty %}<li class="flow-empty-row"><p>Nenhuma condição neste setor.</p></li>{% endfor %}
+            </ul>
+        </section>
+    </div>
+    {% endif %}
 </div>
-
 <script>
-document.querySelectorAll("[data-restore-defaults]").forEach(function (button) {
-    button.addEventListener("click", function () {
-        if (!window.confirm("Restaurar esta aba para o padrao LPS? Isso desfaz cor, nome, descricao e status ocultos personalizados aqui.")) return;
-        var match = document.cookie.match(/csrftoken=([^;]+)/);
-        fetch(button.getAttribute("data-restore-url"), {
-            method: "POST",
-            headers: {
-                "X-Requested-With": "XMLHttpRequest",
-                "X-CSRFToken": match ? match[1] : "",
-            },
-        }).then(function () { window.location.reload(); });
-    });
-});
-document.querySelectorAll(".js-flow-modal").forEach(function (link) {
-    link.addEventListener("click", function (event) {
-        if (!window.LPSModal) return;
-        event.preventDefault();
-        window.LPSModal.open(link.getAttribute("href"), {
-            onSuccess: function () { window.location.reload(); }
-        });
-    });
+document.querySelectorAll('.js-flow-modal').forEach(function(link) {
+  link.addEventListener('click', function(event) {
+    if (!window.LPSModal) return;
+    event.preventDefault();
+    window.LPSModal.open(link.href, {onSuccess: function(){ window.location.reload(); }});
+  });
 });
 </script>
+<script src="{% static 'js/flow-config.js' %}?v=20261001a"></script>
 {% endblock %}

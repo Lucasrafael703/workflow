@@ -1,8 +1,8 @@
-from django.urls import path, re_path
+from django.urls import include, path, re_path
 
 from core.legacy_redirects import MovedPrefixView
 
-from . import views
+from . import kanban, views
 
 urlpatterns = [
     path("", views.HomeView.as_view(), name="home"),
@@ -14,9 +14,10 @@ urlpatterns = [
     path("demandas/<int:pk>/nova/contexto/", views.ActivityWizardStep2View.as_view(), name="activity-wizard-contexto"),
     path("demandas/<int:pk>/nova/detalhes/", views.ActivityWizardStep3View.as_view(), name="activity-wizard-detalhes"),
     path("demandas/<int:pk>/nova/descartar/", views.ActivityWizardDiscardView.as_view(), name="activity-wizard-discard"),
-    path("demandas/kanban/", views.ActivityKanbanView.as_view(), name="activity-kanban"),
+    path("demandas/kanban/", kanban.ActivityKanbanView.as_view(), name="activity-kanban"),
     path("demandas/calendario/", views.ActivityCalendarView.as_view(), name="activity-calendar"),
     path("demandas/<int:pk>/mover-estagio/", views.ActivityMoveStageView.as_view(), name="activity-move-stage"),
+    path("demandas/<int:pk>/condicao/", views.ActivitySetConditionView.as_view(), name="activity-set-condition"),
     path("demandas/<int:pk>/", views.ActivityDetailView.as_view(), name="activity-detail"),
     path("demandas/<int:pk>/painel/", views.ActivityDrawerView.as_view(), name="activity-drawer"),
     path("demandas/<int:pk>/editar/", views.ActivityEditView.as_view(), name="activity-edit"),
@@ -66,9 +67,10 @@ urlpatterns = [
     # Tarefas
     path("tarefas/", views.TaskListView.as_view(), name="task-list"),
     path("tarefas/nova-rapida/", views.TaskQuickCreateStandaloneView.as_view(), name="task-quick-create-standalone"),
-    path("tarefas/kanban/", views.TaskKanbanView.as_view(), name="task-kanban"),
+    path("tarefas/kanban/", kanban.TaskKanbanView.as_view(), name="task-kanban"),
     path("tarefas/calendario/", views.TaskCalendarView.as_view(), name="task-calendar"),
     path("tarefas/<int:pk>/mover-estagio/", views.TaskMoveStageView.as_view(), name="task-move-stage"),
+    path("tarefas/<int:pk>/condicao/", views.TaskSetConditionView.as_view(), name="task-set-condition"),
     path("tarefas/<int:pk>/", views.TaskDetailView.as_view(), name="task-detail"),
     path("tarefas/<int:pk>/editar/", views.TaskEditView.as_view(), name="task-edit"),
     path("tarefas/<int:pk>/assumir/", views.TaskActionView.as_view(action="assume"), name="task-assume"),
@@ -154,4 +156,6 @@ urlpatterns = [
     path("fila/entrada/<int:pk>/reordenar/", views.QueueReorderView.as_view(), name="queue-reorder"),
     path("gestao/", views.ManagementView.as_view(), name="management"),
     path("historico/", views.HistoryView.as_view(), name="history"),
+    # Ações do quadro Kanban (mover etapa, condição, criar na coluna, limite, gaveta da demanda).
+    path("", include("activities.kanban_urls")),
 ]

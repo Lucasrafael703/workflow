@@ -95,6 +95,14 @@ class ResourceContext:
 
         if model_name == "task":
             activity = resource.activity
+            # Listas e quadros já trazem os executores ativos (`Prefetch(..., to_attr="active_executors")`):
+            # sem isto, cada tarefa custaria uma consulta por ação avaliada.
+            active = getattr(resource, "active_executors", None)
+            executor_ids = (
+                frozenset(executor.user_id for executor in active)
+                if active is not None
+                else frozenset(resource.executors.filter(removed_at__isnull=True).values_list("user_id", flat=True))
+            )
             return cls(
                 organization_id=activity.organization_id,
                 company_id=activity.company_id,
@@ -102,9 +110,7 @@ class ResourceContext:
                 site_id=activity.site_id,
                 cost_center_id=activity.cost_center_id,
                 owner_id=activity.owner_id,
-                executor_ids=frozenset(
-                    resource.executors.filter(removed_at__isnull=True).values_list("user_id", flat=True)
-                ),
+                executor_ids=executor_ids,
             )
 
         if model_name == "activity":
@@ -119,6 +125,12 @@ class ResourceContext:
 
         if model_name == "sector":
             return cls(organization_id=resource.organization_id, sector_id=resource.pk)
+
+        if model_name in {"activitystage", "taskstage", "workflowstatus"}:
+            # Etapas e condições são cadastros do setor. Sem este endereço,
+            # uma concessão por setor acabaria negada ou, pior, precisaria ser
+            # substituída por uma concessão ampla da organização.
+            return cls(organization_id=resource.organization_id, sector_id=resource.sector_id)
 
         if model_name == "queueentry":
             activity = resource.task.activity
@@ -393,8 +405,14 @@ class AuthorizationService:
             direct_scopes[grant.action.key].append(grant.scope)
 
         result = {}
+        contexts = {}
         for action_key, resource in checks:
-            context = ResourceContext.of(resource)
+            # O endereço do recurso é o mesmo para todas as ações: calcula uma vez por recurso.
+            pk = getattr(resource, "pk", None)
+            context_key = (type(resource), pk if pk is not None else id(resource))
+            context = contexts.get(context_key)
+            if context is None:
+                context = contexts[context_key] = ResourceContext.of(resource)
             tenant_ok = context.organization_id in (None, organization_id)
             allowed = tenant_ok and (
                 any(scope_contains(scope, context, user) for scope in profile_scopes.get(action_key, ()))

@@ -1,91 +1,16 @@
-{% comment %}Seletor de visão, escopo e filtros compartilhados entre as visualizações de tarefas.{% endcomment %}
+{% comment %}Abas e escopo das tarefas; a barra de filtros é compartilhada com Demandas.{% endcomment %}
 <nav class="tabs task-view-tabs" aria-label="Como mostrar as tarefas">
-    <a href="{% url 'task-list' %}?{{ filter_querystring }}" class="{% if view_mode == 'lista' %}is-active{% endif %}"{% if view_mode == 'lista' %} aria-current="page"{% endif %}>
-        {% include "_icon.html" with name="menu" %} Lista
-    </a>
-    <a href="{% url 'task-list' %}?visao=demanda&{{ filter_querystring }}" class="{% if view_mode == 'demanda' %}is-active{% endif %}"{% if view_mode == 'demanda' %} aria-current="page"{% endif %}>
-        {% include "_icon.html" with name="activity" %} Por demanda
-    </a>
-    <a href="{% url 'task-kanban' %}?{{ filter_querystring }}" class="{% if view_mode == 'kanban' %}is-active{% endif %}"{% if view_mode == 'kanban' %} aria-current="page"{% endif %}>
-        {% include "_icon.html" with name="queue" %} Quadro (Kanban)
-    </a>
-    <a href="{% url 'task-calendar' %}?{{ filter_querystring }}" class="{% if view_mode == 'calendario' %}is-active{% endif %}"{% if view_mode == 'calendario' %} aria-current="page"{% endif %}>
-        {% include "_icon.html" with name="clock" %} Calendário
-    </a>
+    <a href="{% url 'task-list' %}?{{ filter_querystring }}" class="{% if view_mode == 'lista' %}is-active{% endif %}"{% if view_mode == 'lista' %} aria-current="page"{% endif %}>{% include "_icon.html" with name="menu" %} Lista</a>
+    <a href="{% url 'task-list' %}?visao=demanda&{{ filter_querystring }}" class="{% if view_mode == 'demanda' %}is-active{% endif %}"{% if view_mode == 'demanda' %} aria-current="page"{% endif %}>{% include "_icon.html" with name="activity" %} Por demanda</a>
+    <a href="{% url 'task-kanban' %}?{{ filter_querystring }}" class="{% if view_mode == 'kanban' %}is-active{% endif %}"{% if view_mode == 'kanban' %} aria-current="page"{% endif %}>{% include "_icon.html" with name="queue" %} Quadro (Kanban)</a>
+    <a href="{% url 'task-calendar' %}?{{ filter_querystring }}" class="{% if view_mode == 'calendario' %}is-active{% endif %}"{% if view_mode == 'calendario' %} aria-current="page"{% endif %}>{% include "_icon.html" with name="clock" %} Calendário</a>
 </nav>
 
 <nav class="tabs task-scope-tabs" aria-label="De quem são as tarefas">
-    <a href="{% querystring tab='minhas' status=None page=None %}" class="{% if tab == 'minhas' and status != 'concluidas' %}is-active{% endif %}"{% if tab == 'minhas' and status != 'concluidas' %} aria-current="page"{% endif %}>Atribuídas a mim</a>
-    <a href="{% querystring tab='setor' status=None page=None %}" class="{% if tab == 'setor' and status != 'concluidas' %}is-active{% endif %}"{% if tab == 'setor' and status != 'concluidas' %} aria-current="page"{% endif %}>Dos meus setores</a>
-    <a href="{% querystring tab='participando' status=None page=None %}" class="{% if tab == 'participando' and status != 'concluidas' %}is-active{% endif %}"{% if tab == 'participando' and status != 'concluidas' %} aria-current="page"{% endif %}>Em que participo</a>
-    <a href="{% querystring status='concluidas' page=None %}" class="{% if status == 'concluidas' %}is-active{% endif %}"{% if status == 'concluidas' %} aria-current="page"{% endif %}>Concluídas</a>
+    <a href="{% querystring tab='minhas' status=None concluidas=None page=None %}" class="{% if tab == 'minhas' and status != 'concluidas' %}is-active{% endif %}"{% if tab == 'minhas' and status != 'concluidas' %} aria-current="page"{% endif %}>Atribuídas a mim</a>
+    <a href="{% querystring tab='setor' status=None concluidas=None page=None %}" class="{% if tab == 'setor' and status != 'concluidas' %}is-active{% endif %}"{% if tab == 'setor' and status != 'concluidas' %} aria-current="page"{% endif %}>Dos meus setores</a>
+    <a href="{% querystring tab='participando' status=None concluidas=None page=None %}" class="{% if tab == 'participando' and status != 'concluidas' %}is-active{% endif %}"{% if tab == 'participando' and status != 'concluidas' %} aria-current="page"{% endif %}>Em que participo</a>
+    <a href="{% querystring concluidas='1' status=None page=None %}" class="{% if status == 'concluidas' %}is-active{% endif %}"{% if status == 'concluidas' %} aria-current="page"{% endif %}>Concluídas</a>
 </nav>
 
-<form method="get" class="activities-filters task-filters" data-task-filters role="search">
-    <input type="hidden" name="tab" value="{{ tab }}">
-    {% if status == 'concluidas' %}<input type="hidden" name="status" value="concluidas">{% endif %}
-    {% if view_mode != 'lista' and view_mode != 'demanda' %}<input type="hidden" name="visao" value="{{ view_mode }}">{% endif %}
-    {% if view_mode == 'demanda' %}<input type="hidden" name="visao" value="demanda">{% endif %}
-    {% if view_mode == 'lista' %}<input type="hidden" name="dir" value="{{ current_dir }}">{% endif %}
-
-    <div class="activities-toolbar task-toolbar">
-        <div class="activities-search">
-            <label class="filter-field-label" for="task-search-{{ view_mode }}">Buscar tarefa</label>
-            <div class="activities-search__control">
-                {% include "_icon.html" with name="search" %}
-                <input id="task-search-{{ view_mode }}" type="search" name="q" value="{{ search }}" placeholder="Digite o nome da tarefa, demanda, cliente ou obra" autocomplete="off">
-                <button type="submit" class="activities-search__submit btn btn--sm">{% include "_icon.html" with name="search" %}<span>Buscar</span></button>
-            </div>
-        </div>
-
-        {% if view_mode == 'lista' %}
-        <div class="activities-filter-chips task-filter-chips" aria-label="Filtros rápidos">
-            <a href="{% if view_filter == 'hoje' %}{% querystring filtro=None page=None %}{% else %}{% querystring filtro='hoje' page=None %}{% endif %}" class="activities-filter-chip{% if view_filter == 'hoje' %} activities-filter-chip--active{% endif %}"{% if view_filter == 'hoje' %} aria-current="page" aria-pressed="true"{% endif %}>Hoje</a>
-            <a href="{% if view_filter == 'atrasadas' %}{% querystring filtro=None page=None %}{% else %}{% querystring filtro='atrasadas' page=None %}{% endif %}" class="activities-filter-chip activities-filter-chip--danger{% if view_filter == 'atrasadas' %} activities-filter-chip--active{% endif %}"{% if view_filter == 'atrasadas' %} aria-current="page" aria-pressed="true"{% endif %}>Atrasadas</a>
-            <a href="{% if view_filter == 'em-fila' %}{% querystring filtro=None page=None %}{% else %}{% querystring filtro='em-fila' page=None %}{% endif %}" class="activities-filter-chip{% if view_filter == 'em-fila' %} activities-filter-chip--active{% endif %}"{% if view_filter == 'em-fila' %} aria-current="page" aria-pressed="true"{% endif %}>Em fila</a>
-            <a href="{% if view_filter == 'em-execucao' %}{% querystring filtro=None page=None %}{% else %}{% querystring filtro='em-execucao' page=None %}{% endif %}" class="activities-filter-chip{% if view_filter == 'em-execucao' %} activities-filter-chip--active{% endif %}"{% if view_filter == 'em-execucao' %} aria-current="page" aria-pressed="true"{% endif %}>Em execução</a>
-        </div>
-        {% endif %}
-
-        <label class="activities-select">
-            <span class="filter-field-label">Situação</span>
-            <select name="filtro">
-                <option value="">Todas</option>
-                <option value="em-execucao" {% if view_filter == 'em-execucao' %}selected{% endif %}>Em execução</option>
-                <option value="atrasadas" {% if view_filter == 'atrasadas' %}selected{% endif %}>Atrasadas</option>
-                <option value="bloqueadas" {% if view_filter == 'bloqueadas' %}selected{% endif %}>Bloqueadas</option>
-                <option value="devolvidas" {% if view_filter == 'devolvidas' %}selected{% endif %}>Devolvidas</option>
-                {% if view_mode == 'lista' %}
-                <option value="hoje" {% if view_filter == 'hoje' %}selected{% endif %}>Hoje</option>
-                <option value="em-fila" {% if view_filter == 'em-fila' %}selected{% endif %}>Em fila</option>
-                {% endif %}
-            </select>
-        </label>
-        <label class="activities-select">
-            <span class="filter-field-label">Setor</span>
-            <select name="sector">
-                <option value="">Todos</option>
-                {% for sector in sectors %}
-                <option value="{{ sector.pk }}" {% if selected_sector == sector.pk|stringformat:'s' %}selected{% endif %}>{{ sector.name }}</option>
-                {% endfor %}
-            </select>
-        </label>
-        {% if view_mode == 'lista' %}
-        <label class="activities-select activities-order">
-            <span class="filter-field-label">Ordenar por</span>
-            <select name="sort">
-                <option value="prazo" {% if current_sort == 'prazo' %}selected{% endif %}>Prazo</option>
-                <option value="tarefa" {% if current_sort == 'tarefa' %}selected{% endif %}>Tarefa (A-Z)</option>
-                <option value="demanda" {% if current_sort == 'demanda' %}selected{% endif %}>Demanda (A-Z)</option>
-                <option value="situacao" {% if current_sort == 'situacao' %}selected{% endif %}>Situação</option>
-            </select>
-        </label>
-        {% endif %}
-    </div>
-
-    {% if has_filters or view_mode == 'lista' and current_sort != 'prazo' %}
-    <div class="activities-filter-footer">
-        <a href="{% querystring q=None status=None filtro=None sector=None sort=None dir=None page=None %}" class="btn btn--ghost btn--sm">Limpar filtros</a>
-    </div>
-    {% endif %}
-</form>
+{% include "activities/_workspace_filter_toolbar.html" %}

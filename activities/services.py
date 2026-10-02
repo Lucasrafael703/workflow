@@ -11,6 +11,7 @@ from acessos.services import AuthorizationError, AuthorizationService, ResourceC
 from audit.models import AuditLog
 from audit.services import AuditService
 from core.models import Tag
+from core.services import CadastroError, ConditionService, StageService
 from notifications.models import Notification
 from notifications.recipients import resolve_sector_and_admins, resolve_sector_managers
 from notifications.services import EmailService, NotificationService
@@ -220,6 +221,8 @@ class ActivityService:
             owner=owner,
             created_by=created_by,
             requested_deadline=requested_deadline,
+            stage=StageService.default_for(organization, sector, "demanda"),
+            condition=ConditionService.default_for(organization, sector, "activity"),
         )
         if tags:
             activity.tags.set(tags)
@@ -287,7 +290,16 @@ class ActivityService:
             raise ActivityError("Toda demanda precisa de um único dono antes de concluir.")
 
         activity.status = Activity.Status.ABERTA
-        activity.save(update_fields=["status"])
+        # O rascunho pode receber setor só na segunda etapa do wizard. As
+        # opções padrão entram no momento em que ele vira uma demanda real.
+        if activity.sector_id:
+            if activity.stage_id is None:
+                activity.stage = StageService.default_for(activity.organization, activity.sector, "demanda")
+            if activity.condition_id is None:
+                activity.condition = ConditionService.default_for(
+                    activity.organization, activity.sector, "activity"
+                )
+        activity.save(update_fields=["status", "stage", "condition"])
         ActivityService._finalize_creation(activity, user)
         return activity
 
@@ -386,6 +398,30 @@ class ActivityService:
         require_action(user, catalog.ATIVIDADE_EDITAR, activity)
         ActivityTransitionPolicy.assert_allowed(activity, "edit", user)
 
+        requested_sector = fields.get("sector", activity.sector)
+        if "sector" in fields and requested_sector != activity.sector:
+            ActivityTransitionPolicy.assert_allowed(activity, "change_sector", user)
+            if requested_sector is None:
+                raise ActivityError("Escolha o setor responsável.")
+            if not _same_organization(activity, requested_sector):
+                raise ActivityError("O setor informado pertence a outra organização.")
+            old_sector, old_stage, old_condition = activity.sector, activity.stage, activity.condition
+            activity.sector = requested_sector
+            activity.stage = StageService.default_for(activity.organization, requested_sector, "demanda")
+            activity.condition = ConditionService.default_for(activity.organization, requested_sector, "activity")
+            activity.save(update_fields=["sector", "stage", "condition"])
+            for field_name, old_value, new_value in (
+                ("setor", old_sector.name if old_sector else "Sem setor", requested_sector.name),
+                ("etapa", old_stage.name if old_stage else "Sem etapa", activity.stage.name if activity.stage else "Sem etapa"),
+                ("condição", old_condition.name if old_condition else "Sem condição", activity.condition.name if activity.condition else "Sem condição"),
+            ):
+                AuditService.log(
+                    user=user, action=AuditLog.Action.UPDATE, activity=activity,
+                    field_name=field_name, old_value=old_value, new_value=new_value,
+                    reason="Setor alterado; etapa e condição foram redefinidas para o fluxo do novo setor.",
+                )
+            activity._sector_configuration_message = "Setor alterado. Etapa e condição foram redefinidas conforme o novo setor."
+
         editable = {
             "title",
             "description",
@@ -397,7 +433,6 @@ class ActivityService:
             "cost_center",
             "client",
             "urgency",
-            "sector",
             "address",
             "external_requester",
             "files_location",
@@ -434,6 +469,53 @@ class ActivityService:
         if "description" in changed:
             notify_mentions(activity.description, user, activity, activity=activity)
 
+        # Os dois valores visuais têm permissões próprias. Eles ficam fora do
+        # conjunto de campos genéricos para não serem alterados por quem só
+        # recebeu direito de editar texto/prazo.
+        if "stage" in fields and fields["stage"] != activity.stage:
+            ActivityService.set_stage(activity, fields["stage"], user)
+        if "condition" in fields and fields["condition"] != activity.condition:
+            ActivityService.set_condition(activity, fields["condition"], user)
+
+        return activity
+
+    @staticmethod
+    @transaction.atomic
+    def set_stage(activity, stage, user):
+        # A migração copia a concessão antiga para a nova ação. O fallback
+        # mantém instalações que ainda não executaram o seed utilizáveis sem
+        # ampliar o escopo: a ação legada tinha exatamente o mesmo alcance.
+        if not AuthorizationService.can(user, catalog.ATIVIDADE_DEFINIR_ETAPA, activity):
+            require_action(user, catalog.ATIVIDADE_MOVER_ESTAGIO, activity)
+        try:
+            StageService.validate(stage, activity.organization, activity.sector, "demanda")
+        except CadastroError as exc:
+            raise ActivityError(str(exc)) from exc
+        old = activity.stage
+        activity.stage = stage
+        activity.stage_changed_at = timezone.now()
+        activity.save(update_fields=["stage", "stage_changed_at"])
+        AuditService.log(
+            user=user, action=AuditLog.Action.UPDATE, activity=activity, field_name="etapa",
+            old_value=old.name if old else "Sem etapa", new_value=stage.name if stage else "Sem etapa",
+        )
+        return activity
+
+    @staticmethod
+    @transaction.atomic
+    def set_condition(activity, condition, user):
+        require_action(user, catalog.ATIVIDADE_DEFINIR_CONDICAO, activity)
+        try:
+            ConditionService.validate(condition, activity.organization, activity.sector, "activity")
+        except CadastroError as exc:
+            raise ActivityError(str(exc)) from exc
+        old = activity.condition
+        activity.condition = condition
+        activity.save(update_fields=["condition"])
+        AuditService.log(
+            user=user, action=AuditLog.Action.UPDATE, activity=activity, field_name="condição",
+            old_value=old.name if old else "Sem condição", new_value=condition.name if condition else "Sem condição",
+        )
         return activity
 
     @staticmethod
@@ -1021,7 +1103,7 @@ class TaskService:
     @transaction.atomic
     def create_task(
         activity, sector, title, created_by, responsavel, description="", order=1, depends_on=None,
-        requested_deadline=None, tags=None, participantes=None,
+        requested_deadline=None, tags=None, participantes=None, stage=None, condition=None,
     ):
         # A tarefa nasce no setor informado: é esse o escopo que autoriza.
         require_action(
@@ -1039,12 +1121,14 @@ class TaskService:
         return TaskService._create_task_core(
             activity, sector, title, created_by, responsavel, description=description, order=order,
             depends_on=depends_on, requested_deadline=requested_deadline, tags=tags, participantes=participantes,
+            stage=stage, condition=condition,
         )
 
     @staticmethod
     def _create_task_core(
         activity, sector, title, created_by, responsavel, description="", order=1, depends_on=None,
         requested_deadline=None, tags=None, participantes=None, process_step=None, enqueue=True, notify=True,
+        stage=None, condition=None,
     ):
         """Validação e gravação de uma tarefa nova — **sem autorizar**.
 
@@ -1068,6 +1152,11 @@ class TaskService:
         if getattr(getattr(responsavel, "profile", None), "organization_id", None) != activity.organization_id:
             raise ActivityError("O responsável informado pertence a outra organização.")
 
+        try:
+            StageService.validate(stage, activity.organization, sector, "tarefa")
+            ConditionService.validate(condition, activity.organization, sector, "task")
+        except CadastroError as exc:
+            raise ActivityError(str(exc)) from exc
         task = Task.objects.create(
             activity=activity,
             sector=sector,
@@ -1080,6 +1169,8 @@ class TaskService:
             status=Task.Status.DISPONIVEL,
             created_by=created_by,
             responsavel=responsavel,
+            stage=stage or StageService.default_for(activity.organization, sector, "tarefa"),
+            condition=condition or ConditionService.default_for(activity.organization, sector, "task"),
         )
         if tags:
             task.tags.set(tags)
@@ -1249,6 +1340,44 @@ class TaskService:
         if "description" in changed:
             notify_mentions(task.description, user, task, activity=task.activity, task=task)
 
+        return task
+
+    @staticmethod
+    @transaction.atomic
+    def set_stage(task, stage, user):
+        if not AuthorizationService.can(user, catalog.TAREFA_DEFINIR_ETAPA, task):
+            require_action(user, catalog.TAREFA_MOVER_ESTAGIO, task)
+        try:
+            StageService.validate(stage, task.activity.organization, task.sector, "tarefa")
+        except CadastroError as exc:
+            raise ActivityError(str(exc)) from exc
+        old = task.stage
+        task.stage = stage
+        task.stage_changed_at = timezone.now()
+        task.save(update_fields=["stage", "stage_changed_at"])
+        AuditService.log(
+            user=user, action=AuditLog.Action.UPDATE, activity=task.activity, task=task,
+            field_name="etapa", old_value=old.name if old else "Sem etapa",
+            new_value=stage.name if stage else "Sem etapa",
+        )
+        return task
+
+    @staticmethod
+    @transaction.atomic
+    def set_condition(task, condition, user):
+        require_action(user, catalog.TAREFA_DEFINIR_CONDICAO, task)
+        try:
+            ConditionService.validate(condition, task.activity.organization, task.sector, "task")
+        except CadastroError as exc:
+            raise ActivityError(str(exc)) from exc
+        old = task.condition
+        task.condition = condition
+        task.save(update_fields=["condition"])
+        AuditService.log(
+            user=user, action=AuditLog.Action.UPDATE, activity=task.activity, task=task,
+            field_name="condição", old_value=old.name if old else "Sem condição",
+            new_value=condition.name if condition else "Sem condição",
+        )
         return task
 
     @staticmethod
@@ -2108,13 +2237,16 @@ class TaskService:
             active_entry.save(update_fields=["left_at"])
             QueueService.renumber(old_sector)
 
+        old_stage, old_condition = task.stage, task.condition
         task.sector = new_sector
+        task.stage = StageService.default_for(task.activity.organization, new_sector, "tarefa")
+        task.condition = ConditionService.default_for(task.activity.organization, new_sector, "task")
         # Etapa que ainda espera a anterior muda de setor sem entrar na fila do
         # novo setor: ela só entra quando a predecessora for concluída.
         waiting = TaskService.pending_dependency(task) is not None and active_entry is None
         queued_status = Task.Status.DEVOLVIDA if keep_status else Task.Status.EM_FILA
         task.status = Task.Status.DISPONIVEL if waiting else queued_status
-        task.save(update_fields=["sector", "status"])
+        task.save(update_fields=["sector", "stage", "condition", "status"])
 
         SectorTransfer.objects.create(task=task, from_sector=old_sector, to_sector=new_sector, moved_by=user, note=note)
         if not waiting:
@@ -2128,6 +2260,16 @@ class TaskService:
             old_value=old_sector.name if old_sector else "",
             new_value=new_sector.name,
         )
+        for field_name, old_value, new_value in (
+            ("etapa", old_stage.name if old_stage else "Sem etapa", task.stage.name if task.stage else "Sem etapa"),
+            ("condição", old_condition.name if old_condition else "Sem condição", task.condition.name if task.condition else "Sem condição"),
+        ):
+            AuditService.log(
+                user=user, action=AuditLog.Action.UPDATE, activity=task.activity, task=task,
+                field_name=field_name, old_value=old_value, new_value=new_value,
+                reason="Setor alterado; etapa e condição foram redefinidas para o fluxo do novo setor.",
+            )
+        task._sector_configuration_message = "Setor alterado. Etapa e condição foram redefinidas conforme o novo setor."
         recipients = resolve_sector_and_admins(new_sector)
         NotificationService.notify(
             users=recipients,

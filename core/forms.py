@@ -66,30 +66,33 @@ class ReturnReasonForm(forms.Form):
     name = forms.CharField(label="Motivo da devolução", max_length=150, help_text="Ex.: Faltam informações ou é necessário corrigir o documento.")
 
 
-class TaskStageForm(forms.Form):
-    """Estágio de Kanban de tarefa — a ordem nunca é digitada, só arrastada."""
-
+class SectorScopedVisualForm(forms.Form):
+    sector = forms.ModelChoiceField(label="Setor", queryset=Sector.objects.none())
     name = forms.CharField(label="Nome", max_length=150)
     color = forms.CharField(label="Cor", widget=ColorPaletteWidget, initial="#94A3B8")
+    is_default = forms.BooleanField(label="Usar como padrão deste setor", required=False)
 
-
-class ActivityStageForm(forms.Form):
-    name = forms.CharField(label="Nome", max_length=150)
-    color = forms.CharField(label="Cor", widget=ColorPaletteWidget, initial="#94A3B8")
-
-
-class WorkflowStatusForm(forms.Form):
-    name = forms.CharField(label="Nome", max_length=150)
-    description = forms.CharField(label="O que este status significa", max_length=255, required=False)
-    behavior = forms.ChoiceField(label="Qual situação este status representa?", choices=(), help_text="Escolha a situação existente que corresponde a este nome.")
-    color = forms.CharField(label="Cor", widget=ColorPaletteWidget, initial="#94A3B8")
-
-    def __init__(self, *args, domain=None, **kwargs):
+    def __init__(self, *args, organization=None, **kwargs):
         super().__init__(*args, **kwargs)
-        color_domain = "activity_status" if domain == "activity" else "task_status"
-        self.fields["behavior"].choices = [
-            (code, code.replace("_", " ").title()) for code in DEFAULTS.get(color_domain, {})
-        ]
+        self.fields["sector"].queryset = Sector.objects.filter(organization=organization, is_active=True)
+
+
+class TaskStageForm(SectorScopedVisualForm):
+    """Etapa de tarefa; a ordem só muda por arrastar."""
+
+
+class ActivityStageForm(SectorScopedVisualForm):
+    """Etapa de demanda; a ordem só muda por arrastar."""
+
+
+class WorkflowStatusForm(SectorScopedVisualForm):
+    name = forms.CharField(label="Nome", max_length=150)
+    description = forms.CharField(label="O que esta condição indica", max_length=255, required=False)
+
+    # ``domain`` é aceito por compatibilidade com as URLs antigas; condição
+    # não recebe comportamento operacional.
+    def __init__(self, *args, domain=None, organization=None, **kwargs):
+        super().__init__(*args, organization=organization, **kwargs)
 
 
 class EnumColorLabelForm(forms.Form):

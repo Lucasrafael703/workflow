@@ -1,0 +1,28 @@
+{% comment %}O quadro: uma coluna por etapa do setor (e "Sem etapa" só se sobrar item).{% endcomment %}
+{% if not sector %}
+<div class="kanban-state card">
+    <div class="empty-state">
+        <div class="empty-state__icon">{% include "_icon.html" with name="folder" %}</div>
+        <h3>Você ainda não tem um setor neste quadro</h3>
+        <p>O quadro mostra o trabalho de um setor por vez. Peça ao administrador para incluir você em um setor.</p>
+    </div>
+</div>
+{% else %}
+<div class="kanban-scroll">
+    <section class="kanban-board" data-kanban-board aria-label="Quadro {{ noun_plural }} de {{ sector.name }}">
+        {% if unassigned %}{% include "activities/_kanban_column.html" with column=unassigned %}{% endif %}
+        {% for column in columns %}{% include "activities/_kanban_column.html" %}{% endfor %}
+        {% if not has_stages %}
+        <div class="kanban-state kanban-state--inline">
+            <h3>{{ sector.name }} ainda não tem etapas para {{ noun_plural }}</h3>
+            {% if can_manage_stages %}
+            <p>As etapas são as colunas do quadro, por exemplo: A fazer, Em andamento e Concluído.</p>
+            <a class="btn btn--primary" href="{{ config_url }}">Configurar etapas</a>
+            {% else %}
+            <p>Fale com o gestor do setor para configurar as etapas.</p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </section>
+</div>
+{% endif %}

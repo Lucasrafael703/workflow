@@ -1,0 +1,105 @@
+{% with fs=filter_state %}
+{% if not fs.is_board or fs.sector_obj %}
+<form method="get" class="activities-filters{% if fs.domain == "tarefa" %} task-filters{% endif %} workspace-filters" data-workspace-filters role="search" aria-label="Filtros de {{ fs.noun_plural|default:fs.noun }}">
+    <input type="hidden" name="tab" value="{{ fs.tab }}">
+    {% if fs.domain == "tarefa" %}
+        {% if fs.view_mode != "lista" and fs.view_mode != "demanda" %}<input type="hidden" name="visao" value="{{ fs.view_mode }}">{% endif %}
+        {% if fs.view_mode == "demanda" %}<input type="hidden" name="visao" value="demanda">{% endif %}
+    {% endif %}
+    {% if fs.view_mode == "calendario" %}
+        <input type="hidden" name="ano" value="{{ fs.calendar_year }}">
+        <input type="hidden" name="mes" value="{{ fs.calendar_month }}">
+    {% endif %}
+    {% if fs.status %}<input type="hidden" name="status" value="{{ fs.status }}">{% endif %}
+    {% for field in fs.preserved_fields %}<input type="hidden" name="{{ field.name }}" value="{{ field.value }}">{% endfor %}
+
+    <div class="workspace-filter-toolbar">
+        <div class="workspace-filter-search">
+            <label class="workspace-filter-label" for="workspace-search-{{ fs.domain }}-{{ fs.view_mode }}">Buscar {{ fs.noun }}</label>
+            <div class="workspace-filter-search__control">
+                {% include "_icon.html" with name="search" %}
+                <input id="workspace-search-{{ fs.domain }}-{{ fs.view_mode }}" type="search" name="q" value="{{ fs.q }}" placeholder="Buscar {{ fs.noun }}, cliente, obra..." autocomplete="off">
+                <button type="submit" class="workspace-filter-button workspace-filter-button--search activities-search__submit">
+                    {% include "_icon.html" with name="search" %}<span>Buscar</span>
+                </button>
+            </div>
+        </div>
+
+        <details class="workspace-filter-popover" data-workspace-popover>
+            <summary class="workspace-filter-button{% if fs.pessoa %} is-active{% endif %}" aria-expanded="false">
+                {% include "_icon.html" with name="user" %}<span>Pessoa</span>
+                {% if fs.pessoa %}<span class="workspace-filter-badge" aria-label="filtro ativo">1</span>{% endif %}
+                <span class="workspace-filter-chevron" aria-hidden="true">{% include "_icon.html" with name="chevron-down" %}</span>
+            </summary>
+            <div class="workspace-filter-popover__panel">
+                <p class="workspace-filter-popover__title">Responsável pela {{ fs.noun }}</p>
+                <label><input type="radio" name="pessoa" value=""{% if not fs.pessoa %} checked{% endif %}> Todas as pessoas</label>
+                <label><input type="radio" name="pessoa" value="eu"{% if fs.pessoa == "eu" %} checked{% endif %}> Eu</label>
+                <label><input type="radio" name="pessoa" value="sem"{% if fs.pessoa == "sem" %} checked{% endif %}> Sem responsável</label>
+                {% for person in fs.people %}<label><input type="radio" name="pessoa" value="{{ person.pk }}"{% if fs.pessoa == person.pk|stringformat:"s" %} checked{% endif %}> {{ person.get_full_name|default:person.get_username }}</label>{% endfor %}
+                <button type="submit" class="btn btn--sm workspace-filter-popover__apply">Aplicar</button>
+            </div>
+        </details>
+
+        <details class="workspace-filter-popover" data-workspace-popover>
+            <summary class="workspace-filter-button{% if fs.condicao %} is-active{% endif %}" aria-expanded="false">
+                {% include "_icon.html" with name="info" %}<span>Condição</span>
+                {% if fs.condicao %}<span class="workspace-filter-badge" aria-label="filtro ativo">1</span>{% endif %}
+                <span class="workspace-filter-chevron" aria-hidden="true">{% include "_icon.html" with name="chevron-down" %}</span>
+            </summary>
+            <div class="workspace-filter-popover__panel">
+                <p class="workspace-filter-popover__title">Condição da {{ fs.noun }}</p>
+                <label><input type="radio" name="condicao" value=""{% if not fs.condicao %} checked{% endif %}> Todas as condições</label>
+                {% for sector_name, conditions in fs.condition_groups %}
+                    {% for condition in conditions %}<label><input type="radio" name="condicao" value="{{ condition.pk }}"{% if fs.condicao == condition.pk|stringformat:"s" %} checked{% endif %}> <span class="workspace-filter-dot" style="--option-color: {{ condition.color }};"></span>{{ condition.name }}{% if fs.is_board and sector_name %} <small>{{ sector_name }}</small>{% endif %}</label>{% endfor %}
+                {% empty %}<p class="muted small">Nenhuma condição cadastrada.</p>{% endfor %}
+                <button type="submit" class="btn btn--sm workspace-filter-popover__apply">Aplicar</button>
+            </div>
+        </details>
+
+        <label class="workspace-filter-sector{% if fs.setor %} is-active{% endif %}">
+            <span class="sr-only">Setor</span>
+            <select name="setor" title="Setor" data-workspace-sector>
+                {% if not fs.is_board %}<option value="">Todos os setores</option>{% endif %}
+                {% for item in fs.sectors %}<option value="{{ item.pk }}"{% if fs.setor == item.pk|stringformat:"s" %} selected{% endif %}>{% if fs.is_board %}Setor: {% endif %}{{ item.name }}</option>{% endfor %}
+            </select>
+        </label>
+
+        <details class="workspace-filter-popover" data-workspace-popover>
+            <summary class="workspace-filter-button{% if fs.status or fs.filtro or fs.estagio or fs.cliente or fs.obra or fs.tag or fs.participante or fs.prazo or fs.bloqueio or fs.concluidas %} is-active{% endif %}" aria-expanded="false">
+                {% include "_icon.html" with name="sliders" %}<span>Filtro</span>
+                {% if fs.active_count %}<span class="workspace-filter-badge" aria-label="filtros ativos">{{ fs.active_count }}</span>{% endif %}
+                <span class="workspace-filter-chevron" aria-hidden="true">{% include "_icon.html" with name="chevron-down" %}</span>
+            </summary>
+            <div class="workspace-filter-popover__panel workspace-filter-popover__panel--wide">
+                <p class="workspace-filter-popover__title">Filtros avançados</p>
+                <label class="workspace-filter-field"><span>Etapa</span><select name="estagio"><option value="">Todas as etapas</option>{% for sector_name, stages in fs.stage_groups %}<optgroup label="{{ sector_name }}">{% for stage in stages %}<option value="{{ stage.pk }}"{% if fs.estagio == stage.pk|stringformat:"s" %} selected{% endif %}>{{ stage.name }}</option>{% endfor %}</optgroup>{% endfor %}</select></label>
+                <label class="workspace-filter-field"><span>Cliente</span><select name="cliente"><option value="">Todos</option>{% for client in fs.clients %}<option value="{{ client.pk }}"{% if fs.cliente == client.pk|stringformat:"s" %} selected{% endif %}>{{ client.name }}</option>{% endfor %}</select></label>
+                <label class="workspace-filter-field"><span>Obra</span><select name="obra"><option value="">Todas</option>{% for site in fs.sites %}<option value="{{ site.pk }}"{% if fs.obra == site.pk|stringformat:"s" %} selected{% endif %}>{{ site.name }}</option>{% endfor %}</select></label>
+                <label class="workspace-filter-field"><span>Prazo</span><select name="prazo"><option value="">Qualquer prazo</option><option value="atrasadas"{% if fs.prazo == "atrasadas" %} selected{% endif %}>Atrasadas</option><option value="hoje"{% if fs.prazo == "hoje" %} selected{% endif %}>Vencem hoje</option><option value="7_dias"{% if fs.prazo == "7_dias" %} selected{% endif %}>Próximos 7 dias</option><option value="30_dias"{% if fs.prazo == "30_dias" %} selected{% endif %}>Próximos 30 dias</option><option value="sem_prazo"{% if fs.prazo == "sem_prazo" %} selected{% endif %}>Sem prazo</option></select></label>
+                <label class="workspace-filter-field"><span>Situação rápida</span><select name="filtro"><option value="">Qualquer situação</option><option value="atrasadas"{% if fs.filtro == "atrasadas" %} selected{% endif %}>Atrasadas</option><option value="hoje"{% if fs.filtro == "hoje" %} selected{% endif %}>Vencem hoje</option><option value="bloqueadas"{% if fs.filtro == "bloqueadas" %} selected{% endif %}>Bloqueadas</option>{% if fs.domain == "tarefa" %}<option value="em-fila"{% if fs.filtro == "em-fila" %} selected{% endif %}>Em fila</option><option value="em-execucao"{% if fs.filtro == "em-execucao" %} selected{% endif %}>Em execução</option><option value="devolvidas"{% if fs.filtro == "devolvidas" %} selected{% endif %}>Devolvidas</option>{% endif %}</select></label>
+                <label class="workspace-filter-field"><span>Marcador</span><select name="tag"><option value="">Todos</option>{% for tag in fs.tags %}<option value="{{ tag.pk }}"{% if fs.tag == tag.pk|stringformat:"s" %} selected{% endif %}>{{ tag.name }}</option>{% endfor %}</select></label>
+                {% if fs.domain == "tarefa" %}<label class="workspace-filter-field"><span>Participante</span><select name="participante"><option value="">Qualquer pessoa</option>{% for person in fs.people %}<option value="{{ person.pk }}"{% if fs.participante == person.pk|stringformat:"s" %} selected{% endif %}>{{ person.get_full_name|default:person.get_username }}</option>{% endfor %}</select></label>{% endif %}
+                <label class="workspace-filter-check"><input type="checkbox" name="bloqueio" value="1"{% if fs.bloqueio %} checked{% endif %}> Somente bloqueadas</label>
+                <label class="workspace-filter-check"><input type="checkbox" name="concluidas" value="1"{% if fs.concluidas %} checked{% endif %}> Incluir concluídas e canceladas</label>
+                <button type="submit" class="btn btn--sm workspace-filter-popover__apply">Aplicar</button>
+            </div>
+        </details>
+
+        <details class="workspace-filter-popover" data-workspace-popover>
+            <summary class="workspace-filter-button{% if fs.ordem != fs.default_order or fs.dir %} is-active{% endif %}" aria-expanded="false">
+                {% include "_icon.html" with name="swap" %}<span>Ordenar</span><span class="workspace-filter-chevron" aria-hidden="true">{% include "_icon.html" with name="chevron-down" %}</span>
+            </summary>
+            <div class="workspace-filter-popover__panel">
+                <p class="workspace-filter-popover__title">Classificar por</p>
+                <label class="workspace-filter-field"><span>Campo</span><select name="ordem">{% for key, label in fs.orderings %}<option value="{{ key }}"{% if fs.ordem == key %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+                <label class="workspace-filter-field"><span>Sentido</span><select name="dir"><option value=""{% if not fs.dir %} selected{% endif %}>Padrão</option><option value="asc"{% if fs.dir == "asc" %} selected{% endif %}>Crescente</option><option value="desc"{% if fs.dir == "desc" %} selected{% endif %}>Decrescente</option></select></label>
+                <button type="submit" class="btn btn--sm workspace-filter-popover__apply">Aplicar</button>
+            </div>
+        </details>
+
+        {% if fs.active_count %}<a class="workspace-filter-clear" href="{{ fs.clear_url }}">{% include "_icon.html" with name="back" %} Limpar filtros</a>{% endif %}
+    </div>
+</form>
+{% endif %}
+{% endwith %}

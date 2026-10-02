@@ -1,0 +1,248 @@
+/* ==========================================================================
+   Quadro Kanban de Demandas e de Tarefas (por setor)
+   Colunas de largura fixa com rolagem horizontal; a cor da etapa aparece só no
+   cabeçalho e num tom leve de fundo; o cartão continua branco e compacto.
+   Seletor de Etapa/Condição (.workflow-pop) também vale fora do quadro (gaveta).
+   ========================================================================== */
+
+:root {
+    --kanban-column-width: 296px;
+    --kanban-gap: 12px;
+}
+
+.kanban-page { min-width: 0; }
+
+/* -- Barra de filtros ------------------------------------------------------ */
+
+.kanban-toolbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    margin: 14px 0 16px;
+}
+.kanban-search {
+    display: flex; align-items: center; gap: 8px;
+    flex: 1 1 260px; max-width: 390px; min-width: 220px; height: 40px; padding: 0 12px;
+    border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface);
+    color: var(--muted);
+}
+.kanban-search svg { width: 17px; height: 17px; flex: 0 0 auto; }
+.kanban-search input {
+    flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font: inherit; color: var(--text);
+}
+.kanban-search:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+
+.toolbar-button, .toolbar-select, .toolbar-clear { height: 40px; }
+.toolbar-button, .toolbar-select {
+    border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface);
+}
+.toolbar-button {
+    display: inline-flex; align-items: center; gap: 8px; padding: 0 12px; cursor: pointer;
+    color: var(--text); font-size: 13.5px; list-style: none; user-select: none; white-space: nowrap;
+}
+.toolbar-button::-webkit-details-marker { display: none; }
+.toolbar-button svg { width: 17px; height: 17px; flex: 0 0 auto; color: var(--muted); }
+.toolbar-button__chevron svg { width: 14px; height: 14px; }
+.toolbar-button:hover { background: var(--surface-alt); }
+.toolbar-button.is-active { border-color: #a9c9ff; background: var(--primary-soft); }
+.toolbar-badge {
+    display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+    background: var(--primary); color: #fff; font-size: 11px; font-weight: 700;
+}
+.toolbar-select--primary { border-color: #a9c9ff; background: var(--primary-soft); }
+.toolbar-select select {
+    height: 100%; padding: 0 12px; border: 0; outline: 0; background: transparent; font: inherit;
+    font-weight: 600; color: var(--primary); cursor: pointer; max-width: 240px;
+}
+.toolbar-clear {
+    display: inline-flex; align-items: center; gap: 6px; margin-left: auto; padding: 0 6px;
+    color: var(--primary); font-weight: 600; font-size: 13.5px; text-decoration: none;
+}
+.toolbar-clear svg { width: 16px; height: 16px; }
+.toolbar-clear:hover { text-decoration: underline; }
+
+.kanban-pop { position: relative; }
+.kanban-pop[open] > .toolbar-button { background: var(--surface-alt); }
+.kanban-pop__panel {
+    position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; width: 260px; max-height: 70vh; overflow-y: auto;
+    padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface);
+    box-shadow: var(--shadow-lg); display: grid; gap: 6px;
+}
+.kanban-pop__panel--wide { width: 300px; }
+.kanban-pop__title { margin: 0 0 4px; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+.kanban-pop__option { display: flex; align-items: center; gap: 8px; padding: 5px 4px; border-radius: 6px; cursor: pointer; font-size: 13.5px; }
+.kanban-pop__option:hover { background: var(--surface-alt); }
+.kanban-pop__field { display: grid; gap: 3px; font-size: 12px; color: var(--muted); }
+.kanban-pop__field select { height: 36px; padding: 0 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); font: inherit; color: var(--text); }
+.kanban-pop__apply { justify-self: end; margin-top: 4px; }
+.option-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--option-color, #94A3B8); flex: 0 0 auto; display: inline-block; }
+
+/* -- Quadro ------------------------------------------------------------------ */
+
+.kanban-scroll { overflow-x: auto; padding-bottom: 12px; margin: 0 -2px; }
+.kanban-board {
+    display: flex; align-items: stretch; gap: var(--kanban-gap);
+    width: max-content; min-width: 100%; min-height: calc(100vh - 330px);
+}
+.kanban-column {
+    --stage-color: #94A3B8;
+    flex: 0 0 var(--kanban-column-width); width: var(--kanban-column-width);
+    display: flex; flex-direction: column; min-height: 420px; border-radius: 9px 9px 0 0;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--stage-color) 16%, white) 0, #f8fafc 140px);
+}
+.kanban-column__header {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    min-height: 46px; padding: 0 6px 0 12px; border-radius: 9px 9px 0 0;
+    background: color-mix(in srgb, var(--stage-color) 62%, white); color: var(--text);
+}
+.kanban-column__title-wrap, .kanban-column__actions { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.kanban-column__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.kanban-column__count {
+    display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 7px; border-radius: 999px;
+    background: rgba(255, 255, 255, .6); font-size: 12px; font-weight: 700; white-space: nowrap;
+}
+.kanban-column__count.is-over { background: var(--danger); color: #fff; }
+
+.icon-button {
+    display: inline-grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 6px;
+    background: transparent; color: inherit; cursor: pointer; list-style: none;
+}
+.icon-button::-webkit-details-marker { display: none; }
+.icon-button svg { width: 18px; height: 18px; }
+.icon-button:hover { background: rgba(255, 255, 255, .6); }
+.kanban-card .icon-button:hover { background: var(--surface-alt); }
+
+.kanban-column__body { display: flex; flex-direction: column; gap: 8px; padding: 10px 8px; min-height: 120px; flex: 1 1 auto; }
+.kanban-column__empty { padding: 22px 12px; color: var(--muted); text-align: center; font-size: 13px; }
+.kanban-column__add {
+    display: flex; align-items: center; justify-content: center; gap: 6px; width: calc(100% - 16px); min-height: 38px;
+    margin: 0 8px 8px; border: 1px dashed var(--border-strong); border-radius: 7px; background: rgba(255, 255, 255, .5);
+    color: var(--text-2); cursor: pointer; font: inherit; font-size: 13.5px; text-decoration: none;
+}
+.kanban-column__add svg { width: 16px; height: 16px; }
+.kanban-column__add:hover { background: var(--surface); }
+.kanban-column--unassigned .kanban-column__header { background: #e2e8f0; }
+.kanban-dropzone--active { outline: 2px dashed color-mix(in srgb, var(--stage-color) 60%, #2563eb); outline-offset: -4px; border-radius: 6px; }
+
+/* -- Cartão -------------------------------------------------------------------- */
+
+.kanban-card {
+    position: relative; padding: 11px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .05);
+}
+.kanban-card[draggable="true"] { cursor: grab; }
+.kanban-card[draggable="true"]:active { cursor: grabbing; }
+.kanban-card:hover { border-color: var(--border-strong); }
+.kanban-card.is-dragging { opacity: .5; }
+.kanban-card.is-saving { opacity: .65; pointer-events: none; }
+.kanban-card--stale { border-left: 3px solid var(--warning); }
+.kanban-card.is-updated { animation: kanban-card-updated 1.2s ease-out; }
+@keyframes kanban-card-updated { 0% { box-shadow: 0 0 0 3px color-mix(in srgb, #18B981 40%, transparent); } 100% { box-shadow: 0 1px 2px rgba(15, 23, 42, .05); } }
+
+.kanban-card__topline { display: flex; align-items: flex-start; gap: 6px; }
+.kanban-card__title {
+    flex: 1; min-width: 0; color: var(--text); font-weight: 700; font-size: 14px; line-height: 1.25; text-decoration: none;
+    overflow-wrap: anywhere;
+}
+.kanban-card__title:hover { color: var(--primary); text-decoration: underline; }
+.kanban-card__meta { display: grid; gap: 6px; margin-top: 9px; }
+.kanban-card__meta-row { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--muted); font-size: 12.5px; }
+.kanban-card__meta-row > svg { width: 16px; height: 16px; flex: 0 0 auto; }
+.kanban-card__meta-row.is-overdue { color: var(--danger); font-weight: 600; }
+.kanban-card .avatar { width: 22px; height: 22px; flex: 0 0 22px; font-size: 9.5px; }
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.kanban-card__foot { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.kanban-card__foot:empty { display: none; }
+.kanban-card__age { color: var(--muted); font-size: 11.5px; margin-left: auto; }
+.kanban-card__flag { display: inline-flex; align-items: center; gap: 4px; color: var(--danger); font-size: 11.5px; font-weight: 600; }
+.kanban-card__flag svg { width: 13px; height: 13px; }
+
+.condition-chip {
+    --condition-color: #94A3B8;
+    max-width: 100%; padding: 4px 10px; border: 0; border-radius: 999px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    background: color-mix(in srgb, var(--condition-color) 18%, white); color: color-mix(in srgb, var(--condition-color) 62%, #111827);
+    font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.condition-chip:disabled { cursor: default; }
+.condition-chip:not(:disabled):hover { background: color-mix(in srgb, var(--condition-color) 28%, white); }
+.condition-chip--empty { background: var(--neutral-soft); color: var(--muted); font-weight: 500; }
+
+/* -- Menus em <details> (cartão e coluna) --------------------------------------- */
+
+.kanban-menu { position: relative; }
+.kanban-menu__panel {
+    position: absolute; top: calc(100% + 4px); right: 0; z-index: 30; min-width: 210px; padding: 6px;
+    border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-lg);
+    display: grid; gap: 1px; text-align: left;
+}
+.kanban-menu__panel > a, .kanban-menu__panel > button {
+    display: block; width: 100%; padding: 8px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--text);
+    font: inherit; font-size: 13.5px; text-align: left; text-decoration: none; cursor: pointer;
+}
+.kanban-menu__panel > a:hover, .kanban-menu__panel > button:hover { background: var(--surface-alt); }
+.kanban-menu__panel .is-danger { color: var(--danger); }
+
+/* -- Criação na coluna ---------------------------------------------------------- */
+
+.kanban-inline-create { padding: 10px; border: 1px solid var(--primary); border-radius: 8px; background: var(--surface); box-shadow: 0 0 0 3px var(--primary-soft); }
+.kanban-inline-create input { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 6px; font: inherit; }
+.kanban-inline-create__hint { margin: 6px 0 0; color: var(--muted); font-size: 11.5px; }
+.kanban-inline-create.is-saving { opacity: .6; }
+
+.kanban-limit-form { display: grid; gap: 8px; padding: 10px; }
+.kanban-limit-form label { display: grid; gap: 4px; font-size: 12.5px; color: var(--muted); }
+.kanban-limit-form input { height: 36px; padding: 0 8px; border: 1px solid var(--border-strong); border-radius: 6px; font: inherit; }
+.kanban-limit-form__actions { display: flex; gap: 6px; justify-content: flex-end; }
+
+/* -- Estados ---------------------------------------------------------------------- */
+
+.kanban-state { text-align: center; }
+.kanban-state--inline {
+    flex: 0 0 420px; align-self: flex-start; padding: 22px; border: 1px dashed var(--border-strong); border-radius: var(--radius);
+    background: var(--surface);
+}
+.kanban-state--inline h3 { margin: 0 0 6px; font-size: 15px; }
+.kanban-state--inline p { margin: 0 0 12px; color: var(--muted); font-size: 13.5px; }
+
+/* -- Seletor de Etapa/Condição (workflow-picker.js) -------------------------------- */
+
+.workflow-value {
+    display: inline-flex; align-items: center; gap: 8px; width: 100%; min-height: 40px; padding: 8px 12px;
+    border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text);
+    font: inherit; font-weight: 500; text-align: left; cursor: pointer;
+}
+.workflow-value svg { width: 15px; height: 15px; margin-left: auto; color: var(--muted); }
+.workflow-value:disabled { cursor: default; background: var(--surface-alt); }
+.workflow-value:not(:disabled):hover { border-color: var(--primary); }
+.workflow-value .option-dot { background: var(--option-color, #94A3B8); }
+
+.workflow-pop {
+    position: absolute; z-index: 130; min-width: 220px; max-width: 300px; max-height: 60vh; overflow-y: auto; padding: 6px;
+    border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-lg);
+}
+.workflow-pop__option {
+    display: flex; align-items: center; gap: 9px; width: 100%; padding: 8px 10px; border: 0; border-radius: 6px; background: transparent;
+    color: var(--text); font: inherit; font-size: 13.5px; text-align: left; cursor: pointer;
+}
+.workflow-pop__option:hover, .workflow-pop__option:focus-visible { background: var(--surface-alt); outline: none; }
+.workflow-pop__option.is-current { font-weight: 700; }
+.workflow-pop__option .workflow-pop__check { margin-left: auto; color: var(--primary); }
+.workflow-pop__sep { height: 1px; margin: 6px 4px; background: var(--border); }
+.workflow-pop__link { display: block; padding: 8px 10px; border-radius: 6px; color: var(--primary); font-size: 13px; text-decoration: none; }
+.workflow-pop__link:hover { background: var(--surface-alt); }
+.workflow-pop__empty { padding: 10px; color: var(--muted); font-size: 13px; }
+.workflow-pop__form { display: grid; gap: 8px; padding: 8px; }
+.workflow-pop__form input[type="text"] { height: 36px; padding: 0 8px; border: 1px solid var(--border-strong); border-radius: 6px; font: inherit; }
+.workflow-pop__swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.workflow-pop__swatch { width: 20px; height: 20px; padding: 0; border: 2px solid transparent; border-radius: 50%; cursor: pointer; background: var(--swatch); }
+.workflow-pop__swatch.is-selected { border-color: var(--text); }
+.workflow-pop__error { margin: 0; color: var(--danger); font-size: 12.5px; }
+
+.workflow-controls { margin-bottom: 4px; }
+
+/* -- Telas estreitas ---------------------------------------------------------------- */
+
+@media (max-width: 900px) {
+    :root { --kanban-column-width: min(84vw, 320px); }
+    .kanban-search { max-width: none; flex-basis: 100%; }
+    .toolbar-clear { margin-left: 0; }
+    .kanban-pop__panel { position: fixed; left: 12px; right: 12px; top: auto; bottom: 12px; width: auto; max-height: 60vh; }
+}

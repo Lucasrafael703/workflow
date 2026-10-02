@@ -59,6 +59,9 @@ dois casos ela é o contexto (a tarefa já pertence a ela) e aparece só como re
         </div>
         {% endif %}
 
+        {% if form.stage %}{% include "activities/_task_field.html" with field=form.stage compact=True %}{% endif %}
+        {% if form.condition %}{% include "activities/_task_field.html" with field=form.condition compact=True %}{% endif %}
+
         {% if form.responsavel %}
         {% include "activities/_task_field.html" with field=form.responsavel compact=True %}
         {% elif task %}

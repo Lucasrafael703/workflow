@@ -1,0 +1,49 @@
+{% comment %}Uma coluna do quadro. `column.stage` vazio = "Sem etapa" (só existe para classificar itens soltos).
+Espera: column, kanban_domain, sector, noun_singular, can_manage_stages, can_manage_conditions.{% endcomment %}
+{% with stage=column.stage %}
+<section class="kanban-column{% if not stage %} kanban-column--unassigned{% endif %}" data-kanban-column
+         {% if stage %}data-stage-id="{{ stage.pk }}" data-stage-name="{{ stage.name }}" data-limit="{{ column.limit|default:'' }}" style="--stage-color: {{ stage.color }};"{% else %}data-unassigned style="--stage-color: #CBD5E1;"{% endif %}>
+    <header class="kanban-column__header">
+        <div class="kanban-column__title-wrap">
+            <strong class="kanban-column__title" {% if not stage %}title="Itens sem etapa neste setor. Arraste cada um para uma etapa."{% endif %}>{% if stage %}{{ stage.name }}{% else %}Sem etapa{% endif %}</strong>
+            <span class="kanban-column__count{% if column.over_limit %} is-over{% endif %}" data-column-count data-count="{{ column.count }}"{% if column.limit %} title="Limite da coluna: {{ column.limit }}"{% endif %}>{% if column.limit %}{{ column.count }} de {{ column.limit }}{% else %}{{ column.count }}{% endif %}</span>
+        </div>
+        {% if stage %}
+        <div class="kanban-column__actions">
+            {% if kanban_domain == "demandas" %}
+            <button type="button" class="icon-button" data-inline-create aria-label="Adicionar demanda em {{ stage.name }}" title="Adicionar demanda">{% include "_icon.html" with name="plus" %}</button>
+            {% else %}
+            <a class="icon-button" href="{% url 'task-quick-create-standalone' %}?sector={{ sector.pk }}&amp;stage={{ stage.pk }}" data-new-item aria-label="Adicionar tarefa em {{ stage.name }}" title="Adicionar tarefa">{% include "_icon.html" with name="plus" %}</a>
+            {% endif %}
+            <details class="kanban-menu" data-kanban-menu>
+                <summary class="icon-button" aria-label="Mais opções da etapa {{ stage.name }}" title="Mais opções">{% include "_icon.html" with name="more" %}</summary>
+                <div class="kanban-menu__panel kanban-menu__panel--end" role="menu">
+                    {% if kanban_domain == "demandas" %}
+                    <button type="button" role="menuitem" data-inline-create>Adicionar nova demanda</button>
+                    {% else %}
+                    <a role="menuitem" href="{% url 'task-quick-create-standalone' %}?sector={{ sector.pk }}&amp;stage={{ stage.pk }}" data-new-item>Adicionar nova tarefa</a>
+                    {% endif %}
+                    {% if column.can_manage %}
+                    <button type="button" role="menuitem" data-set-limit>Definir limite da coluna</button>
+                    <a role="menuitem" href="{% url 'config-etapas-status' %}?domain={{ kanban_domain }}&amp;sector={{ sector.pk }}">Editar etapa</a>
+                    {% endif %}
+                </div>
+            </details>
+        </div>
+        {% endif %}
+    </header>
+    <div class="kanban-column__body" data-dropzone>
+        {% for item in column.items %}
+            {% if kanban_domain == "demandas" %}{% include "activities/_kanban_activity_card.html" %}{% else %}{% include "activities/_kanban_task_card.html" %}{% endif %}
+        {% endfor %}
+        <div class="kanban-column__empty" data-column-empty{% if column.items %} hidden{% endif %}>Nenhum item nesta etapa</div>
+    </div>
+    {% if stage %}
+        {% if kanban_domain == "demandas" %}
+        <button type="button" class="kanban-column__add" data-inline-create>{% include "_icon.html" with name="plus" %} Nova demanda</button>
+        {% else %}
+        <a class="kanban-column__add" href="{% url 'task-quick-create-standalone' %}?sector={{ sector.pk }}&amp;stage={{ stage.pk }}" data-new-item>{% include "_icon.html" with name="plus" %} Adicionar tarefa</a>
+        {% endif %}
+    {% endif %}
+</section>
+{% endwith %}

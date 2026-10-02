@@ -166,23 +166,26 @@ class ActivityWorkspaceTests(ViewTestCase):
         response = self.client.get(reverse("activity-list"), {"q": "nao-existe"})
         self.assertNotContains(response, f'id="activity-{self.activity.pk}"')
 
-    def test_quick_filter_links_toggle_the_active_value(self):
+    def test_shared_filter_toolbar_exposes_manual_controls(self):
         response = self.client.get(reverse("activity-list"))
-        self.assertContains(response, 'href="?prazo=atrasadas"')
-        self.assertContains(response, 'href="?prazo=hoje"')
-        self.assertContains(response, 'href="?status=BLOQUEADA"')
+        self.assertContains(response, 'data-workspace-filters')
+        self.assertContains(response, 'name="q"')
+        self.assertContains(response, 'name="prazo"')
+        self.assertContains(response, 'name="filtro"')
+        self.assertContains(response, 'name="bloqueio"')
+        self.assertContains(response, 'class="workspace-filter-button workspace-filter-button--search activities-search__submit"')
+        self.assertNotContains(response, 'data-auto-submit')
 
         response = self.client.get(reverse("activity-list"), {"tab": "minhas", "prazo": "atrasadas"})
-        self.assertContains(response, 'href="?tab=minhas"')
-        self.assertContains(response, 'aria-pressed="true"')
+        self.assertContains(response, 'option value="atrasadas" selected')
+        self.assertContains(response, 'class="workspace-filter-button is-active"')
 
         response = self.client.get(reverse("activity-list"), {"tab": "minhas", "status": "BLOQUEADA"})
-        self.assertContains(response, 'href="?tab=minhas"')
-        self.assertContains(response, 'aria-pressed="true"')
+        self.assertContains(response, 'name="bloqueio" value="1" checked')
 
     def test_filter_context_is_preserved_when_switching_views(self):
         stage = ActivityStage.objects.create(
-            organization=self.org, name="Em análise", order=1, color="#3B82F6", created_by=self.requester
+            organization=self.org, sector=self.sector, name="Em análise", order=1, color="#3B82F6", created_by=self.requester
         )
         response = self.client.get(
             reverse("activity-list"),
@@ -196,7 +199,8 @@ class ActivityWorkspaceTests(ViewTestCase):
         self.assertIn("q=Material", querystring)
         self.assertIn("status=ABERTA", querystring)
         self.assertIn(f"estagio={stage.pk}", querystring)
-        self.assertIn(f"grupo={self.sector.pk}", querystring)
+        self.assertIn(f"setor={self.sector.pk}", querystring)
+        self.assertNotIn("grupo=", querystring)
         self.assertIn("ordem=titulo", querystring)
         self.assertNotIn("page=", querystring)
         self.assertNotIn("ano=", querystring)
@@ -216,7 +220,7 @@ class ActivityWorkspaceTests(ViewTestCase):
     def test_filter_changes_do_not_keep_pagination(self):
         response = self.client.get(reverse("activity-list"), {"q": "Material", "page": 1})
         self.assertNotContains(response, 'name="page"')
-        self.assertContains(response, 'href="?q=Material&amp;prazo=atrasadas"')
+        self.assertContains(response, 'href="?q=Material&amp;ordem=titulo"')
 
     def test_legacy_drawer_redirects_to_full_activity(self):
         self.assertRedirects(self.client.get(reverse("activity-drawer", args=[self.activity.pk])), reverse("activity-detail", args=[self.activity.pk]))

@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20261002-lista-demandas">
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20261004-filtros2">
     <script>
     // Aplica o estado recolhido antes do primeiro paint — sem isto, a
     // sidebar apareceria expandida por um instante e "pularia" pro estado
@@ -20,6 +20,7 @@
 <link rel="stylesheet" href="{% static 'css/activity-workspace.css' %}?v=20261002c">
 <link rel="stylesheet" href="{% static 'css/intake.css' %}?v=20261001a">
 <link rel="stylesheet" href="{% static 'css/task-modal.css' %}?v=20261001a">
+<link rel="stylesheet" href="{% static 'css/kanban.css' %}?v=20261003a">
 </head>
 <body data-mention-search-url="{% url 'person-search' %}">
 <a class="skip-link" href="#main-content">Ir para o conteúdo</a>
@@ -65,38 +66,16 @@
             </a>
             {% endif %}
 
-            <details class="nav-group {% if nav_active == 'activities' %}has-active{% endif %}"
-                      {% if nav_active == 'activities' %}open{% endif %}>
-                <summary data-tooltip="Demandas">
-                    <span class="nav-item__icon">{% include "_icon.html" with name="activity" %}</span>
-                    <span class="nav-item__label">Demandas</span>
-                    <span class="nav-group__chevron">{% include "_icon.html" with name="chevron-down" %}</span>
-                </summary>
-                <div class="nav-group__flyout">
-                    <div class="nav-group__flyout-title">Demandas</div>
-                    <a href="{% url 'activity-list' %}?tab=minhas" class="nav-subitem">Sob minha responsabilidade</a>
-                    <a href="{% url 'activity-list' %}?tab=participando" class="nav-subitem">Participando</a>
-                    <a href="{% url 'activity-list' %}?tab=grupo" class="nav-subitem">Do meu setor</a>
-                    <a href="{% url 'activity-list' %}?tab=concluidas" class="nav-subitem">Concluídas</a>
-                </div>
-            </details>
+            <a href="{% url 'activity-list' %}?tab=minhas" class="nav-item {% if nav_active == 'activities' %}is-active{% endif %}" data-tooltip="Demandas">
+                <span class="nav-item__icon">{% include "_icon.html" with name="activity" %}</span>
+                <span class="nav-item__label">Demandas</span>
+            </a>
 
-            <details class="nav-group {% if nav_active == 'tasks' %}has-active{% endif %}"
-                      {% if nav_active == 'tasks' %}open{% endif %}>
-                <summary data-tooltip="Tarefas">
-                    <span class="nav-item__icon">{% include "_icon.html" with name="task" %}</span>
-                    <span class="nav-item__label">Tarefas</span>
-                    {% if lps_open_tasks %}<span class="nav-count nav-count--quiet">{{ lps_open_tasks }}</span>{% endif %}
-                    <span class="nav-group__chevron">{% include "_icon.html" with name="chevron-down" %}</span>
-                </summary>
-                <div class="nav-group__flyout">
-                    <div class="nav-group__flyout-title">Tarefas</div>
-                    <a href="{% url 'task-list' %}?tab=minhas" class="nav-subitem">Minhas tarefas</a>
-                    <a href="{% url 'task-list' %}?tab=participando" class="nav-subitem">Participando</a>
-                    <a href="{% url 'task-list' %}?tab=setor" class="nav-subitem">Do meu setor</a>
-                    <a href="{% url 'task-list' %}?tab=concluidas&status=concluidas" class="nav-subitem">Concluídas</a>
-                </div>
-            </details>
+            <a href="{% url 'task-list' %}?tab=minhas" class="nav-item {% if nav_active == 'tasks' %}is-active{% endif %}" data-tooltip="Tarefas">
+                <span class="nav-item__icon">{% include "_icon.html" with name="task" %}</span>
+                <span class="nav-item__label">Tarefas</span>
+                {% if lps_open_tasks %}<span class="nav-count nav-count--quiet">{{ lps_open_tasks }}</span>{% endif %}
+            </a>
 
             <a href="{% url 'queue' %}" class="nav-item {% if nav_active == 'queue' %}is-active{% endif %}" data-tooltip="Fila">
                 <span class="nav-item__icon">{% include "_icon.html" with name="queue" %}</span>
@@ -227,7 +206,7 @@
                 </summary>
                 <div class="nav-group__flyout">
                     <div class="nav-group__flyout-title">Configurações</div>
-                    <a href="{% url 'config-etapas-status' %}" class="nav-subitem {% if nav_active2 == 'config-etapas-status' %}is-active{% endif %}">Etapas e status</a>
+                    <a href="{% url 'config-etapas-status' %}" class="nav-subitem {% if nav_active2 == 'config-etapas-status' %}is-active{% endif %}">Etapas e condições</a>
                     <a href="{% url 'config-prioridades' %}" class="nav-subitem {% if nav_active2 == 'config-prioridades' %}is-active{% endif %}">Prioridades</a>
                     <a href="{% url 'config-motivos-bloqueio' %}" class="nav-subitem {% if nav_active2 == 'config-motivos-bloqueio' %}is-active{% endif %}">Motivos de bloqueio</a>
                     <a href="{% url 'config-motivos-devolucao' %}" class="nav-subitem {% if nav_active2 == 'config-motivos-devolucao' %}is-active{% endif %}">Motivos de devolução</a>
@@ -353,10 +332,14 @@
 <script src="{% static 'js/timer.js' %}?v=20260919c"></script>
 <script src="{% static 'js/checklist.js' %}?v=20260929c"></script>
 <script src="{% static 'js/task-drawer.js' %}?v=20260919c"></script>
+<script src="{% static 'js/workflow-picker.js' %}?v=20261003a"></script>
 <script src="{% static 'js/color-utils.js' %}?v=20260926a"></script>
 <script src="{% static 'js/color-palette-picker.js' %}?v=20260926a"></script>
 {% endif %}
-{% if user.is_authenticated %}<script src="{% static 'js/activity-workspace.js' %}?v=20261002-filtros2"></script>{% endif %}
+{% if user.is_authenticated %}
+<script src="{% static 'js/activity-workspace.js' %}?v=20261004-filtros3"></script>
+<script src="{% static 'js/workspace-filters.js' %}?v=20261004b"></script>
+{% endif %}
 {% block scripts %}{% endblock %}
 </body>
 </html>

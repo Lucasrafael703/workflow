@@ -138,7 +138,7 @@ class TagService(SimpleCadastroService):
     model = Tag
 
 
-class TaskStageService(SimpleCadastroService):
+class LegacyTaskStageService(SimpleCadastroService):
     """Estágios de Kanban de tarefa (cadastro configurável por organização).
 
     `order` nunca é digitado — nasce no fim da lista e só muda via `reorder`,
@@ -171,7 +171,7 @@ class TaskStageService(SimpleCadastroService):
                 stage.save(update_fields=["order"])
 
 
-class ActivityStageService(SimpleCadastroService):
+class LegacyActivityStageService(SimpleCadastroService):
     model = ActivityStage
 
     @classmethod
@@ -195,7 +195,7 @@ class ActivityStageService(SimpleCadastroService):
                 stage.save(update_fields=["order"])
 
 
-class WorkflowStatusService(SimpleCadastroService):
+class LegacyWorkflowStatusService(SimpleCadastroService):
     model = WorkflowStatus
 
     @classmethod
@@ -253,6 +253,276 @@ class WorkflowStatusService(SimpleCadastroService):
         if fields:
             instance.save(update_fields=fields)
         return instance
+
+
+class SectorScopedVisualService(SimpleCadastroService):
+    """Base para cadastros visuais por setor, sem efeito operacional."""
+
+    @classmethod
+    def available_for(cls, organization, sector, *, include_inactive=False):
+        queryset = cls.model.objects.filter(organization=organization, sector=sector)
+        if not include_inactive:
+            queryset = queryset.filter(is_active=True)
+        return queryset.order_by("order", "name")
+
+    @classmethod
+    @transaction.atomic
+    def create(cls, organization, sector, name, created_by=None, is_default=False, **extra):
+        if sector is None or sector.organization_id != organization.id:
+            raise CadastroError("Escolha um setor da organização.")
+        name = (name or "").strip()
+        if not name:
+            raise CadastroError("Informe o nome.")
+        color = extra.get("color", "#94A3B8")
+        if not is_valid_palette_color(color):
+            raise CadastroError("Escolha uma cor da paleta oficial.")
+        if cls.model.objects.filter(organization=organization, sector=sector, name__iexact=name).exists():
+            raise CadastroError(f"Já existe uma opção com o nome “{name}” neste setor.")
+        if is_default:
+            cls.model.objects.filter(organization=organization, sector=sector, is_default=True).update(is_default=False)
+        last_order = cls.model.objects.filter(organization=organization, sector=sector).aggregate(models.Max("order"))["order__max"] or 0
+        return cls.model.objects.create(
+            organization=organization, sector=sector, name=name, created_by=created_by,
+            order=last_order + 1, is_default=is_default, **extra,
+        )
+
+    @classmethod
+    @transaction.atomic
+    def update(cls, instance, name=None, color=None, is_active=None, is_default=None, **extra):
+        fields = []
+        if name is not None:
+            name = name.strip()
+            if not name:
+                raise CadastroError("Informe o nome.")
+            duplicate = cls.model.objects.filter(
+                organization=instance.organization, sector=instance.sector, name__iexact=name
+            ).exclude(pk=instance.pk)
+            if duplicate.exists():
+                raise CadastroError(f"Já existe uma opção com o nome “{name}” neste setor.")
+            instance.name = name
+            fields.append("name")
+        if color is not None:
+            if not is_valid_palette_color(color):
+                raise CadastroError("Escolha uma cor da paleta oficial.")
+            instance.color = color
+            fields.append("color")
+        if is_active is not None:
+            instance.is_active = is_active
+            fields.append("is_active")
+            # Um padrÃ£o inativo nÃ£o pode continuar sendo aplicado em novas
+            # demandas/tarefas. ReferÃªncias histÃ³ricas permanecem intactas.
+            if not is_active and instance.is_default:
+                instance.is_default = False
+                fields.append("is_default")
+        if is_default is not None:
+            if is_default:
+                cls.model.objects.filter(
+                    organization=instance.organization, sector=instance.sector, is_default=True
+                ).exclude(pk=instance.pk).update(is_default=False)
+            instance.is_default = is_default
+            fields.append("is_default")
+        for field, value in extra.items():
+            setattr(instance, field, value)
+            fields.append(field)
+        if fields:
+            instance.save(update_fields=sorted(set(fields)))
+        return instance
+
+    @classmethod
+    @transaction.atomic
+    def reorder(cls, organization, sector, ordered_ids):
+        rows = {
+            row.pk: row
+            for row in cls.model.objects.filter(organization=organization, sector=sector, pk__in=ordered_ids)
+        }
+        for position, row_id in enumerate(ordered_ids, start=1):
+            row = rows.get(row_id)
+            if row and row.order != position:
+                row.order = position
+                row.save(update_fields=["order"])
+
+    @classmethod
+    @transaction.atomic
+    def delete_if_unused(cls, instance):
+        """Exclui apenas uma opÃ§Ã£o nunca usada; caso contrÃ¡rio a inativa.
+
+        Etapas e condiÃ§Ãµes fazem parte do histÃ³rico das demandas e tarefas.
+        Apagar um valor referenciado quebraria a leitura do que aconteceu no
+        passado; para esses casos, a inativaÃ§Ã£o Ã© a operaÃ§Ã£o segura.
+        """
+        references = []
+        if isinstance(instance, ActivityStage):
+            references = [instance.activities.exists()]
+        elif isinstance(instance, TaskStage):
+            references = [instance.tasks.exists()]
+        elif isinstance(instance, WorkflowStatus):
+            references = [instance.activities.exists(), instance.tasks.exists()]
+        if any(references):
+            cls.update(instance, is_active=False)
+            return False
+        instance.delete()
+        return True
+
+
+class TaskStageService(SectorScopedVisualService):
+    model = TaskStage
+
+
+class ActivityStageService(SectorScopedVisualService):
+    model = ActivityStage
+
+
+class StageService:
+    """Porta única para validar e obter etapas da demanda/tarefa."""
+
+    services = {
+        WorkflowStatus.Domain.ACTIVITY: ActivityStageService,
+        WorkflowStatus.Domain.TASK: TaskStageService,
+        "demanda": ActivityStageService,
+        "tarefa": TaskStageService,
+    }
+
+    @classmethod
+    def for_domain(cls, domain):
+        try:
+            return cls.services[domain]
+        except KeyError as exc:
+            raise CadastroError("Domínio de etapa desconhecido.") from exc
+
+    @classmethod
+    def validate(cls, stage, organization, sector, domain, *, allow_inactive_current=False):
+        if stage is None:
+            return None
+        service = cls.for_domain(domain)
+        if not isinstance(stage, service.model) or stage.organization_id != organization.id or stage.sector_id != getattr(sector, "id", None):
+            raise CadastroError("A etapa escolhida não pertence ao setor atual.")
+        if not stage.is_active and not allow_inactive_current:
+            raise CadastroError("A etapa escolhida está inativa.")
+        return stage
+
+    @classmethod
+    def default_for(cls, organization, sector, domain):
+        if sector is None:
+            return None
+        return cls.for_domain(domain).available_for(organization, sector).filter(is_default=True).first()
+
+
+class WorkflowStatusService(SectorScopedVisualService):
+    """Nome técnico legado; a interface utiliza o termo Condição."""
+
+    model = WorkflowStatus
+
+    @classmethod
+    def available_for(cls, organization, sector, domain, *, include_inactive=False):
+        return super().available_for(organization, sector, include_inactive=include_inactive).filter(domain=domain)
+
+    @classmethod
+    @transaction.atomic
+    def create(
+        cls, organization, name, domain, sector=None, behavior="", created_by=None,
+        description="", color="#94A3B8", is_default=False,
+    ):
+        if domain not in (WorkflowStatus.Domain.ACTIVITY, WorkflowStatus.Domain.TASK):
+            raise CadastroError("Domínio de condição desconhecido.")
+        if sector is None or sector.organization_id != organization.id:
+            raise CadastroError("Escolha o setor desta condição.")
+        name = (name or "").strip()
+        if not name:
+            raise CadastroError("Informe o nome.")
+        if not is_valid_palette_color(color):
+            raise CadastroError("Escolha uma cor da paleta oficial.")
+        if cls.model.objects.filter(
+            organization=organization, sector=sector, domain=domain, name__iexact=name
+        ).exists():
+            raise CadastroError("Já existe uma condição com este nome neste setor.")
+        if is_default:
+            cls.model.objects.filter(organization=organization, sector=sector, domain=domain, is_default=True).update(is_default=False)
+        last_order = cls.model.objects.filter(organization=organization, sector=sector, domain=domain).aggregate(models.Max("order"))["order__max"] or 0
+        return cls.model.objects.create(
+            organization=organization, sector=sector, domain=domain, name=name, description=description,
+            behavior=behavior or "", color=color, order=last_order + 1, is_default=is_default, created_by=created_by,
+        )
+
+    @classmethod
+    @transaction.atomic
+    def update(cls, instance, name=None, description=None, color=None, is_active=None, is_default=None, **_ignored):
+        fields = []
+        if name is not None:
+            name = name.strip()
+            if not name:
+                raise CadastroError("Informe o nome.")
+            duplicate = cls.model.objects.filter(
+                organization=instance.organization, sector=instance.sector,
+                domain=instance.domain, name__iexact=name,
+            ).exclude(pk=instance.pk)
+            if duplicate.exists():
+                raise CadastroError("Já existe uma condição com este nome neste setor.")
+            instance.name = name
+            fields.append("name")
+        if description is not None:
+            instance.description = description
+            fields.append("description")
+        if color is not None:
+            if not is_valid_palette_color(color):
+                raise CadastroError("Escolha uma cor da paleta oficial.")
+            instance.color = color
+            fields.append("color")
+        if is_active is not None:
+            instance.is_active = is_active
+            fields.append("is_active")
+            if not is_active and instance.is_default:
+                instance.is_default = False
+                fields.append("is_default")
+        if is_default is not None:
+            if is_default:
+                cls.model.objects.filter(
+                    organization=instance.organization, sector=instance.sector,
+                    domain=instance.domain, is_default=True,
+                ).exclude(pk=instance.pk).update(is_default=False)
+            instance.is_default = is_default
+            fields.append("is_default")
+        if fields:
+            instance.save(update_fields=sorted(set(fields)))
+        return instance
+
+    @classmethod
+    @transaction.atomic
+    def reorder(cls, organization, sector, domain, ordered_ids):
+        rows = {
+            row.pk: row
+            for row in cls.model.objects.filter(
+                organization=organization, sector=sector, domain=domain, pk__in=ordered_ids
+            )
+        }
+        for position, row_id in enumerate(ordered_ids, start=1):
+            row = rows.get(row_id)
+            if row and row.order != position:
+                row.order = position
+                row.save(update_fields=["order"])
+
+
+class ConditionService:
+    """Validação explícita da camada manual, independente de status interno."""
+
+    @staticmethod
+    def validate(condition, organization, sector, domain, *, allow_inactive_current=False):
+        if condition is None:
+            return None
+        if (
+            condition.organization_id != organization.id
+            or condition.sector_id != getattr(sector, "id", None)
+            or condition.domain != domain
+        ):
+            raise CadastroError("A condição escolhida não pertence ao setor atual.")
+        if not condition.is_active and not allow_inactive_current:
+            raise CadastroError("A condição escolhida está inativa.")
+        return condition
+
+    @staticmethod
+    def default_for(organization, sector, domain):
+        if sector is None:
+            return None
+        return WorkflowStatusService.available_for(organization, sector, domain).filter(is_default=True).first()
 
 
 class EnumColorService:

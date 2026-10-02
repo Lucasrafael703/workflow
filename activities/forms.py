@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import format_html
 
-from core.models import Client, Company, CostCenter, Sector, Site, Tag
+from core.models import ActivityStage, Client, Company, CostCenter, Sector, Site, Tag, TaskStage, WorkflowStatus
 from core.sanitize import sanitize_description
 from core.widgets import (
     ActivityPickerWidget,
@@ -176,6 +176,30 @@ class OrganizationScopedFormMixin:
                 fields["sector"].widget.queryset = fields["sector"].queryset
                 if can_create_sector:
                     fields["sector"].widget.create_url = reverse("sector-create")
+        # Etapa e condição só podem aparecer para o setor selecionado. O
+        # serviço repete a validação no POST; o filtro aqui evita combinações
+        # inválidas já na interface.
+        selected_sector_id = None
+        if self.is_bound:
+            selected_sector_id = self.data.get("sector")
+        elif getattr(self, "instance", None) is not None:
+            selected_sector_id = getattr(self.instance, "sector_id", None)
+        if "stage" in fields:
+            model = ActivityStage if getattr(getattr(self, "_meta", None), "model", None) is Activity else TaskStage
+            queryset = model.objects.filter(organization=organization, is_active=True)
+            if selected_sector_id:
+                queryset = queryset.filter(sector_id=selected_sector_id)
+            else:
+                queryset = queryset.none()
+            fields["stage"].queryset = queryset
+        if "condition" in fields:
+            domain = WorkflowStatus.Domain.ACTIVITY if getattr(getattr(self, "_meta", None), "model", None) is Activity else WorkflowStatus.Domain.TASK
+            queryset = WorkflowStatus.objects.filter(organization=organization, domain=domain, is_active=True)
+            if selected_sector_id:
+                queryset = queryset.filter(sector_id=selected_sector_id)
+            else:
+                queryset = queryset.none()
+            fields["condition"].queryset = queryset
         if "tags" in fields:
             queryset = Tag.objects.filter(organization=organization, is_active=True)
             fields["tags"].queryset = queryset
@@ -294,7 +318,7 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
     """
 
     STEP_FIELDS = {
-        1: ("title", "owner", "sector", "requested_deadline", "urgency", "company"),
+        1: ("title", "owner", "sector", "stage", "condition", "requested_deadline", "urgency", "company"),
         2: ("client", "site", "cost_center", "external_requester", "address"),
         3: ("description", "files_location"),
     }
@@ -314,7 +338,7 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
     class Meta:
         model = Activity
         fields = [
-            "title", "owner", "sector", "requested_deadline", "urgency", "company",
+            "title", "owner", "sector", "stage", "condition", "requested_deadline", "urgency", "company",
             "client", "site", "cost_center", "external_requester", "address",
             "description", "files_location",
         ]
@@ -322,6 +346,8 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
             "title": "Nome da demanda",
             "owner": "Atribuído a",
             "sector": "Setor responsável",
+            "stage": "Etapa",
+            "condition": "Condição",
             "urgency": "Urgência",
             "company": "Organização",
             "client": "Cliente",
@@ -336,6 +362,8 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
             "title": "Descreva a entrega esperada. Ex.: Orçamento do gerador aprovado.",
             "owner": "Essa pessoa será responsável pela entrega e acompanhará as tarefas.",
             "sector": "Escolha o setor que será responsável por esta demanda.",
+            "stage": "Etapa visual deste setor.",
+            "condition": "Condição manual deste setor; não muda o status operacional.",
             "urgency": "Indique o quanto esta demanda precisa de atenção.",
             "company": "Ex.: Comercial, Engenharia, Operações, etc.",
             "client": "Selecione o cliente relacionado a esta demanda.",
@@ -499,6 +527,8 @@ class ActivityDeadlineChangeForm(forms.Form):
 TASK_LABELS = {
     "title": "O que precisa ser feito?",
     "sector": "Setor",
+    "stage": "Etapa",
+    "condition": "Condição",
     "responsavel": "Responsável",
     "participantes": "Participantes",
     "requested_deadline": "Data do prazo",
@@ -508,6 +538,8 @@ TASK_LABELS = {
 TASK_HELP = {
     "title": "Comece com uma ação. Ex.: Conferir os preços da planilha.",
     "sector": "Equipe que recebe a tarefa na fila de trabalho.",
+    "stage": "Etapa visual do setor selecionado.",
+    "condition": "Condição manual do setor; não altera o status operacional.",
     "responsavel": "Quem acompanha a tarefa até a conclusão.",
     "participantes": "Quem ajuda a executar a tarefa. Uma pessoa que você convida só entra depois de aceitar.",
     "requested_deadline": "Quando quem pediu precisa receber a entrega. O prazo que a equipe se compromete a "
@@ -719,7 +751,7 @@ class TaskQuickCreateForm(TaskDeadlineInputsMixin, OrganizationScopedFormMixin, 
 
     class Meta:
         model = Task
-        fields = ["title", "sector", "requested_deadline", "tags", "description"]
+        fields = ["title", "sector", "stage", "condition", "requested_deadline", "tags", "description"]
         labels = {name: TASK_LABELS[name] for name in fields}
         help_texts = {name: TASK_HELP[name] for name in fields}
         widgets = {
@@ -732,12 +764,19 @@ class TaskQuickCreateForm(TaskDeadlineInputsMixin, OrganizationScopedFormMixin, 
     def __init__(self, *args, organization=None, activity=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.scope_querysets(organization)
-        self.order_fields(["title", "sector", "responsavel", "participantes", "requested_deadline", "tags", "description"])
+        self.order_fields(["title", "sector", "stage", "condition", "responsavel", "participantes", "requested_deadline", "tags", "description"])
         self.fields["description"].required = False
         self.fields["tags"].required = False
         self.fields["sector"].required = True
         if activity is not None and activity.sector_id and not self.is_bound:
             self.fields["sector"].initial = activity.sector_id
+            self.fields["stage"].queryset = TaskStage.objects.filter(
+                organization=organization, sector_id=activity.sector_id, is_active=True
+            ).order_by("order", "name")
+            self.fields["condition"].queryset = WorkflowStatus.objects.filter(
+                organization=organization, sector_id=activity.sector_id,
+                domain=WorkflowStatus.Domain.TASK, is_active=True,
+            ).order_by("order", "name")
         if organization is not None:
             people = User.objects.filter(
                 profile__organization=organization, is_active=True
@@ -783,7 +822,10 @@ class TaskQuickCreateStandaloneForm(TaskQuickCreateForm):
         # A atividade só é conhecida depois de escolhida no próprio popup,
         # então nunca há um `activity` fixo para herdar o setor dele.
         super().__init__(*args, organization=organization, activity=None, **kwargs)
-        self.order_fields(["activity", "title", "sector", "responsavel", "participantes", "requested_deadline", "tags", "description"])
+        self.order_fields([
+            "activity", "title", "sector", "stage", "condition", "responsavel",
+            "participantes", "requested_deadline", "tags", "description",
+        ])
         queryset = Activity.objects.filter(organization=organization, status__in=self.OPEN_ACTIVITY_STATUSES)
         self.fields["activity"].queryset = queryset
         self.fields["activity"].widget.queryset = queryset

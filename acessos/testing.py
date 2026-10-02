@@ -16,19 +16,20 @@ def ensure_catalog():
     """
     from .catalog import GROUPS
 
-    if Action.objects.exists():
-        return
-
     from .models import ActionGroup
 
     for order, (group_key, group_name, actions) in enumerate(GROUPS, start=1):
-        group = ActionGroup.objects.create(key=group_key, name=group_name, order=order)
-        Action.objects.bulk_create(
-            Action(
-                group=group, key=key, name=name, description=description, is_sensitive=sensitive
-            )
-            for key, name, description, sensitive in actions
+        group, _ = ActionGroup.objects.get_or_create(
+            key=group_key, defaults={"name": group_name, "order": order}
         )
+        for key, name, description, sensitive in actions:
+            Action.objects.get_or_create(
+                key=key,
+                defaults={
+                    "group": group, "name": name, "description": description,
+                    "is_sensitive": sensitive,
+                },
+            )
 
 
 def grant_action(user, action_key, organization=None, scope=None, sector=None, relation=None):
