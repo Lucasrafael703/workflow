@@ -1,7 +1,7 @@
 from django.conf import settings
 
 from . import catalog
-from .services import AuthorizationService
+from .services import AuthorizationService, ResourceContext
 
 
 def navigation(request):
@@ -27,6 +27,7 @@ def navigation(request):
         "lps_nav": {
             "intake": intake["visible"],
             "intake_can_view": intake["can_view"],
+            "boards": _boards_nav(user, organization),
             "management": AuthorizationService.can_anywhere(user, catalog.METRICAS_VISUALIZAR),
             "cadastros": (
                 can(user, catalog.SETOR_EDITAR)
@@ -67,6 +68,40 @@ _NAV_BY_URL_NAME = {
     "intake-convert": "intake",
     "intake-ignore": "intake",
     "intake-restore": "intake",
+    "board-list": "boards",
+    "board-create": "boards",
+    "board-detail": "boards",
+    "board-rename": "boards",
+    "board-delete": "boards",
+    "board-history": "boards",
+    "board-view-create": "boards",
+    "board-view-detail": "boards",
+    "board-view-update": "boards",
+    "board-view-delete": "boards",
+    "board-view-lanes": "boards",
+    "board-group-create": "boards",
+    "board-group-update": "boards",
+    "board-group-reorder": "boards",
+    "board-group-delete": "boards",
+    "board-column-create": "boards",
+    "board-column-rename": "boards",
+    "board-column-resize": "boards",
+    "board-column-reorder": "boards",
+    "board-column-settings": "boards",
+    "board-column-hide": "boards",
+    "board-column-duplicate": "boards",
+    "board-column-type": "boards",
+    "board-column-delete": "boards",
+    "board-column-fragment": "boards",
+    "board-option-create": "boards",
+    "board-option-update": "boards",
+    "board-option-reorder": "boards",
+    "board-option-delete": "boards",
+    "board-item-create": "boards",
+    "board-item-rename": "boards",
+    "board-item-move": "boards",
+    "board-item-delete": "boards",
+    "board-cell-update": "boards",
     "task-list": "tasks",
     "task-kanban": "tasks",
     "task-calendar": "tasks",
@@ -225,6 +260,17 @@ def _intake_nav(user, organization):
 
         new = IntakeService.new_count(user, organization)
     return {"visible": visible, "can_view": can_view, "new": new}
+
+
+def _boards_nav(user, organization):
+    """Menu "Quadros": aparece para quem pode ver quadros da própria organização.
+
+    Quadros só têm escopo de organização (não pertencem a um setor), então a pergunta é a mesma que a
+    lista de quadros faz: `quadro.visualizar` no contexto da organização.
+    """
+    if organization is None:
+        return False
+    return AuthorizationService.can(user, catalog.QUADRO_VISUALIZAR, ResourceContext.for_new(organization))
 
 
 def _open_task_count(user):

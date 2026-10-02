@@ -241,6 +241,77 @@ erDiagram
 
 ---
 
+## 7.2 `boards` (Quadros dinâmicos)
+
+```mermaid
+erDiagram
+    Organization ||--o{ Board : "boards"
+    Board ||--o{ BoardGroup : "groups"
+    Board ||--o{ BoardColumn : "columns"
+    Board ||--o{ BoardItem : "items"
+    Board ||--o{ BoardView : "views"
+    BoardGroup ||--o{ BoardItem : "items (PROTECT)"
+    BoardColumn ||--o{ BoardColumnOption : "options"
+    BoardItem ||--o{ BoardCell : "cells"
+    BoardColumn ||--o{ BoardCell : "cells (PROTECT)"
+    BoardCell ||--o{ BoardCellUser : "user_values"
+    BoardCell ||--o{ BoardCellOption : "option_values"
+    BoardColumnOption ||--o{ BoardCellOption : "cell_values (PROTECT)"
+```
+
+| Modelo | Campos principais |
+|---|---|
+| `Board` | `organization` (CASCADE), `name`, `description`, `item_label` (como a primeira coluna se chama: "Obra", "Contrato"; padrão "Elemento"), `is_active`, `created_by` |
+| `BoardGroup` | `board`, `name`, `color` (`#RRGGBB`), `position`, `is_active`. É organização visual, **não** um status: mover de grupo não muda dado |
+| `BoardView` | `board`, `name` (até 80), `type` (hoje só `KANBAN`), `position`, `settings` (JSON, ver abaixo), `is_active`, `created_by`. **Não guarda dado de negócio**: é só a configuração de uma forma de enxergar os mesmos itens. A tabela ("Quadro principal") é implícita e não tem registro |
+| `BoardColumn` | `board`, `name`, `type`, `position`, `width` (96–640, padrão 160), `description`, `settings` (JSON), `is_required`, `is_visible`, `is_active`, `created_by` |
+| `BoardColumnOption` | `column`, `label`, `color`, `position`, `is_default`, `is_done`, `is_active` (etiqueta de **Status** e **Lista suspensa**) |
+| `BoardItem` | `board`, `group` (PROTECT), `name` (pode ficar vazio), `position`, `is_active`, `created_by`, `updated_by` |
+| `BoardCell` | `item`, `column`, `value_text`, `value_number` (Decimal 24,6), `value_date`, `value_datetime`, `value_boolean`, `value_json`, `updated_by`. Única por `(item, column)` |
+| `BoardCellUser` / `BoardCellOption` | Ligam a célula a uma pessoa / uma etiqueta (única por par). Uma célula guarda **um** valor hoje; a tabela já comporta vários |
+
+- **Tipos de coluna** (`BoardColumn.Type`): ativos hoje `STATUS`, `DROPDOWN`, `TEXT`, `DATE`, `PERSON`, `NUMBER`, `CURRENCY`, `CHECKBOX`
+  (`ACTIVE_TYPES`). Existem no enum, mas ainda **não** se criam nem se editam: `FILE`, `TIMELINE`, `PRIORITY`, `CONFIRMATION`,
+  `RELATION`, `FORMULA`, `AI_EXTRACT`.
+- **Valor tipado, não JSON:** número ordena como número e data como data **no banco**; relatórios e filtros futuros precisam disso.
+  A conversão do que o usuário digitou fica em `boards/validators.py` (`normalize_cell_value`): moeda vira `Decimal`
+  (aceita `1.234,56` e `1234.56`), data aceita ISO e `dd/mm/aaaa`, pessoa tem de ser usuário **ativo da mesma organização**,
+  etiqueta tem de ser **ativa e da mesma coluna**, e `is_required` recusa limpar. O valor antigo só é apagado depois de o novo
+  passar na validação.
+- **`settings` por tipo** (só chaves conhecidas; as demais são descartadas): `DATE` → `show_time`, `allow_weekends`,
+  `is_deadline` (destaca "vencido"), `format`; `NUMBER` → `decimal_places` (0–6), `unit`, `minimum`, `maximum`;
+  `CURRENCY` → `currency` (`BRL`/`USD`/`EUR`), `decimal_places`, `minimum`, `maximum`; `PERSON` → `multiple` (só `false` por ora).
+- **Posição decimal** (passo 1000): mover algo grava **uma** posição entre as vizinhas (ponto médio); quando a distância
+  some (≤ 0,001) as irmãs são renumeradas (`PositionService.rebalance`). O cliente manda os vizinhos (`before_id` à
+  esquerda/acima, `after_id` à direita/abaixo), nunca o número; se os dois não são mais adjacentes, vale a da esquerda.
+- **Etiquetas em tabela própria** (não no JSON da coluna) para poder ordenar, referenciar e trocar a cor sem regravar as
+  células. Status nasce com *Não iniciado* (padrão), *Em andamento* e *Concluído* (`is_done`); item novo já nasce com a
+  etiqueta padrão de cada coluna. Excluir uma etiqueta é lógico e **limpa** as células que a usavam.
+- **Conversão de tipo** (`ColumnService.conversion_plan` / `change_type`): `safe` (Número↔Moeda, Status↔Lista, qualquer
+  tipo → Texto, escreve o texto que a tela mostrava), `parsed` (Texto → Número/Moeda/Data: o que não converte é limpo) e
+  `destructive` (demais: limpa os valores). Fora de `safe` exige `confirm` (a view responde **409** com a contagem).
+- **Visualizações (Kanban)** (`boards/kanban.py`): o Kanban **lê as colunas e os itens do quadro**; cada etiqueta da coluna
+  agrupadora vira uma raia (então renomear ou recolorir a etiqueta muda a raia na hora: não há outro cadastro de nome ou de
+  cor) e cada item é o mesmo item da tabela, nunca uma cópia. Todo quadro nasce com um Kanban (`ViewService.create_default_kanban`);
+  o modelo Orçamentos já traz o seu configurado (por Status, soma do Valor). `BoardView.settings` aceita só estas chaves
+  (as demais são descartadas e toda referência a coluna tem de ser de uma coluna **ativa deste quadro** do tipo certo):
+  `group_by` (id de coluna de Status ou Lista suspensa; vazio = a primeira de Status, depois de Lista), `show_empty`
+  (raias sem cartão), `blank_lane` (`auto` só quando há itens sem etiqueta · `always` · `never`), `sort`
+  (`{by: manual|name|created|<id de coluna>, dir}`), `sum_column` (Número ou Moeda: soma no cabeçalho da raia),
+  `card_fields` (ids na ordem do cartão; vazio = os 4 primeiros campos visíveis, fora o agrupador), `show_field_names`.
+  Item sem etiqueta (ou com a etiqueta apagada) cai na raia **"Em branco"**. Arrastar o cartão grava a etiqueta da coluna
+  agrupadora pelo mesmo serviço da célula (`CellService.set_value`): mesma validação, mesma auditoria.
+- **Exclusão lógica** em tudo (`is_active`). Excluir coluna **mantém** as células no banco; grupo só sai se estiver sem itens.
+- **Auditoria genérica:** `audit.AuditLog` ganhou `target_type` (ex.: `board_cell`), `target_id` e `metadata` (JSON). Todo
+  registro do quadro leva `metadata["board_id"]`, que alimenta o histórico do quadro (`/quadros/<id>/historico/`). Migração
+  `audit/0010`.
+- **Migrations:** `boards/0001_initial`, `boards/0002_boardview` e `boards/0003_kanban_padrao_nos_quadros` (de dados: dá um Kanban aos quadros que já existiam; reversível); `audit/0010_auditoria_generica_de_quadros` e `audit/0011_visualizacoes_de_quadro`; `acessos/0005_quadros_actions` (cria o
+  grupo `quadros` e **concede por mapeamento** aos perfis existentes: quem tem `demanda.criar` recebe visualizar/criar
+  item/editar item; quem tem `demanda.aprovar_pendencia`, também criar/editar quadro, gerir colunas e excluir item; quem
+  tem `seguranca.gerir_perfis`, tudo. Reversível).
+
+---
+
 ## 8. Migrations
 
 - Cada app tem suas migrations em `<app>/migrations/`.

@@ -85,7 +85,7 @@
                                     <span class="apply-step-row__num">{{ row.step.order }}</span>
                                     <div>
                                         <div class="apply-step-row__name">{{ row.step.name }}</div>
-                                        <div class="muted small">{{ row.step.sector.name }}{% if row.step.depends_on_previous and not forloop.first %} · espera a etapa anterior{% endif %}</div>
+                                        <div class="muted small">{% include "_sector_badge.html" with sector=row.step.sector variant="compact" %}{% if row.step.depends_on_previous and not forloop.first %} · espera a etapa anterior{% endif %}</div>
                                     </div>
                                 </div>
                                 <div class="apply-step-row__who">

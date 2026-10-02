@@ -98,6 +98,22 @@ de sempre: `CREATE` e `ACTIVITY_CREATED` (dono e criador). O texto da solicitaç
 descrição com as `@menções` neutralizadas, para um e-mail recebido de fora não notificar
 ninguém da equipe. O aviso de item novo é só o contador do menu (doc 13, F23).
 
+**Quadros (`boards`).** Toda alteração do quadro grava `AuditLog` (sem `Notification`, sem e-mail), pelo mesmo
+`AuditService.log`, que agora aceita `target_type`, `target_id` e `metadata` (as colunas `activity`/`task` ficam vazias, porque
+o alvo não é atividade nem tarefa). Todo registro leva `metadata["board_id"]`; o histórico do quadro é
+`AuditLog.objects.filter(metadata__board_id=...)`.
+
+| Evento | `AuditLog.Action` | `target_type` | Campos |
+|---|---|---|---|
+| Criar / renomear / excluir quadro | `BOARD_CREATED` / `BOARD_UPDATED` / `BOARD_DELETED` | `board` | `field_name`, `old/new_value` |
+| Criar / editar / mover / excluir grupo | `BOARD_GROUP_CREATED` / `_UPDATED` / `_MOVED` / `_DELETED` | `board_group` | idem |
+| Criar / renomear ou configurar / excluir visualização (Kanban) | `BOARD_VIEW_CREATED` / `_UPDATED` / `_DELETED` | `board_view` | `field_name` = `name` ou a chave da configuração (`group_by`, `card_fields`...), `old/new_value`; um registro por chave que mudou |
+| Criar (ou duplicar) / editar / mover / redimensionar / excluir coluna | `BOARD_COLUMN_CREATED` / `_UPDATED` / `_MOVED` / `_RESIZED` / `_DELETED` | `board_column` | idem; troca de tipo grava `type` e `cleared_values` em `metadata`; etiquetas gravam `etiqueta*` e `option_id` |
+| Criar / renomear / mover / excluir item | `BOARD_ITEM_CREATED` / `_UPDATED` / `_MOVED` / `_DELETED` | `board_item` | idem |
+| Preencher célula | `BOARD_CELL_UPDATED` | `board_cell` | `field_name` = nome da coluna, `old/new_value` = o texto que a tela mostra; `metadata` com `item_id` e `column_id`. **Só quando o valor muda** |
+
+Criar quadro a partir de um modelo grava também `metadata["template"]`.
+
 ---
 
 ## 3. Onde aparece

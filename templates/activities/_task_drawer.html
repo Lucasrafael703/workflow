@@ -88,7 +88,7 @@ _task_editor_fields.html).{% endcomment %}
                 <div class="drawer__facts">
                     <div class="form-row">
                         <label>Setor</label>
-                        <div class="field-static">{% include "_icon.html" with name="users" %}<span>{{ task.sector.name }}</span></div>
+                        <div class="field-static">{% include "_icon.html" with name="users" %}{% include "_sector_badge.html" with sector=task.sector variant="compact" %}</div>
                     </div>
                     <div class="form-row">
                         <label>Responsável</label>

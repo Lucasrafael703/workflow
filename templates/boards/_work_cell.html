@@ -1,0 +1,11 @@
+<td id="work-cell-{{ item.pk }}-{{ cell.field.pk }}" class="work-cell work-cell--{{ cell.kind|lower }}" data-work-cell data-field-id="{{ cell.field.pk }}" data-field-key="{{ cell.key }}" data-item-id="{{ item.pk }}" data-value="{{ cell.raw }}"{% if cell.editable %} tabindex="0" role="button" aria-label="Editar {{ cell.field.label }}"{% endif %}>
+    <span class="work-cell__value">
+    {% if cell.sector %}{% include "_sector_badge.html" with sector=cell.sector variant="table" %}
+    {% elif cell.choice %}<span class="work-pill" style="--work-pill-bg:{{ cell.choice.color }};--work-pill-text:{{ cell.choice.text_color }}">{{ cell.text }}</span>
+    {% elif cell.color %}<span class="work-pill" style="--work-pill-bg:{{ cell.color }};--work-pill-text:{{ cell.text_color }}">{{ cell.text }}</span>
+    {% elif cell.person %}<span class="work-person"><span class="avatar">{{ cell.person.get_username|slice:':2'|upper }}</span>{{ cell.text }}</span>
+    {% elif cell.progress is not None %}<span class="work-progress"><span><i style="width:{{ cell.progress }}%"></i></span>{{ cell.text }}</span>
+    {% else %}{{ cell.text }}{% endif %}
+    </span>
+    {% if cell.options %}<template data-work-options>{% if cell.key == "stage" or cell.key == "condition" %}<option value="">{% if cell.key == "stage" %}Sem etapa{% else %}Sem condição{% endif %}</option>{% endif %}{% for option in cell.options %}<option value="{{ option.pk }}"{% if option.pk|stringformat:"s" == cell.raw|stringformat:"s" %} selected{% endif %}>{{ option }}</option>{% endfor %}</template>{% endif %}
+</td>

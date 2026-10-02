@@ -35,6 +35,7 @@ negócio estão na raiz:
 | `activities` | Núcleo operacional: atividades, tarefas, fila por setor, negociação de prazo, bloqueios, devoluções, sessões de trabalho, checklist, anexos, mensagens com @menções. | `models.py`, `services.py`, `views.py`, `templatetags/lps.py` |
 | `processes` | Modelos de processo reutilizáveis e versionados (inputs, output, critérios de aceite, fluxo por setor). | `models.py`, `services.py`, `views.py` |
 | `intake` | Caixa de Entrada (**inativa por padrão**, `INTAKE_ENABLED`, doc 03): solicitações que chegaram (e-mail, Teams, pedido verbal) e ainda não viraram atividade. A pessoa decide **Criar demanda**, **Editar** as sugestões ou **Ignorar**; nada vira atividade sozinho. Sugere título, cliente, obra, setor e prazo com regras locais (sem IA). Ver [06_ATIVIDADES_E_TAREFAS.md](06_ATIVIDADES_E_TAREFAS.md) para o que a atividade criada recebe. | `models.py`, `services.py`, `suggestions.py`, `textparse.py`, `policies.py`, `views.py` |
+| `boards` | **Quadros dinâmicos** (motor de quadros): o usuário monta o quadro (grupos, colunas de 8 tipos, etiquetas) e preenche itens numa tabela editável, com autosave por célula. Camada flexível **ao lado** de `Activity`/`Task`: não as substitui nem as lê. Auditoria genérica (`target_type`/`target_id`/`metadata`). Ver [04_MODELOS_DE_DADOS.md](04_MODELOS_DE_DADOS.md) §7.2 e [09_ROTAS.md](09_ROTAS.md) §6.2. | `models.py`, `validators.py`, `services.py`, `queries.py`, `presentation.py`, `starter_templates.py`, `views.py` |
 | `notifications` | Notificações in-app, caixa de entrada com categorias, e-mails síncronos. | `models.py`, `services.py`, `recipients.py`, `views.py` |
 | `audit` | `AuditLog`: trilha de auditoria somente-inclusão de eventos de negócio e de segurança. | `models.py`, `services.py` |
 | `painel` | Telas "em construção" que mantêm o menu lateral fiel a `Telas/MENU_E_SUBMENUS_LPS.md`, mais duas telas de configuração emprestadas de `core`. | `views.py`, `urls.py` |
@@ -56,6 +57,7 @@ apps:
 | `processes` | `acessos`, `core` |
 | `notifications` | `accounts`; FKs para `activities` |
 | `intake` | `acessos`, `activities` (cria a atividade por `ActivityService.save_draft` + `publish_draft`), `core`. `activities` **não** importa `intake`: a ligação de volta é só o `OneToOneField` `IntakeItem.activity` (`activity.intake_item`). |
+| `boards` | `acessos`, `audit`, `core` (organização e usuários). **Não** depende de `activities`, `processes` nem `intake`. `acessos.ResourceContext.of` reconhece os modelos do quadro pelo nome da classe, sem importar `boards`. |
 | `acessos` | `accounts`, `activities`, `audit`, `core` |
 | `core` | `accounts`, `acessos`, `activities`, `audit` |
 | `activities` | `acessos`, `audit`, `core`, `notifications`, `processes` (FKs `Activity.process_version` e `Task.process_step`; aplicação do processo em `activities/process_application.py`, que também usa `processes.services.people_with_sector_members`) |
@@ -95,6 +97,7 @@ para o usuário:
 | `CadastroError` | `core/services.py` |
 | `ProcessError` | `processes/services.py` |
 | `IntakeError` | `intake/services.py` (a falha de `ActivityService` ao converter vira `IntakeError`) |
+| `BoardError`, `BoardPermissionError` | `boards/services.py` (a segunda é a recusa do motor de autorização; as views respondem 400/409 e 403) |
 | `AuthorizationError` | `acessos/services.py` (convertida em `ActivityError` por `require_action`) |
 
 ---

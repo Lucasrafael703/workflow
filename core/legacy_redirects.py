@@ -5,13 +5,9 @@ endereços antigos não podem dar 404: cada um manda para o novo, mantendo o res
 consulta (`?tab=…`).
 """
 
-import os
 import re
 
-from django.conf import settings
-from django.core.exceptions import SuspiciousFileOperation
-from django.http import HttpResponseRedirect
-from django.utils._os import safe_join
+from django.http import HttpResponseGone, HttpResponseRedirect
 from django.views import View
 
 
@@ -53,14 +49,4 @@ class MovedActivityFileView(View):
     arquivo ficou na pasta antiga (a migração não conseguiu movê-lo), o destino mantém o caminho."""
 
     def dispatch(self, request, *args, **kwargs):
-        rest = kwargs.get("rest", "")
-        renamed = OLD_CODE_SEGMENT.sub(r"\1DEM-\2", rest)
-        target = renamed if renamed != rest and self._is_stored(renamed) else rest
-        return _permanent_redirect(request, f"{settings.ACTIVITY_FILES_URL}{target}")
-
-    @staticmethod
-    def _is_stored(relative_path):
-        try:
-            return os.path.isfile(safe_join(settings.ACTIVITY_FILES_ROOT, relative_path))
-        except (SuspiciousFileOperation, ValueError):
-            return False
+        return HttpResponseGone("Este link de arquivo expirou. Abra a demanda para baixar o anexo com segurança.")

@@ -3,19 +3,22 @@ from django.urls import include, path, re_path
 from core.legacy_redirects import MovedPrefixView
 
 from . import kanban, views
+from boards.work_views import DemandWorkBoardView, TaskWorkBoardView
 
 urlpatterns = [
     path("", views.HomeView.as_view(), name="home"),
     # Endereço de antes da troca de "atividade" por "demanda" (01/10/2026): links antigos continuam valendo.
     re_path(r"^atividades/(?P<rest>.*)$", MovedPrefixView.as_view(new_prefix="/demandas/"), name="legacy-activities"),
     # Demandas
-    path("demandas/", views.ActivityListView.as_view(), name="activity-list"),
+    path("demandas/", DemandWorkBoardView.as_view(), name="activity-list"),
+    path("demandas/lista-legada/", views.ActivityListView.as_view(), name="activity-list-legacy"),
     path("demandas/nova/", views.ActivityCreateView.as_view(), name="activity-create"),
     path("demandas/<int:pk>/nova/contexto/", views.ActivityWizardStep2View.as_view(), name="activity-wizard-contexto"),
     path("demandas/<int:pk>/nova/detalhes/", views.ActivityWizardStep3View.as_view(), name="activity-wizard-detalhes"),
     path("demandas/<int:pk>/nova/descartar/", views.ActivityWizardDiscardView.as_view(), name="activity-wizard-discard"),
-    path("demandas/kanban/", kanban.ActivityKanbanView.as_view(), name="activity-kanban"),
-    path("demandas/calendario/", views.ActivityCalendarView.as_view(), name="activity-calendar"),
+    path("demandas/kanban/", DemandWorkBoardView.as_view(forced_view_type="KANBAN"), name="activity-kanban"),
+    path("demandas/calendario/", DemandWorkBoardView.as_view(forced_view_type="CALENDAR"), name="activity-calendar"),
+    path("demandas/kanban-legado/", kanban.ActivityKanbanView.as_view(), name="activity-kanban-legacy"),
     path("demandas/<int:pk>/mover-estagio/", views.ActivityMoveStageView.as_view(), name="activity-move-stage"),
     path("demandas/<int:pk>/condicao/", views.ActivitySetConditionView.as_view(), name="activity-set-condition"),
     path("demandas/<int:pk>/", views.ActivityDetailView.as_view(), name="activity-detail"),
@@ -60,15 +63,22 @@ urlpatterns = [
     path("demandas/busca/", views.ActivitySearchView.as_view(), name="activity-search"),
     path("demandas/<int:pk>/anexos/", views.ActivityAttachmentUploadView.as_view(), name="activity-attachment-upload"),
     path(
+        "demandas/<int:pk>/anexos/<int:attachment_pk>/download/",
+        views.ActivityAttachmentDownloadView.as_view(),
+        name="activity-attachment-download",
+    ),
+    path(
         "demandas/<int:pk>/anexos/<int:attachment_pk>/remover/",
         views.ActivityAttachmentDeleteView.as_view(),
         name="activity-attachment-delete",
     ),
     # Tarefas
-    path("tarefas/", views.TaskListView.as_view(), name="task-list"),
+    path("tarefas/", TaskWorkBoardView.as_view(), name="task-list"),
+    path("tarefas/lista-legada/", views.TaskListView.as_view(), name="task-list-legacy"),
     path("tarefas/nova-rapida/", views.TaskQuickCreateStandaloneView.as_view(), name="task-quick-create-standalone"),
-    path("tarefas/kanban/", kanban.TaskKanbanView.as_view(), name="task-kanban"),
-    path("tarefas/calendario/", views.TaskCalendarView.as_view(), name="task-calendar"),
+    path("tarefas/kanban/", TaskWorkBoardView.as_view(forced_view_type="KANBAN"), name="task-kanban"),
+    path("tarefas/calendario/", TaskWorkBoardView.as_view(forced_view_type="CALENDAR"), name="task-calendar"),
+    path("tarefas/kanban-legado/", kanban.TaskKanbanView.as_view(), name="task-kanban-legacy"),
     path("tarefas/<int:pk>/mover-estagio/", views.TaskMoveStageView.as_view(), name="task-move-stage"),
     path("tarefas/<int:pk>/condicao/", views.TaskSetConditionView.as_view(), name="task-set-condition"),
     path("tarefas/<int:pk>/", views.TaskDetailView.as_view(), name="task-detail"),

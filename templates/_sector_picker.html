@@ -1,0 +1,23 @@
+{% comment %}Seletor de setor compartilhado. Recebe: name, sector, allowed_sectors, allow_empty, workspace_field.{% endcomment %}
+<div class="person-picker sector-picker" data-person-picker data-picker-kind="sector"
+     data-search-url="{% url 'sector-search' %}"
+     data-placeholder="Buscar setor..."
+     data-empty-label="{% if allow_empty %}Todos os setores{% else %}Selecionar setor{% endif %}"
+     data-selected-color="{% if sector %}{{ sector.color }}{% endif %}"
+     data-selected-text-color="{% if sector %}{{ sector.text_color }}{% endif %}"
+     data-allowed-sector-ids="{% for item in allowed_sectors %}{{ item.pk }}{% if not forloop.last %},{% endif %}{% endfor %}"
+     {% if allow_empty %}data-allow-empty="true"{% endif %}>
+    <input type="hidden" name="{{ name|default:'sector' }}" value="{% if sector %}{{ sector.pk }}{% endif %}"{% if workspace_field %} data-workspace-sector{% endif %}{% if step_field %} data-step-sector{% endif %}>
+    <button type="button" class="person-picker__trigger sector-picker__trigger" aria-haspopup="listbox" aria-expanded="false">
+        <span class="person-picker__icon">{% include "_icon.html" with name="users" %}</span>
+        <span class="sector-picker__swatch" aria-hidden="true"{% if not sector %} hidden{% endif %}{% if sector %} style="background-color: {{ sector.color }};"{% endif %}></span>
+        <span class="person-picker__label{% if not sector %} muted{% endif %}">{% if sector %}{{ sector.name }}{% elif allow_empty %}Todos os setores{% else %}Selecionar setor{% endif %}</span>
+        <span class="sector-picker__chevron" aria-hidden="true">{% include "_icon.html" with name="chevron-down" %}</span>
+    </button>
+    <noscript>
+        <select name="{{ name|default:'sector' }}"{% if step_field %} required{% endif %}>
+            {% if allow_empty %}<option value="">Todos os setores</option>{% endif %}
+            {% for item in allowed_sectors %}<option value="{{ item.pk }}"{% if sector and sector.pk == item.pk %} selected{% endif %}>{{ item.name }}</option>{% endfor %}
+        </select>
+    </noscript>
+</div>

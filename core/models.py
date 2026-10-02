@@ -49,6 +49,12 @@ class Sector(models.Model):
     )
     name = models.CharField("nome", max_length=150)
     description = models.CharField("descrição", max_length=255, blank=True)
+    color = models.CharField(
+        "cor",
+        max_length=7,
+        default="#3B82F6",
+        help_text="Cor visual do setor nas listas, filtros e cartões.",
+    )
     is_active = models.BooleanField("ativo", default=True)
     created_by = models.ForeignKey(
         "auth.User", verbose_name="criado por", null=True, on_delete=models.SET_NULL, related_name="+"
@@ -65,6 +71,12 @@ class Sector(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def text_color(self):
+        from .colors import get_contrast_text
+
+        return get_contrast_text(self.color)
 
 
 class TaskStage(models.Model):
@@ -387,6 +399,7 @@ class EnumColor(models.Model):
         ACTIVITY_STATUS = "activity_status", "Status da demanda"
         TASK_STATUS = "task_status", "Status da tarefa"
         ACTIVITY_URGENCY = "activity_urgency", "Prioridade da demanda"
+        TASK_PRIORITY = "task_priority", "Prioridade da tarefa"
 
     organization = models.ForeignKey(
         Organization, verbose_name="organização", on_delete=models.CASCADE, related_name="enum_colors"

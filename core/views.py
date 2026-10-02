@@ -239,7 +239,14 @@ class _SimpleSearchView(OrganizationRequiredMixin, View):
         queryset = self.filter_queryset(queryset)
         if term:
             queryset = queryset.filter(name__icontains=term)
-        results = [{"id": obj.pk, "name": str(obj)} for obj in queryset[: self.MAX_RESULTS]]
+        results = [
+            {
+                "id": obj.pk,
+                "name": str(obj),
+                **({"color": obj.color, "text_color": obj.text_color} if isinstance(obj, Sector) else {}),
+            }
+            for obj in queryset[: self.MAX_RESULTS]
+        ]
         return JsonResponse({"results": results})
 
     def _id_param(self, name):
@@ -389,15 +396,24 @@ class SectorFormView(CadastroFormView):
     required_action = catalog.SETOR_EDITAR
 
     def initial_from(self, instance):
-        return {"name": instance.name, "description": instance.description}
+        return {"name": instance.name, "description": instance.description, "color": instance.color}
 
     def create(self, data):
         return SectorService.create(
-            self.organization, data["name"], self.request.user, description=data.get("description", "")
+            self.organization,
+            data["name"],
+            self.request.user,
+            description=data.get("description", ""),
+            color=data.get("color", "#3B82F6"),
         )
 
     def update(self, instance, data):
-        return SectorService.update(instance, name=data["name"], description=data.get("description", ""))
+        return SectorService.update(
+            instance,
+            name=data["name"],
+            description=data.get("description", ""),
+            color=data.get("color", "#3B82F6"),
+        )
 
 
 class CompanyFormView(CadastroFormView):
@@ -1193,12 +1209,16 @@ class PrioridadesView(OrganizationRequiredMixin, ActionRequiredMixin, TemplateVi
     required_action = catalog.COR_PRIORIDADE_GERIR
 
     def get_context_data(self, **kwargs):
-        from activities.models import Activity
+        from activities.models import Activity, Task
 
         context = super().get_context_data(**kwargs)
         colors = EnumColorService.list_for_domain(self.organization, "activity_urgency")
         context["rows"] = [
             {"code": code, "label": label, "color": colors[code]} for code, label in Activity.Urgency.choices
+        ]
+        task_colors = EnumColorService.list_for_domain(self.organization, "task_priority")
+        context["task_rows"] = [
+            {"code": code, "label": label, "color": task_colors[code]} for code, label in Task.Priority.choices
         ]
         context["domain"] = "activity_urgency"
         return context
@@ -1212,6 +1232,7 @@ class EnumColorSaveView(OrganizationRequiredMixin, ActionRequiredMixin, View):
         "activity_status": catalog.COR_STATUS_GERIR,
         "task_status": catalog.COR_STATUS_GERIR,
         "activity_urgency": catalog.COR_PRIORIDADE_GERIR,
+        "task_priority": catalog.COR_PRIORIDADE_GERIR,
     }
 
     def dispatch(self, request, *args, **kwargs):

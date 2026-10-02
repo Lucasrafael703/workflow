@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Avg, Count, Exists, F, OuterRef, Prefetch, Q
-from django.http import Http404, JsonResponse
+from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -1402,7 +1402,10 @@ class ActivityDetailView(OrganizationRequiredMixin, DetailView):
                 "tasks_done": done,
                 "tasks_total": len(tasks),
                 "open_tasks": open_tasks,
-                "sectors_involved": sorted({t.sector.name for t in tasks}),
+                "sectors_involved": sorted(
+                    {t.sector_id: t.sector for t in tasks if t.sector_id}.values(),
+                    key=lambda sector: sector.name.lower(),
+                ),
                 "status_counts": status_counts,
                 "next_attention": _next_attention(tasks),
                 "is_overdue": is_overdue,
@@ -2662,6 +2665,26 @@ class ActivityAttachmentDeleteView(ServiceActionView):
         return f"{reverse('activity-detail', args=[self.kwargs['pk']])}#feed-panel"
 
 
+class ActivityAttachmentDownloadView(OrganizationRequiredMixin, View):
+    """Entrega anexo apenas depois de validar login, tenant e recurso."""
+    def get(self, request, pk, attachment_pk):
+        attachment = get_object_or_404(
+            ActivityAttachment.objects.select_related("activity"),
+            pk=attachment_pk,
+            activity_id=pk,
+            activity__organization=self.organization,
+        )
+        if not AuthorizationService.can(request.user, catalog.ATIVIDADE_VISUALIZAR, attachment.activity):
+            raise PermissionDenied("Você não possui acesso a este anexo.")
+        if not attachment.file:
+            raise Http404("Arquivo não encontrado.")
+        return FileResponse(
+            attachment.file.open("rb"),
+            as_attachment=True,
+            filename=attachment.original_name or attachment.file.name.rsplit("/", 1)[-1],
+        )
+
+
 class TaskActionView(ServiceActionView):
     """Ações de estado da tarefa, cada uma delegando ao serviço correspondente."""
 
@@ -3389,6 +3412,7 @@ class ManagementView(OrganizationRequiredMixin, TemplateView):
         d_sector = self.request.GET.get("grupo", "")
         if d_sector:
             dash_activities = dash_activities.filter(sector_id=d_sector)
+        dash_selected_sector = sectors.filter(pk=d_sector).first() if d_sector else None
 
         d_period_from = self.request.GET.get("periodo_de", "")
         if d_period_from:
@@ -3476,6 +3500,7 @@ class ManagementView(OrganizationRequiredMixin, TemplateView):
                 ).order_by("first_name", "username"),
                 "dash_cost_centers": CostCenter.objects.filter(organization=org, is_active=True),
                 "dash_sectors": Sector.objects.filter(organization=org, is_active=True),
+                "dash_selected_sector": dash_selected_sector,
                 "dash_status_choices": dash_status_choices,
                 "f_periodo_de": d_period_from,
                 "f_periodo_ate": d_period_to,

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% load static lps_board %}
+{% block title %}{{ view.name }} — {{ board.name }} — Quadros — LPS{% endblock %}
+
+{% block content %}
+<section class="board-page board-page--kanban" data-board-page data-board-id="{{ board.id }}" data-view-id="{{ view.id }}">
+    {% include "boards/_board_head.html" %}
+    {% include "boards/_board_view_tabs.html" with active_view=view %}
+
+    <form class="board-toolbar" method="get" data-board-toolbar>
+        <label class="board-search">
+            {% include "_icon.html" with name="search" %}
+            <input type="search" name="q" value="{{ search }}" placeholder="Buscar neste quadro…" aria-label="Buscar neste quadro" maxlength="120">
+        </label>
+        <label class="board-select">
+            <span class="sr-only">Filtrar por pessoa</span>
+            <select name="pessoa" data-board-person-filter aria-label="Filtrar por pessoa">
+                <option value="">Todas as pessoas</option>
+                {% for person in people %}<option value="{{ person.pk }}"{% if person.pk == person_id %} selected{% endif %}>{{ person|person_name }}</option>{% endfor %}
+            </select>
+        </label>
+        <button type="submit" class="btn btn--sm">Buscar</button>
+        {% if permissions.edit %}
+        <label class="board-select board-select--labeled">
+            <span>Agrupar por</span>
+            <select data-kanban-group-by aria-label="Agrupar por">
+                {% if not group_candidates %}<option value="">Nenhuma coluna de Status ou Lista</option>{% endif %}
+                {% for column in group_candidates %}<option value="{{ column.pk }}"{% if group_column and column.pk == group_column.pk %} selected{% endif %}>{{ column.name }}</option>{% endfor %}
+            </select>
+        </label>
+        <label class="board-select board-select--labeled">
+            <span>Ordenar</span>
+            <select data-kanban-sort aria-label="Ordenar os cartões">
+                {% for option in sort_options %}<option value="{{ option.value }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>{% endfor %}
+            </select>
+        </label>
+        <button type="button" class="board-tool" data-kanban-config aria-haspopup="dialog">{% include "_icon.html" with name="sliders" %} Configurar cartões</button>
+        {% elif group_column %}
+        <span class="board-chip">Agrupado por <strong>{{ group_column.name }}</strong></span>
+        {% endif %}
+        <button type="button" class="board-tool" disabled title="Em breve: filtros por valor de coluna">{% include "_icon.html" with name="sliders" %} Filtros <span class="board-soon">em breve</span></button>
+        {% if filtering %}<a class="board-clear" href="{% url 'board-view-detail' view.pk %}">Limpar busca</a>{% endif %}
+    </form>
+
+    <div class="kanban-scroll" data-board-scroll>
+        <div class="kanban-lanes" data-kanban-lanes>{% include "boards/_kanban_lanes.html" %}</div>
+    </div>
+</section>
+
+<div class="board-toast-area" data-board-toasts role="status" aria-live="polite"></div>
+{{ meta|json_script:"board-meta" }}
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/boards.js' %}?v=20261007c"></script>
+{% endblock %}

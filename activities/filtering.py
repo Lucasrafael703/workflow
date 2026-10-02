@@ -149,6 +149,7 @@ def filter_state_for_template(request, *, domain, view_mode, sectors, people=Non
             "view_mode": view_mode,
             "noun": "demanda" if domain == "demanda" else "tarefa",
             "is_board": board,
+            "allow_empty_sector": not board,
             "sectors": sectors,
             "people": people or [],
             "clients": clients or [],
@@ -170,5 +171,9 @@ def filter_state_for_template(request, *, domain, view_mode, sectors, people=Non
             ),
             "clear_url": clear_filter_querystring(request, keep_sector=board, keep_calendar=view_mode == "calendario"),
         }
+    )
+    state["sector_obj"] = next(
+        (item for item in sectors if str(item.pk) == str(state["setor"])),
+        None,
     )
     return state

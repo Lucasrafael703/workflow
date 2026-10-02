@@ -1,0 +1,4 @@
+{% comment %}Bloco visual compartilhado para qualquer setor. Variantes aceitas: table, compact, inline.{% endcomment %}
+{% if sector %}<span class="sector-badge{% if variant %} sector-badge--{{ variant }}{% endif %}{% if class_name %} {{ class_name }}{% endif %}"
+    style="--sector-color: {{ sector.color|default:'#3B82F6' }}; --sector-text-color: {{ sector.text_color|default:'#FFFFFF' }};"
+    data-sector-id="{{ sector.pk }}" title="{{ sector.name }}">{{ label|default:sector.name }}</span>{% endif %}

@@ -14,7 +14,7 @@
         {% for column in columns %}{% include "activities/_kanban_column.html" %}{% endfor %}
         {% if not has_stages %}
         <div class="kanban-state kanban-state--inline">
-            <h3>{{ sector.name }} ainda não tem etapas para {{ noun_plural }}</h3>
+            <h3>{% include "_sector_badge.html" with sector=sector variant="compact" %} ainda não tem etapas para {{ noun_plural }}</h3>
             {% if can_manage_stages %}
             <p>As etapas são as colunas do quadro, por exemplo: A fazer, Em andamento e Concluído.</p>
             <a class="btn btn--primary" href="{{ config_url }}">Configurar etapas</a>

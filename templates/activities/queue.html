@@ -12,12 +12,8 @@
 
 <form method="get">
     <div class="toolbar">
-        <label class="inline" for="sector">Setor</label>
-        <select id="sector" name="sector" onchange="this.form.submit()">
-            {% for option in sectors %}
-            <option value="{{ option.pk }}" {% if sector and option.pk == sector.pk %}selected{% endif %}>{{ option.name }}</option>
-            {% endfor %}
-        </select>
+        <label class="inline">Setor</label>
+        {% include "_sector_picker.html" with name="sector" sector=sector allowed_sectors=sectors workspace_field=True %}
         <noscript><button type="submit" class="btn">Ver fila</button></noscript>
     </div>
 </form>
@@ -53,7 +49,7 @@
 
 <div class="card card--flush">
     <div class="card__head">
-        <h2>{{ sector.name }} — ordem de execução</h2>
+        <h2>{% include "_sector_badge.html" with sector=sector variant="compact" %} — ordem de execução</h2>
         {% if can_reorder %}<span class="muted small">Arraste para reordenar</span>{% endif %}
     </div>
     <div class="card__body">
@@ -108,7 +104,7 @@ Quem é de fora do setor vê só a própria demanda: posição e prazo, nunca o
 título das outras tarefas (doc 09 §97-99).
 {% endcomment %}
 <div class="card card--flush">
-    <div class="card__head"><h2>{{ sector.name }}</h2></div>
+    <div class="card__head"><h2>{% include "_sector_badge.html" with sector=sector variant="compact" %}</h2></div>
     <div class="card__body">
         {% if my_entries %}
             {% for entry in my_entries %}

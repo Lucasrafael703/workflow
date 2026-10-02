@@ -49,7 +49,7 @@
             <tr>
                 <td data-label="Tarefa"><a href="{% url 'task-detail' task.pk %}" class="title">{{ task.title }}</a></td>
                 <td data-label="Demanda"><a href="{% url 'activity-detail' task.activity.pk %}">{{ task.activity.title }}</a></td>
-                <td data-label="Setor">{{ task.sector.name }}</td>
+                <td data-label="Setor">{% include "_sector_badge.html" with sector=task.sector variant="table" %}</td>
                 <td data-label="Condição" class="lps-sheet-status-cell">{% include "_sheet_status.html" with color=task.condition_color text_color=task.condition.text_color label=task.condition_name %}</td>
             </tr>
             {% endfor %}

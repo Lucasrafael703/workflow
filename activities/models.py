@@ -535,6 +535,11 @@ class Task(models.Model):
         CONCLUIDA = "CONCLUIDA", "Concluída"
         CANCELADA = "CANCELADA", "Cancelada"
 
+    class Priority(models.TextChoices):
+        BAIXA = "BAIXA", "Baixa"
+        MEDIA = "MEDIA", "Média"
+        ALTA = "ALTA", "Alta"
+
     activity = models.ForeignKey(Activity, verbose_name="demanda", on_delete=models.CASCADE, related_name="tasks")
     sector = models.ForeignKey(
         "core.Sector", verbose_name="setor responsável", on_delete=models.PROTECT, related_name="tasks"
@@ -591,6 +596,7 @@ class Task(models.Model):
     )
 
     status = models.CharField("status", max_length=14, choices=Status.choices, default=Status.NAO_INICIADA)
+    priority = models.CharField("prioridade", max_length=8, choices=Priority.choices, default=Priority.MEDIA)
 
     requested_deadline = models.DateTimeField("prazo solicitado", null=True, blank=True)
     committed_deadline = models.DateTimeField("prazo comprometido", null=True, blank=True)

@@ -148,6 +148,14 @@ class ResourceContext:
                 ),
             )
 
+        if model_name in {
+            "board", "boardgroup", "boardcolumn", "boardcolumnoption", "boarditem", "boardcell", "boardview",
+            "domainboard", "domainboardfield", "domainboardchoice", "domainboardview", "domainboardviewcolumn",
+            "domainboardcardfield", "domaincustomvalue",
+        }:
+            # Quadros dinâmicos: no D0 o endereço é só a organização (cada modelo a expõe em `organization_id`).
+            return cls(organization_id=resource.organization_id)
+
         if model_name == "company":
             return cls(organization_id=resource.organization_id, company_id=resource.pk)
 

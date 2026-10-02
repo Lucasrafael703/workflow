@@ -57,13 +57,9 @@
             </div>
         </details>
 
-        <label class="workspace-filter-sector{% if fs.setor %} is-active{% endif %}">
-            <span class="sr-only">Setor</span>
-            <select name="setor" title="Setor" data-workspace-sector>
-                {% if not fs.is_board %}<option value="">Todos os setores</option>{% endif %}
-                {% for item in fs.sectors %}<option value="{{ item.pk }}"{% if fs.setor == item.pk|stringformat:"s" %} selected{% endif %}>{% if fs.is_board %}Setor: {% endif %}{{ item.name }}</option>{% endfor %}
-            </select>
-        </label>
+        <div class="workspace-filter-sector{% if fs.setor %} is-active{% endif %}" aria-label="Setor">
+            {% include "_sector_picker.html" with name="setor" sector=fs.sector_obj allowed_sectors=fs.sectors allow_empty=fs.allow_empty_sector workspace_field=True %}
+        </div>
 
         <details class="workspace-filter-popover" data-workspace-popover>
             <summary class="workspace-filter-button{% if fs.status or fs.filtro or fs.estagio or fs.cliente or fs.obra or fs.tag or fs.participante or fs.prazo or fs.bloqueio or fs.concluidas %} is-active{% endif %}" aria-expanded="false">

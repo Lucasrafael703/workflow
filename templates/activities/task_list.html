@@ -50,7 +50,7 @@
                 {% for task in group.tasks %}
                 <tr>
                     <td data-label="Tarefa"><a href="{% url 'task-detail' task.pk %}" class="title">{{ task.title }}</a></td>
-                    <td data-label="Setor">{{ task.sector.name }}</td>
+                    <td data-label="Setor">{% include "_sector_badge.html" with sector=task.sector variant="table" %}</td>
                     <td data-label="Prazo">
                         {% if task.committed_deadline %}{{ task.committed_deadline|date:"d/m/Y H:i" }}
                         {% elif task.requested_deadline %}<span class="muted">{{ task.requested_deadline|date:"d/m/Y H:i" }} (solicitado)</span>
@@ -118,7 +118,7 @@
                     <td data-label="Cliente">{% if task.activity.client %}{{ task.activity.client.name }}{% else %}<span class="muted">—</span>{% endif %}</td>
                     <td data-label="Obra">{% if task.activity.site %}{{ task.activity.site.name }}{% else %}<span class="muted">—</span>{% endif %}</td>
                     <td data-label="Setor">
-                        {% if task.can_move_sector %}<a class="actionable-value" href="{% url 'task-move' task.pk %}" data-activity-action><span class="tag">{{ task.sector.name }}</span><span class="actionable-value__arrow" aria-hidden="true">›</span></a>{% else %}<span class="tag">{{ task.sector.name }}</span>{% endif %}
+                        {% if task.can_move_sector %}<a class="actionable-value" href="{% url 'task-move' task.pk %}" data-activity-action>{% include "_sector_badge.html" with sector=task.sector variant="table" %}<span class="actionable-value__arrow" aria-hidden="true">›</span></a>{% else %}{% include "_sector_badge.html" with sector=task.sector variant="table" %}{% endif %}
                     </td>
                     <td data-label="Responsável">
                         {% if task.responsavel %}

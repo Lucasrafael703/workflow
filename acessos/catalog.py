@@ -106,6 +106,17 @@ ENTRADA_VISUALIZAR = "entrada.visualizar"
 ENTRADA_REGISTRAR = "entrada.registrar"
 ENTRADA_TRIAR = "entrada.triar"
 
+# Quadros dinâmicos (app `boards`). No D0 o quadro é da organização: só concessões de escopo "organização"
+# autorizam; permissão por setor/obra e por coluna ficam para as fases seguintes.
+QUADRO_VISUALIZAR = "quadro.visualizar"
+QUADRO_CRIAR = "quadro.criar"
+QUADRO_EDITAR = "quadro.editar"
+QUADRO_EXCLUIR = "quadro.excluir"
+QUADRO_GERIR_COLUNAS = "quadro.gerir_colunas"
+QUADRO_CRIAR_ITEM = "quadro.criar_item"
+QUADRO_EDITAR_ITEM = "quadro.editar_item"
+QUADRO_EXCLUIR_ITEM = "quadro.excluir_item"
+
 
 # (chave, nome, descrição, sensível)
 GROUPS = [
@@ -245,6 +256,20 @@ GROUPS = [
             (ENTRADA_TRIAR, "Triar solicitações", "Permite corrigir as sugestões, criar a demanda a partir da solicitação, ignorá-la ou restaurá-la.", False),
         ],
     ),
+    (
+        "quadros",
+        "Quadros",
+        [
+            (QUADRO_VISUALIZAR, "Ver quadros", "Permite abrir os quadros da organização e ler seus itens e o histórico de alterações.", False),
+            (QUADRO_CRIAR, "Criar quadros", "Permite criar um quadro novo, inclusive a partir de um modelo.", False),
+            (QUADRO_EDITAR, "Editar quadros", "Permite renomear o quadro e criar, renomear e remover grupos.", False),
+            (QUADRO_EXCLUIR, "Excluir quadros", "Permite excluir um quadro (o histórico é preservado).", True),
+            (QUADRO_GERIR_COLUNAS, "Gerir colunas do quadro", "Permite criar, renomear, mover, redimensionar, configurar, ocultar, duplicar, converter e excluir colunas, e manter as etiquetas de status e lista.", False),
+            (QUADRO_CRIAR_ITEM, "Criar itens do quadro", "Permite adicionar itens (linhas) a um quadro.", False),
+            (QUADRO_EDITAR_ITEM, "Editar itens do quadro", "Permite alterar o nome dos itens, o valor das células e mover itens entre grupos.", False),
+            (QUADRO_EXCLUIR_ITEM, "Excluir itens do quadro", "Permite excluir itens de um quadro (o histórico é preservado).", False),
+        ],
+    ),
 ]
 
 
@@ -278,6 +303,9 @@ SUGGESTED_PROFILES = {
         ATIVIDADE_DEFINIR_ETAPA,
         ATIVIDADE_DEFINIR_CONDICAO,
         ENTRADA_REGISTRAR,
+        QUADRO_VISUALIZAR,
+        QUADRO_CRIAR_ITEM,
+        QUADRO_EDITAR_ITEM,
     ],
     "Gestor de Setor": [
         ATIVIDADE_VISUALIZAR,
@@ -334,6 +362,13 @@ SUGGESTED_PROFILES = {
         ENTRADA_VISUALIZAR,
         ENTRADA_REGISTRAR,
         ENTRADA_TRIAR,
+        QUADRO_VISUALIZAR,
+        QUADRO_CRIAR,
+        QUADRO_EDITAR,
+        QUADRO_GERIR_COLUNAS,
+        QUADRO_CRIAR_ITEM,
+        QUADRO_EDITAR_ITEM,
+        QUADRO_EXCLUIR_ITEM,
     ],
     "Administrador": [key for _, _, actions in GROUPS for key, _, _, _ in actions],
 }

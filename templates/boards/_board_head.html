@@ -1,0 +1,11 @@
+<header class="board-head">
+    <div class="board-head__title">
+        <a class="board-head__back" href="{% url 'board-list' %}">Quadros</a>
+        <input type="text" class="board-title" data-board-title value="{{ board.name }}" maxlength="160" aria-label="Nome do quadro"{% if not permissions.edit %} readonly{% endif %}>
+    </div>
+    <div class="board-head__actions">
+        <span class="board-status" data-board-status role="status" aria-live="polite"></span>
+        <a class="btn btn--sm" href="{% url 'board-history' board.pk %}">{% include "_icon.html" with name="clock" %} Histórico</a>
+        {% if permissions.delete %}<button type="button" class="btn btn--sm btn--soft-danger" data-board-delete>{% include "_icon.html" with name="trash" %} Excluir quadro</button>{% endif %}
+    </div>
+</header>

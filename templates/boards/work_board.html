@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}{{ title }} — LPS{% endblock %}
+
+{% block content %}
+<section class="work-board" data-work-board data-board-id="{{ board.pk }}" data-view-id="{{ work_view.pk }}" data-domain="{{ board.domain|lower }}">
+    <header class="work-board__head">
+        <div>
+            <h1>{{ title }}</h1>
+            <p>{% if board.domain == "DEMAND" %}Gestão das demandas internas e intersetoriais da organização.{% else %}Execução operacional das tarefas vinculadas às demandas e processos.{% endif %}</p>
+        </div>
+        <div class="work-board__head-actions">
+            {% if can_create %}<a class="btn btn--primary" href="{% url create_url_name %}">{% include "_icon.html" with name="plus" %} Criar {{ singular }}</a>{% endif %}
+            {% if can_configure %}<button class="btn" type="button" data-work-add-field>{% include "_icon.html" with name="plus" %} Campo</button><button class="btn" type="button" data-work-card-settings aria-expanded="false">{% include "_icon.html" with name="settings" %} Configurar cartões</button>{% endif %}
+        </div>
+    </header>
+
+    <nav class="work-board__views" aria-label="Visualizações de {{ title|lower }}">
+        {% for candidate in work_views %}
+        <a href="?view={{ candidate.pk }}&{{ request.GET.urlencode }}" class="work-board__view{% if candidate.pk == work_view.pk %} is-active{% endif %}"{% if candidate.pk == work_view.pk %} aria-current="page"{% endif %}>
+            {% if candidate.type == "TABLE" %}{% include "_icon.html" with name="list-ul" %}{% elif candidate.type == "KANBAN" %}{% include "_icon.html" with name="queue" %}{% else %}{% include "_icon.html" with name="calendar" %}{% endif %}
+            {{ candidate.name }}
+        </a>
+        {% endfor %}
+    </nav>
+
+    {% include "boards/_work_toolbar.html" %}
+
+    {% if work_view.type == "TABLE" %}
+        {% include "boards/_work_table.html" %}
+    {% elif work_view.type == "KANBAN" %}
+        {% include "boards/_work_kanban.html" %}
+    {% else %}
+        {% include "boards/_work_calendar.html" %}
+    {% endif %}
+</section>
+
+{% if can_configure %}
+<aside class="work-card-settings" data-work-add-field-panel hidden aria-label="Adicionar campo">
+    <div class="work-card-settings__head"><strong>Adicionar campo</strong><button type="button" class="icon-button" data-work-add-field-close aria-label="Fechar">×</button></div>
+    <form data-work-add-field-form data-url="{% url 'workboard-field-create' board.pk %}"><label>Nome<input name="label" required maxlength="120"></label><label>Tipo<select name="type"><option value="TEXT">Texto</option><option value="NUMBER">Número</option><option value="CURRENCY">Moeda</option><option value="DATETIME">Data e hora</option><option value="SELECT">Lista</option><option value="BOOLEAN">Confirmação</option></select></label><button class="btn btn--primary" type="submit">Adicionar</button></form>
+</aside>
+<aside class="work-card-settings" data-work-card-settings-panel hidden aria-label="Configurar campos do cartão">
+    <div class="work-card-settings__head"><strong>Campos visíveis no cartão</strong><button type="button" class="icon-button" data-work-card-settings-close aria-label="Fechar">×</button></div>
+    <form data-work-card-settings-form data-url="{% url 'workboard-card-fields' work_view.pk %}">
+        {% for field in all_fields %}
+        <label><input type="checkbox" name="field_ids" value="{{ field.pk }}"{% for card_field in work_view.card_fields.all %}{% if card_field.field_id == field.pk and card_field.is_visible %} checked{% endif %}{% endfor %}> {{ field.label }}</label>
+        {% endfor %}
+        <button class="btn btn--primary" type="submit">Salvar cartões</button>
+    </form>
+</aside>
+{% endif %}
+<div class="work-board__toast" data-work-board-toast role="status" aria-live="polite"></div>
+{% endblock %}
+
+{% block scripts %}<script src="{% static 'js/work-board.js' %}?v=20261009a"></script>{% endblock %}

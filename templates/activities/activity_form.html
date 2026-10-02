@@ -105,7 +105,7 @@ Não há upload: a etapa 3 só tem as observações e o link/caminho dos arquivo
                         <div class="activity-form-group activity-form-full">
                             <span class="activity-label">Anexos enviados antes</span>
                             <ul class="activity-legacy-files">
-                                {% for attachment in attachments %}<li id="editor-attachment-{{ attachment.pk }}"><a href="{{ attachment.file.url }}" target="_blank" rel="noopener">{{ attachment.original_name|default:attachment.file.name }}</a><button type="submit" form="remove-attachment-{{ attachment.pk }}" class="activity-btn activity-btn-secondary activity-btn--small">Remover</button></li>{% endfor %}
+                                {% for attachment in attachments %}<li id="editor-attachment-{{ attachment.pk }}"><a href="{% url 'activity-attachment-download' activity.pk attachment.pk %}" target="_blank" rel="noopener">{{ attachment.original_name|default:attachment.file.name }}</a><button type="submit" form="remove-attachment-{{ attachment.pk }}" class="activity-btn activity-btn-secondary activity-btn--small">Remover</button></li>{% endfor %}
                             </ul>
                         </div>
                         {% endif %}

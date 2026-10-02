@@ -10,3 +10,4 @@ staticfiles/
 atividade_arquivos/
 .vscode/
 .idea/
+node_modules/

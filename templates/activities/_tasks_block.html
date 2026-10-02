@@ -33,7 +33,7 @@ nova aba, JS desabilitado).{% endcomment %}
                 {% endif %}
             </span>
 
-            <span class="muted small">{{ task.sector.name }}</span>
+            {% include "_sector_badge.html" with sector=task.sector variant="compact" %}
 
             <span class="executor-cell">
                 {% if task.responsavel %}

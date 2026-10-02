@@ -55,7 +55,7 @@
         <div class="timer-hero__clock" data-started-at="{{ session.started_at.isoformat }}">--:--:--</div>
         <div class="timer-hero__task">
             <a href="{% url 'task-detail' session.task.pk %}">{{ session.task.title }}</a>
-            <div class="muted small">{{ session.task.activity.title }} · {{ session.task.sector.name }}</div>
+            <div class="muted small">{{ session.task.activity.title }} · {% include "_sector_badge.html" with sector=session.task.sector variant="compact" %}</div>
         </div>
         <div class="actions-row" style="justify-content:center">
             <form method="post" action="{% url 'task-pause' session.task.pk %}">
@@ -98,7 +98,7 @@
                                 <a href="{% url 'task-detail' task.pk %}" class="title">{{ task.title }}</a>
                                 <div class="muted small">{{ task.activity.title }}</div>
                             </td>
-                            <td data-label="Setor">{{ task.sector.name }}</td>
+                            <td data-label="Setor">{% include "_sector_badge.html" with sector=task.sector variant="table" %}</td>
                             <td data-label="Prazo">
                                 {% if task.committed_deadline %}{{ task.committed_deadline|date:"d/m/Y H:i" }}
                                 {% elif task.requested_deadline %}<span class="muted">{{ task.requested_deadline|date:"d/m/Y H:i" }}</span>
@@ -243,7 +243,7 @@
             <div class="card__body">
                 <ul class="list-rows">
                     {% for sector in my_sectors %}
-                    <li><a href="{% url 'queue-sector' sector.pk %}">{{ sector.name }}</a></li>
+                    <li><a href="{% url 'queue-sector' sector.pk %}">{% include "_sector_badge.html" with sector=sector variant="compact" %}</a></li>
                     {% endfor %}
                 </ul>
             </div>

@@ -1,5 +1,7 @@
 from django import forms
 
+from core.widgets import SectorPickerWidget
+
 from .models import ProcessCriterion, ProcessInput, ProcessStep, ProcessVersion
 
 
@@ -39,9 +41,10 @@ class ProcessCriterionForm(forms.Form):
 
 class ProcessStepForm(forms.Form):
     name = forms.CharField(label="Nome da tarefa", max_length=200)
-    sector = forms.ModelChoiceField(label="Setor responsável", queryset=None)
+    sector = forms.ModelChoiceField(label="Setor responsável", queryset=None, widget=SectorPickerWidget())
     depends_on_previous = forms.BooleanField(label="Depende da etapa anterior", required=False, initial=True)
 
     def __init__(self, *args, sectors=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["sector"].queryset = sectors
+        self.fields["sector"].widget.queryset = sectors

@@ -108,7 +108,7 @@ O molde é imutável; o que muda aqui são as linhas da atividade.{% endcomment 
                     <div class="proc-step__main">
                         <a href="{% url 'task-detail' row.task.pk %}" class="proc-step__title">{{ row.task.title }}</a>
                         <div class="muted small">
-                            {{ row.task.sector.name }} · {{ row.task.responsavel.get_full_name|default:row.task.responsavel.get_username }}
+                            {% include "_sector_badge.html" with sector=row.task.sector variant="compact" %} · {{ row.task.responsavel.get_full_name|default:row.task.responsavel.get_username }}
                             {% if row.state == "aguardando" %} · entra na fila quando «{{ row.task.depends_on.title }}» for concluída{% endif %}
                         </div>
                     </div>

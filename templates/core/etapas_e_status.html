@@ -22,9 +22,7 @@
     <form class="activities-toolbar flow-config-selector" method="get" aria-label="Escolher fluxo">
         <label>
             <span>Setor</span>
-            <select name="sector" onchange="this.form.submit()">
-                {% for item in sectors %}<option value="{{ item.pk }}"{% if sector.pk == item.pk %} selected{% endif %}>{{ item.name }}</option>{% endfor %}
-            </select>
+            {% include "_sector_picker.html" with name="sector" sector=sector allowed_sectors=sectors workspace_field=True %}
         </label>
         <nav class="tabs flow-config-tabs" aria-label="Domínio do fluxo">
             <a href="?domain=demandas{% if sector %}&sector={{ sector.pk }}{% endif %}"{% if domain == "demandas" %} class="is-active" aria-current="page"{% endif %}>Demandas</a>
@@ -39,7 +37,7 @@
     <div class="flow-config-columns">
         <section class="flow-config-panel">
             <header class="flow-config-panel__head">
-                <div><h2>Etapas</h2><p>Colunas e leitura visual do fluxo de {{ sector.name }}.</p></div>
+                <div><h2>Etapas</h2><p>Colunas e leitura visual do fluxo de {% include "_sector_badge.html" with sector=sector variant="compact" %}.</p></div>
                 {% if can_manage_stages %}<a class="btn btn--primary js-flow-modal" href="{{ stage_create_url }}">{% include "_icon.html" with name="plus" %} Nova etapa</a>{% endif %}
             </header>
             <ul class="flow-stage-list"{% if can_manage_stages %} data-flow-reorder data-reorder-url="{% url 'flow-config-reorder' kind=stage_kind %}"{% endif %}>

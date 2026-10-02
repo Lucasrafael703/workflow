@@ -56,7 +56,7 @@
                     </td>
                     <td>
                         {% if activity.sector %}
-                        <span class="activity-sector-pill">{{ activity.sector.name }}</span>
+                        {% include "_sector_badge.html" with sector=activity.sector variant="table" %}
                         {% else %}-{% endif %}
                     </td>
                     <td>

@@ -54,7 +54,7 @@ dois casos ela é o contexto (a tarefa já pertence a ela) e aparece só como re
         {% elif task %}
         <div class="task-field">
             <span class="task-label">Setor</span>
-            <div class="field-static">{% include "_icon.html" with name="users" %}<span>{{ task.sector.name }}</span></div>
+            <div class="field-static">{% include "_icon.html" with name="users" %}{% include "_sector_badge.html" with sector=task.sector variant="compact" %}</div>
             <p class="task-helper">Para mudar de setor, use Mais ações → Enviar para outro setor.</p>
         </div>
         {% endif %}

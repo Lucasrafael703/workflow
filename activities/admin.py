@@ -23,7 +23,7 @@ from .models import (
 class TaskInline(admin.TabularInline):
     model = Task
     extra = 0
-    fields = ("order", "title", "sector", "status", "requested_deadline", "committed_deadline")
+    fields = ("order", "title", "sector", "priority", "status", "requested_deadline", "committed_deadline")
     show_change_link = True
 
 
@@ -102,8 +102,8 @@ class DeadlineProposalInline(admin.TabularInline):
 
 @admin.register(Task)
 class TaskAdmin(admin.ModelAdmin):
-    list_display = ("title", "activity", "sector", "status", "requested_deadline", "committed_deadline")
-    list_filter = ("sector", "status")
+    list_display = ("title", "activity", "sector", "priority", "status", "requested_deadline", "committed_deadline")
+    list_filter = ("sector", "priority", "status")
     search_fields = ("title", "activity__title")
     autocomplete_fields = ("activity", "sector", "depends_on", "created_by")
     # Muitas etapas de processo: um <select> com todas seria inviável.

@@ -54,6 +54,7 @@ O "endereço" de um recurso é montado por `ResourceContext.of(recurso)` em
 | `DeadlineProposal`, `DeadlineConflict` | o da tarefa |
 | `Sector`, `Company`, `Site`, `CostCenter` | org + o próprio id |
 | `IntakeItem` (Caixa de Entrada) | org + **setor sugerido** + obra sugerida. Sem setor sugerido só casam escopos de organização |
+| `Board`, `BoardGroup`, `BoardColumn`, `BoardColumnOption`, `BoardItem`, `BoardCell` (quadros) | **só a org** (o quadro não pertence a um setor) |
 | outro model com `organization_id` | só a org |
 | qualquer outra coisa | `unresolved` → **nega** |
 | `None` | vazio: só escopos `ORGANIZACAO` (e relacionais) casam |
@@ -158,6 +159,40 @@ poder editar o fluxo) e está registrada em `Regras/12` §41.
   empresa, obra e centro de custo não ampliam o que se vê na Caixa de Entrada.
 - **Perfis sugeridos:** Colaborador recebe `entrada.registrar`; Gestor de Setor recebe as três;
   Administrador, todas.
+
+---
+
+### 4.3 Quadros dinâmicos: `quadro.*`
+
+| Ação | O que permite | Sensível |
+|---|---|---|
+| `quadro.visualizar` | Ver a lista e o conteúdo dos quadros da organização, o histórico e a busca/ordem/filtro. | não |
+| `quadro.criar` | Criar quadro (em branco ou de um modelo). | não |
+| `quadro.editar` | Renomear o quadro, **gerir grupos** (criar, renomear, cor, mover, excluir vazio) e **gerir visualizações** (criar, renomear, configurar e excluir Kanbans). | não |
+| `quadro.excluir` | Excluir o quadro inteiro. | **sim** |
+| `quadro.gerir_colunas` | Criar, renomear, redimensionar, reordenar, configurar, ocultar, duplicar, **converter** e excluir colunas; gerir etiquetas. | não |
+| `quadro.criar_item` | Adicionar item a um grupo. | não |
+| `quadro.editar_item` | Renomear item, **mover** (de grupo e de posição) e preencher células. | não |
+| `quadro.excluir_item` | Excluir item. | não |
+
+- **Escopo só de organização.** O quadro não tem setor, então `ResourceContext.of` devolve só a organização e as ações
+  valem para a organização inteira; um escopo de setor concedido a `quadro.*` **não** casa (a lista dá 403 e o menu não
+  mostra "Quadros", que usa `can` com `ResourceContext.for_new(org)`, a mesma pergunta da lista). Quem quiser
+  quadros por setor precisa de uma decisão nova (doc 13, F31).
+- **Visualizações são compartilhadas**: quem vê o quadro vê todas as abas e usa qualquer Kanban (arrastar cartão, preencher campo
+  e criar item seguem `criar_item`/`editar_item`); mexer na **configuração** da visualização (agrupar por, ordem, campos do cartão,
+  soma, nome, criar e excluir aba) é `quadro.editar`, e mexer nas **etiquetas das raias** é `quadro.gerir_colunas`. Não há
+  visualização pessoal (doc 13, F31).
+- **A permissão é checada no serviço**, a cada ação, e de novo a cada gravação de célula. Esconder botão (a tela recebe
+  `permissions` calculado uma vez por `can_many`) é só experiência de uso. Endpoints que só **leem** (`.../fragmento/`, a
+  prévia de conversão de tipo, `.../configuracoes/` sem campos) também exigem a ação (`BoardAPIView.require`): sem isso
+  eles vazariam o desenho e a contagem de valores.
+- **Outra organização recebe 404** em tudo (página e API): o quadro é carregado sempre por `organization=<a da pessoa>`.
+  Um objeto de **outro quadro da mesma organização** usado como âncora (coluna, grupo) também dá 404.
+- **Perfis sugeridos** (`SUGGESTED_PROFILES`): Colaborador recebe `visualizar`, `criar_item`, `editar_item`; Gestor de Setor
+  soma `criar`, `editar`, `gerir_colunas` e `excluir_item`; Administrador, todas. Em bases que já existem, a migração
+  `acessos/0005` concede por mapeamento (ver doc 04 §7.2) e `seed_acoes` cria as ações; marque o que faltar em
+  `/permissoes/`.
 
 ---
 

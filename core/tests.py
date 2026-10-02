@@ -24,7 +24,26 @@ class SectorServiceTests(TestCase):
     def test_create_sector(self):
         sector = SectorService.create(self.org, "Compras", self.user)
         self.assertEqual(sector.name, "Compras")
+        self.assertEqual(sector.color, "#3B82F6")
         self.assertTrue(sector.is_active)
+
+    def test_create_and_update_sector_color_from_official_palette(self):
+        sector = SectorService.create(self.org, "Compras", self.user, color="#facc15")
+        self.assertEqual(sector.color, "#FACC15")
+        self.assertEqual(sector.text_color, "#1F2937")
+
+        SectorService.update(sector, color="#0E7490")
+        sector.refresh_from_db()
+        self.assertEqual(sector.color, "#0E7490")
+        self.assertEqual(sector.text_color, "#FFFFFF")
+
+    def test_sector_color_must_belong_to_official_palette(self):
+        with self.assertRaises(CadastroError):
+            SectorService.create(self.org, "Compras", self.user, color="#123456")
+
+        sector = SectorService.create(self.org, "Compras", self.user)
+        with self.assertRaises(CadastroError):
+            SectorService.update(sector, color="#123456")
 
     def test_duplicate_name_is_blocked_ignoring_case(self):
         SectorService.create(self.org, "Financeiro", self.user)
@@ -51,6 +70,24 @@ class SectorServiceTests(TestCase):
         sector.refresh_from_db()
         self.assertFalse(sector.is_active)
         self.assertTrue(Sector.objects.filter(pk=sector.pk).exists())
+
+
+class SectorSearchViewTests(TestCase):
+    def setUp(self):
+        self.org = Organization.objects.create(name="Biasi")
+        self.user = User.objects.create_user("paulo", password="x")
+        self.user.profile.organization = self.org
+        self.user.profile.save(update_fields=["organization"])
+        self.sector = Sector.objects.create(organization=self.org, name="Comercial", color="#FACC15")
+        self.client.force_login(self.user)
+
+    def test_sector_search_returns_color_and_contrast(self):
+        response = self.client.get(reverse("sector-search"), {"q": "com"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["results"],
+            [{"id": self.sector.pk, "name": "Comercial", "color": "#FACC15", "text_color": "#1F2937"}],
+        )
 
 
 class UserSectorServiceTests(TestCase):

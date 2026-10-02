@@ -3,7 +3,7 @@
     <td data-label="Demanda"><a href="{% url 'activity-detail' task.activity.pk %}">{{ task.activity.title }}</a></td>
     <td data-label="Cliente">{% if task.activity.client %}{{ task.activity.client.name }}{% else %}<span class="muted">—</span>{% endif %}</td>
     <td data-label="Obra">{% if task.activity.site %}{{ task.activity.site.name }}{% else %}<span class="muted">—</span>{% endif %}</td>
-    <td data-label="Setor">{% if task.can_move_sector %}<a class="actionable-value" href="{% url 'task-move' task.pk %}" data-activity-action><span class="tag">{{ task.sector.name }}</span><span class="actionable-value__arrow" aria-hidden="true">›</span></a>{% else %}<span class="tag">{{ task.sector.name }}</span>{% endif %}</td>
+    <td data-label="Setor">{% if task.can_move_sector %}<a class="actionable-value" href="{% url 'task-move' task.pk %}" data-activity-action>{% include "_sector_badge.html" with sector=task.sector variant="table" %}<span class="actionable-value__arrow" aria-hidden="true">›</span></a>{% else %}{% include "_sector_badge.html" with sector=task.sector variant="table" %}{% endif %}</td>
     <td data-label="Responsável">
         {% if task.responsavel %}{% if task.can_change_responsavel %}<a class="actionable-value" href="{% url 'task-change-responsavel' task.pk %}" data-activity-action>{% endif %}<span class="responsible-cell"><span class="avatar avatar--{{ task.responsavel|avatar_color }}">{{ task.responsavel.get_username|slice:":2"|upper }}</span><span class="small">{{ task.responsavel.get_username }}</span></span>{% if task.can_change_responsavel %}<span class="actionable-value__arrow" aria-hidden="true">›</span></a>{% endif %}{% else %}<span class="muted">—</span>{% endif %}
     </td>

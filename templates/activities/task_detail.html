@@ -26,7 +26,7 @@
         <h1>{{ task.title }}</h1>
         <div class="sub">
             <span class="tag" style="--tag-bg: {{ task.status_color }}1A; --tag-fg: {{ task.status_color }};">{{ task.status_label }}</span>
-            · Setor: <strong>{{ task.sector.name }}</strong>
+            · Setor: {% include "_sector_badge.html" with sector=task.sector variant="compact" %}
             {% if queue_info %} · <span class="position-pill">Na fila: {{ queue_info.position }} de {{ queue_info.total }}</span>{% endif %}
         </div>
     </div>
@@ -406,7 +406,7 @@
                 <ul class="list-rows">
                     {% for item in returns %}
                     <li>
-                        <strong>{{ item.from_sector.name }} → {{ item.to_sector.name }}</strong>
+                        {% if item.from_sector %}{% include "_sector_badge.html" with sector=item.from_sector variant="compact" %}{% endif %} → {% include "_sector_badge.html" with sector=item.to_sector variant="compact" %}
                         <div class="muted small">{{ item.reason.name }}{% if item.observation %} — {{ item.observation }}{% endif %}</div>
                         <div class="muted small">{{ item.returned_by.get_username }} em {{ item.returned_at|date:"d/m/Y H:i" }}</div>
                     </li>
@@ -422,7 +422,7 @@
             <div class="card__body">
                 <ul class="list-rows">
                     {% for transfer in transfers %}
-                    <li>{% if transfer.from_sector %}{{ transfer.from_sector.name }} → {% endif %}<strong>{{ transfer.to_sector.name }}</strong>
+                    <li>{% if transfer.from_sector %}{% include "_sector_badge.html" with sector=transfer.from_sector variant="compact" %} → {% endif %}{% include "_sector_badge.html" with sector=transfer.to_sector variant="compact" %}
                         <div class="muted small">{{ transfer.moved_at|date:"d/m/Y H:i" }}</div></li>
                     {% endfor %}
                 </ul>

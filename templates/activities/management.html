@@ -66,12 +66,7 @@ ao que o modelo trazia.{% endcomment %}
             </div>
             <div class="form-row">
                 <label>Setor</label>
-                <select name="grupo">
-                    <option value="">Todos</option>
-                    {% for sector in dash_sectors %}
-                    <option value="{{ sector.pk }}" {% if f_dash_setor == sector.pk|stringformat:"s" %}selected{% endif %}>{{ sector.name }}</option>
-                    {% endfor %}
-                </select>
+                {% include "_sector_picker.html" with name="grupo" sector=dash_selected_sector allowed_sectors=dash_sectors allow_empty=True %}
             </div>
         </div>
         <div class="card__foot actions-row">
@@ -150,7 +145,7 @@ ao que o modelo trazia.{% endcomment %}
                     <tbody>
                     {% for sector in dash_filas_por_setor %}
                     <tr>
-                        <td data-label="Setor"><span class="title">{{ sector.name }}</span></td>
+                        <td data-label="Setor">{% include "_sector_badge.html" with sector=sector variant="table" %}</td>
                         <td data-label="Na fila">{{ sector.queue_size }}</td>
                         <td data-label="Ações" class="col-actions"><a href="{% url 'queue-sector' sector.pk %}">Ver fila</a></td>
                     </tr>
@@ -356,7 +351,7 @@ ao que o modelo trazia.{% endcomment %}
                         <span class="tag tag--overdue">Atrasada</span>
                     </div>
                     <div class="muted small">
-                        {{ task.sector.name }} · Prazo comprometido {{ task.committed_deadline|date:"d/m/Y H:i" }}
+                        {% include "_sector_badge.html" with sector=task.sector variant="compact" %} · Prazo comprometido {{ task.committed_deadline|date:"d/m/Y H:i" }}
                         · Dono: {{ task.activity.owner.get_username }}
                     </div>
                 </div>
@@ -381,7 +376,7 @@ ao que o modelo trazia.{% endcomment %}
                 {% for task in blocked_tasks %}
                 <div class="attention attention--warning">
                     <div class="attention__title"><a href="{% url 'task-detail' task.pk %}">{{ task.title }}</a></div>
-                    <div class="muted small">{{ task.sector.name }}{% for block in task.blocks.all %}{% if not block.ended_at %} · {{ block.reason }}{% endif %}{% endfor %}</div>
+                    <div class="muted small">{% include "_sector_badge.html" with sector=task.sector variant="compact" %}{% for block in task.blocks.all %}{% if not block.ended_at %} · {{ block.reason }}{% endif %}{% endfor %}</div>
                 </div>
                 {% endfor %}
                 {% else %}

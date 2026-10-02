@@ -210,6 +210,47 @@ também funcionam como página; com `X-Requested-With: XMLHttpRequest` respondem
 - Todos os nomes `intake-*` estão em `_NAV_BY_URL_NAME` (item "Entrada" ativo no menu); um teste
   confere.
 
+## 6.2 `boards` (`/quadros/`) — Quadros dinâmicos
+
+Nomes de rota globais com o prefixo `board-`. Todas exigem login e organização; objeto de outra organização dá **404**, sem a
+ação dá **403** (seção 4.3 de [05_AUTORIZACAO.md](05_AUTORIZACAO.md)). As gravações são **POST com corpo JSON** (CSRF no
+cabeçalho `X-CSRFToken`) e respondem `{"ok": true, ...}`; erro de regra: `400 {"ok": false, "error", "needs_confirmation"}`;
+pede confirmação: **409** com `needs_confirmation: true`; sem permissão: 403; JSON inválido (ou que não é objeto): 400
+"JSON inválido.". Os ids de grupo, coluna, etiqueta e item vão no caminho.
+
+| Caminho | Nome | Método | Ação | Corpo → resposta |
+|---|---|---|---|---|
+| `` | `board-list` | GET | `quadro.visualizar` | Lista dos quadros e, com `quadro.criar`, o formulário "Criar um quadro" |
+| `novo/` | `board-create` | POST (form) | `quadro.criar` | `name`, `template` (`orcamentos`, opcional) → redireciona ao quadro |
+| `<id>/` | `board-detail` | GET | `quadro.visualizar` | A tabela. `?sort=<coluna>&dir=asc\|desc`, `?q=` (nome, texto, etiqueta, pessoa), `?pessoa=<id>` |
+| `<id>/historico/` | `board-history` | GET | `quadro.visualizar` | `AuditLog` do quadro, 50 por página |
+| `visoes/<id>/` | `board-view-detail` | GET | `quadro.visualizar` | A visualização **Kanban**: as raias com os cartões. `?q=` e `?pessoa=` como na tabela; ordem e agrupamento vêm da configuração salva |
+| `<id>/visoes/novo/` | `board-view-create` | POST | `quadro.editar` | `{name, type: "KANBAN", settings}` → `{view, redirect_url}` |
+| `visoes/<id>/editar/` | `board-view-update` | POST | `quadro.editar` | `{name?, settings?}` (só as chaves enviadas mudam; valida e audita uma a uma) → `{view, settings}` completo |
+| `visoes/<id>/excluir/` | `board-view-delete` | POST | `quadro.editar` | Exclusão lógica → `{redirect_url}` (a tabela). Os itens não são afetados |
+| `visoes/<id>/lanes/` | `board-view-lanes` | POST | `quadro.visualizar` | `{q, pessoa}` → `{lanes_html, total_items, columns, settings, group_column_id, sum_column_id, card_column_ids}`: o servidor redistribui os cartões e o navegador troca o HTML |
+| `<id>/renomear/` | `board-rename` | POST | `quadro.editar` | `{name, description}` → `{name, description}` |
+| `<id>/excluir/` | `board-delete` | POST | `quadro.excluir` | → `{redirect_url}` |
+| `<id>/grupos/novo/` | `board-group-create` | POST | `quadro.editar` | `{name, color}` → `{group, group_html}` |
+| `grupos/<id>/editar/` · `mover/` · `excluir/` | `board-group-update` · `-reorder` · `-delete` | POST | `quadro.editar` | `{name, color}` · `{before_id, after_id}` · recusa se houver itens |
+| `<id>/colunas/novo/` | `board-column-create` | POST | `quadro.gerir_colunas` | `{type, after_column_id}` → `{column, header_html, cells: {item_id: td}, after_column_id}` |
+| `colunas/<id>/renomear/` · `largura/` · `mover/` | `board-column-rename` · `-resize` · `-reorder` | POST | `quadro.gerir_colunas` | `{name}` → `{column, header_html}` · `{width}` → `{width}` (limitada a 96–640) · `{before_id, after_id}` |
+| `colunas/<id>/configuracoes/` | `board-column-settings` | POST | `quadro.gerir_colunas` | `{description, is_required, settings}` → coluna + cabeçalho + células |
+| `colunas/<id>/ocultar/` · `duplicar/` · `excluir/` | `board-column-hide` · `-duplicate` · `-delete` | POST | `quadro.gerir_colunas` | `{visible}` · cópia ao lado · exclusão lógica |
+| `colunas/<id>/tipo/` | `board-column-type` | POST | `quadro.gerir_colunas` | `{type, preview}` → `{plan: {mode, filled, lost}}`; sem `confirm` e fora de `safe`: **409**; `{type, confirm: true}` converte |
+| `colunas/<id>/fragmento/` | `board-column-fragment` | POST | `quadro.visualizar` | Redesenha cabeçalho e células de uma coluna (depois de editar etiquetas) |
+| `colunas/<id>/etiquetas/novo/` · `etiquetas/<id>/editar/` · `mover/` · `excluir/` | `board-option-create` · `-update` · `-reorder` · `-delete` | POST | `quadro.gerir_colunas` | `{label, color}` · `{label, color, is_default, is_done}` · `{before_id, after_id}` · `{cleared_cells}` |
+| `<id>/itens/novo/` | `board-item-create` | POST | `quadro.criar_item` | `{group_id, name, initial: {column_id, value}}` → `{item, row_html}` (grupo de outro quadro: 404). `initial` preenche já uma coluna **na mesma transação** (o Kanban cria o cartão dentro de uma raia): valor inválido ou sem `editar_item` desfaz tudo |
+| `itens/<id>/renomear/` · `mover/` · `excluir/` | `board-item-rename` · `-move` · `-delete` | POST | `quadro.editar_item` · `quadro.editar_item` · `quadro.excluir_item` | `{name}` · `{group_id, before_id, after_id}` |
+| `itens/<id>/colunas/<id>/valor/` | `board-cell-update` | POST | `quadro.editar_item` | `{value}` → `{display, cell_html}`; sem `value` limpa a célula |
+
+- A pesquisa de pessoas da célula reaproveita `person-search` (`/api/pessoas/`).
+- Todos os nomes `board-*` estão em `_NAV_BY_URL_NAME` (item "Quadros" ativo no menu); um teste confere (34 rotas).
+- O endereço dos endpoints chega ao JavaScript pelo `json_script` `#board-meta`, com um id fictício (`999999999`, e
+  `999999998` para a coluna na rota da célula) que o script troca pelo real.
+
+---
+
 ## 7. `painel` (`/painel/`)
 
 Telas em branco ("em construção") que mantêm o menu completo:

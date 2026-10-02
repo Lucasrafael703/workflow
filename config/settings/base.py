@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     "processes",
     "notifications",
     "intake",
+    "boards",
     "audit",
     "painel",
 ]

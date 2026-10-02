@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Quadros — LPS{% endblock %}
+
+{% block content %}
+<section class="boards-home">
+    <div class="page-head">
+        <div class="page-head__text">
+            <h1>Quadros</h1>
+            <p class="sub">Monte do seu jeito: colunas, grupos e etiquetas. A LPS entende o que você montou.</p>
+        </div>
+    </div>
+
+    {% if can_create %}
+    <form class="card boards-create" method="post" action="{% url 'board-create' %}">
+        {% csrf_token %}
+        <h2 class="boards-create__title">Criar um quadro</h2>
+        <div class="boards-create__fields">
+            <label class="boards-create__field">
+                <span>Nome</span>
+                <input type="text" name="name" maxlength="160" placeholder="Ex.: Orçamentos" autocomplete="off">
+            </label>
+            <label class="boards-create__field">
+                <span>Começar de</span>
+                <select name="template">
+                    <option value="">Quadro em branco</option>
+                    {% for key, label in template_choices %}<option value="{{ key }}">Modelo: {{ label }}</option>{% endfor %}
+                </select>
+            </label>
+            <button type="submit" class="btn btn--primary">{% include "_icon.html" with name="plus" %} Criar quadro</button>
+        </div>
+    </form>
+    {% endif %}
+
+    {% if boards %}
+    <ul class="boards-grid">
+        {% for board in boards %}
+        <li>
+            <a class="boards-card" href="{% url 'board-detail' board.pk %}">
+                <span class="boards-card__icon" aria-hidden="true">{% include "_icon.html" with name="list-ul" %}</span>
+                <span class="boards-card__name">{{ board.name }}</span>
+                {% if board.description %}<span class="boards-card__desc">{{ board.description }}</span>{% endif %}
+                <span class="boards-card__meta">Atualizado em {{ board.updated_at|date:"d/m/Y" }}</span>
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <div class="card">
+        <div class="empty-state">
+            <div class="empty-state__icon">{% include "_icon.html" with name="list-ul" %}</div>
+            <h3>Nenhum quadro ainda</h3>
+            {% if can_create %}
+            <p>Crie um quadro em branco ou comece pelo modelo de Orçamentos e ajuste as colunas ao seu processo.</p>
+            {% else %}
+            <p>Quando alguém criar um quadro, ele aparece aqui.</p>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

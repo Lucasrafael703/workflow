@@ -10,7 +10,7 @@
         {% if activity.site %}<span class="activity-context-detail">{{ activity.site.name }}</span>{% endif %}
         {% if activity.cost_center %}<span class="activity-context-detail">Centro de custo: {{ activity.cost_center.name }}</span>{% endif %}
     </td>
-    <td>{% if activity.sector %}<span class="activity-sector-pill">{{ activity.sector.name }}</span>{% else %}-{% endif %}</td>
+    <td>{% if activity.sector %}{% include "_sector_badge.html" with sector=activity.sector variant="table" %}{% else %}-{% endif %}</td>
     <td>
         {% if activity.owner %}
         {% if activity.can_repassar %}<a class="actionable-value" href="{% url 'activity-change-owner' activity.pk %}" data-activity-action>{% endif %}

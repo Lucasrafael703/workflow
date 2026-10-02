@@ -16,6 +16,9 @@ class AuditService:
         old_value="",
         new_value="",
         reason="",
+        target_type="",
+        target_id=None,
+        metadata=None,
     ):
         return AuditLog.objects.create(
             user=user,
@@ -27,4 +30,7 @@ class AuditService:
             old_value=str(old_value) if old_value is not None else "",
             new_value=str(new_value) if new_value is not None else "",
             reason=reason,
+            target_type=target_type,
+            target_id=target_id,
+            metadata=metadata or {},
         )

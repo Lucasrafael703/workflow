@@ -229,7 +229,7 @@
                         <div class="proc-row__main">
                             <div class="proc-row__title">{{ item.order }}. {{ item.name }}</div>
                             <div class="proc-row__meta">
-                                {{ item.sector.name }}{% if item.depends_on_previous and not forloop.first %} · depende da etapa anterior{% endif %}
+                                {% include "_sector_badge.html" with sector=item.sector variant="compact" %}{% if item.depends_on_previous and not forloop.first %} · depende da etapa anterior{% endif %}
                                 · Responsável padrão:
                                 {% if item.default_responsavel %}<strong>{{ item.default_responsavel.get_full_name|default:item.default_responsavel.get_username }}</strong>{% else %}<span class="muted">quem aplicar escolhe</span>{% endif %}
                             </div>
@@ -269,12 +269,7 @@
                         <div class="field"><label>Nome da tarefa</label><input type="text" name="name" placeholder="Ex.: Realizar cotação" required></div>
                         <div class="field">
                             <label>Setor responsável</label>
-                            <select name="sector" required data-step-sector>
-                                <option value="">Selecione…</option>
-                                {% for sector in sectors %}
-                                <option value="{{ sector.pk }}">{{ sector.name }}</option>
-                                {% endfor %}
-                            </select>
+                            {% include "_sector_picker.html" with name="sector" allowed_sectors=sectors step_field=True %}
                         </div>
                         <div class="field">
                             <label>Responsável padrão <span class="muted small">(opcional)</span></label>

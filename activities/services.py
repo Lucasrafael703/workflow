@@ -1344,6 +1344,26 @@ class TaskService:
 
     @staticmethod
     @transaction.atomic
+    def set_priority(task, priority, user):
+        """Atualiza a prioridade visual sem contornar autorização nem auditoria."""
+        require_action(user, catalog.TAREFA_EDITAR, task)
+        TaskTransitionPolicy.assert_allowed(task, "edit", user)
+        allowed = {choice for choice, _label in Task.Priority.choices}
+        if priority not in allowed:
+            raise ActivityError("Prioridade inválida.")
+        if task.priority == priority:
+            return task
+        old = task.priority
+        task.priority = priority
+        task.save(update_fields=["priority"])
+        AuditService.log(
+            user=user, action=AuditLog.Action.UPDATE, activity=task.activity, task=task,
+            field_name="prioridade", old_value=old, new_value=priority,
+        )
+        return task
+
+    @staticmethod
+    @transaction.atomic
     def set_stage(task, stage, user):
         if not AuthorizationService.can(user, catalog.TAREFA_DEFINIR_ETAPA, task):
             require_action(user, catalog.TAREFA_MOVER_ESTAGIO, task)

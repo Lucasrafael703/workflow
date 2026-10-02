@@ -54,6 +54,28 @@ class AuditLog(models.Model):
         SECTORS_CHANGED = "SECTORS_CHANGED", "Setores do usuário alterados"
         USER_CREATED = "USER_CREATED", "Usuário criado"
         PASSWORD_RESET = "PASSWORD_RESET", "Senha redefinida"
+        # Quadros dinâmicos (app `boards`): o registro aponta para o alvo por `target_type`/`target_id`
+        # (não há demanda nem tarefa) e `metadata["board_id"]` liga tudo ao quadro, para o histórico dele.
+        BOARD_CREATED = "BOARD_CREATED", "Quadro criado"
+        BOARD_UPDATED = "BOARD_UPDATED", "Quadro alterado"
+        BOARD_DELETED = "BOARD_DELETED", "Quadro excluído"
+        BOARD_GROUP_CREATED = "BOARD_GROUP_CREATED", "Grupo criado"
+        BOARD_GROUP_UPDATED = "BOARD_GROUP_UPDATED", "Grupo alterado"
+        BOARD_GROUP_MOVED = "BOARD_GROUP_MOVED", "Grupo movido"
+        BOARD_GROUP_DELETED = "BOARD_GROUP_DELETED", "Grupo excluído"
+        BOARD_COLUMN_CREATED = "BOARD_COLUMN_CREATED", "Coluna criada"
+        BOARD_COLUMN_UPDATED = "BOARD_COLUMN_UPDATED", "Coluna alterada"
+        BOARD_COLUMN_MOVED = "BOARD_COLUMN_MOVED", "Coluna movida"
+        BOARD_COLUMN_RESIZED = "BOARD_COLUMN_RESIZED", "Coluna redimensionada"
+        BOARD_COLUMN_DELETED = "BOARD_COLUMN_DELETED", "Coluna excluída"
+        BOARD_ITEM_CREATED = "BOARD_ITEM_CREATED", "Item criado"
+        BOARD_ITEM_UPDATED = "BOARD_ITEM_UPDATED", "Item alterado"
+        BOARD_ITEM_MOVED = "BOARD_ITEM_MOVED", "Item movido"
+        BOARD_ITEM_DELETED = "BOARD_ITEM_DELETED", "Item excluído"
+        BOARD_CELL_UPDATED = "BOARD_CELL_UPDATED", "Célula alterada"
+        BOARD_VIEW_CREATED = "BOARD_VIEW_CREATED", "Visualização criada"
+        BOARD_VIEW_UPDATED = "BOARD_VIEW_UPDATED", "Visualização alterada"
+        BOARD_VIEW_DELETED = "BOARD_VIEW_DELETED", "Visualização excluída"
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -90,6 +112,14 @@ class AuditLog(models.Model):
     old_value = models.TextField("valor anterior", blank=True)
     new_value = models.TextField("novo valor", blank=True)
     reason = models.TextField("motivo", blank=True)
+    target_type = models.CharField(
+        "tipo do alvo",
+        max_length=64,
+        blank=True,
+        help_text="Eventos que não pertencem a uma demanda ou tarefa (ex.: coluna de quadro).",
+    )
+    target_id = models.PositiveBigIntegerField("id do alvo", null=True, blank=True)
+    metadata = models.JSONField("dados extras", default=dict, blank=True)
     timestamp = models.DateTimeField("data/hora", auto_now_add=True)
 
     class Meta:
@@ -99,6 +129,7 @@ class AuditLog(models.Model):
         indexes = [
             models.Index(fields=["activity", "timestamp"]),
             models.Index(fields=["task", "timestamp"]),
+            models.Index(fields=["target_type", "target_id", "timestamp"]),
         ]
 
     def __str__(self):

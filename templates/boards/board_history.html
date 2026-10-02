@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Histórico de {{ board.name }} — LPS{% endblock %}
+
+{% block content %}
+<section class="boards-home">
+    <div class="page-head">
+        <div class="page-head__text">
+            <h1>Histórico · {{ board.name }}</h1>
+            <p class="sub">Tudo o que mudou neste quadro: quem fez, quando e o que era antes.</p>
+        </div>
+        <div class="page-head__actions">
+            <a class="btn" href="{% url 'board-detail' board.pk %}">{% include "_icon.html" with name="back" %} Voltar ao quadro</a>
+        </div>
+    </div>
+
+    {% if page.object_list %}
+    <div class="card board-history">
+        <ul class="board-history__list">
+            {% for entry in page.object_list %}
+            <li class="board-history__row">
+                <time datetime="{{ entry.timestamp|date:'c' }}">{{ entry.timestamp|date:"d/m/Y H:i" }}</time>
+                <span class="board-history__who">{% if entry.user %}{{ entry.user.get_full_name|default:entry.user.get_username }}{% else %}Sistema{% endif %}</span>
+                <span class="board-history__what">
+                    <strong>{{ entry.get_action_display }}</strong>
+                    {% if entry.field_name %} · {{ entry.field_name }}{% endif %}
+                    {% if entry.old_value or entry.new_value %}
+                    : {% if entry.old_value %}<span class="board-history__old">{{ entry.old_value }}</span> → {% endif %}<span class="board-history__new">{{ entry.new_value|default:"(vazio)" }}</span>
+                    {% endif %}
+                </span>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% if page.paginator.num_pages > 1 %}
+    <div class="pagination">
+        {% if page.has_previous %}<a class="btn btn--sm" href="?page={{ page.previous_page_number }}">Anterior</a>{% endif %}
+        <span class="muted small">Página {{ page.number }} de {{ page.paginator.num_pages }}</span>
+        {% if page.has_next %}<a class="btn btn--sm" href="?page={{ page.next_page_number }}">Próxima</a>{% endif %}
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="card">
+        <div class="empty-state">
+            <div class="empty-state__icon">{% include "_icon.html" with name="clock" %}</div>
+            <h3>Nada mudou ainda</h3>
+            <p>As alterações do quadro aparecem aqui assim que alguém editar.</p>
+        </div>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

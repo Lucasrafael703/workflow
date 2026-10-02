@@ -61,6 +61,7 @@ DEFAULT_COLOR = "#94A3B8"
 DOMAIN_ACTIVITY_STATUS = "activity_status"
 DOMAIN_TASK_STATUS = "task_status"
 DOMAIN_ACTIVITY_URGENCY = "activity_urgency"
+DOMAIN_TASK_PRIORITY = "task_priority"
 
 # Defaults LPS — nunca vivem no banco: são a fonte de verdade em runtime
 # sempre que a organização não customizou o code correspondente.
@@ -86,6 +87,11 @@ DEFAULTS = {
     },
     DOMAIN_ACTIVITY_URGENCY: {
         "BAIXA": "#64748B",
+        "MEDIA": "#F59E0B",
+        "ALTA": "#EF4444",
+    },
+    DOMAIN_TASK_PRIORITY: {
+        "BAIXA": "#22C55E",
         "MEDIA": "#F59E0B",
         "ALTA": "#EF4444",
     },

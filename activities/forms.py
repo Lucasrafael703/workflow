@@ -856,7 +856,9 @@ class ActivityAttachmentForm(forms.Form):
 class TaskReturnForm(forms.Form):
     """Devolução: motivo sempre obrigatório (Regras 02 §36)."""
 
-    to_sector = forms.ModelChoiceField(queryset=Sector.objects.none(), label="Setor que receberá a devolução")
+    to_sector = forms.ModelChoiceField(
+        queryset=Sector.objects.none(), label="Setor que receberá a devolução", widget=SectorPickerWidget()
+    )
     reason = forms.ModelChoiceField(queryset=ReturnReason.objects.none(), label="Por que a tarefa precisa voltar?")
     observation = forms.CharField(
         label="O que precisa ser corrigido?", required=False, widget=forms.Textarea(attrs={"rows": 3, "data-mention": "1"}),
@@ -876,6 +878,7 @@ class TaskReturnForm(forms.Form):
                 sectors = sectors.filter(pk__in=[s for s in visited if s])
             sectors = sectors.exclude(pk=task.sector_id)
         self.fields["to_sector"].queryset = sectors
+        self.fields["to_sector"].widget.queryset = sectors
         self.fields["reason"].queryset = ReturnReason.objects.filter(
             organization=organization, is_active=True
         )
@@ -905,7 +908,9 @@ class TaskBlockForm(forms.Form):
 
 
 class MoveSectorForm(forms.Form):
-    to_sector = forms.ModelChoiceField(queryset=Sector.objects.none(), label="Enviar para o setor")
+    to_sector = forms.ModelChoiceField(
+        queryset=Sector.objects.none(), label="Enviar para o setor", widget=SectorPickerWidget()
+    )
     note = forms.CharField(label="Orientação para o próximo setor", required=False, max_length=255,
                           help_text="Explique o que a equipe precisa fazer ao receber a tarefa.")
 
@@ -915,6 +920,7 @@ class MoveSectorForm(forms.Form):
         if task is not None:
             queryset = queryset.exclude(pk=task.sector_id)
         self.fields["to_sector"].queryset = queryset
+        self.fields["to_sector"].widget.queryset = queryset
 
 
 class ExecutorForm(forms.Form):

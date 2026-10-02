@@ -21,11 +21,44 @@
         var emptyLabel = root.getAttribute("data-empty-label") || "Selecionar pessoa";
         var createUrl = root.getAttribute("data-create-url");
         var createLabel = root.getAttribute("data-create-label") || "Criar novo usuário";
+        var pickerKind = root.getAttribute("data-picker-kind") || "";
+        var isSectorPicker = pickerKind === "sector";
+        var allowedSectorIds = (root.getAttribute("data-allowed-sector-ids") || "")
+            .split(",").filter(Boolean);
 
         var popup = null;
         var results = [];
         var activeIndex = -1;
         var debounceTimer = null;
+        var sectorSwatch = null;
+
+        function setSectorVisual(item) {
+            if (!isSectorPicker) return;
+            var color = item && item.color || "";
+            var textColor = item && item.text_color || "";
+            if (color) root.style.setProperty("--picker-color", color);
+            else root.style.removeProperty("--picker-color");
+            if (textColor) root.style.setProperty("--picker-text-color", textColor);
+            else root.style.removeProperty("--picker-text-color");
+            if (sectorSwatch) {
+                sectorSwatch.hidden = !color;
+                if (color) sectorSwatch.style.backgroundColor = color;
+            }
+        }
+
+        if (isSectorPicker) {
+            sectorSwatch = trigger.querySelector(".sector-picker__swatch");
+            if (!sectorSwatch) {
+                sectorSwatch = document.createElement("span");
+                sectorSwatch.className = "sector-picker__swatch";
+                sectorSwatch.setAttribute("aria-hidden", "true");
+                trigger.insertBefore(sectorSwatch, label);
+            }
+            setSectorVisual({
+                color: root.getAttribute("data-selected-color") || "",
+                text_color: root.getAttribute("data-selected-text-color") || "",
+            });
+        }
 
         if (sectorFieldId) {
             var sectorField = document.getElementById(sectorFieldId);
@@ -57,6 +90,7 @@
             popup.remove();
             popup = null;
             root.classList.remove("is-open");
+            trigger.setAttribute("aria-expanded", "false");
             document.removeEventListener("click", onDocumentClick, true);
         }
 
@@ -68,6 +102,8 @@
             hidden.value = person.id;
             label.textContent = person.name;
             label.classList.remove("muted");
+            if (!person.id) label.classList.add("muted");
+            setSectorVisual(person);
             // `detail.item` é a opção escolhida, com o que mais a busca devolveu (ex.: o resumo da atividade).
             hidden.dispatchEvent(new CustomEvent("change", { bubbles: true, detail: { item: person } }));
             closePopup();
@@ -86,21 +122,33 @@
         }
 
         function renderResults(list) {
-            results = list;
+            var visibleList = list.filter(function (person) {
+                return !isSectorPicker || !allowedSectorIds.length || allowedSectorIds.indexOf(String(person.id)) !== -1;
+            });
+            results = visibleList;
             activeIndex = -1;
             var resultsEl = popup.querySelector(".person-picker__results");
             resultsEl.innerHTML = "";
 
-            if (list.length === 0) {
+            if (visibleList.length === 0) {
                 renderMessage("Nada encontrado.");
                 return;
             }
 
-            list.forEach(function (person, index) {
+            visibleList.forEach(function (person, index) {
                 var option = document.createElement("button");
                 option.type = "button";
                 option.className = "person-picker__option";
-                option.textContent = person.name;
+                if (isSectorPicker && person.color) {
+                    var swatch = document.createElement("span");
+                    swatch.className = "sector-picker__option-swatch";
+                    swatch.style.backgroundColor = person.color;
+                    swatch.setAttribute("aria-hidden", "true");
+                    option.appendChild(swatch);
+                }
+                var optionLabel = document.createElement("span");
+                optionLabel.textContent = person.name;
+                option.appendChild(optionLabel);
                 option.addEventListener("click", function () { select(person); });
                 option.addEventListener("mouseenter", function () { setActive(index); });
                 resultsEl.appendChild(option);
@@ -149,6 +197,7 @@
         function openPopup() {
             if (popup) return;
             root.classList.add("is-open");
+            trigger.setAttribute("aria-expanded", "true");
 
             popup = document.createElement("div");
             popup.className = "person-picker__popup";
@@ -169,6 +218,17 @@
                     openCreateModal();
                 });
                 popup.appendChild(createButton);
+            }
+
+            if (isSectorPicker && root.getAttribute("data-allow-empty") === "true") {
+                var clearButton = document.createElement("button");
+                clearButton.type = "button";
+                clearButton.className = "person-picker__option sector-picker__clear";
+                clearButton.textContent = emptyLabel;
+                clearButton.addEventListener("click", function () {
+                    select({ id: "", name: emptyLabel });
+                });
+                popup.appendChild(clearButton);
             }
 
             root.appendChild(popup);

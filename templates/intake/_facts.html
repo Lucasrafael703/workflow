@@ -17,7 +17,7 @@ texto — nunca deixa o espaço em branco nem depende só de cor.
     </div>
     <div class="intake-fact">
         <dt>Setor sugerido</dt>
-        <dd>{% if item.suggested_sector %}{{ item.suggested_sector.name }}{% else %}<span class="muted">não identificado</span>{% endif %}</dd>
+        <dd>{% if item.suggested_sector %}{% include "_sector_badge.html" with sector=item.suggested_sector variant="compact" %}{% else %}<span class="muted">não identificado</span>{% endif %}</dd>
     </div>
 </dl>
 {% if item.suggestion_reasons %}

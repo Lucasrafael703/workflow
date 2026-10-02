@@ -60,7 +60,7 @@
             <div class="card__body">
                 <ul class="list-rows">
                     {% for sector in sectors %}
-                    <li><a href="{% url 'queue-sector' sector.pk %}">{{ sector.name }}</a></li>
+                    <li><a href="{% url 'queue-sector' sector.pk %}">{% include "_sector_badge.html" with sector=sector variant="compact" %}</a></li>
                     {% empty %}
                     <li class="muted">Nenhum setor cadastrado.</li>
                     {% endfor %}

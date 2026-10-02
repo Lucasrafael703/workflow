@@ -1,0 +1,10 @@
+{% load lps_board %}<th class="board-th" scope="col" data-column-th data-column-id="{{ column.id }}" data-type="{{ column.type }}"{% if sort_column_id == column.id %} aria-sort="{% if sort_dir == 'desc' %}descending{% else %}ascending{% endif %}"{% endif %}>
+    <div class="board-th__inner">
+        <span class="board-th__icon" aria-hidden="true">{% include "_icon.html" with name=column.type|type_icon %}</span>
+        <span class="board-th__name" data-column-name title="{{ column.name }}">{{ column.name }}</span>
+        {% if sort_column_id == column.id %}<span class="board-th__sort" aria-hidden="true" title="Ordenado por esta coluna">{% if sort_dir == 'desc' %}↓{% else %}↑{% endif %}</span>{% endif %}
+        {% if column.description %}<span class="board-th__info" title="{{ column.description }}">{% include "_icon.html" with name="info" %}</span>{% endif %}
+        <button type="button" class="board-th__menu" data-column-menu aria-haspopup="menu" aria-label="Opções da coluna {{ column.name }}">{% include "_icon.html" with name="more" %}</button>
+    </div>
+    {% if permissions.manage_columns %}<span class="board-th__resize" data-column-resize role="separator" tabindex="0" aria-orientation="vertical" aria-label="Redimensionar a coluna {{ column.name }}"></span>{% endif %}
+</th>

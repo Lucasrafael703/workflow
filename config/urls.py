@@ -42,6 +42,7 @@ urlpatterns = [
     path("processos/", include("processes.urls")),
     path("painel/", include("painel.urls")),
     path("entrada/", include("intake.urls")),
+    path("quadros/", include("boards.urls")),
     path("", include("core.urls")),
     path("", include("activities.urls")),
 ]
@@ -51,10 +52,9 @@ urlpatterns = [
 urlpatterns += [
     # Endereço dos anexos antes da troca de "atividade" por "demanda" (01/10/2026).
     re_path(r"^atividade-arquivos/(?P<rest>.*)$", MovedActivityFileView.as_view(), name="legacy-activity-files"),
-    re_path(r"^%s(?P<path>.*)$" % settings.MEDIA_URL.lstrip("/"), serve, {"document_root": settings.MEDIA_ROOT}),
-    re_path(
-        r"^%s(?P<path>.*)$" % settings.ACTIVITY_FILES_URL.lstrip("/"),
-        serve,
-        {"document_root": settings.ACTIVITY_FILES_ROOT},
-    ),
 ]
+
+if settings.DEBUG:
+    urlpatterns += [
+        re_path(r"^%s(?P<path>.*)$" % settings.MEDIA_URL.lstrip("/"), serve, {"document_root": settings.MEDIA_ROOT}),
+    ]

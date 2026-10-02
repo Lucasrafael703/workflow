@@ -34,6 +34,22 @@
     </ul>
 </div>
 
+<div class="card card--flush" style="margin-top:16px">
+    <div class="card__head"><h2>Prioridades das tarefas</h2></div>
+    <ul class="color-config-list">
+        {% for row in task_rows %}
+        <li class="color-config-row">
+            <span class="color-config-row__label">{{ row.label }}</span>
+            <span class="color-config-row__preview"><span class="tag" style="--tag-bg: {{ row.color }}1A; --tag-fg: {{ row.color }};">{{ row.label }}</span></span>
+            <button type="button" class="color-swatch" data-color-swatch
+                    data-save-url="{% url 'enumcolor-save' domain='task_priority' %}"
+                    data-code="{{ row.code }}" style="--swatch-color: {{ row.color }};" data-current-color="{{ row.color }}"
+                    aria-haspopup="true" aria-label="Cor de {{ row.label }}: clique para mudar."></button>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+
 <script>
 document.querySelectorAll("[data-restore-defaults]").forEach(function (button) {
     button.addEventListener("click", function () {

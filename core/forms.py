@@ -5,9 +5,15 @@ from acessos.models import Action
 from acessos.models import Profile as AccessProfile
 from acessos.models import Scope
 
-from .colors import DEFAULTS
+from .colors import DEFAULTS, is_valid_palette_color
 from .models import Client, Company, CostCenter, Organization, Sector, Site
-from .widgets import ClientPickerWidget, ColorPaletteWidget, SitePickerWidget
+from .widgets import (
+    ClientPickerWidget,
+    ColorPaletteWidget,
+    SectorCheckboxSelectMultiple,
+    SectorPickerWidget,
+    SitePickerWidget,
+)
 
 User = get_user_model()
 
@@ -15,6 +21,13 @@ User = get_user_model()
 class SectorForm(forms.Form):
     name = forms.CharField(label="Nome do setor", max_length=150, help_text="Ex.: Compras, Orçamento ou Engenharia.")
     description = forms.CharField(label="O que este setor faz", max_length=255, required=False)
+    color = forms.CharField(label="Cor de visualização", widget=ColorPaletteWidget, initial="#3B82F6")
+
+    def clean_color(self):
+        color = (self.cleaned_data.get("color") or "#3B82F6").upper()
+        if not is_valid_palette_color(color):
+            raise forms.ValidationError("Escolha uma cor da paleta oficial.")
+        return color
 
 
 class CompanyForm(forms.Form):
@@ -67,14 +80,16 @@ class ReturnReasonForm(forms.Form):
 
 
 class SectorScopedVisualForm(forms.Form):
-    sector = forms.ModelChoiceField(label="Setor", queryset=Sector.objects.none())
+    sector = forms.ModelChoiceField(label="Setor", queryset=Sector.objects.none(), widget=SectorPickerWidget())
     name = forms.CharField(label="Nome", max_length=150)
     color = forms.CharField(label="Cor", widget=ColorPaletteWidget, initial="#94A3B8")
     is_default = forms.BooleanField(label="Usar como padrão deste setor", required=False)
 
     def __init__(self, *args, organization=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["sector"].queryset = Sector.objects.filter(organization=organization, is_active=True)
+        sectors = Sector.objects.filter(organization=organization, is_active=True)
+        self.fields["sector"].queryset = sectors
+        self.fields["sector"].widget.queryset = sectors
 
 
 class TaskStageForm(SectorScopedVisualForm):
@@ -137,13 +152,13 @@ class UserForm(forms.Form):
         label="Setores em que atua",
         queryset=Sector.objects.none(),
         required=False,
-        widget=forms.CheckboxSelectMultiple,
+        widget=SectorCheckboxSelectMultiple,
     )
     managed_sectors = forms.ModelMultipleChoiceField(
         label="Setores que gerencia",
         queryset=Sector.objects.none(),
         required=False,
-        widget=forms.CheckboxSelectMultiple,
+        widget=SectorCheckboxSelectMultiple,
         help_text="Escolha apenas setores marcados acima. As permissões são definidas depois, em Acessos.",
     )
     is_active = forms.BooleanField(label="Permitir que esta pessoa entre na LPS", required=False, initial=True,
@@ -226,7 +241,9 @@ class ScopedGrantForm(forms.Form):
     scope_type = forms.ChoiceField(label="Onde a pessoa poderá usar este acesso?", choices=Scope.Type.choices,
                                   help_text="Escolha toda a organização ou limite o acesso a uma empresa, setor, obra ou aos trabalhos da pessoa.")
     company = forms.ModelChoiceField(label="Empresa", queryset=Company.objects.none(), required=False)
-    sector = forms.ModelChoiceField(label="Setor", queryset=Sector.objects.none(), required=False)
+    sector = forms.ModelChoiceField(
+        label="Setor", queryset=Sector.objects.none(), required=False, widget=SectorPickerWidget()
+    )
     site = forms.ModelChoiceField(label="Obra", queryset=Site.objects.none(), required=False)
     cost_center = forms.ModelChoiceField(
         label="Centro de custo", queryset=CostCenter.objects.none(), required=False
@@ -240,9 +257,11 @@ class ScopedGrantForm(forms.Form):
         self.fields["company"].queryset = Company.objects.filter(
             organization=organization, is_active=True
         )
-        self.fields["sector"].queryset = Sector.objects.filter(
+        sectors = Sector.objects.filter(
             organization=organization, is_active=True
         )
+        self.fields["sector"].queryset = sectors
+        self.fields["sector"].widget.queryset = sectors
         self.fields["site"].queryset = Site.objects.filter(organization=organization, is_active=True)
         self.fields["cost_center"].queryset = CostCenter.objects.filter(
             organization=organization, is_active=True

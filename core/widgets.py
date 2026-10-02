@@ -82,7 +82,7 @@ class PersonPickerWidget(VisibleHiddenInput):
         return format_html(
             '<div class="person-picker" data-person-picker data-search-url="{search_url}"{create_attr}{sector_attr} data-placeholder="{placeholder}" data-empty-label="{empty_label}">'
             '{hidden_html}'
-            '<button type="button" class="person-picker__trigger">'
+            '<button type="button" class="person-picker__trigger" aria-haspopup="listbox" aria-expanded="false">'
             '<span class="person-picker__icon">{icon}</span>'
             '<span class="person-picker__label{label_class}">{label}</span>'
             "</button>"
@@ -144,7 +144,7 @@ class ClientPickerWidget(VisibleHiddenInput):
             ' data-create-label="Cadastrar cliente" data-placeholder="Buscar cliente..."'
             ' data-empty-label="Selecionar cliente"{create_attr}>'
             '{hidden_html}'
-            '<button type="button" class="person-picker__trigger">'
+            '<button type="button" class="person-picker__trigger" aria-haspopup="listbox" aria-expanded="false">'
             '<span class="person-picker__icon">{icon}</span>'
             '<span class="person-picker__label{label_class}">{label}</span>'
             "</button>"
@@ -195,7 +195,7 @@ class ActivityPickerWidget(VisibleHiddenInput):
             '<div class="person-picker" data-person-picker data-search-url="{search_url}"'
             ' data-create-label="Criar nova demanda"{create_attr}>'
             '{hidden_html}'
-            '<button type="button" class="person-picker__trigger">'
+            '<button type="button" class="person-picker__trigger" aria-haspopup="listbox" aria-expanded="false">'
             '<span class="person-picker__icon">{icon}</span>'
             '<span class="person-picker__label{label_class}">{label}</span>'
             "</button>"
@@ -216,6 +216,7 @@ class _SimpleSearchPickerWidget(VisibleHiddenInput):
     `create_label`, `empty_label` e `placeholder`."""
 
     search_url_name = None
+    picker_kind = ""
     create_label = "Cadastrar"
     empty_label = "Selecionar"
     placeholder = "Buscar..."
@@ -251,6 +252,15 @@ class _SimpleSearchPickerWidget(VisibleHiddenInput):
         hidden_html = super().render(name, value, attrs, renderer)
         label = self._label_for(value)
         search_url = reverse_lazy(self.search_url_name)
+        selected_color = ""
+        selected_text_color = ""
+        if value and self.queryset is not None and self.picker_kind == "sector":
+            try:
+                selected = self.queryset.get(pk=value)
+                selected_color = getattr(selected, "color", "")
+                selected_text_color = getattr(selected, "text_color", "")
+            except (self.queryset.model.DoesNotExist, ValueError, TypeError):
+                pass
 
         create_attr = format_html(' data-create-url="{}"', self.create_url) if self.create_url else mark_safe("")
         if self.filter_field_id and self.filter_param:
@@ -260,16 +270,19 @@ class _SimpleSearchPickerWidget(VisibleHiddenInput):
         label_class = "" if label else " muted"
 
         return format_html(
-            '<div class="person-picker" data-person-picker data-search-url="{search_url}"'
+            '<div class="person-picker{if_kind}" data-person-picker data-picker-kind="{picker_kind}" data-search-url="{search_url}"'
             ' data-create-label="{create_label}" data-placeholder="{placeholder}"'
-            ' data-empty-label="{empty_label}"{create_attr}>'
+            ' data-empty-label="{empty_label}" data-selected-color="{selected_color}"'
+            ' data-selected-text-color="{selected_text_color}"{create_attr}>'
             "{hidden_html}"
-            '<button type="button" class="person-picker__trigger">'
+            '<button type="button" class="person-picker__trigger" aria-haspopup="listbox" aria-expanded="false">'
             '<span class="person-picker__icon">{icon}</span>'
             '<span class="person-picker__label{label_class}">{label}</span>'
             "</button>"
             "</div>",
             search_url=search_url,
+            if_kind=" sector-picker" if self.picker_kind == "sector" else "",
+            picker_kind=self.picker_kind,
             create_label=self.create_label,
             placeholder=self.placeholder,
             empty_label=self.empty_label,
@@ -278,6 +291,8 @@ class _SimpleSearchPickerWidget(VisibleHiddenInput):
             icon=self._icon(),
             label_class=label_class,
             label=label or self.empty_label,
+            selected_color=selected_color,
+            selected_text_color=selected_text_color,
         )
 
 
@@ -285,9 +300,40 @@ class SectorPickerWidget(_SimpleSearchPickerWidget):
     """Seletor de setor com busca, mesmo padrão do `ClientPickerWidget`."""
 
     search_url_name = "sector-search"
+    picker_kind = "sector"
     create_label = "Cadastrar setor"
     empty_label = "Selecionar setor"
     placeholder = "Buscar setor..."
+
+
+class SectorCheckboxSelectMultiple(forms.CheckboxSelectMultiple):
+    """Checkboxes múltiplos de setores com a amostra da cor atual.
+
+    O queryset é resolvido uma única vez por renderização do widget; a cor
+    continua vindo do próprio setor e não cria consultas por opção.
+    """
+
+    def _sector_map(self):
+        if hasattr(self, "_cached_sector_map"):
+            return self._cached_sector_map
+        queryset = getattr(self.choices, "queryset", None)
+        if queryset is None:
+            self._cached_sector_map = {}
+        else:
+            self._cached_sector_map = {str(item.pk): item for item in queryset}
+        return self._cached_sector_map
+
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        option = super().create_option(name, value, label, selected, index, subindex=subindex, attrs=attrs)
+        sector = self._sector_map().get(str(value))
+        if sector:
+            option["label"] = format_html(
+                '<span class="sector-checkbox__swatch" style="--sector-color: {};" aria-hidden="true"></span><span>{}</span>',
+                sector.color,
+                sector.name,
+            )
+            option["attrs"]["title"] = sector.name
+        return option
 
 
 class CompanyPickerWidget(_SimpleSearchPickerWidget):

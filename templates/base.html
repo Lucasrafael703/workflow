@@ -21,6 +21,8 @@
 <link rel="stylesheet" href="{% static 'css/intake.css' %}?v=20261001a">
 <link rel="stylesheet" href="{% static 'css/task-modal.css' %}?v=20261001a">
 <link rel="stylesheet" href="{% static 'css/kanban.css' %}?v=20261003a">
+<link rel="stylesheet" href="{% static 'css/boards.css' %}?v=20261007c">
+<link rel="stylesheet" href="{% static 'css/work-board.css' %}?v=20261009a">
 </head>
 <body data-mention-search-url="{% url 'person-search' %}">
 <a class="skip-link" href="#main-content">Ir para o conteúdo</a>
@@ -76,6 +78,13 @@
                 <span class="nav-item__label">Tarefas</span>
                 {% if lps_open_tasks %}<span class="nav-count nav-count--quiet">{{ lps_open_tasks }}</span>{% endif %}
             </a>
+
+            {% if lps_nav.boards %}
+            <a href="{% url 'board-list' %}" class="nav-item {% if nav_active == 'boards' %}is-active{% endif %}" data-tooltip="Quadros">
+                <span class="nav-item__icon">{% include "_icon.html" with name="list-ul" %}</span>
+                <span class="nav-item__label">Quadros</span>
+            </a>
+            {% endif %}
 
             <a href="{% url 'queue' %}" class="nav-item {% if nav_active == 'queue' %}is-active{% endif %}" data-tooltip="Fila">
                 <span class="nav-item__icon">{% include "_icon.html" with name="queue" %}</span>
@@ -230,6 +239,7 @@
             {% elif nav_active == 'activities' and request.resolver_match.url_name == 'activity-list' %}Demandas · {% if request.GET.tab == 'grupo' %}Do meu setor{% elif request.GET.tab == 'participando' %}Em que participo{% elif request.GET.tab == 'concluidas' %}Concluídas{% elif request.GET.tab == 'todas' %}Todas as demandas{% else %}Sob minha responsabilidade{% endif %}
             {% elif nav_active == 'activities' %}Demandas · Entregas
             {% elif nav_active == 'tasks' %}Tarefas · Trabalho a fazer
+            {% elif nav_active == 'boards' %}Quadros · Monte do seu jeito
             {% elif nav_active == 'notifications' %}Notificações · Avisos para você
             {% elif nav_active == 'queue' %}Ordem das tarefas
             {% elif nav_active == 'management' %}Acompanhamento da equipe
@@ -324,7 +334,7 @@
 <script src="{% static 'js/retroactive-work.js' %}?v=20261001a"></script>
 <script src="{% static 'js/activity-steps.js' %}?v=20261002a"></script>
 <script src="{% static 'js/task-modal.js' %}?v=20261001a"></script>
-<script src="{% static 'js/person-picker.js' %}?v=20260927a"></script>
+<script src="{% static 'js/person-picker.js' %}?v=20261005-sector-colors"></script>
 <script src="{% static 'js/person-multi-picker.js' %}?v=20260929a"></script>
 <script src="{% static 'js/tag-picker.js' %}?v=20260926a"></script>
 <script src="{% static 'js/rich-text.js' %}?v=20261001a"></script>

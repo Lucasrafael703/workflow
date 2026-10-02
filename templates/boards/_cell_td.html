@@ -1,0 +1,1 @@
+{% load lps_board %}<td class="board-td board-td--{{ column.type|lower }}{% if permissions.edit_item %} is-editable{% endif %}" data-cell data-item-id="{{ item.id }}" data-column-id="{{ column.id }}" data-type="{{ column.type }}" data-value="{% raw_value cell column %}"{% if permissions.edit_item %} tabindex="0"{% endif %}>{% include "boards/_cell.html" %}</td>

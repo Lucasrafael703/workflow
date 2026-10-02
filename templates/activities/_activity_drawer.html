@@ -23,7 +23,7 @@ O essencial para decidir sem sair do quadro; a ficha completa continua a um cliq
                 <div class="drawer__facts">
                     <div class="form-row"><label>Cliente</label><div class="field-static">{% include "_icon.html" with name="building" %}<span>{{ activity.client.name|default:"—" }}</span></div></div>
                     <div class="form-row"><label>Obra</label><div class="field-static">{% include "_icon.html" with name="hardhat" %}<span>{{ activity.site.name|default:"—" }}</span></div></div>
-                    <div class="form-row"><label>Setor</label><div class="field-static">{% include "_icon.html" with name="users" %}<span>{{ activity.sector.name|default:"—" }}</span></div></div>
+                    <div class="form-row"><label>Setor</label><div class="field-static">{% include "_icon.html" with name="users" %}{% if activity.sector %}{% include "_sector_badge.html" with sector=activity.sector variant="compact" %}{% else %}<span>—</span>{% endif %}</div></div>
                     <div class="form-row"><label>Responsável</label><div class="field-static">{% include "_icon.html" with name="user" %}<span>{{ activity.owner.get_full_name|default:activity.owner.get_username|default:"Sem responsável" }}</span></div></div>
                     <div class="form-row"><label>Prazo</label><div class="field-static">{% include "_icon.html" with name="calendar" %}<span>{% if activity.requested_deadline %}{{ activity.requested_deadline|date:"d/m/Y H:i" }}{% else %}<span class="muted">Sem prazo</span>{% endif %}</span></div></div>
                 </div>
@@ -36,7 +36,7 @@ O essencial para decidir sem sair do quadro; a ficha completa continua a um cliq
                     {% for task in tasks %}
                     <li>
                         <a href="{% url 'task-detail' task.pk %}">{{ task.title }}</a>
-                        <span class="muted small">{{ task.responsavel.get_full_name|default:task.responsavel.get_username|default:"Sem responsável" }} · {{ task.sector.name }}</span>
+                        <span class="muted small">{{ task.responsavel.get_full_name|default:task.responsavel.get_username|default:"Sem responsável" }} · {% include "_sector_badge.html" with sector=task.sector variant="compact" %}</span>
                         <span class="tag tag--{{ task.status }}">{{ task.get_status_display }}</span>
                     </li>
                     {% endfor %}
@@ -51,7 +51,7 @@ O essencial para decidir sem sair do quadro; a ficha completa continua a um cliq
                 <h3>Anexos</h3>
                 <ul class="list-rows">
                     {% for attachment in attachments %}
-                    <li><a href="{{ attachment.file.url }}" target="_blank" rel="noopener">{{ attachment.original_name|default:attachment.file.name }}</a></li>
+                    <li><a href="{% url 'activity-attachment-download' activity.pk attachment.pk %}" target="_blank" rel="noopener">{{ attachment.original_name|default:attachment.file.name }}</a></li>
                     {% endfor %}
                 </ul>
             </div>

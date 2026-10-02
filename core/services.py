@@ -25,18 +25,25 @@ def _assert_unique_name(model, organization, name, instance=None):
 class SectorService:
     @staticmethod
     @transaction.atomic
-    def create(organization, name, created_by, description=""):
+    def create(organization, name, created_by, description="", color="#3B82F6"):
+        from .colors import is_valid_palette_color
+
         name = (name or "").strip()
         if not name:
             raise CadastroError("Informe o nome do setor.")
+        color = (color or "#3B82F6").upper()
+        if not is_valid_palette_color(color):
+            raise CadastroError("Escolha uma cor da paleta oficial.")
         _assert_unique_name(Sector, organization, name)
         return Sector.objects.create(
-            organization=organization, name=name, description=description, created_by=created_by
+            organization=organization, name=name, description=description, color=color, created_by=created_by
         )
 
     @staticmethod
     @transaction.atomic
-    def update(sector, name=None, description=None):
+    def update(sector, name=None, description=None, color=None):
+        from .colors import is_valid_palette_color
+
         if name is not None:
             name = name.strip()
             if not name:
@@ -45,7 +52,14 @@ class SectorService:
             sector.name = name
         if description is not None:
             sector.description = description
-        sector.save(update_fields=["name", "description"])
+        fields = ["name", "description"]
+        if color is not None:
+            color = (color or "#3B82F6").upper()
+            if not is_valid_palette_color(color):
+                raise CadastroError("Escolha uma cor da paleta oficial.")
+            sector.color = color
+            fields.append("color")
+        sector.save(update_fields=fields)
         return sector
 
     @staticmethod
