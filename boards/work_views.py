@@ -15,6 +15,7 @@ from django.views.generic import TemplateView
 
 from acessos import catalog
 from acessos.services import AuthorizationService
+from activities.filtering import normalize_workspace_filters
 from activities.models import Activity, Task
 from core.colors import EnumColorResolver
 from core.mixins import OrganizationRequiredMixin
@@ -252,7 +253,7 @@ class DomainWorkBoardView(OrganizationRequiredMixin, TemplateView):
                 self.organization,
                 domain=self.domain,
                 show_empty=bool((view.settings or {}).get("show_empty", False)),
-                sector_id=self.request.GET.get("setor") or self.request.GET.get("sector") or self.request.GET.get("grupo"),
+                sector_id=normalize_workspace_filters(self.request)["setor"],  # só dígitos; valor inválido vira "sem setor"
             ),
             group_by=group_by,
             group_field=group_field,
@@ -342,7 +343,7 @@ class DemandWorkBoardView(DomainWorkBoardView):
         sectors = Sector.objects.filter(
             organization=self.organization, is_active=True
         ).order_by("name")
-        selected_sector = self.request.GET.get("setor") or self.request.GET.get("sector") or self.request.GET.get("grupo")
+        selected_sector = normalize_workspace_filters(self.request)["setor"]
         stage_groups, condition_groups = visual_filter_choice_groups(
             self.organization, "demanda", selected_sector
         )

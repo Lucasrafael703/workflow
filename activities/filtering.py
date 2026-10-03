@@ -31,6 +31,18 @@ def _first(params, *names):
     return ""
 
 
+def _identifier(raw, name, invalid):
+    """Id de filtro (setor, etapa, status, cliente, obra, marcador): só dígitos valem. Qualquer outra coisa é
+    **ignorada** (e anotada em `invalid`) em vez de chegar ao banco e derrubar a tela com erro 500."""
+    value = str(raw or "").strip()
+    if not value:
+        return ""
+    if value.isascii() and value.isdigit():
+        return value
+    invalid.append(name)
+    return ""
+
+
 def _values(params, *names):
     """Read a repeatable query parameter, keeping legacy aliases working."""
     for name in names:
@@ -64,7 +76,9 @@ def normalize_workspace_filters(request, *, default_order="prazo"):
 
     if quick not in QUICK_FILTERS:
         quick = ""
-    if deadline not in DEADLINE_FILTERS:
+    invalid = []
+    if deadline and deadline not in DEADLINE_FILTERS:
+        invalid.append("prazo")
         deadline = ""
 
     order = _first(params, "ordem", "sort") or default_order
@@ -73,13 +87,13 @@ def normalize_workspace_filters(request, *, default_order="prazo"):
         "tab": params.get("tab", "minhas"),
         "pessoa": _first(params, "pessoa", "responsavel"),
         "pessoas": _values(params, "pessoa", "responsavel"),
-        "setor": _first(params, "setor", "sector", "grupo"),
-        "condicao": params.get("condicao", ""),
-        "estagio": params.get("estagio", ""),
+        "setor": _identifier(_first(params, "setor", "sector", "grupo"), "setor", invalid),
+        "condicao": _identifier(params.get("condicao", ""), "status", invalid),
+        "estagio": _identifier(params.get("estagio", ""), "etapa", invalid),
         "filtro": quick,
-        "cliente": params.get("cliente", ""),
-        "obra": params.get("obra", ""),
-        "tag": params.get("tag", ""),
+        "cliente": _identifier(params.get("cliente", ""), "cliente", invalid),
+        "obra": _identifier(params.get("obra", ""), "obra", invalid),
+        "tag": _identifier(params.get("tag", ""), "marcador", invalid),
         "participante": params.get("participante", ""),
         "prazo": deadline,
         "bloqueio": bool(params.get("bloqueio")) or quick == "bloqueadas" or raw_status == "BLOQUEADA",
@@ -89,6 +103,8 @@ def normalize_workspace_filters(request, *, default_order="prazo"):
         "dir": params.get("dir", ""),
         "ano": params.get("ano", ""),
         "mes": params.get("mes", ""),
+        # Filtros recebidos com valor inválido e ignorados (a tela pode avisar em vez de falhar).
+        "invalid": list(dict.fromkeys(invalid)),
     }
 
 

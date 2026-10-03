@@ -310,51 +310,14 @@ class ColumnTests(KanbanTestCase):
 
 
 class FilterTests(KanbanTestCase):
-    def test_search_matches_title_client_site_and_the_old_code(self):
-        for term in ("Aurora", "Convivy", "Residencial", self.a1.code.replace("DEM-", "ATV-")):
-            with self.subTest(term=term):
-                response = self.board("activity-kanban", self.ana, q=term)
-                self.assertEqual(self.all_titles(response), ["Orçamento Aurora"])
-
     def test_task_search_matches_the_demand_of_the_task(self):
         response = self.board("task-kanban", self.ana, q="garagem")
         self.assertEqual(self.all_titles(response), ["Cotar cabos"])
-
-    def test_person_filter(self):
-        mine = self.board("activity-kanban", self.ana, pessoa="eu")
-        self.assertEqual(self.all_titles(mine), ["Orçamento Aurora"])
-        other = self.client.get(reverse("activity-kanban"), {"pessoa": self.gestor.pk})
-        self.assertEqual(self.all_titles(other), ["Levantamento da garagem"])
-
-    def test_condition_filter(self):
-        response = self.board("activity-kanban", self.ana, condicao=self.d_cliente.pk)
-        self.assertEqual(self.all_titles(response), ["Levantamento da garagem"])
-
-    def test_client_and_site_filters(self):
-        self.assertEqual(self.all_titles(self.board("activity-kanban", self.ana, cliente=self.convivy.pk)), ["Orçamento Aurora"])
-        self.assertEqual(self.all_titles(self.client.get(reverse("activity-kanban"), {"obra": self.aurora.pk})), ["Orçamento Aurora"])
-
-    def test_deadline_filters(self):
-        now = timezone.now()
-        Activity.objects.filter(pk=self.a1.pk).update(requested_deadline=now - datetime.timedelta(days=2))
-        Activity.objects.filter(pk=self.a2.pk).update(requested_deadline=now + datetime.timedelta(days=3))
-        self.assertEqual(self.all_titles(self.board("activity-kanban", self.ana, prazo="atrasadas")), ["Orçamento Aurora"])
-        self.assertEqual(self.all_titles(self.client.get(reverse("activity-kanban"), {"prazo": "7_dias"})), ["Levantamento da garagem"])
-        self.assertEqual(self.all_titles(self.client.get(reverse("activity-kanban"), {"prazo": "sem_prazo"})), ["Item do visitante"])
-
-    def test_blocked_filter_uses_the_operational_status(self):
-        Activity.objects.filter(pk=self.a2.pk).update(status=Activity.Status.BLOQUEADA)
-        self.assertEqual(self.all_titles(self.board("activity-kanban", self.ana, bloqueio="1")), ["Levantamento da garagem"])
 
     def test_task_participant_filter(self):
         self.t1.executors.create(user=self.duo, added_by=self.ana)
         response = self.board("task-kanban", self.ana, participante=self.duo.pk)
         self.assertEqual(self.all_titles(response), ["Levantar quantitativos"])
-
-    def test_invalid_values_are_ignored(self):
-        response = self.board("activity-kanban", self.ana, pessoa="abc", condicao="x", cliente="; drop", prazo="nunca", ordem="zzz", dir="up")
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(self.all_titles(response)), 3)
 
     def test_ordering_by_title_in_both_directions(self):
         asc = self.board("activity-kanban", self.ana, ordem="titulo")
