@@ -1,6 +1,8 @@
 from django.conf import settings
 
 from . import catalog
+from .screen_services import menu_levels
+from .screens import NONE
 from .services import AuthorizationService, ResourceContext
 
 
@@ -18,27 +20,29 @@ def navigation(request):
     if user is None or not user.is_authenticated:
         return {}
 
-    can = AuthorizationService.can
     profile = getattr(user, "profile", None)
     organization = getattr(profile, "organization", None)
     intake = _intake_nav(user, organization)
 
+    # Cada item do menu segue o acesso da pessoa à tela correspondente (acessos/screens.py).
+    # "" = sem acesso; "ver" ou "editar" = o item aparece.
+    screens = {key: (level if level != NONE else "") for key, level in menu_levels(user).items()}
+    has = lambda *keys: any(screens[key] for key in keys)  # noqa: E731
+
     return {
         "lps_nav": {
+            "screens": screens,
             "intake": intake["visible"],
             "intake_can_view": intake["can_view"],
             "boards": _boards_nav(user, organization),
-            "management": AuthorizationService.can_anywhere(user, catalog.METRICAS_VISUALIZAR),
-            "cadastros": (
-                can(user, catalog.SETOR_EDITAR)
-                or can(user, catalog.EMPRESA_GERIR)
-                or can(user, catalog.MOTIVO_DEVOLUCAO_GERIR)
-                or can(user, catalog.ESTAGIO_TAREFA_GERIR)
-                or can(user, catalog.TAG_GERIR)
-                or AuthorizationService.can_anywhere(user, catalog.PROCESSO_VISUALIZAR)
+            "management": has("visao_gestor", "equipe", "gargalos", "insights"),
+            "cadastros": has("empresas", "setores", "clientes", "obras", "centros_custo"),
+            "users": bool(screens["usuarios"]),
+            "security": bool(screens["grupos"]),
+            "administration": has(
+                "empresas", "setores", "clientes", "obras", "centros_custo",
+                "usuarios", "grupos", "configuracoes", "integracoes",
             ),
-            "users": can(user, catalog.USUARIO_VISUALIZAR),
-            "security": can(user, catalog.SEGURANCA_GERIR_PERFIS),
         },
         "lps_org": organization,
         "lps_open_tasks": _open_task_count(user),
@@ -151,11 +155,17 @@ _NAV_BY_URL_NAME = {
     "tag-edit": "cadastros",
     "user-list": "users",
     "user-create": "users",
+    "user-quick-create": "users",
     "user-edit": "users",
     "user-access": "users",
     "permissions": "permissions",
     "profile-create": "permissions",
     "profile-edit": "permissions",
+    "access-groups": "permissions",
+    "access-group-create": "permissions",
+    "access-group-save": "permissions",
+    "access-group-inactivate": "permissions",
+    "access-groups-compare": "permissions",
     "settings": "settings",
     "equipe-pessoas": "equipe",
     "equipe-capacidade": "equipe",

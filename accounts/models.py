@@ -29,6 +29,11 @@ class Profile(models.Model):
         related_name="+",
         help_text="Usado como padrão em filtros de telas do usuário (Regras 05 §29). Não limita os demais vínculos.",
     )
+    must_change_password = models.BooleanField(
+        "trocar a senha no próximo acesso",
+        default=False,
+        help_text="Ligado quando um administrador define uma senha provisória: a pessoa só segue depois de escolher a dela.",
+    )
     created_at = models.DateTimeField("criado em", auto_now_add=True)
 
     class Meta:

@@ -1,6 +1,6 @@
 from django.urls import path, re_path
 
-from . import views
+from . import access_views, views
 from .legacy_redirects import MovedPrefixView
 
 urlpatterns = [
@@ -78,9 +78,20 @@ urlpatterns = [
     path("permissoes/<int:pk>/salvar/", views.PermissionUpdateView.as_view(), name="permissions-update"),
     path("perfis/novo/", views.ProfileFormView.as_view(), name="profile-create"),
     path("perfis/<int:pk>/", views.ProfileFormView.as_view(), name="profile-edit"),
-    path("usuarios/", views.UserListView.as_view(), name="user-list"),
-    path("usuarios/novo/", views.UserFormView.as_view(), name="user-create"),
-    path("usuarios/<int:pk>/", views.UserFormView.as_view(), name="user-edit"),
+    path("grupos-de-acesso/", access_views.AccessGroupsView.as_view(), name="access-groups"),
+    path("grupos-de-acesso/novo/", access_views.AccessGroupCreateView.as_view(), name="access-group-create"),
+    path("grupos-de-acesso/comparar/", access_views.AccessGroupsCompareView.as_view(), name="access-groups-compare"),
+    path("grupos-de-acesso/<int:pk>/salvar/", access_views.AccessGroupSaveView.as_view(), name="access-group-save"),
+    path(
+        "grupos-de-acesso/<int:pk>/inativar/",
+        access_views.AccessGroupInactivateView.as_view(),
+        name="access-group-inactivate",
+    ),
+    path("usuarios/", access_views.UserListView.as_view(), name="user-list"),
+    path("usuarios/novo/", access_views.UserEditorView.as_view(), name="user-create"),
+    # Cadastro rápido em janela (seletores de pessoa de outras telas): só a pessoa, sem acessos.
+    path("usuarios/novo-rapido/", views.UserFormView.as_view(), name="user-quick-create"),
+    path("usuarios/<int:pk>/", access_views.UserEditorView.as_view(), name="user-edit"),
     path("usuarios/<int:pk>/acessos/", views.UserAccessView.as_view(), name="user-access"),
     path(
         "usuarios/<int:pk>/acessos/<int:assignment_pk>/remover/",

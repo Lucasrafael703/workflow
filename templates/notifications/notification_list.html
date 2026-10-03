@@ -22,6 +22,7 @@
                 {% csrf_token %}<button type="submit" class="notification-page__mark-all">Marcar todas como lidas</button>
             </form>
             {% endif %}
+            <a href="{% url 'settings' %}" class="notification-page__mark-all">Preferências de aviso</a>
         </div>
     </header>
 

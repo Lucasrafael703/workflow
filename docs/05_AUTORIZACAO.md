@@ -198,8 +198,15 @@ poder editar o fluxo) e está registrada em `Regras/12` §41.
 
 ## 5. Administração pela interface
 
+O caminho do dia a dia é por **tela e nível** (seção 5.1): o usuário numa página só, os grupos de
+acesso e o menu. As telas por ação, abaixo, continuam existindo como **ajuste fino** (avançado).
+
 | Tela | URL | Ação exigida |
 |---|---|---|
+| Lista de usuários | `/usuarios/` | `usuario.visualizar` |
+| Novo usuário / editar usuário (dados, equipe, grupo, telas) | `/usuarios/novo/`, `/usuarios/<pk>/` | `usuario.criar` / `usuario.editar` (grupo e telas: também `seguranca.gerir_autorizacoes`) |
+| Grupos de acesso (editar) | `/grupos-de-acesso/` | ver: `seguranca.gerir_perfis`; gravar: `seguranca.gerir_autorizacoes` |
+| Comparar grupos | `/grupos-de-acesso/comparar/` | `seguranca.gerir_perfis` |
 | Matriz de permissões (perfis × ações) | `/permissoes/` | `seguranca.gerir_perfis` |
 | Salvar ações de um perfil | `/permissoes/<pk>/salvar/` | `seguranca.gerir_autorizacoes` |
 | Criar/editar perfil | `/perfis/novo/`, `/perfis/<pk>/` | `seguranca.gerir_perfis` |
@@ -210,6 +217,66 @@ Todas as alterações passam por `AccessService` e são auditadas
 (`PROFILE_CREATED`, `PROFILE_ASSIGNED`, `ACTION_GRANTED` etc., com
 `target_user`). `AccessService.set_profile_actions` só altera as ações que
 estavam **visíveis** na tela, para um filtro na matriz não apagar o resto.
+
+### 5.1 Telas e níveis (grupos de acesso)
+
+O motor continua sendo **ação + escopo + origem**. Por cima dele, `acessos/screens.py` é a tabela que liga
+cada **tela** do menu e cada **nível** às ações; `acessos/screen_services.py` lê e grava por ela. Não há
+modelo novo:
+
+| Na tela | No motor |
+|---|---|
+| Grupo de acesso | `acessos.Profile` (perfil) |
+| Equipe (Membro / Gestor da equipe / principal) | `accounts.UserSector` e `Profile.main_sector` |
+| Vale para | o `Scope` da atribuição: organização inteira, `MEUS_SETORES` (as equipes da pessoa) ou `SETORES_GERENCIADOS` |
+| Tela + nível | as ações da tabela abaixo |
+| Ajuste individual | `UserAction` (concessão direta) para aquela pessoa |
+| Menu | o nível de cada tela, lido das ações efetivas da pessoa |
+
+Níveis: **Sem acesso** (nenhuma ação da tela), **Ver** (`view`) e **Editar** (`view` + `edit`). Cada tela
+declara três listas: `view`, `edit` e `extra` (avançadas e sensíveis, como cancelar e reabrir). A primeira
+ação de `edit` é o *marcador* que decide se um perfil lido está em "Editar". As 21 telas, em 4 seções (Dia a
+dia, Gestão, Processos e cadastros, Administração), estão em `screens.SCREENS`; o teste `ScreenMapTests`
+garante que toda ação existe no catálogo e pertence a **uma** tela só.
+
+Regras que importam:
+
+- **Só se grava o que mudou.** Salvar um grupo compara o nível lido com o pedido, tela a tela
+  (`GroupService.changes_for`). O que não mudou — inclusive ações avançadas e perfis montados à mão na
+  matriz — fica exatamente como estava. Descer de "Editar" para "Ver" tira as ações de edição e as
+  avançadas da tela; "Sem acesso" tira tudo dela.
+- **Não existe "negar".** O motor só concede (seção 1), então, na tela da pessoa, um nível abaixo do
+  grupo fica desabilitado: para tirar uma tela, mude o grupo. O servidor ignora um pedido abaixo do grupo.
+- **Ajuste individual** só sobe o nível. Ações que só funcionam sobre a organização inteira
+  (`screens.ORG_ONLY_ACTIONS`: quadros, usuários, grupos, cadastros…) são concedidas no escopo de
+  organização; as demais, no escopo da atribuição do grupo. "Voltar ao padrão do grupo" revoga essas
+  concessões. Concessões manuais em outros escopos (feitas em *Acessos avançados*) não são tocadas.
+- **Vale para × telas só de organização.** Num grupo atribuído a "as equipes da pessoa", telas cuja ação é
+  verificada sobre a organização inteira (quadros, cadastros, usuários…) não autorizam nem aparecem no menu.
+  A tela avisa e oferece "Usar a organização inteira".
+- **Quem tem mais de um grupo** (ou um escopo "personalizado": empresa, obra, setor fixo) continua com a
+  atribuição como está; a página da pessoa mostra os grupos e só edita dados, equipe e situação.
+- **Ninguém se tranca para fora:** salvar um grupo que tiraria de quem salva o poder de gerir grupos, ou
+  mudar o próprio grupo de um modo que tire `usuario.editar`/`seguranca.gerir_autorizacoes`, é recusado.
+- **Super usuário** (`is_superuser`) continua passando direto pelo motor. Só outro super usuário o concede ou
+  retira (auditado como `SUPERUSER_CHANGED`) e sempre sobra ao menos um ativo. A lista de usuários mostra a
+  etiqueta e conta quem está "como Administrador" (super usuário ou grupo com todas as telas).
+
+**Menu.** Cada item da barra lateral aparece conforme o nível da tela
+(`acessos.screen_services.menu_levels`, 2 consultas por página). Ações verificadas só sobre a organização
+contam só se vierem de escopo de organização; as demais contam em qualquer escopo. Isto é experiência de uso
+— a proteção real continua nas views e serviços (seção 4). As telas que só existiam como item de menu
+ganharam ações `tela.*` (grupo `telas` do catálogo): `tela.inicio`, `notificacoes`, `equipe`, `gargalos`,
+`insights`, `empresas`, `setores`, `clientes`, `obras`, `centros_custo`, `configuracoes`, `integracoes`.
+
+**Migração `acessos/0006_telas_do_menu`.** Cria as ações `tela.*` e concede a quem já enxergava cada item
+o que o mantém visível (perfis e concessões diretas, no mesmo escopo): Início e Notificações para todos;
+Equipe, Filas e gargalos e Insights para quem tem `metricas.visualizar`; os cinco cadastros para quem já
+abria Cadastros; Configurações e Integrações para quem já via a seção Administração. Nenhum perfil existente
+(inclusive o Administrador) nem nenhum super usuário perde acesso; reversível.
+
+> Uma pessoa **sem nenhum grupo nem concessão** não vê nenhum item no menu (antes via Início, Demandas,
+> Tarefas e Notificações, sem poder usar nada). Atribua um grupo em *Usuários*.
 
 ---
 

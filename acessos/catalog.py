@@ -117,6 +117,21 @@ QUADRO_CRIAR_ITEM = "quadro.criar_item"
 QUADRO_EDITAR_ITEM = "quadro.editar_item"
 QUADRO_EXCLUIR_ITEM = "quadro.excluir_item"
 
+# Telas do menu que não têm uma ação operacional própria. Existem só para que o menu (e as telas de
+# acesso) saibam se a pessoa enxerga aquele item; ver `acessos/screens.py`. Não protegem dados.
+TELA_INICIO = "tela.inicio"
+TELA_NOTIFICACOES = "tela.notificacoes"
+TELA_EQUIPE = "tela.equipe"
+TELA_GARGALOS = "tela.gargalos"
+TELA_INSIGHTS = "tela.insights"
+TELA_EMPRESAS = "tela.empresas"
+TELA_SETORES = "tela.setores"
+TELA_CLIENTES = "tela.clientes"
+TELA_OBRAS = "tela.obras"
+TELA_CENTROS_CUSTO = "tela.centros_custo"
+TELA_CONFIGURACOES = "tela.configuracoes"
+TELA_INTEGRACOES = "tela.integracoes"
+
 
 # (chave, nome, descrição, sensível)
 GROUPS = [
@@ -270,6 +285,24 @@ GROUPS = [
             (QUADRO_EXCLUIR_ITEM, "Excluir itens do quadro", "Permite excluir itens de um quadro (o histórico é preservado).", False),
         ],
     ),
+    (
+        "telas",
+        "Telas do menu",
+        [
+            (TELA_INICIO, "Ver Início", "Mostra o Início no menu.", False),
+            (TELA_NOTIFICACOES, "Ver Notificações", "Mostra as Notificações no menu.", False),
+            (TELA_EQUIPE, "Ver Equipe", "Mostra Equipe (pessoas, capacidade e carga) no menu.", False),
+            (TELA_GARGALOS, "Ver Filas e gargalos", "Mostra Filas e gargalos no menu.", False),
+            (TELA_INSIGHTS, "Ver Insights e resultados", "Mostra Insights, Desenvolvimento e Resultados no menu.", False),
+            (TELA_EMPRESAS, "Ver Empresas", "Mostra o cadastro de empresas no menu.", False),
+            (TELA_SETORES, "Ver Setores", "Mostra o cadastro de setores (equipes) no menu.", False),
+            (TELA_CLIENTES, "Ver Clientes", "Mostra o cadastro de clientes no menu.", False),
+            (TELA_OBRAS, "Ver Obras", "Mostra o cadastro de obras no menu.", False),
+            (TELA_CENTROS_CUSTO, "Ver Centros de custo", "Mostra o cadastro de centros de custo no menu.", False),
+            (TELA_CONFIGURACOES, "Ver Configurações", "Mostra as Configurações no menu.", False),
+            (TELA_INTEGRACOES, "Ver Integrações", "Mostra as Integrações no menu.", False),
+        ],
+    ),
 ]
 
 
@@ -306,6 +339,9 @@ SUGGESTED_PROFILES = {
         QUADRO_VISUALIZAR,
         QUADRO_CRIAR_ITEM,
         QUADRO_EDITAR_ITEM,
+        TELA_INICIO,
+        TELA_NOTIFICACOES,
+        TELA_CLIENTES,
     ],
     "Gestor de Setor": [
         ATIVIDADE_VISUALIZAR,
@@ -369,6 +405,14 @@ SUGGESTED_PROFILES = {
         QUADRO_CRIAR_ITEM,
         QUADRO_EDITAR_ITEM,
         QUADRO_EXCLUIR_ITEM,
+        TELA_INICIO,
+        TELA_NOTIFICACOES,
+        TELA_EQUIPE,
+        TELA_GARGALOS,
+        TELA_INSIGHTS,
+        TELA_SETORES,
+        TELA_CLIENTES,
+        TELA_CONFIGURACOES,
     ],
     "Administrador": [key for _, _, actions in GROUPS for key, _, _, _ in actions],
 }

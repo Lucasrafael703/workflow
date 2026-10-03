@@ -73,7 +73,7 @@ espelhadas em `static/js/color-utils.js`.
 
 | Model | Campos relevantes | Constraints / regras |
 |---|---|---|
-| `Profile` | `user` 1:1 (`profile`), `organization` (null, PROTECT, `members`), `phone`, `main_sector` (null, SET_NULL) | Criado vazio por signal ao criar um `User`. `main_sector` é só o filtro padrão das telas (Regras 05 §29). |
+| `Profile` | `user` 1:1 (`profile`), `organization` (null, PROTECT, `members`), `phone`, `main_sector` (null, SET_NULL), `must_change_password` | Criado vazio por signal ao criar um `User`. `main_sector` é só o filtro padrão das telas (Regras 05 §29). `must_change_password` liga com a senha provisória e desliga quando a pessoa escolhe a própria (doc 07). |
 | `UserSector` | `user` (`sector_memberships`), `sector` (`user_memberships`), `role` (`MEMBRO`, `GESTOR`), `joined_at`, `removed_at` | Único por (user, sector) **enquanto** `removed_at` é nulo — sair e voltar abre novo período. Ser GESTOR não concede autorização por si só. |
 | `EmailVerification` | `user` 1:1, `code` (6 dígitos), `expires_at`, `attempts`, `confirmed_at` | `CODE_TTL`=15 min, `RESEND_COOLDOWN`=60 s, `MAX_ATTEMPTS`=5. `issue(user)` substitui o código anterior. |
 

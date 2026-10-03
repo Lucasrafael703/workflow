@@ -1,0 +1,43 @@
+{% comment %}
+Telas com "Sem acesso / Ver / Editar", agrupadas por seção do menu.
+Espera: sections (ver core.access_views.screen_sections), locked (somente leitura) e
+show_individual (liga o selo "Ajuste individual" e o botão de voltar ao padrão do grupo).
+{% endcomment %}
+{% for section in sections %}
+<div class="access-block" data-section="{{ section.key }}">
+    <div class="access-block__head">
+        <strong>{{ section.name }}</strong>
+        {% if not locked %}
+        <span class="access-block__bulk">
+            <button type="button" class="link-button" data-bulk="none">Nenhuma</button>
+            <button type="button" class="link-button" data-bulk="ver">Todas: ver</button>
+            <button type="button" class="link-button" data-bulk="editar">Todas: editar</button>
+        </span>
+        {% endif %}
+    </div>
+    {% for row in section.rows %}
+    <div class="access-row{% if row.individual %} is-individual{% endif %}" data-screen="{{ row.screen.key }}" data-floor="{{ row.floor }}">
+        <div class="access-row__text">
+            <div class="access-row__name">
+                {{ row.screen.name }}
+                {% if show_individual %}<span class="pill pill--individual" data-individual-badge{% if not row.individual %} hidden{% endif %}>Ajuste individual</span>{% endif %}
+            </div>
+            <div class="access-row__desc">{{ row.screen.description }}</div>
+        </div>
+        <div class="access-row__control">
+            {% if show_individual and not locked %}
+            <button type="button" class="link-button access-row__reset" data-reset{% if not row.individual %} hidden{% endif %}>Voltar ao padrão do grupo</button>
+            {% endif %}
+            <div class="seg" role="radiogroup" aria-label="Acesso a {{ row.screen.name }}">
+                {% for option in row.options %}
+                <label class="seg__opt seg__opt--{{ option.value }}{% if option.disabled %} is-disabled{% endif %}">
+                    <input type="radio" name="screen_{{ row.screen.key }}" value="{{ option.value }}"{% if option.checked %} checked{% endif %}{% if option.disabled or locked %} disabled{% endif %}>
+                    <span>{{ option.label }}</span>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endfor %}
