@@ -1,0 +1,7 @@
+{% comment %}Avisos da tela: filtro inválido ignorado e escopo "Minhas" com responsável de outra pessoa (nada muda sozinho).{% endcomment %}
+{% for notice in ws.notices %}
+<div class="ws-notice ws-notice--{{ notice.kind }}" role="status">
+    <span>{{ notice.text }}</span>
+    {% if notice.action %}<a class="btn btn--sm" href="{{ notice.action.url }}">{{ notice.action.label }}</a>{% endif %}
+</div>
+{% endfor %}

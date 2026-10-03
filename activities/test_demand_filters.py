@@ -298,3 +298,15 @@ class FilterNormalizationTests(SimpleTestCase):
 
     def test_unicode_digits_are_not_ids(self):
         self.assertEqual(self.normalize({"cliente": "١٢"})["cliente"], "")  # dígitos árabe-índicos
+
+
+class WorkspaceOnFilterTests(DemandFilterTests):
+    """A mesma bateria de filtros com o shell novo (flag ligada): o recorte não muda de tela para tela."""
+
+    flag = "on"
+
+
+class WorkspaceOnScopeTests(DemandScopeTests):
+    """Escopos, vazamento entre setores e arrastar, agora no Workspace."""
+
+    flag = "on"

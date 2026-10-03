@@ -1,0 +1,15 @@
+{% comment %}Cabeçalho do Workspace: título, subtítulo, contador do universo filtrado e a ação Criar. Igual nas 3 visões.{% endcomment %}
+<header class="ws__head">
+    <div class="ws__title">
+        <h1 id="ws-title">{{ ws.title }}</h1>
+        <p>{{ ws.subtitle }}</p>
+    </div>
+    <div class="ws__head-actions">
+        <span class="ws__count" data-ws-count role="status" aria-live="polite">{{ ws.count }} demanda{{ ws.count|pluralize }}</span>
+        {% if can_create %}
+        <a class="btn btn--primary ws__create" href="{% url 'activity-create' %}?next={{ request.get_full_path|urlencode }}" data-activity-action data-activity-navigate>
+            {% include "_icon.html" with name="plus" %} Criar demanda
+        </a>
+        {% endif %}
+    </div>
+</header>

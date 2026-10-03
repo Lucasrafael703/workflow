@@ -1,0 +1,10 @@
+{% comment %}Calendário de Demandas: nesta fase, a lista de prazos de sempre DENTRO do shell novo (a grade mensal é de uma fase futura).{% endcomment %}
+<div class="demand-board__calendar" aria-label="Demandas por prazo">
+    {% for activity in activities %}
+    <article class="demand-board__calendar-card{% if activity.is_overdue %} is-late{% endif %}">
+        <time datetime="{% if activity.requested_deadline %}{{ activity.requested_deadline|date:'c' }}{% endif %}">{% include "_icon.html" with name="clock" %}{% if activity.requested_deadline %}{{ activity.requested_deadline|date:'d/m/Y H:i' }}{% else %}Sem prazo{% endif %}</time>
+        <a href="{% url 'activity-detail' activity.pk %}?next={{ request.get_full_path|urlencode }}">{{ activity.title }}</a>
+        <span>{% if activity.client %}{{ activity.client.name }}{% else %}Sem cliente{% endif %}{% if activity.sector %} · {{ activity.sector.name }}{% endif %}</span>
+    </article>
+    {% empty %}<div class="demand-board__calendar-empty">{% include "workspace/_empty.html" %}</div>{% endfor %}
+</div>

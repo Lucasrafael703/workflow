@@ -56,3 +56,47 @@ test('seletor de setor mostra a cor, atualiza o hidden e respeita teclado', asyn
     );
     assert.equal(trigger.getAttribute('aria-expanded'), 'false');
 });
+
+/* Seletores de Cliente/Obra do painel de filtros do Workspace: `data-allow-empty` oferece "Todos os ..." para limpar. */
+function setupLookup({allowEmpty}) {
+    const dom = new JSDOM(`<!doctype html><body>
+      <div data-person-picker data-picker-kind="client" data-search-url="/clientes/" data-placeholder="Buscar cliente..."
+           data-empty-label="Todos os clientes"${allowEmpty ? ' data-allow-empty="true"' : ''}>
+        <input type="hidden" name="cliente" id="ws-filter-cliente" value="12">
+        <button type="button" class="person-picker__trigger" aria-haspopup="listbox" aria-expanded="false">
+          <span class="person-picker__label">Convivy</span>
+        </button>
+      </div>
+    </body>`, {url: 'http://localhost/demandas/', runScripts: 'dangerously'});
+    dom.window.fetch = async () => ({json: async () => ({results: []})});
+    const scriptElement = dom.window.document.createElement('script');
+    scriptElement.textContent = script;
+    dom.window.document.body.appendChild(scriptElement);
+    return dom;
+}
+
+test('cliente com data-allow-empty oferece "Todos os clientes" e limpa a escolha', async t => {
+    const dom = setupLookup({allowEmpty: true});
+    t.after(() => dom.window.close());
+    const root = dom.window.document.querySelector('[data-person-picker]');
+    const hidden = root.querySelector('input[name=cliente]');
+    let changes = 0;
+    hidden.addEventListener('change', () => { changes += 1; });
+    root.querySelector('.person-picker__trigger').click();
+    const clear = root.querySelector('.sector-picker__clear');
+    assert.ok(clear, 'o botão de limpar existe');
+    assert.equal(clear.textContent, 'Todos os clientes');
+    clear.click();
+    assert.equal(hidden.value, '');
+    assert.equal(root.querySelector('.person-picker__label').textContent, 'Todos os clientes');
+    assert.ok(root.querySelector('.person-picker__label').classList.contains('muted'));
+    assert.equal(changes, 1, 'avisa a mudança (a Obra depende do Cliente)');
+});
+
+test('cliente sem data-allow-empty não ganha o botão de limpar', async t => {
+    const dom = setupLookup({allowEmpty: false});
+    t.after(() => dom.window.close());
+    const root = dom.window.document.querySelector('[data-person-picker]');
+    root.querySelector('.person-picker__trigger').click();
+    assert.equal(root.querySelector('.sector-picker__clear'), null);
+});

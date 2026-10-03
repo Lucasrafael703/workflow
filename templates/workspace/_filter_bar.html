@@ -1,0 +1,113 @@
+{% comment %}
+Barra do Workspace (igual nas 3 visões): Escopo · Mostrar · Buscar · Filtros · Agrupar · Ordenar · (Personalizar).
+Uma regra de interação, em uma frase: controles simples aplicam ao escolher; o painel "Filtros" é um RASCUNHO com um único
+"Aplicar filtros"; a busca aplica com Enter. Agrupar/Ordenar só aparecem onde fazem sentido (nunca desabilitados).
+Todos os formulários reenviam o resto do estado como campos ocultos (ws.*.hidden): nada se perde ao filtrar.
+{% endcomment %}
+<div class="ws-bar" data-ws-bar>
+    <div class="ws-bar__row">
+        <div class="ws-segment" role="group" aria-label="Escopo: quais demandas">
+            <span class="ws-segment__label">Escopo</span>
+            {% for option in ws.scope.options %}<a href="{{ option.url }}" class="ws-segment__item{% if option.active %} is-active{% endif %}"{% if option.active %} aria-current="true"{% endif %}>{{ option.label }}</a>{% endfor %}
+        </div>
+        <div class="ws-segment" role="group" aria-label="Mostrar">
+            <span class="ws-segment__label">Mostrar</span>
+            {% for option in ws.show.options %}<a href="{{ option.url }}" class="ws-segment__item{% if option.active %} is-active{% endif %}"{% if option.active %} aria-current="true"{% endif %}>{{ option.label }}</a>{% endfor %}
+        </div>
+    </div>
+
+    <div class="ws-bar__row">
+        <form class="ws-search" method="get" role="search" action="{{ request.path }}" data-ws-search>
+            {% for name, value in ws.search.hidden %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+            <label class="ws-search__control">
+                <span class="sr-only">Buscar demanda</span>
+                {% include "_icon.html" with name="search" %}
+                <input type="search" name="q" value="{{ ws.search.value }}" placeholder="Buscar demanda, cliente ou obra…" maxlength="120">
+            </label>
+            <button class="btn" type="submit">Buscar</button>
+        </form>
+
+        <button type="button" class="btn ws-bar__filters" data-ws-panel-toggle aria-expanded="{% if ws.panel.open %}true{% else %}false{% endif %}" aria-controls="ws-filter-panel">
+            {% include "_icon.html" with name="sliders" %} Filtros{% if ws.panel.active_count %} <span class="ws-badge" aria-label="{{ ws.panel.active_count }} ativo{{ ws.panel.active_count|pluralize }}">{{ ws.panel.active_count }}</span>{% endif %}
+        </button>
+
+        {% if ws.group %}
+        <label class="ws-select"><span>Agrupar</span>
+            <select data-ws-nav aria-label="Agrupar demandas por">{% for option in ws.group.options %}<option value="{{ option.url }}"{% if option.active %} selected{% endif %}>{{ option.label }}</option>{% endfor %}</select>
+        </label>
+        {% endif %}
+        {% if ws.sort %}
+        <label class="ws-select"><span>Ordenar</span>
+            <select data-ws-nav aria-label="Ordenar demandas">{% for option in ws.sort.options %}<option value="{{ option.url }}"{% if option.active %} selected{% endif %}>{{ option.label }}</option>{% endfor %}</select>
+        </label>
+        {% endif %}
+        {% if ws.view == 'kanban' and can_configure %}
+        <span class="ws-personalize" role="group" aria-label="Personalizar o Kanban">
+            <button class="btn" type="button" data-work-add-field>{% include "_icon.html" with name="plus" %} Campo</button>
+            <button class="btn" type="button" data-work-card-settings aria-expanded="false">{% include "_icon.html" with name="settings" %} Personalizar</button>
+        </span>
+        {% endif %}
+    </div>
+
+    {% if ws.chips %}
+    <ul class="ws-chips" aria-label="Filtros ativos">
+        {% for chip in ws.chips %}<li class="ws-chip"><span><b>{{ chip.label }}:</b> {{ chip.value }}</span><a href="{{ chip.url }}" aria-label="Remover filtro {{ chip.label }}">×</a></li>{% endfor %}
+        <li><a class="ws-chips__clear" href="{{ ws.clear_url }}">Limpar filtros</a></li>
+    </ul>
+    {% endif %}
+
+    {% with panel=ws.panel %}
+    <form class="ws-panel" id="ws-filter-panel" method="get" action="{{ request.path }}" data-ws-panel aria-label="Filtros de demandas"{% if not panel.open %} hidden{% endif %}>
+        {% for name, value in panel.hidden %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+        <div class="ws-panel__body" data-ws-panel-body>
+            <div class="ws-panel__grid">
+                <label class="ws-field"><span>Setor</span>
+                    <select name="setor" data-ws-sector>
+                        <option value="">Todos os setores</option>
+                        {% for sector in panel.sectors %}<option value="{{ sector.pk }}"{% if panel.selected_sector == sector.pk|stringformat:'s' %} selected{% endif %}>{{ sector.name }}</option>{% endfor %}
+                    </select>
+                </label>
+                <label class="ws-field"><span>Etapa</span>
+                    <select name="estagio" data-ws-dependent>
+                        <option value="">Todas as etapas</option>
+                        {% for group in panel.stage_groups %}<optgroup label="{{ group.sector_name }}" data-sector-id="{{ group.sector_id }}">{% for stage in group.items %}<option value="{{ stage.pk }}"{% if panel.selected_stage == stage.pk|stringformat:'s' %} selected{% endif %}>{{ stage.name }}</option>{% endfor %}</optgroup>{% endfor %}
+                    </select>
+                </label>
+                <label class="ws-field"><span>Status</span>
+                    <select name="condicao" data-ws-dependent>
+                        <option value="">Todos os status</option>
+                        {% for group in panel.status_groups %}<optgroup label="{{ group.sector_name }}" data-sector-id="{{ group.sector_id }}">{% for status in group.items %}<option value="{{ status.pk }}"{% if panel.selected_status == status.pk|stringformat:'s' %} selected{% endif %}>{{ status.name }}</option>{% endfor %}</optgroup>{% endfor %}
+                    </select>
+                </label>
+                <label class="ws-field"><span>Prazo</span>
+                    <select name="prazo">{% for value, label in panel.deadlines %}<option value="{{ value }}"{% if panel.selected_deadline == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+                </label>
+                <div class="ws-field"><span id="ws-client-label">Cliente</span>
+                    <div class="person-picker" data-person-picker data-picker-kind="client" data-search-url="{% url 'client-search' %}" data-placeholder="Buscar cliente..." data-empty-label="Todos os clientes" data-allow-empty="true" role="group" aria-labelledby="ws-client-label">
+                        <input type="hidden" name="cliente" id="ws-filter-cliente" value="{% if panel.client %}{{ panel.client.pk }}{% endif %}">
+                        <button type="button" class="person-picker__trigger" aria-haspopup="listbox" aria-expanded="false"><span class="person-picker__icon">{% include "_icon.html" with name="building" %}</span><span class="person-picker__label{% if not panel.client %} muted{% endif %}">{% if panel.client %}{{ panel.client.name }}{% else %}Todos os clientes{% endif %}</span></button>
+                    </div>
+                </div>
+                <div class="ws-field"><span id="ws-site-label">Obra</span>
+                    <div class="person-picker" data-person-picker data-picker-kind="site" data-search-url="{% url 'site-search' %}" data-placeholder="Buscar obra..." data-empty-label="Todas as obras" data-allow-empty="true" data-filter-field="ws-filter-cliente" data-filter-param="client" role="group" aria-labelledby="ws-site-label">
+                        <input type="hidden" name="obra" id="ws-filter-obra" value="{% if panel.site %}{{ panel.site.pk }}{% endif %}">
+                        <button type="button" class="person-picker__trigger" aria-haspopup="listbox" aria-expanded="false"><span class="person-picker__icon">{% include "_icon.html" with name="pin" %}</span><span class="person-picker__label{% if not panel.site %} muted{% endif %}">{% if panel.site %}{{ panel.site.name }}{% else %}Todas as obras{% endif %}</span></button>
+                    </div>
+                </div>
+            </div>
+            <fieldset class="ws-field ws-people">
+                <legend>Responsável</legend>
+                <div class="ws-people__list">
+                    <label><input type="checkbox" name="pessoa" value="eu"{% if 'eu' in panel.selected_people %} checked{% endif %}> <span>Eu</span></label>
+                    <label><input type="checkbox" name="pessoa" value="sem"{% if 'sem' in panel.selected_people %} checked{% endif %}> <span>Sem responsável</span></label>
+                    {% for person in panel.people %}<label><input type="checkbox" name="pessoa" value="{{ person.pk }}"{% if person.pk|stringformat:'s' in panel.selected_people %} checked{% endif %}> <span>{{ person.get_full_name|default:person.get_username }}</span></label>{% endfor %}
+                </div>
+            </fieldset>
+        </div>
+        <div class="ws-panel__actions">
+            <a class="btn" href="{{ panel.clear_url }}">Limpar</a>
+            <button class="btn btn--primary" type="submit">Aplicar filtros</button>
+        </div>
+    </form>
+    {% endwith %}
+</div>

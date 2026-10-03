@@ -1,0 +1,8 @@
+{% comment %}Dois vazios diferentes: nada cadastrado ainda × nada com esses filtros (com a saída: limpar).{% endcomment %}
+{% if ws.has_filters %}
+<strong>Nenhuma demanda com esses filtros.</strong>
+<span><a href="{{ ws.clear_url }}">Limpar filtros</a></span>
+{% else %}
+<strong>Nenhuma demanda ainda.</strong>
+{% if can_create %}<span>Crie a primeira em “Criar demanda”.</span>{% endif %}
+{% endif %}

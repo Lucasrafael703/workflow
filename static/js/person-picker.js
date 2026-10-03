@@ -220,7 +220,9 @@
                 popup.appendChild(createButton);
             }
 
-            if (isSectorPicker && root.getAttribute("data-allow-empty") === "true") {
+            // "Todos os ..." para limpar a escolha: setor (como sempre) e qualquer outro seletor que peça `data-allow-empty`
+            // (ex.: Cliente e Obra no painel de filtros do Workspace).
+            if (root.getAttribute("data-allow-empty") === "true") {
                 var clearButton = document.createElement("button");
                 clearButton.type = "button";
                 clearButton.className = "person-picker__option sector-picker__clear";

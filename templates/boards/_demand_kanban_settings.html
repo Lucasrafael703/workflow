@@ -2,6 +2,7 @@
 <aside class="work-card-settings" data-work-add-field-panel hidden aria-label="Adicionar campo">
     <div class="work-card-settings__head"><strong>Adicionar campo</strong><button type="button" class="icon-button" data-work-add-field-close aria-label="Fechar">×</button></div>
     <form data-work-add-field-form data-url="{% url 'workboard-field-create' board.pk %}">
+        {% if not hide_group_by %}{# no Workspace o agrupamento é um controle da barra (Agrupar), não daqui #}
         <fieldset class="work-card-settings__options">
             <legend>Visualização</legend>
             <label>Agrupar por
@@ -11,6 +12,7 @@
                 </select>
             </label>
         </fieldset>
+        {% endif %}
         <label>Nome<input name="label" required maxlength="120"></label>
         <label>Tipo<select name="type"><option value="TEXT">Texto</option><option value="NUMBER">Número</option><option value="CURRENCY">Moeda</option><option value="DATETIME">Data e hora</option><option value="SELECT">Lista</option><option value="BOOLEAN">Confirmação</option></select></label>
         <button class="btn btn--primary" type="submit">Adicionar</button>

@@ -19,6 +19,7 @@ from activities.filtering import normalize_workspace_filters
 from activities.models import Activity, Task
 from core.colors import EnumColorResolver
 from core.mixins import OrganizationRequiredMixin
+from core.feature_flags import workspace_v2_enabled
 from core.models import ActivityStage, Sector, TaskStage, WorkflowStatus
 
 from .domain_defaults import ensure_domain_board
@@ -72,7 +73,7 @@ class DomainWorkBoardView(OrganizationRequiredMixin, TemplateView):
             filtered_tasks_queryset,
         )
         if self.domain == DomainBoard.Domain.DEMAND:
-            items = list(filtered_activities_queryset(self.request, self.organization))
+            items = list(self.arrange_activities(filtered_activities_queryset(self.request, self.organization)))
             decorate_activity_cards(items, self.organization)
             action = catalog.ATIVIDADE_VISUALIZAR
         else:
@@ -86,6 +87,14 @@ class DomainWorkBoardView(OrganizationRequiredMixin, TemplateView):
             action = catalog.TAREFA_VISUALIZAR
         access = AuthorizationService.can_many(self.request.user, [(action, item) for item in items])
         return [item for item in items if access[(action, item.pk)]]
+
+    def arrange_activities(self, queryset):
+        """Gancho: o Workspace reordena (nulos no fim, sentido aplicado); a tela de sempre não muda."""
+        return queryset
+
+    def requested_group_by(self):
+        """Gancho: agrupamento pedido na URL (só o Workspace usa). `None` = o padrão salvo da visualização."""
+        return None
 
     @staticmethod
     def _group_items(items, group_by, organization, *, domain=None, show_empty=False, sector_id=None):
@@ -211,7 +220,7 @@ class DomainWorkBoardView(OrganizationRequiredMixin, TemplateView):
             field for field in all_fields if field.pk not in {visible.pk for visible in visible_card_fields}
         ]
         items = build_cells(self.get_items(), fields, self.organization)
-        group_by = (view.settings or {}).get("group_by", "stage")
+        group_by = self.requested_group_by() or (view.settings or {}).get("group_by", "stage")
         group_field = board.fields.filter(key=group_by, is_active=True).first()
         move_actions = {
             DomainBoard.Domain.DEMAND: {
@@ -287,6 +296,31 @@ class DemandWorkBoardView(DomainWorkBoardView):
 
     domain = DomainBoard.Domain.DEMAND
     template_name = "boards/demand_work_board.html"
+    workspace_template_name = "workspace/demandas.html"
+
+    def use_workspace(self):
+        """Workspace (shell único) ligado para esta pessoa? Flag `WORKSPACE_V2`; desligada = a tela de sempre."""
+        if not hasattr(self, "_use_workspace"):
+            self._use_workspace = workspace_v2_enabled(self.request.user)
+        return self._use_workspace
+
+    def get_template_names(self):
+        return [self.workspace_template_name if self.use_workspace() else self.template_name]
+
+    def requested_group_by(self):
+        if not self.use_workspace():
+            return None
+        from .demand_workspace import GROUPING_KEYS
+
+        value = self.request.GET.get("agrupar", "")
+        return value if value in GROUPING_KEYS else None
+
+    def arrange_activities(self, queryset):
+        if not self.use_workspace():
+            return queryset
+        from .demand_workspace import order_expressions
+
+        return queryset.order_by(*order_expressions(normalize_workspace_filters(self.request)))
 
     def _lanes(self, activities):
         """Inclui etapas vazias para que o quadro mostre o fluxo completo."""
@@ -325,8 +359,44 @@ class DemandWorkBoardView(DomainWorkBoardView):
             })
         return lanes
 
+    def workspace_context(self, context, view_mode):
+        """Contexto do shell novo (flag `WORKSPACE_V2`): só a barra; os dados já vieram da consulta de sempre."""
+        from .demand_workspace import build_workspace
+
+        User = get_user_model()
+        sectors = list(Sector.objects.filter(organization=self.organization, is_active=True).order_by("name"))
+        people = list(User.objects.filter(profile__organization=self.organization, is_active=True).order_by("first_name", "username"))
+        grouped_list = view_mode == "lista" and self.requested_group_by() is not None
+        context["view_mode"] = view_mode
+        context["ws"] = build_workspace(
+            self.request,
+            organization=self.organization,
+            view_mode=view_mode,
+            filters=normalize_workspace_filters(self.request),
+            activities=context["activities"],
+            groups=context["groups"],
+            people=people,
+            sectors=sectors,
+            group_by=context["group_by"],
+            grouped_list=grouped_list,
+        )
+        if view_mode == "lista":
+            from activities.inline_edit import inline_flags
+
+            inline_flags(self.request.user, context["activities"])
+        return context
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        mode_by_type = {
+            DomainBoardView.Type.TABLE: "lista",
+            DomainBoardView.Type.KANBAN: "kanban",
+            DomainBoardView.Type.CALENDAR: "calendario",
+        }
+        view_mode = mode_by_type.get(context["work_view"].type, "lista")
+        if self.use_workspace():
+            return self.workspace_context(context, view_mode)
+
         from activities.views import (
             activity_filter_context,
             build_filter_toolbar_state,
@@ -334,12 +404,6 @@ class DemandWorkBoardView(DomainWorkBoardView):
         )
         from activities.filtering import canonical_filter_querystring
 
-        mode_by_type = {
-            DomainBoardView.Type.TABLE: "lista",
-            DomainBoardView.Type.KANBAN: "kanban",
-            DomainBoardView.Type.CALENDAR: "calendario",
-        }
-        view_mode = mode_by_type.get(context["work_view"].type, "lista")
         sectors = Sector.objects.filter(
             organization=self.organization, is_active=True
         ).order_by("name")

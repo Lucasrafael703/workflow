@@ -24,6 +24,7 @@
 <link rel="stylesheet" href="{% static 'css/boards.css' %}?v=20261012a">
 <link rel="stylesheet" href="{% static 'css/work-board.css' %}?v=20261009a">
 <link rel="stylesheet" href="{% static 'css/demand-board.css' %}?v=20261016-filters">
+<link rel="stylesheet" href="{% static 'css/workspace.css' %}?v=20261015b">
 <link rel="stylesheet" href="{% static 'css/task-center.css' %}?v=20261013a">
 <link rel="stylesheet" href="{% static 'css/demand-conversation.css' %}?v=20261010a">
 <link rel="stylesheet" href="{% static 'css/notification-page.css' %}?v=20261010a">
@@ -235,7 +236,8 @@
         <label for="nav-toggle" class="sidebar__toggle" title="Menu">{% include "_icon.html" with name="menu" %}</label>
 
         <span class="workspace-location">
-            {% if nav_active == 'intake' %}Entrada · Solicitações para triar
+            {% if ws %}{{ ws.location }}
+            {% elif nav_active == 'intake' %}Entrada · Solicitações para triar
             {% elif nav_active == 'activities' and request.resolver_match.url_name == 'activity-list' %}Demandas · {% if request.GET.tab == 'grupo' %}Do meu setor{% elif request.GET.tab == 'participando' %}Em que participo{% elif request.GET.tab == 'concluidas' %}Concluídas{% elif request.GET.tab == 'todas' %}Todas as demandas{% else %}Sob minha responsabilidade{% endif %}
             {% elif nav_active == 'activities' %}Demandas · Entregas
             {% elif nav_active == 'tasks' %}Tarefas · Trabalho a fazer

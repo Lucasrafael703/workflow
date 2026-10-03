@@ -1,0 +1,26 @@
+{% comment %}
+Lista de Demandas (renderizador novo do Workspace): 6 colunas de informação + a ação "abrir". A edição inline mantém EXATAMENTE
+o markup/atributos de sempre (data-inline-field, data-column, activity.inline.*), porque static/js/activity-inline-*.js os usa.
+Com `agrupar` na URL a lista vem em seções (ws.list_groups); sem ele, uma tabela só.
+{% endcomment %}
+<div class="demand-board__table-card ws-table-card">
+    <table class="demand-board__table ws-table" aria-label="Lista de demandas" data-activity-list data-inline-url="{% url 'activity-inline-update' 999999999 %}" data-inline-sentinel="999999999" data-people-url="{% url 'person-search' %}" data-options-url="{% url 'activity-inline-options' 999999999 %}">
+        <colgroup><col class="ws-col-title"><col class="demand-board__col-sector"><col class="demand-board__col-owner"><col class="demand-board__col-deadline"><col class="demand-board__col-stage"><col class="demand-board__col-condition"><col class="demand-board__col-actions"></colgroup>
+        <thead><tr><th>Demanda</th><th>Setor</th><th>Responsável</th><th>Prazo</th><th>Etapa</th><th>Status</th><th><span class="sr-only">Ações</span></th></tr></thead>
+        {% if ws.list_groups %}
+        {% for group in ws.list_groups %}
+        <tbody class="ws-group" data-ws-group="{{ group.key }}" style="--ws-group-color:{{ group.color }}">
+            <tr class="ws-group__head"><th colspan="7" scope="colgroup"><span class="ws-group__dot" aria-hidden="true"></span>{{ group.label }} <small>{{ group.items|length }}</small></th></tr>
+            {% for activity in group.items %}{% include "workspace/_lista_row.html" %}{% endfor %}
+        </tbody>
+        {% endfor %}
+        {% elif activities %}
+        <tbody>{% for activity in activities %}{% include "workspace/_lista_row.html" %}{% endfor %}</tbody>
+        {% endif %}
+        {% if not activities %}
+        <tbody><tr><td colspan="7" class="ws-empty">{% include "workspace/_empty.html" %}</td></tr></tbody>
+        {% endif %}
+    </table>
+    <footer class="demand-board__table-footer">Mostrando {{ activities|length }} demanda{{ activities|length|pluralize }}.</footer>
+</div>
+<div id="activity-inline-overlay-root" class="activity-inline-overlay-root" aria-live="polite"></div>

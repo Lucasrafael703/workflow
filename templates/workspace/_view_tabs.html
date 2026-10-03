@@ -1,0 +1,6 @@
+{% comment %}Abas Lista · Kanban · Calendário. Cada link leva a querystring INTEIRA (menos a página), então o recorte não muda.{% endcomment %}
+<nav class="ws__tabs" aria-label="Como visualizar as demandas">
+    {% for tab in ws.tabs %}
+    <a href="{{ tab.url }}" class="ws__tab{% if tab.active %} is-active{% endif %}"{% if tab.active %} aria-current="page"{% endif %}>{% include "_icon.html" with name=tab.icon %} {{ tab.label }}</a>
+    {% endfor %}
+</nav>
