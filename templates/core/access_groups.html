@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Grupos de acesso — LPS{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div class="page-head__text">
+        <div class="breadcrumb">Administração<span>›</span>Grupos de acesso</div>
+        <h1>Grupos de acesso</h1>
+        <p class="sub">Cada grupo define quais telas aparecem para as pessoas dele. Mudou aqui, muda para todos do grupo.</p>
+    </div>
+    <div class="page-head__actions">{% include "core/_access_tabs.html" %}</div>
+</div>
+
+<div class="groups-layout">
+    <aside class="access-card groups-list">
+        <h3 class="groups-list__title">Grupos</h3>
+        <ul class="groups-list__items">
+            {% for item in items %}
+            <li>
+                <a href="{% url 'access-groups' %}?grupo={{ item.group.pk }}" class="groups-list__item{% if item.selected %} is-selected{% endif %}"{% if item.selected %} aria-current="true"{% endif %}>
+                    <span>
+                        <strong>{{ item.group.name }}</strong>
+                        <small>{{ item.group.user_count }} pessoa{{ item.group.user_count|pluralize }}</small>
+                    </span>
+                    <span class="groups-list__count">{% if item.full %}Todas{% else %}{{ item.screens }} tela{{ item.screens|pluralize }}{% endif %}</span>
+                </a>
+            </li>
+            {% empty %}
+            <li class="muted small groups-list__empty">Nenhum grupo ainda.</li>
+            {% endfor %}
+        </ul>
+        {% if can_edit %}
+        <details class="groups-new">
+            <summary class="groups-new__button">{% include "_icon.html" with name="plus" %} Novo grupo</summary>
+            <form method="post" action="{% url 'access-group-create' %}" class="groups-new__form">
+                {% csrf_token %}
+                <label for="new-name">Nome do grupo</label>
+                <input type="text" id="new-name" name="name" maxlength="120" required placeholder="Ex.: Orçamentistas">
+                <label for="new-desc">Descrição (opcional)</label>
+                <input type="text" id="new-desc" name="description" maxlength="255" placeholder="Para quem é este grupo?">
+                <label for="new-copy">Começar de</label>
+                <select id="new-copy" name="copy_from">
+                    <option value="">Em branco (nenhuma tela)</option>
+                    {% for option in copy_options %}<option value="{{ option.pk }}">{{ option.name }}</option>{% endfor %}
+                </select>
+                <button type="submit" class="btn btn--primary btn--block">Criar grupo</button>
+            </form>
+        </details>
+        {% endif %}
+    </aside>
+
+    {% if group %}
+    <div class="groups-editor">
+        <form method="post" action="{% url 'access-group-save' group.pk %}" id="group-form" class="access-form" data-access-editor data-dirty-guard>
+            {% csrf_token %}
+            <section class="access-card">
+                <div class="access-grid">
+                    <div class="form-row">
+                        <label for="g-name">Nome do grupo</label>
+                        <input type="text" id="g-name" name="name" value="{{ group.name }}" maxlength="120" required{% if not can_manage_groups or not can_edit %} readonly{% endif %}>
+                    </div>
+                    <div class="form-row">
+                        <label for="g-desc">Descrição</label>
+                        <input type="text" id="g-desc" name="description" value="{{ group.description }}" maxlength="255"{% if not can_manage_groups or not can_edit %} readonly{% endif %}>
+                    </div>
+                </div>
+                <p class="access-info">{% include "_icon.html" with name="info" %}
+                    Alterações valem para <strong>{{ people }} pessoa{{ people|pluralize }}</strong> assim que você salvar.</p>
+            </section>
+
+            <section class="access-card">
+                <header class="access-card__head">
+                    <div class="access-card__grow"><h2>Telas do grupo</h2><p>O que fica marcado aqui aparece no menu de quem é deste grupo.</p></div>
+                    <div class="groups-editor__count"><strong data-count="total">{{ liberated }}</strong> de {{ total_screens }} telas liberadas</div>
+                </header>
+                {% include "core/_screen_levels.html" with sections=sections locked=read_only show_individual=False %}
+                {% if extras or unmapped %}
+                <p class="access-note small muted">
+                    {% if extras %}Este grupo também tem <strong>{{ extras }}</strong> {% if extras == 1 %}ação avançada{% else %}ações avançadas{% endif %} (cancelar, reabrir, reordenar…) que não {% if extras == 1 %}aparece{% else %}aparecem{% endif %} aqui; {% if extras == 1 %}é mantida{% else %}são mantidas{% endif %} enquanto o nível da tela não mudar.{% endif %}
+                    {% if unmapped %}Há {{ unmapped }} {% if unmapped == 1 %}ação{% else %}ações{% endif %} fora das telas, definida{{ unmapped|pluralize }} na matriz.{% endif %}
+                    <a href="{% url 'permissions' %}?profile={{ group.pk }}">Ajuste fino por ação</a>
+                </p>
+                {% else %}
+                <p class="access-note small muted"><a href="{% url 'permissions' %}?profile={{ group.pk }}">Ajuste fino por ação (avançado)</a></p>
+                {% endif %}
+            </section>
+        </form>
+
+        <div class="access-card access-savebar">
+            {% if can_edit %}
+            <form method="post" action="{% url 'access-group-inactivate' group.pk %}" id="group-inactivate" onsubmit="return confirm('Inativar o grupo {{ group.name|escapejs }}?');">
+                {% csrf_token %}
+                <button type="submit" class="link-button link-button--danger">Inativar grupo</button>
+            </form>
+            <span class="access-savebar__spacer"></span>
+            <a href="{% url 'access-groups' %}?grupo={{ group.pk }}" class="btn">Descartar</a>
+            <button type="submit" form="group-form" class="btn btn--primary">Salvar grupo</button>
+            {% else %}
+            <span class="muted small">Você pode ver este grupo, mas não alterá-lo.</span>
+            {% endif %}
+        </div>
+    </div>
+    {% else %}
+    <div class="access-card"><p class="muted">Crie o primeiro grupo para começar.</p></div>
+    {% endif %}
+</div>
+
+{% if group %}{{ client_config|json_script:"access-config" }}{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% load static %}
+<script src="{% static 'js/access-editor.js' %}?v=20261017a"></script>
+{% endblock %}

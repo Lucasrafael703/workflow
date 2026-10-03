@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% block title %}{% if instance %}Editar usuário{% else %}Novo usuário{% endif %} — LPS{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div class="page-head__text">
+        <div class="breadcrumb"><a href="{% url 'user-list' %}">Usuários</a><span>›</span>{% if instance %}{{ instance.get_full_name|default:instance.username }}{% else %}Novo usuário{% endif %}</div>
+        <h1>{% if instance %}Editar usuário{% else %}Novo usuário{% endif %}</h1>
+        <p class="sub">Tudo numa tela só: quem é, em qual equipe trabalha e o que pode acessar.</p>
+    </div>
+    {% if instance and can_manage_access %}
+    <div class="page-head__actions">
+        <a href="{% url 'user-access' instance.pk %}" class="btn btn--ghost">Acessos avançados</a>
+    </div>
+    {% endif %}
+</div>
+
+{% if form.non_field_errors %}<div class="message message--error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+{% if instance and not instance.is_active %}
+<div class="message message--warning">Esta pessoa está inativa. O histórico dela é preservado.</div>
+{% endif %}
+{% if is_superuser %}
+<div class="access-alert" role="status">
+    <span class="access-alert__icon">{% include "_icon.html" with name="alert" %}</span>
+    <span class="access-alert__text"><strong>Super usuário.</strong> Esta pessoa enxerga e faz tudo, ignorando os grupos abaixo.
+    {% if can_set_superuser %}Para limitar o acesso, escolha o grupo e desmarque “Super usuário” em <em>Grupo de acesso</em>.{% endif %}</span>
+</div>
+{% endif %}
+
+<form method="post" id="user-editor" class="access-form" data-access-editor novalidate>
+    {% csrf_token %}
+    <div class="access-layout">
+        <div class="access-main">
+
+            {# 1 · Dados da pessoa #}
+            <section class="access-card">
+                <header class="access-card__head">
+                    <span class="access-card__num">1</span>
+                    <div><h2>Dados da pessoa</h2><p>Identificação e como ela vai entrar no sistema.</p></div>
+                </header>
+                <div class="access-grid">
+                    {% include "core/_field.html" with field=form.first_name %}
+                    {% include "core/_field.html" with field=form.email %}
+                    {% include "core/_field.html" with field=form.username %}
+                    {% include "core/_field.html" with field=form.phone %}
+                </div>
+                <p class="small muted access-note">O usuário pode ficar em branco: usamos o início do e-mail.</p>
+
+                <fieldset class="access-fieldset">
+                    <legend>{% if instance %}Acesso à conta{% else %}Primeiro acesso{% endif %}</legend>
+                    <div class="option-cards" data-first-access>
+                        {% if instance %}
+                        <label class="option-card">
+                            <input type="radio" name="first_access" value="keep" {% if form.first_access.value == "keep" or not form.first_access.value %}checked{% endif %}>
+                            <span><strong>Não alterar</strong><small>{% if pending_invite %}O convite enviado ainda não foi aceito.{% else %}A pessoa continua entrando como hoje.{% endif %}</small></span>
+                        </label>
+                        {% endif %}
+                        <label class="option-card">
+                            <input type="radio" name="first_access" value="invite" {% if form.first_access.value == "invite" %}checked{% endif %}>
+                            <span><strong>{% if instance %}Enviar link para criar nova senha{% else %}Enviar convite por e-mail{% endif %}</strong><small>A pessoa cria a própria senha pelo link.</small></span>
+                        </label>
+                        <label class="option-card">
+                            <input type="radio" name="first_access" value="password" {% if form.first_access.value == "password" %}checked{% endif %}>
+                            <span><strong>Definir senha provisória</strong><small>Troca obrigatória no primeiro login.</small></span>
+                        </label>
+                    </div>
+                    <div class="access-grid" data-password-fields hidden>
+                        {% include "core/_field.html" with field=form.password1 %}
+                        {% include "core/_field.html" with field=form.password2 %}
+                    </div>
+                    {% if form.first_access.errors %}<ul class="errorlist">{% for e in form.first_access.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                </fieldset>
+
+                <div class="form-row form-row--check">
+                    <label for="{{ form.is_active.id_for_label }}">{{ form.is_active }} {{ form.is_active.label }}</label>
+                    <div class="helptext">Ao desmarcar, a conta fica inativa e o histórico é preservado.</div>
+                </div>
+            </section>
+
+            {# 2 · Equipe #}
+            <section class="access-card">
+                <header class="access-card__head">
+                    <span class="access-card__num">2</span>
+                    <div><h2>Equipe</h2><p>Em quais equipes (setores) a pessoa trabalha. Define para onde vão as tarefas e a fila dela.</p></div>
+                </header>
+                {% if teams %}
+                <div class="access-chips access-chips--pick" role="group" aria-label="Equipes da pessoa">
+                    {% for team in teams %}
+                    <label class="access-chip access-chip--check">
+                        <input type="checkbox" name="teams" value="{{ team.sector.pk }}" data-team{% if team.selected %} checked{% endif %}>
+                        <span>{{ team.sector.name }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+                <div class="team-table" data-team-table>
+                    <div class="team-table__row team-table__row--head"><span>Equipe</span><span>Papel na equipe</span><span>Equipe principal</span></div>
+                    {% for team in teams %}
+                    <div class="team-table__row" data-team-row="{{ team.sector.pk }}"{% if not team.selected %} hidden{% endif %}>
+                        <strong>{% include "_sector_badge.html" with sector=team.sector variant="compact" %}</strong>
+                        <div class="seg seg--small" role="radiogroup" aria-label="Papel em {{ team.sector.name }}">
+                            <label class="seg__opt seg__opt--ver"><input type="radio" name="role_{{ team.sector.pk }}" value="MEMBRO"{% if team.role != "GESTOR" %} checked{% endif %}><span>Membro</span></label>
+                            <label class="seg__opt seg__opt--ver"><input type="radio" name="role_{{ team.sector.pk }}" value="GESTOR"{% if team.role == "GESTOR" %} checked{% endif %}><span>Gestor da equipe</span></label>
+                        </div>
+                        <label class="team-main"><input type="radio" name="main_sector" value="{{ team.sector.pk }}"{% if team.main %} checked{% endif %}> Principal</label>
+                    </div>
+                    {% endfor %}
+                    <p class="small muted" data-team-empty{% if selection.teams %} hidden{% endif %}>Marque ao menos uma equipe para definir o papel da pessoa.</p>
+                </div>
+                {% else %}
+                <p class="muted">Nenhuma equipe cadastrada ainda. Cadastre os setores em Cadastros para poder vincular pessoas.</p>
+                {% endif %}
+            </section>
+
+            {# 3 · Grupo de acesso #}
+            <section class="access-card">
+                <header class="access-card__head">
+                    <span class="access-card__num">3</span>
+                    <div><h2>Grupo de acesso</h2><p>Escolha um grupo pronto. As telas abaixo são marcadas automaticamente.</p></div>
+                </header>
+
+                {% if complex %}
+                <div class="message message--info">
+                    Esta pessoa tem {{ assignments|length }} grupos atribuídos:
+                    {% for item in assignments %}<strong>{{ item.profile.name }}</strong> <span class="muted">({{ item.scope.label }})</span>{% if not forloop.last %}, {% endif %}{% endfor %}.
+                    Para mudar, use <a href="{% url 'user-access' instance.pk %}">Acessos avançados</a>.
+                </div>
+                {% elif not can_manage_access %}
+                <div class="message message--info">Você pode ver, mas não alterar, o grupo e as telas desta pessoa.</div>
+                {% endif %}
+
+                {% if can_set_superuser %}
+                <div class="form-row form-row--check access-superuser">
+                    <input type="hidden" name="is_superuser_field" value="1">
+                    <label for="id_is_superuser"><input type="checkbox" id="id_is_superuser" name="is_superuser"{% if is_superuser %} checked{% endif %}> Super usuário (acesso total à plataforma, ignora os grupos)</label>
+                    <div class="helptext">Use só para quem administra a plataforma. Quem tem um grupo adequado não precisa disto.</div>
+                </div>
+                {% endif %}
+
+                <div class="group-cards" data-group-cards>
+                    {% for card in group_cards %}
+                    <label class="group-card{% if card.selected %} is-selected{% endif %}">
+                        <input type="radio" name="group" value="{{ card.group.pk }}"{% if card.selected %} checked{% endif %}{% if access_locked %} disabled{% endif %}>
+                        <span class="group-card__name">{{ card.group.name }}</span>
+                        <span class="group-card__desc">{{ card.group.description|default:"Grupo criado pela organização." }}</span>
+                        <span class="group-card__count">{% if card.full %}Todas as telas{% else %}{{ card.screens }} tela{{ card.screens|pluralize }}{% endif %}</span>
+                    </label>
+                    {% empty %}
+                    <p class="muted">Nenhum grupo cadastrado. <a href="{% url 'access-groups' %}">Crie o primeiro em Grupos de acesso</a>.</p>
+                    {% endfor %}
+                </div>
+
+                <div class="scope-row">
+                    <label for="id_scope">Vale para</label>
+                    <select id="id_scope" name="scope" data-scope{% if access_locked %} disabled{% endif %}>
+                        {% for value, label in scope_choices %}<option value="{{ value }}"{% if selection.scope == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+                    </select>
+                    <span class="small muted">Ex.: um gestor de Projetos só gerencia a fila de Projetos.</span>
+                </div>
+                <div class="message message--warning scope-warning" data-scope-warning hidden>
+                    <span data-scope-warning-text></span>
+                    <button type="button" class="link-button" data-scope-use-org>Usar a organização inteira</button>
+                </div>
+            </section>
+
+            {# 4 · Telas #}
+            <section class="access-card">
+                <header class="access-card__head">
+                    <span class="access-card__num">4</span>
+                    <div class="access-card__grow"><h2>Telas que a pessoa pode acessar</h2><p>Vêm do grupo escolhido. Ajuste só o que for exceção desta pessoa.</p></div>
+                    <div class="access-legend"><span class="seg__swatch seg__swatch--editar"></span> Editar <span class="seg__swatch seg__swatch--ver"></span> Só ver</div>
+                </header>
+                {% include "core/_screen_levels.html" with sections=sections locked=access_locked show_individual=True %}
+            </section>
+
+            <div class="access-footer">
+                <a href="{% url 'user-list' %}" class="btn btn--ghost">Cancelar</a>
+                <button type="submit" class="btn btn--primary">Salvar usuário</button>
+            </div>
+        </div>
+
+        <aside class="access-aside">
+            <div class="access-card access-preview">
+                <h3>{% include "_icon.html" with name="eye" %} Assim o menu vai aparecer</h3>
+                <div class="stat-trio">
+                    <div><strong data-count="total">{{ counts.total }}</strong><span>telas</span></div>
+                    <div><strong data-count="view">{{ counts.view_only }}</strong><span>só ver</span></div>
+                    <div><strong data-count="individual">{{ counts.individual }}</strong><span>exceções</span></div>
+                </div>
+                <nav class="menu-preview" data-menu-preview aria-label="Prévia do menu"></nav>
+            </div>
+            <div class="access-tip">
+                <strong>Dica:</strong> se várias pessoas precisam do mesmo ajuste, crie um grupo em
+                {% if can_manage_access %}<a href="{% url 'access-groups' %}">Grupos de acesso</a>{% else %}Grupos de acesso{% endif %}
+                em vez de ajustar uma por uma.
+            </div>
+        </aside>
+    </div>
+</form>
+
+{{ client_config|json_script:"access-config" }}
+{% endblock %}
+
+{% block scripts %}
+{% load static %}
+<script src="{% static 'js/access-editor.js' %}?v=20261017a"></script>
+{% endblock %}

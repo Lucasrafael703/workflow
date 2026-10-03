@@ -1,0 +1,4 @@
+<nav class="seg seg--tabs" aria-label="Grupos de acesso">
+    <a href="{% url 'access-groups' %}" class="seg__tab{% if tab == 'editar' %} is-active{% endif %}">Editar grupo</a>
+    <a href="{% url 'access-groups-compare' %}" class="seg__tab{% if tab == 'comparar' %} is-active{% endif %}">Comparar grupos</a>
+</nav>

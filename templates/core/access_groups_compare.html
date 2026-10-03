@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Comparar grupos — LPS{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div class="page-head__text">
+        <div class="breadcrumb">Administração<span>›</span>Grupos de acesso</div>
+        <h1>Grupos de acesso</h1>
+        <p class="sub">Todas as telas em linhas e os grupos em colunas, para ver as diferenças de uma vez.</p>
+    </div>
+    <div class="page-head__actions">{% include "core/_access_tabs.html" %}</div>
+</div>
+
+<div class="toolbar">
+    {% if only_diff %}
+    <a href="{% url 'access-groups-compare' %}" class="btn">Mostrar todas as telas</a>
+    {% else %}
+    <a href="{% url 'access-groups-compare' %}?so_diferencas=1" class="btn">Mostrar só as diferenças</a>
+    {% endif %}
+</div>
+
+<div class="card card--flush">
+    <div class="table-wrap">
+        <table class="compare-table">
+            <thead>
+                <tr>
+                    <th>Tela</th>
+                    {% for group in groups %}
+                    <th class="compare-table__group"><a href="{% url 'access-groups' %}?grupo={{ group.pk }}">{{ group.name }}</a><small>{{ group.user_count }} pessoa{{ group.user_count|pluralize }}</small></th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+            {% for section in sections %}
+                <tr class="compare-table__section"><th colspan="{{ groups|length|add:1 }}">{{ section.name }}</th></tr>
+                {% for row in section.rows %}
+                <tr{% if row.differs %} class="is-different"{% endif %}>
+                    <td><strong>{{ row.screen.name }}</strong><div class="small muted">{{ row.screen.description }}</div></td>
+                    {% for level in row.cells %}
+                    <td class="compare-table__cell"><span class="level-pill level-pill--{{ level }}">{% if level == "none" %}—{% elif level == "ver" %}Ver{% else %}Editar{% endif %}</span></td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            {% empty %}
+                <tr><td colspan="{{ groups|length|add:1 }}" class="muted">Nenhuma diferença entre os grupos.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

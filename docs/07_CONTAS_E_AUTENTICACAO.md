@@ -11,15 +11,29 @@
 
 | | Autocadastro (`/accounts/criar-conta/`) | Cadastro pelo administrador (`/usuarios/novo/`) |
 |---|---|---|
-| Quem faz | a própria pessoa | quem tem `usuario.editar` |
-| Conta nasce | **inativa** até confirmar o e-mail | ativa, com senha definida pelo admin |
-| `username` | gerado (`conta-<20 hex>`) | digitado pelo admin |
-| Organização | **nenhuma** | a do admin (campo obrigatório, travado nela) |
-| Setores | nenhum | escolhidos no formulário (`AccessService.sync_user_sectors`) |
-| Auditoria | não | `USER_CREATED` (+ `SECTORS_CHANGED`) |
+| Quem faz | a própria pessoa | quem tem `usuario.criar` (editar: `usuario.editar`) |
+| Conta nasce | **inativa** até confirmar o e-mail | ativa, por **convite** (a pessoa cria a senha) ou **senha provisória** (troca obrigatória) |
+| `username` | gerado (`conta-<20 hex>`) | digitado ou derivado do e-mail (único) |
+| Organização | **nenhuma** | a do admin (travada nela) |
+| Equipes e grupo | nenhum | escolhidos na mesma página (ver doc 05, seção 5.1) |
+| Auditoria | não | `USER_CREATED`, `USER_INVITED`, `PROFILE_ASSIGNED`, `SECTORS_CHANGED`… |
 
 Em ambos os casos o signal `accounts.signals` cria o `Profile` vazio no
-`post_save` do `User`; o `UserFormView` preenche a organização em seguida.
+`post_save` do `User`; o `UserEditorView` (`core/access_views.py`) preenche a organização em seguida.
+
+O e-mail é a chave de login (`EmailBackend`), então **não pode repetir** entre pessoas (sem diferenciar
+maiúsculas); o formulário recusa.
+
+**Primeiro acesso (cadastro pelo administrador)**
+
+- *Enviar convite por e-mail*: a conta nasce sem senha utilizável e a pessoa recebe um link
+  (`accounts/invitations.py`) que usa o mesmo fluxo de redefinição de senha (`password_reset_confirm`,
+  validade padrão do Django). Enquanto não entrar, a lista mostra **Convite pendente** (sem senha utilizável e
+  `last_login` vazio). Se o e-mail falhar, a pessoa é salva mesmo assim e o administrador é avisado. Em
+  *Editar usuário*, "Enviar link para criar nova senha" reenvia.
+- *Definir senha provisória*: grava a senha (validada pelas regras do projeto) e liga
+  `Profile.must_change_password`. O `ForcePasswordChangeMiddleware` leva a pessoa a
+  `/accounts/trocar-senha/` em qualquer tela até ela escolher a própria; só `sair` e `/static/` ficam livres.
 
 Uma conta criada pelo autocadastro consegue logar depois de confirmar o
 e-mail, mas **toda tela da LPS a redireciona para `/accounts/me/`** até um

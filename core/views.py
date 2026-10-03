@@ -1415,30 +1415,6 @@ class ProfileFormView(OrganizationRequiredMixin, ActionRequiredMixin, FormView):
         return redirect(f"{reverse('permissions')}?profile={instance.pk}")
 
 
-class UserListView(OrganizationRequiredMixin, ActionRequiredMixin, TemplateView):
-    template_name = "core/user_list.html"
-    required_action = catalog.USUARIO_VISUALIZAR
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        users = (
-            User.objects.filter(profile__organization=self.organization)
-            .prefetch_related("access_profiles__profile", "access_profiles__scope")
-            .order_by("username")
-        )
-        search = self.request.GET.get("q", "").strip()
-        if search:
-            users = users.filter(
-                Q(username__icontains=search)
-                | Q(first_name__icontains=search)
-                | Q(email__icontains=search)
-            )
-        context["users"] = users
-        context["search"] = search
-        context["can_edit"] = AuthorizationService.can(self.request.user, catalog.USUARIO_EDITAR)
-        return context
-
-
 class UserFormView(OrganizationRequiredMixin, ActionRequiredMixin, FormView):
     template_name = "core/user_form.html"
     form_class = UserForm

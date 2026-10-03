@@ -54,6 +54,9 @@ class AuditLog(models.Model):
         SECTORS_CHANGED = "SECTORS_CHANGED", "Setores do usuário alterados"
         USER_CREATED = "USER_CREATED", "Usuário criado"
         PASSWORD_RESET = "PASSWORD_RESET", "Senha redefinida"
+        USER_UPDATED = "USER_UPDATED", "Usuário alterado"
+        USER_INVITED = "USER_INVITED", "Convite enviado"
+        SUPERUSER_CHANGED = "SUPERUSER_CHANGED", "Super usuário alterado"
         # Quadros dinâmicos (app `boards`): o registro aponta para o alvo por `target_type`/`target_id`
         # (não há demanda nem tarefa) e `metadata["board_id"]` liga tudo ao quadro, para o histórico dele.
         BOARD_CREATED = "BOARD_CREATED", "Quadro criado"

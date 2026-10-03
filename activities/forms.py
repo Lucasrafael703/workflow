@@ -140,7 +140,7 @@ class OrganizationScopedFormMixin:
             if isinstance(fields["owner"].widget, PersonPickerWidget):
                 fields["owner"].widget.queryset = fields["owner"].queryset
                 if can_create_person:
-                    fields["owner"].widget.create_url = reverse("user-create")
+                    fields["owner"].widget.create_url = reverse("user-quick-create")
         if "requested_by" in fields:
             fields["requested_by"].queryset = User.objects.filter(
                 profile__organization=organization, is_active=True
@@ -593,7 +593,7 @@ class ChangeOwnerForm(forms.Form):
         self.fields["new_owner"].queryset = queryset
         self.fields["new_owner"].widget.queryset = queryset
         if can_create_person:
-            self.fields["new_owner"].widget.create_url = reverse("user-create")
+            self.fields["new_owner"].widget.create_url = reverse("user-quick-create")
 
 
 class ActivityDeadlineChangeForm(forms.Form):
@@ -748,8 +748,8 @@ class TaskEditorForm(TaskDeadlineInputsMixin, forms.Form):
         self.fields["participantes"].queryset = people
         self.fields["participantes"].widget.queryset = people
         if can_create_person:
-            self.fields["responsavel"].widget.create_url = reverse("user-create")
-            self.fields["participantes"].widget.create_url = reverse("user-create")
+            self.fields["responsavel"].widget.create_url = reverse("user-quick-create")
+            self.fields["participantes"].widget.create_url = reverse("user-quick-create")
         if not can_change_responsavel:
             del self.fields["responsavel"]
         if not can_assign:
@@ -1017,7 +1017,7 @@ class ExecutorForm(forms.Form):
         self.fields["user"].queryset = queryset
         self.fields["user"].widget.queryset = queryset
         if can_create_person:
-            self.fields["user"].widget.create_url = reverse("user-create")
+            self.fields["user"].widget.create_url = reverse("user-quick-create")
 
 
 class TaskChangeResponsavelForm(forms.Form):
@@ -1034,7 +1034,7 @@ class TaskChangeResponsavelForm(forms.Form):
         self.fields["new_responsavel"].queryset = queryset
         self.fields["new_responsavel"].widget.queryset = queryset
         if can_create_person:
-            self.fields["new_responsavel"].widget.create_url = reverse("user-create")
+            self.fields["new_responsavel"].widget.create_url = reverse("user-quick-create")
 
 
 class DeadlineProposalForm(forms.Form):
