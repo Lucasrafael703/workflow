@@ -117,6 +117,14 @@ ACTIVITY_FILES_URL = "/demanda-arquivos/"
 # defina INTAKE_ENABLED=true no ambiente (no Render: Environment do serviço web).
 INTAKE_ENABLED = env.bool("INTAKE_ENABLED", default=False)
 
+# Workspace de Demandas (um shell só, com Lista / Kanban / Calendário): atrás de feature flag.
+#   off        (padrão) todo mundo vê a tela de Demandas de sempre;
+#   allowlist  só quem estiver em WORKSPACE_V2_USERS (e-mails ou nomes de usuário, separados por vírgula);
+#   on         todos.
+# Voltar a "off" no ambiente (no Render: Environment do serviço web) é o rollback imediato; não exige deploy.
+WORKSPACE_V2 = env("WORKSPACE_V2", default="off").strip().lower()
+WORKSPACE_V2_USERS = [item.strip().lower() for item in env.list("WORKSPACE_V2_USERS", default=[]) if item.strip()]
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Login é feito por e-mail (Telas/09_01_LOGIN.md), não por username.
