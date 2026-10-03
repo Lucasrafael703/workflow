@@ -158,3 +158,42 @@ Testam `/tarefas/<id>/...`, que a centralização das tarefas em Quadros aposent
 **activities.test_views.TaskFilterViewTests**
 - `test_old_visao_and_sort_values_still_work` — AssertionError: 'list' != 'demanda'
 - `test_task_activity_view_uses_shared_task_toolbar` — AssertionError: False is not true : Couldn't find 'class="activities-filters task-filters workspace-filters"' 
+
+---
+
+## Execução (03/10/2026)
+
+**Commit 1 — bloco D e bloco A.** O erro 500 por valor inválido em filtro foi corrigido na origem (`normalize_workspace_filters` só aceita ids numéricos e anota o resto em `invalid`; `DemandWorkBoardView` lê o setor já normalizado). As regras do bloco A passaram a ser testadas na tela atual, em `activities/test_demand_filters.py` (busca por título, cliente, obra e código antigo; pessoa; etapa, status e setor; cliente e obra; prazos; bloqueada; valores inválidos). Os 7 testes antigos migrados saíram de `test_kanban.py`.
+
+**Commit 2 — bloco B.** Antes de apagar, cada teste foi lido: o que era regra de negócio foi migrado para `test_demand_filters.py`; o que sobrou descrevia só a estrutura da tela antiga. Removidos **24** testes:
+
+| Teste removido | Regra de negócio? | Onde a regra continua testada |
+|---|---|---|
+| `BoardSectorTests`: setor lembrado na sessão, setor principal como padrão, explicação "sem setor", explicação "sem etapas" com atalho, "um quadro por setor" | só da tela antiga (Kanban de um setor só) | não se aplica: a tela atual não tem "quadro de um setor" |
+| `BoardSectorTests`: setor que a pessoa não pode abrir é ignorado, sem vazar | **sim** (segurança) | `test_the_all_scope_without_the_permission_shows_only_my_own_and_never_leaks_a_sector` |
+| `BoardSectorTests`: parâmetro antigo `grupo` escolhe o setor | **sim** (compatibilidade) | `test_the_old_sector_names_still_select_the_sector` |
+| `BoardVisibilityTests` (4): quem vê o quê, rascunhos e concluídas, outra organização, quem é de fora | **sim** | `DemandScopeTests` (escopos Minhas / Do meu setor / Participando / Todas) e `DemandFilterTests` |
+| `ColumnTests`: itens agrupados e contados; "Sem etapa" só quando precisa; etapa inativa; arrastar só quem pode | **sim** | `test_the_no_stage_lane_only_appears_when_a_demand_needs_classifying`, `test_the_kanban_never_loses_a_demand_when_its_stage_stops_being_active`, `test_a_card_is_draggable_only_for_who_can_move_it` e `test_domain_workboards` (raias vazias, arrastar) |
+| `ColumnTests`: limite de coluna só avisa (2 testes) e menu da coluna (limite/editar) só para gestores | capacidade **que a tela atual não tem** (ver abaixo) | — |
+| `SetConditionTests`: seletor de status no cartão só para quem pode | capacidade que a tela atual não tem | — |
+| `WiringTests`: endereços apontam para `activities.kanban` | só estrutura | `DemandRoutingTests` (as três rotas são a mesma view) |
+| `ActivityKanbanAndCalendarViewTests`: colunas por etapa + "sem etapa"; calendário em grade semanal | estrutura da tela antiga | itens acima; a grade volta com a fase do Calendário |
+| `SpreadsheetListViewTests`: status customizado com rótulo e cor | **sim** | `test_a_custom_status_shows_its_label_and_color_in_the_list` |
+| `SpreadsheetListViewTests`: classes `lps-sheet` | só estrutura | — |
+
+**Reclassificados para o bloco C (não mexer):** `WiringTests.test_garbage_in_the_initial_values_is_ignored` (é a janela de nova tarefa, rota 410) e `SpreadsheetListViewTests.test_tasks_grouped_by_demand_use_the_same_sheet_status` (lista de tarefas).
+
+**Pendente, porque os arquivos estão com a outra sessão:** 4 testes do bloco B em `activities/test_activity_workspace.py` (paginação da lista antiga, cancelar pela lista, ids das linhas, barra de filtros antiga), 1 do bloco A no mesmo arquivo (busca na barra; a regra já está testada em `test_demand_filters.py`) e 1 do bloco A em `activities/test_reopen.py` (a lista atual não oferece "Reabrir"; ver abaixo). Voltam à pauta quando a outra sessão terminar.
+
+**Ficam para a fase 1A** (dependem da ordenação nova): `test_ordering_by_title_in_both_directions`, `test_deadline_ordering_puts_the_empty_deadline_last` e `test_clear_link_keeps_only_the_sector`.
+
+## Capacidades do Kanban/Lista antigos que a tela atual NÃO tem (decisão de produto, não de teste)
+
+Os testes acima só deixaram de existir porque a tela que eles descreviam foi substituída; mas estas **capacidades também sumiram** e vale uma decisão explícita (reter, redesenhar ou abandonar):
+
+1. **Limite de coluna (WIP)** do Kanban de Demandas (aviso "2 de 1") e o menu da coluna para definir limite/editar etapa.
+2. **Seletor de status no cartão** do Kanban (trocar o status sem abrir a demanda).
+3. **Menu de ações na linha da Lista**: Concluir, Cancelar, Reabrir e Transferir responsabilidade agora só existem dentro da ficha da demanda.
+4. **Setor lembrado** no Kanban e a explicação "este setor ainda não tem etapas" com o atalho "Configurar etapas".
+5. **Paginação** da Lista (a atual lista tudo).
+6. **Calendário em grade semanal** (o atual é uma lista de prazos; a grade mensal está prevista na fase do Calendário).

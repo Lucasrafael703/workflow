@@ -156,58 +156,9 @@ class KanbanTestCase(TestCase):
 
 
 class BoardSectorTests(KanbanTestCase):
-    def test_the_board_is_always_of_one_sector_with_its_own_stages(self):
-        response = self.board("activity-kanban", self.ana)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context["sector"], self.orcamento)
-        self.assertEqual([c["stage"].name for c in response.context["columns"]], ["A fazer", "Levantamento", "Cotação"])
-        self.assertNotContains(response, "Conferência")
-
     def test_tasks_board_uses_the_task_stages_of_the_sector(self):
         response = self.board("task-kanban", self.ana)
         self.assertEqual([c["stage"].name for c in response.context["columns"]], ["A fazer", "Em execução", "Pronto"])
-
-    def test_a_member_of_two_sectors_switches_and_the_choice_is_remembered(self):
-        self.duo.profile.main_sector = None
-        self.duo.profile.save(update_fields=["main_sector"])
-        first = self.board("activity-kanban", self.duo)
-        # Sem setor principal abre no setor em que a pessoa passou a atuar primeiro, não no primeiro por nome.
-        self.assertEqual(first.context["sector"], self.orcamento)
-        switched = self.client.get(reverse("activity-kanban"), {"setor": self.financeiro.pk})
-        self.assertEqual(switched.context["sector"], self.financeiro)
-        remembered = self.client.get(reverse("activity-kanban"))
-        self.assertEqual(remembered.context["sector"], self.financeiro)
-
-    def test_the_main_sector_of_the_person_is_the_default(self):
-        self.duo.profile.main_sector = self.orcamento
-        self.duo.profile.save(update_fields=["main_sector"])
-        self.assertEqual(self.board("activity-kanban", self.duo).context["sector"], self.orcamento)
-
-    def test_a_sector_the_person_cannot_open_is_ignored_not_leaked(self):
-        for other in (self.financeiro, self.foreign_sector):
-            with self.subTest(sector=other.name):
-                response = self.board("activity-kanban", self.ana, setor=other.pk)
-                self.assertEqual(response.context["sector"], self.orcamento)
-                self.assertNotIn("Pagamento fornecedor", self.all_titles(response))
-
-    def test_old_group_parameter_still_selects_the_sector(self):
-        response = self.board("activity-kanban", self.duo, grupo=self.financeiro.pk)
-        self.assertEqual(response.context["sector"], self.financeiro)
-
-    def test_a_person_without_sector_or_items_sees_an_explanation(self):
-        response = self.board("activity-kanban", self.semsetor)
-        self.assertEqual(response.status_code, 200)
-        self.assertIsNone(response.context["sector"])
-        self.assertContains(response, "Você ainda não tem um setor neste quadro")
-
-    def test_a_sector_without_stages_explains_and_offers_setup_only_to_managers(self):
-        ActivityStage.objects.filter(sector=self.orcamento).delete()
-        manager = self.board("activity-kanban", self.gestor)
-        self.assertContains(manager, "ainda não tem etapas para demandas")
-        self.assertContains(manager, "Configurar etapas")
-        member = self.board("activity-kanban", self.ana)
-        self.assertContains(member, "Fale com o gestor do setor")
-        self.assertNotContains(member, "Configurar etapas")
 
     def test_login_is_required(self):
         self.client.logout()
@@ -216,17 +167,6 @@ class BoardSectorTests(KanbanTestCase):
 
 
 class BoardVisibilityTests(KanbanTestCase):
-    def test_a_member_of_the_sector_sees_every_item_of_it(self):
-        response = self.board("activity-kanban", self.ana)
-        self.assertEqual(
-            sorted(self.all_titles(response)), sorted(["Orçamento Aurora", "Levantamento da garagem", "Item do visitante"])
-        )
-
-    def test_someone_outside_the_sector_sees_only_what_they_work_on(self):
-        response = self.board("activity-kanban", self.visitante)
-        self.assertEqual(response.context["sector"], self.orcamento)
-        self.assertEqual(self.all_titles(response), ["Item do visitante"])
-
     def test_participating_in_a_task_makes_the_demand_visible_to_an_outsider(self):
         self.t1.executors.create(user=self.visitante, added_by=self.ana)
         response = self.board("activity-kanban", self.visitante)
@@ -236,73 +176,19 @@ class BoardVisibilityTests(KanbanTestCase):
         response = self.board("task-kanban", self.visitante)
         self.assertEqual(self.all_titles(response), ["Tarefa do visitante"])
 
-    def test_drafts_and_finished_items_are_hidden_until_asked(self):
-        hidden = self.board("activity-kanban", self.ana)
-        self.assertNotIn("Já concluída", self.all_titles(hidden))
-        self.assertNotIn("Rascunho", self.all_titles(hidden))
-        shown = self.client.get(reverse("activity-kanban"), {"concluidas": "1"})
-        self.assertIn("Já concluída", self.all_titles(shown))
-        self.assertNotIn("Rascunho", self.all_titles(shown))
-
     def test_finished_tasks_are_hidden_until_asked(self):
         done = self.task(self.a1, "Tarefa pronta", self.ana, self.orcamento, self.t_pronto, None, status=Task.Status.CONCLUIDA)
         self.assertNotIn(done.title, self.all_titles(self.board("task-kanban", self.ana)))
         self.assertIn(done.title, self.all_titles(self.client.get(reverse("task-kanban"), {"concluidas": "1"})))
 
-    def test_nothing_from_another_organization_ever_shows(self):
-        self.client.force_login(self.alheio)
-        response = self.client.get(reverse("activity-kanban"))
-        self.assertNotIn("Orçamento Aurora", self.all_titles(response))
-
 
 class ColumnTests(KanbanTestCase):
-    def test_items_are_grouped_by_stage_and_counted(self):
-        response = self.board("activity-kanban", self.ana)
-        counts = {c["stage"].name: c["count"] for c in response.context["columns"]}
-        self.assertEqual(counts, {"A fazer": 2, "Levantamento": 1, "Cotação": 0})
-
-    def test_sem_etapa_only_appears_when_something_needs_classifying(self):
-        self.assertIsNone(self.board("activity-kanban", self.ana).context["unassigned"])
-        Activity.objects.filter(pk=self.a1.pk).update(stage=None)
-        response = self.client.get(reverse("activity-kanban"))
-        self.assertEqual([i.title for i in response.context["unassigned"]["items"]], ["Orçamento Aurora"])
-        self.assertContains(response, "Sem etapa")
-
-    def test_an_inactive_stage_sends_its_items_to_sem_etapa(self):
-        ActivityStage.objects.filter(pk=self.d_levant.pk).update(is_active=False)
-        response = self.board("activity-kanban", self.ana)
-        self.assertEqual([c["stage"].name for c in response.context["columns"]], ["A fazer", "Cotação"])
-        self.assertEqual([i.title for i in response.context["unassigned"]["items"]], ["Levantamento da garagem"])
-
-    def test_the_column_limit_only_warns(self):
-        ActivityStage.objects.filter(pk=self.d_afazer.pk).update(column_limit=1)
-        response = self.board("activity-kanban", self.ana)
-        column = response.context["columns"][0]
-        self.assertTrue(column["over_limit"])
-        self.assertContains(response, "2 de 1")
-        self.assertEqual(response.status_code, 200)
-
-    def test_a_column_within_the_limit_is_not_flagged(self):
-        ActivityStage.objects.filter(pk=self.d_afazer.pk).update(column_limit=5)
-        self.assertFalse(self.board("activity-kanban", self.ana).context["columns"][0]["over_limit"])
-
     def test_cards_show_the_condition_and_titles_are_escaped(self):
         Activity.objects.filter(pk=self.a1.pk).update(title="<script>alert(1)</script>")
         response = self.board("activity-kanban", self.ana)
         self.assertContains(response, "Aguardando cliente")
         self.assertNotContains(response, "<script>alert(1)</script>")
         self.assertContains(response, "&lt;script&gt;alert(1)&lt;/script&gt;")
-
-    def test_cards_the_person_cannot_move_are_not_draggable(self):
-        response = self.board("activity-kanban", self.leitor)
-        self.assertContains(response, 'draggable="false"')
-        self.assertNotContains(response, 'draggable="true"')
-        mover = self.board("activity-kanban", self.ana)
-        self.assertContains(mover, 'draggable="true"')
-
-    def test_the_column_menu_offers_limit_and_edit_only_to_managers(self):
-        self.assertContains(self.board("activity-kanban", self.gestor), "Definir limite da coluna")
-        self.assertNotContains(self.board("activity-kanban", self.ana), "Definir limite da coluna")
 
     def test_task_columns_open_the_new_task_window_already_in_the_sector_and_stage(self):
         response = self.board("task-kanban", self.ana)
@@ -480,10 +366,6 @@ class SetConditionTests(KanbanTestCase):
 
     def test_a_person_without_the_action_is_refused(self):
         self.assertEqual(self.post("demandas", self.a1, self.d_cliente.pk, user=self.leitor).status_code, 403)
-
-    def test_the_card_offers_the_condition_picker_only_to_who_can_change_it(self):
-        self.assertContains(self.board("activity-kanban", self.ana), "data-workflow-picker")
-        self.assertNotContains(self.board("activity-kanban", self.leitor), 'data-kind="condition"')
 
 
 class CreateCardTests(KanbanTestCase):
@@ -669,12 +551,6 @@ class DrawerTests(KanbanTestCase):
 
 
 class WiringTests(KanbanTestCase):
-    def test_the_kanban_addresses_use_the_new_views(self):
-        self.assertEqual(reverse("activity-kanban"), "/demandas/kanban/")
-        self.assertEqual(reverse("task-kanban"), "/tarefas/kanban/")
-        self.assertEqual(resolve("/demandas/kanban/").func.view_class.__module__, "activities.kanban")
-        self.assertEqual(resolve("/tarefas/kanban/").func.view_class.__module__, "activities.kanban")
-
     def test_both_boards_light_up_their_menu_item(self):
         self.assertEqual(self.board("activity-kanban", self.ana).context["nav_active"], "activities")
         self.assertEqual(self.board("task-kanban", self.ana).context["nav_active"], "tasks")

@@ -9,11 +9,13 @@ ligada (ver `WorkspaceOnFilterTests`, na fase do Workspace) para provar que o re
 import datetime
 
 from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings
-from django.urls import reverse
+from django.urls import resolve, reverse
 from django.utils import timezone
 
 from accounts.models import UserSector
 from acessos import catalog
+from boards.models import DomainBoard, DomainBoardView
+from boards.work_views import DemandWorkBoardView
 from core.models import ActivityStage, Client, Organization, Sector, Site, WorkflowStatus
 
 from .filtering import normalize_workspace_filters
@@ -217,6 +219,23 @@ class DemandScopeTests(DemandFilterBase):
         listed = sorted(item.title for group in response.context["groups"] for item in group["items"])
         self.assertEqual(listed, before)  # a etapa antiga ganha a sua raia ao fim; nada some
 
+    def test_the_no_stage_lane_only_appears_when_a_demand_needs_classifying(self):
+        with override_settings(WORKSPACE_V2=self.flag):
+            self.client.get(reverse("activity-kanban"), {"tab": "todas"})  # cria o quadro padrão
+        board = DomainBoard.objects.get(organization=self.org, domain=DomainBoard.Domain.DEMAND)
+        view = board.views.get(type=DomainBoardView.Type.KANBAN)
+        view.settings = {**(view.settings or {}), "show_empty": False}
+        view.save(update_fields=["settings"])
+
+        def lane_keys():
+            with override_settings(WORKSPACE_V2=self.flag):
+                response = self.client.get(reverse("activity-kanban"), {"tab": "todas"})
+            return [group["key"] for group in response.context["groups"]]
+
+        self.assertNotIn("empty", lane_keys())  # todas têm etapa: nada a classificar
+        Activity.objects.filter(pk=self.a1.pk).update(stage=None)
+        self.assertIn("empty", lane_keys())
+
     def test_a_card_is_draggable_only_for_who_can_move_it(self):
         for user, draggable in ((self.mover, True), (self.leitor, False)):
             with self.subTest(user=user.username):
@@ -234,6 +253,21 @@ class DemandScopeTests(DemandFilterBase):
         html = self.get().content.decode()
         self.assertIn("Em análise", html)
         self.assertIn("#8B5CF6", html.upper())
+
+
+class DemandRoutingTests(SimpleTestCase):
+    """As três entradas (Lista, Kanban, Calendário) são a MESMA view; só muda o tipo de visualização."""
+
+    def test_the_three_addresses_are_one_view(self):
+        for path in ("/demandas/", "/demandas/kanban/", "/demandas/calendario/"):
+            with self.subTest(path=path):
+                self.assertIs(resolve(path).func.view_class, DemandWorkBoardView)
+
+    def test_the_route_names_keep_their_addresses(self):
+        self.assertEqual(
+            [reverse(name) for name in ("activity-list", "activity-kanban", "activity-calendar")],
+            ["/demandas/", "/demandas/kanban/", "/demandas/calendario/"],
+        )
 
 
 class FilterNormalizationTests(SimpleTestCase):

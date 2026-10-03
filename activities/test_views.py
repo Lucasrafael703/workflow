@@ -605,22 +605,6 @@ class ActivityKanbanAndCalendarViewTests(ViewTestCase):
         self.activity.sector = self.sector
         self.activity.save(update_fields=["sector"])
 
-    def test_kanban_shows_stage_columns_and_unassigned_activities(self):
-        self.client.force_login(self.requester)
-        response = self.client.get(reverse("activity-kanban"))
-        self.assertEqual(response.status_code, 200)
-        stages = [column["stage"] for column in response.context["columns"]]
-        self.assertIn(self.stage, stages)
-        unassigned_ids = [a.pk for a in response.context["unassigned"]["items"]]
-        self.assertIn(self.activity.pk, unassigned_ids)
-
-    def test_calendar_returns_ok_with_week_grid(self):
-        self.client.force_login(self.requester)
-        response = self.client.get(reverse("activity-calendar"))
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("weeks", response.context)
-        self.assertTrue(len(response.context["weeks"]) > 0)
-
     def test_move_stage_updates_stage_only_never_status(self):
         self.client.force_login(self.requester)
         original_status = self.activity.status
@@ -724,15 +708,6 @@ class TaskFilterViewTests(ViewTestCase):
 class SpreadsheetListViewTests(ViewTestCase):
     """As listas críticas usam o mesmo markup denso, sem alterar as regras."""
 
-    def test_demand_list_uses_sheet_status_and_progress_components(self):
-        self.client.force_login(self.requester)
-        response = self.client.get(reverse("activity-list"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'class="activities-table lps-sheet lps-sheet--demand"')
-        self.assertContains(response, 'class="lps-sheet-status"')
-        self.assertContains(response, 'class="lps-sheet-progress"')
-        self.assertContains(response, "Demanda")
-
     def test_task_list_uses_sheet_markup_without_nonfunctional_selection(self):
         self.client.force_login(self.requester)
         response = self.client.get(reverse("task-list"))
@@ -756,18 +731,6 @@ class SpreadsheetListViewTests(ViewTestCase):
         self.assertContains(response, 'lps-sheet--home-tasks')
         self.assertContains(response, 'lps-sheet--home-demands')
         self.assertContains(response, 'class="lps-sheet-progress"')
-
-    def test_custom_status_color_and_label_are_rendered_in_demand_sheet(self):
-        from core.services import EnumColorService
-
-        EnumColorService.set_color(self.org, "activity_status", Activity.Status.ABERTA, "#2563EB", updated_by=self.requester)
-        EnumColorService.set_overrides(
-            self.org, "activity_status", Activity.Status.ABERTA, label="Em análise", updated_by=self.requester
-        )
-        self.client.force_login(self.requester)
-        response = self.client.get(reverse("activity-list"))
-        self.assertContains(response, "Em análise")
-        self.assertContains(response, "--lps-sheet-status-color: #2563EB")
 
     def test_admin_uses_current_demand_terminology_without_renaming_models(self):
         self.assertEqual(Activity._meta.verbose_name, "demanda")
