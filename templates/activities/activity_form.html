@@ -8,14 +8,19 @@ Nova atividade e Editar atividade: a MESMA janela, em quatro etapas.
 
 Todas as etapas são campos de um único formulário; nada é gravado antes do envio
 final (static/js/activity-steps.js só mostra uma etapa por vez e valida a
-primeira). Sem JavaScript as três etapas aparecem empilhadas na página e o
+primeira). Sem JavaScript as quatro etapas aparecem empilhadas na página e o
 formulário funciona do mesmo jeito — o Django valida tudo no envio.
-Não há upload: a etapa 3 só tem as observações e o link/caminho dos arquivos.
+Não há upload: a etapa 4 só tem as observações e o link/caminho dos arquivos.
+
+Editar: a etapa 3 mostra o quadro que a demanda tem hoje e deixa trocá-lo. Trocar
+exclui as tarefas do quadro atual, por isso o envio pede confirmação (diálogo
+[data-board-confirm], ligado em activity-steps.js; sem JavaScript a pessoa marca a
+caixa "Confirmo a troca"). O servidor confere a confirmação de novo.
 {% endcomment %}
 
 {% block content %}
 <div class="modal-backdrop activity-modal-overlay">
-    <div class="modal activity-modal" data-activity-stepper data-initial-step="{{ initial_step }}"{% if editing %} data-submit-anywhere{% endif %}>
+    <div class="modal activity-modal" data-activity-stepper data-initial-step="{{ initial_step }}"{% if form.editing_published and form.current_board and form.board_replace_allowed %} data-board-exists="1" data-board-mode="{{ form.board_setup_mode.initial }}" data-board-template="{{ form.board_template.initial|default_if_none:'' }}" data-board-items="{{ form.board_item_count }}"{% endif %}>
         <header class="activity-modal-header">
             <span class="activity-header-icon" aria-hidden="true">{% include "_icon.html" with name="file-text" %}</span>
             <div class="activity-header-content">
@@ -99,6 +104,20 @@ Não há upload: a etapa 3 só tem as observações e o link/caminho dos arquivo
 
                     {% elif step.key == 3 %}
                     <div class="activity-form-grid">
+                        {% if form.editing_published %}
+                        <div class="activity-form-full board-current{% if form.current_board is None %} board-current--empty{% endif %}" data-board-current>
+                            {% if form.current_board is None %}
+                            <p>Esta demanda ainda não tem quadro de tarefas. Escolha abaixo como organizá-las e o quadro será criado ao salvar.</p>
+                            {% else %}
+                            <p><strong>Quadro atual:</strong> {% if form.current_board.source_template %}a partir do modelo “{{ form.current_board.source_template.name }}”{% else %}criado em branco{% endif %} · {{ form.board_item_count }} tarefa{{ form.board_item_count|pluralize }}</p>
+                            {% if form.board_replace_allowed %}
+                            <p class="board-current__warning" data-board-change-warning>Trocar o quadro exclui as tarefas do quadro atual. Você confirma antes de salvar.</p>
+                            {% else %}
+                            <p class="board-current__note">Só o responsável, quem criou a demanda ou quem gerencia quadros pode trocar o quadro.</p>
+                            {% endif %}
+                            {% endif %}
+                        </div>
+                        {% endif %}
                         <div class="activity-form-group form-row activity-form-full{% if form.board_setup_mode.errors %} has-error{% endif %}" data-field="board_setup_mode">
                             <span class="activity-label" id="board-mode-label">Como deseja organizar as tarefas?</span>
                             <div class="board-choice-grid" role="radiogroup" aria-labelledby="board-mode-label">
@@ -117,6 +136,12 @@ Não há upload: a etapa 3 só tem as observações e o link/caminho dos arquivo
                         <div class="activity-form-full" data-board-template-field>
                             {% include "activities/_activity_modal_field.html" with field=form.board_template full=True %}
                         </div>
+                        {% if form.editing_published and form.current_board and form.board_replace_allowed %}
+                        <label class="activity-form-full board-confirm-fallback" data-board-confirm-fallback>
+                            <input type="checkbox" name="confirm_board_replace" value="1" id="id_confirm_board_replace"{% if form.confirm_board_replace.value %} checked{% endif %}>
+                            <span>Confirmo a troca do quadro e a exclusão das tarefas do quadro atual (só vale se você escolheu outro quadro acima).</span>
+                        </label>
+                        {% endif %}
                     </div>
 
                     {% else %}
@@ -141,11 +166,25 @@ Não há upload: a etapa 3 só tem as observações e o link/caminho dos arquivo
                 <a href="{{ cancel_url }}" class="activity-btn activity-btn-secondary btn">Cancelar</a>
                 <div class="activity-footer-right">
                     <button type="button" class="activity-btn activity-btn-secondary" data-step-prev hidden disabled>{% include "_icon.html" with name="back" %} Voltar</button>
-                    <button type="button" class="activity-btn activity-btn-{% if editing %}secondary{% else %}primary{% endif %}" data-step-next hidden>Continuar {% include "_icon.html" with name="arrow-right" %}</button>
+                    <button type="button" class="activity-btn activity-btn-primary" data-step-next hidden>Continuar {% include "_icon.html" with name="arrow-right" %}</button>
                     <button type="submit" name="acao" value="publicar" class="activity-btn activity-btn-primary" data-step-submit>{{ submit_label }} {% include "_icon.html" with name="arrow-right" %}</button>
                 </div>
             </footer>
         </form>
+
+        {% if form.editing_published and form.current_board and form.board_replace_allowed %}
+        <div class="activity-confirm" data-board-confirm hidden>
+            <div class="activity-confirm__card" role="alertdialog" aria-modal="true" aria-labelledby="board-confirm-title" aria-describedby="board-confirm-message">
+                <h3 class="activity-confirm__title" id="board-confirm-title">Trocar o quadro de tarefas?</h3>
+                <p class="activity-confirm__message" id="board-confirm-message" data-board-confirm-message></p>
+                <p class="activity-confirm__target" data-board-confirm-target></p>
+                <div class="activity-confirm__actions">
+                    <button type="button" class="activity-btn activity-btn-secondary" data-board-confirm-cancel>Cancelar</button>
+                    <button type="button" class="activity-btn activity-btn-danger" data-board-confirm-accept>Trocar quadro e excluir tarefas</button>
+                </div>
+            </div>
+        </div>
+        {% endif %}
 
         {% if draft %}<form method="post" action="{% url 'activity-wizard-discard' draft.pk %}" class="activity-modal-discard" onsubmit="return confirm('Descartar este rascunho?');">{% csrf_token %}<button class="activity-btn activity-btn-secondary activity-btn--small" type="submit">Descartar rascunho</button></form>{% endif %}
         {% for attachment in attachments %}<form id="remove-attachment-{{ attachment.pk }}" data-editor-attachment-remove data-attachment-row="editor-attachment-{{ attachment.pk }}" method="post" action="{% url 'activity-attachment-delete' activity.pk attachment.pk %}" hidden>{% csrf_token %}</form>{% endfor %}

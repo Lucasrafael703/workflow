@@ -50,7 +50,7 @@ Esses três pontos estão em [13_PENDENCIAS_CONHECIDAS.md](13_PENDENCIAS_CONHECI
 
 `activities/activity_editor.py` reúne criação, retomada de rascunho e edição.
 Todas usam `ActivityEditorForm` e `activities/activity_form.html`: **a mesma janela,
-em três etapas**, tanto para “Nova atividade” quanto para “Editar atividade”.
+em quatro etapas** (Informações principais, Cliente e obra, Quadro de tarefas, Descrição e arquivos), tanto para “Nova demanda” quanto para “Editar demanda”. Ao editar, a etapa do quadro mostra o quadro atual e deixa trocá-lo com confirmação (exclui as tarefas do quadro atual: ver `docs/13` F36).
 
 | Etapa | Campos (formulário → modelo) |
 |---|---|
@@ -82,7 +82,7 @@ e de novo no servidor, em `ActivityEditorForm.clean`).
 - O contador “0/2000” do editor de observações é só orientação: o servidor não corta
   o texto.
 - Nada é gravado antes do botão final (`Criar atividade` / `Salvar alterações`): as
-  três etapas são painéis do mesmo formulário e o backend de criação continua sendo
+  quatro etapas são painéis do mesmo formulário e o backend de criação continua sendo
   `ActivityService.save_draft` + `publish_draft` (edição: `update_activity`).
 
 Rotas e respostas:
@@ -90,7 +90,7 @@ Rotas e respostas:
 - `/demandas/nova/`: publica em uma única submissão, exigindo nome, responsável e setor.
   Aberta pelos botões (`data-activity-action data-activity-navigate`), responde JSON:
   sucesso `{redirect_url}` (a tela segue para a ficha), erro `400 {errors}` (a janela abre
-  na etapa do primeiro erro). Sem JavaScript é uma página com as três etapas empilhadas.
+  na etapa do primeiro erro). Sem JavaScript é uma página com as quatro etapas empilhadas.
 - Rascunho antigo (`acao=rascunho`, sem botão na tela): aceita tudo vazio; `?pk=<id>`
   retoma apenas um rascunho da organização criado pela pessoa atual.
 - `/demandas/<pk>/editar/`: mesmo formulário; exige `demanda.editar`.

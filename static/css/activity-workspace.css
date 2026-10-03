@@ -1,4 +1,4 @@
-/* Janela de atividade (Nova / Editar) em três etapas + pequenos utilitários da área de atividades.
+/* Janela de demanda (Nova / Editar) em quatro etapas + pequenos utilitários da área de atividades.
    Usa os tokens de app.css (--primary, --border, --text...); as cores de urgência e o brilho do
    foco seguem o desenho de referência. */
 
@@ -97,6 +97,38 @@
 .board-choice small { color: #5b718a; font-size: 12.5px; }
 [data-board-template-field][hidden] { display: none; }
 @media (max-width: 760px) { .board-choice-grid { grid-template-columns: 1fr; } }
+
+/* Editar: o quadro que a demanda tem hoje e o aviso de que trocá-lo exclui as tarefas. */
+.board-current { padding: 12px 14px; border: 1px solid #dce6f0; border-radius: 10px; background: #f6f9fd; font-size: 13.5px; color: #1a2d47; }
+.board-current p { margin: 0; }
+.board-current p + p { margin-top: 6px; }
+.board-current__warning { color: #8a5a00; }
+.board-current__note { color: #5b718a; }
+.board-current__warning[hidden] { display: none; }
+.board-choice:has(input:disabled) { cursor: not-allowed; opacity: .7; }
+.board-choice input:disabled { cursor: not-allowed; }
+.board-confirm-fallback { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid #f0c9cd; border-radius: 10px; background: var(--danger-soft); color: #7a1f27; font-size: 13px; cursor: pointer; }
+.board-confirm-fallback[hidden] { display: none; }
+.board-confirm-fallback input { margin-top: 2px; accent-color: var(--danger); }
+
+/* Confirmação de troca de quadro: cobre a janela (que passa a ser a referência de posição). */
+.activity-modal { position: relative; }
+.activity-confirm {
+    position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; padding: 20px;
+    background: rgba(21, 42, 68, .5); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+}
+.activity-confirm[hidden] { display: none; }
+.activity-confirm__card {
+    width: min(460px, 100%); padding: 22px 24px 20px; border: 1px solid #f0c9cd; border-radius: 16px;
+    background: var(--surface); box-shadow: 0 22px 60px rgba(13, 35, 65, .28);
+}
+.activity-confirm__title { margin: 0 0 8px; font-size: 18px; color: #162944; }
+.activity-confirm__message { margin: 0 0 6px; color: #7a1f27; font-weight: 600; font-size: 14px; }
+.activity-confirm__target { margin: 0 0 16px; color: #5b718a; font-size: 13px; }
+.activity-confirm__actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
+.activity-btn-danger { border: 1px solid #a82a35; color: #fff; background: linear-gradient(180deg, #dc4a56, var(--danger)); box-shadow: 0 6px 16px rgba(207, 59, 71, .22); }
+.activity-btn-danger:hover { background: linear-gradient(180deg, var(--danger), #b5313c); }
+@media (max-width: 760px) { .activity-confirm__actions .activity-btn { flex: 1 1 100%; } }
 
 /* =========================================================
    CORPO (rola sozinho) E CARTÃO DE CADA ETAPA

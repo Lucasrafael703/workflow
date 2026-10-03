@@ -127,7 +127,7 @@
                             </div>
                             <div>
                                 <div class="ad-situation__count-label">{{ tasks_done }} de {{ tasks_total }} concluídas</div>
-                                <div class="ad-situation__count-sub">{{ status_counts.waiting }} em fila · {{ status_counts.blocked }} bloqueada{{ status_counts.blocked|pluralize }}{% if status_counts.dependency_waiting %} · {{ status_counts.dependency_waiting }} aguardando etapa anterior{% endif %}</div>
+                                <div class="ad-situation__count-sub">{{ status_counts.in_progress }} em andamento · {{ status_counts.waiting }} a fazer{% if status_counts.blocked %} · {{ status_counts.blocked }} bloqueada{{ status_counts.blocked|pluralize }}{% endif %}{% if status_counts.dependency_waiting %} · {{ status_counts.dependency_waiting }} aguardando etapa anterior{% endif %}</div>
                             </div>
                         </div>
 

@@ -665,7 +665,7 @@ ACTIVITY_ORDERINGS = {
 
 def filtered_activities_queryset(request, organization, *, order=True):
     """Filtro de atividades compartilhado entre Lista, Kanban e Calendário —
-    mesmos parâmetros GET (tab/status/prazo/urgencia/cliente/grupo/
+    mesmos parâmetros GET (tab/status/prazo/pessoa/urgencia/cliente/grupo/
     centro_custo/datas/q), para as 3 visualizações sempre mostrarem
     exatamente o mesmo subconjunto, só reagrupado/re-renderizado de formas
     diferentes."""
@@ -761,12 +761,21 @@ def filtered_activities_queryset(request, organization, *, order=True):
     if sector_id:
         queryset = queryset.filter(sector_id=sector_id)
 
-    if filters["pessoa"] == "sem":
-        queryset = queryset.filter(owner__isnull=True)
-    elif filters["pessoa"] == "eu":
-        queryset = queryset.filter(owner=user)
-    elif _int_or_none(filters["pessoa"]) is not None:
-        queryset = queryset.filter(owner_id=_int_or_none(filters["pessoa"]))
+    people = filters["pessoas"]
+    if people:
+        owner_ids = [person_id for value in people if (person_id := _int_or_none(value)) is not None]
+        owner_filter = Q()
+        if "sem" in people:
+            owner_filter |= Q(owner__isnull=True)
+        if "eu" in people:
+            owner_filter |= Q(owner=user)
+        if owner_ids:
+            owner_filter |= Q(owner_id__in=owner_ids)
+        # Valores inválidos continuam sendo ignorados, como no filtro único
+        # anterior; valores numéricos desconhecidos simplesmente não retornam
+        # nenhuma demanda.
+        if owner_ids or "sem" in people or "eu" in people:
+            queryset = queryset.filter(owner_filter)
 
     if filters["obra"]:
         queryset = queryset.filter(site_id=filters["obra"])
@@ -1597,6 +1606,27 @@ class ActivityDetailView(OrganizationRequiredMixin, DetailView):
                 ),
             }
         )
+        # A fonte das tarefas é o Quadro da Demanda (a Task antiga ficou só como histórico): o progresso, "pronta para
+        # concluir" e o bloco Tarefas passam a ler dele. Demanda antiga sem Quadro mantém o que já mostrava.
+        from boards.demand_preview import DemandBoardPreviewQuery
+
+        preview = DemandBoardPreviewQuery.build(user=user, activity=activity)
+        context["board_preview"] = preview
+        if preview is not None:
+            total, board_done = preview["total"], preview["done"]
+            all_done = total > 0 and board_done == total
+            context.update(
+                task_board_url=preview["board_url"],
+                tasks_total=total,
+                tasks_done=board_done,
+                status_counts={
+                    "done": board_done, "in_progress": preview["in_progress"], "waiting": preview["todo"],
+                    "blocked": 0, "dependency_waiting": 0,
+                },
+                has_blocked_task=False,
+                is_ready_to_complete=all_done and not unmet_required_criteria,
+                is_blocked_by_criteria=all_done and bool(unmet_required_criteria),
+            )
         return context
 
 

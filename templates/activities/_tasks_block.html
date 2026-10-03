@@ -1,12 +1,43 @@
-<div class="card card--flush">
+{% load lps_board %}{% comment %}
+Bloco "Tarefas" da ficha da Demanda: prévia (só leitura) do Quadro REAL da Demanda. O resumo e as linhas vêm de
+boards/demand_preview.py; "Abrir quadro" leva ao próprio Quadro, nunca ao modelo.
+{% endcomment %}
+<div class="card card--flush task-preview">
     <div class="card__head">
         <h2><span class="ad-section-icon">{% include "_icon.html" with name="task" %}</span> Tarefas</h2>
-        <a href="{{ task_board_url }}" class="btn btn--sm btn--primary">Abrir quadro</a>
+        {% if board_preview %}<a href="{{ board_preview.board_url }}" class="btn btn--sm btn--primary">Abrir quadro</a>{% endif %}
     </div>
+    {% if board_preview %}
     <div class="card__body">
-        <p class="muted">
-            As tarefas desta demanda são itens do quadro. Adicione, atribua pessoas,
-            altere o status e organize o trabalho diretamente nele.
-        </p>
+        <div class="task-preview__summary">
+            <div><strong>{{ board_preview.total }}</strong><span>tarefa{{ board_preview.total|pluralize }}</span></div>
+            <div><strong>{{ board_preview.done }}</strong><span>concluída{{ board_preview.done|pluralize }}</span></div>
+            <div><strong>{{ board_preview.in_progress }}</strong><span>em andamento</span></div>
+            <div><strong>{{ board_preview.unread_mentions }}</strong><span>menç{{ board_preview.unread_mentions|pluralize:"ão,ões" }} nova{{ board_preview.unread_mentions|pluralize }}</span></div>
+        </div>
+        {% if board_preview.rows %}
+        <table class="task-preview__table" aria-label="Prévia das tarefas do quadro">
+            <thead><tr><th>Nome da Tarefa</th><th>Responsável</th><th>Status</th><th>Prazo</th></tr></thead>
+            <tbody>
+            {% for row in board_preview.rows %}
+                <tr>
+                    <td class="task-preview__name">{{ row.name }}</td>
+                    <td>{% if row.person %}<span class="board-person"><span class="board-avatar" aria-hidden="true">{{ row.person|initials }}</span><span class="board-person__name">{{ row.person|person_name }}</span></span>{% else %}<span class="muted">Sem responsável</span>{% endif %}</td>
+                    <td><span class="board-pill" style="background:{{ row.status_color }};color:{{ row.status_color|contrast }}">{{ row.status_label }}</span></td>
+                    <td>{% if row.due %}<span class="board-date{% if row.overdue %} is-overdue{% endif %}"><time datetime="{{ row.due|date:'Y-m-d' }}">{{ row.due|date:'d/m/Y' }}</time>{% if row.overdue %} <span class="board-date__flag">vencido</span>{% endif %}</span>{% else %}<span class="muted">Sem prazo</span>{% endif %}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% if board_preview.more %}<p class="muted task-preview__more">+ {{ board_preview.more }} tarefa{{ board_preview.more|pluralize }} no quadro.</p>{% endif %}
+        {% else %}
+        <p class="muted">Este quadro ainda não tem tarefas. Abra o quadro para adicionar e organizar o trabalho.</p>
+        {% endif %}
+        <p class="muted task-preview__note">Esta é uma prévia. Para editar, atribuir pessoas e organizar o trabalho completo, abra o quadro.</p>
     </div>
+    {% else %}
+    <div class="card__body">
+        <p class="muted">Nenhum quadro configurado para esta demanda.</p>
+    </div>
+    {% endif %}
 </div>

@@ -1,10 +1,12 @@
-/* Nova / Editar atividade em três etapas (templates/activities/activity_form.html).
+/* Nova / Editar demanda em quatro etapas (templates/activities/activity_form.html) — a MESMA janela nos dois casos.
 
-   As três etapas são painéis do MESMO formulário: aqui só se mostra um por vez,
+   As etapas são painéis do MESMO formulário: aqui só se mostra um por vez,
    se marca o progresso e se valida a primeira etapa antes de avançar. Nenhum dado
    sai do DOM ao avançar ou voltar (os painéis só ficam `hidden`) e nada é enviado
    antes do botão final — o servidor continua sendo quem valida e grava.
-   Sem este script as três etapas aparecem empilhadas e o formulário funciona igual. */
+   Editar: trocar o quadro de tarefas (etapa 3) exclui as tarefas do quadro atual, então o envio final abre um
+   diálogo de confirmação; só ao confirmar a caixa `confirm_board_replace` é marcada e o formulário é reenviado.
+   Sem este script as etapas aparecem empilhadas e o formulário funciona igual (a caixa de confirmação fica visível). */
 (function () {
     "use strict";
 
@@ -50,8 +52,6 @@
             if (event.target && event.target.name === "board_setup_mode") syncTemplate();
         });
         syncTemplate();
-        // Editar: tudo já vem preenchido, então "Salvar alterações" vale em qualquer etapa (criar continua só na última).
-        var submitAnywhere = root.hasAttribute("data-submit-anywhere");
 
         function groupsIn(panel) {
             return Array.prototype.slice.call(panel.querySelectorAll("[data-required]"));
@@ -113,7 +113,7 @@
             prev.hidden = false;
             prev.disabled = current === 1;
             next.hidden = current === total;
-            submit.hidden = !submitAnywhere && current !== total;
+            submit.hidden = current !== total;
             if (body) body.scrollTop = 0;
             if (options && options.focus) {
                 var first = panels[current - 1].querySelector("input:not([type=hidden]):not([type=radio]), textarea, .person-picker__trigger, [contenteditable]");
@@ -139,10 +139,117 @@
             }
         });
 
-        // Captura: roda antes do envio do LPSModal. Nas primeiras etapas o envio vira "continuar" (salvo ao editar,
-        // onde o botão salvar existe em toda etapa); ao enviar de verdade, confere todas as etapas antes de deixar seguir.
+        // ---- Editar: trocar o quadro pede confirmação (as tarefas do quadro atual são excluídas) ----
+        var boardExists = root.getAttribute("data-board-exists") === "1";
+        var boardTemplate = root.getAttribute("data-board-template") || "";
+        var boardItems = parseInt(root.getAttribute("data-board-items"), 10) || 0;
+        var confirmBox = root.querySelector("[data-board-confirm]");
+        var confirmFlag = form.querySelector("input[name=confirm_board_replace]");
+        var confirmFallback = root.querySelector("[data-board-confirm-fallback]");
+        var changeWarning = root.querySelector("[data-board-change-warning]");
+        if (!confirmBox || !confirmFlag) boardExists = false;
+        if (boardExists && confirmFallback) confirmFallback.hidden = true; // com JavaScript quem confirma é o diálogo
+
+        // A escolha do passo 3 difere do quadro que a demanda tem hoje? (mesmo critério do servidor)
+        function boardChanged() {
+            if (!boardExists) return false;
+            var checked = root.querySelector("input[name=board_setup_mode]:checked");
+            var mode = checked ? checked.value : "BLANK";
+            if (mode !== "TEMPLATE") return boardTemplate !== "";
+            var select = root.querySelector("[name=board_template]");
+            return !!select && select.value !== "" && select.value !== boardTemplate;
+        }
+
+        function syncBoardChange() {
+            if (changeWarning) changeWarning.hidden = !boardChanged();
+        }
+        syncBoardChange();
+        // Mudou a escolha: a confirmação anterior não vale mais.
+        root.addEventListener("change", function (event) {
+            if (!event.target || (event.target.name !== "board_setup_mode" && event.target.name !== "board_template")) return;
+            if (confirmFlag) confirmFlag.checked = false;
+            syncBoardChange();
+        });
+
+        function confirmText() {
+            if (boardItems === 1) return "A tarefa do quadro atual será excluída definitivamente. Esta ação não pode ser desfeita.";
+            if (boardItems > 1) return "As " + boardItems + " tarefas do quadro atual serão excluídas definitivamente. Esta ação não pode ser desfeita.";
+            return "O quadro atual será substituído por um novo. Esta ação não pode ser desfeita.";
+        }
+
+        function targetText() {
+            var checked = root.querySelector("input[name=board_setup_mode]:checked");
+            if (checked && checked.value === "TEMPLATE") {
+                var select = root.querySelector("[name=board_template]");
+                var option = select && select.options && select.options[select.selectedIndex];
+                return "Novo quadro: a partir do modelo " + (option ? option.textContent.trim() : "");
+            }
+            return "Novo quadro: em branco";
+        }
+
+        function setInert(on) {
+            Array.prototype.slice.call(root.children).forEach(function (child) {
+                if (child === confirmBox) return;
+                if (on) child.setAttribute("inert", ""); else child.removeAttribute("inert");
+            });
+        }
+
+        function openConfirm() {
+            root.querySelector("[data-board-confirm-message]").textContent = confirmText();
+            root.querySelector("[data-board-confirm-target]").textContent = targetText();
+            setInert(true);
+            confirmBox.hidden = false;
+            var cancel = confirmBox.querySelector("[data-board-confirm-cancel]");
+            if (cancel) cancel.focus(); // o botão seguro é o padrão
+        }
+
+        function closeConfirm() {
+            confirmBox.hidden = true;
+            setInert(false);
+        }
+
+        if (boardExists) {
+            confirmBox.querySelector("[data-board-confirm-cancel]").addEventListener("click", function () {
+                closeConfirm();
+                confirmFlag.checked = false;
+                show(3, { focus: false }); // volta ao passo do quadro; nada foi enviado
+                var radio = root.querySelector("input[name=board_setup_mode]:checked");
+                if (radio && radio.focus) radio.focus();
+            });
+            confirmBox.querySelector("[data-board-confirm-accept]").addEventListener("click", function () {
+                closeConfirm();
+                confirmFlag.checked = true;
+                if (form.requestSubmit) form.requestSubmit(submit);
+                else form.submit();
+            });
+            // Clicar fora do cartão não confirma: só cancela.
+            confirmBox.addEventListener("click", function (event) {
+                if (event.target === confirmBox) confirmBox.querySelector("[data-board-confirm-cancel]").click();
+            });
+        }
+
+        // Com o diálogo aberto, Esc fecha só o diálogo (não a janela inteira) e Tab fica preso nele.
+        root.addEventListener("keydown", function (event) {
+            if (!boardExists || confirmBox.hidden) return;
+            if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                confirmBox.querySelector("[data-board-confirm-cancel]").click();
+            } else if (event.key === "Tab") {
+                var buttons = Array.prototype.slice.call(confirmBox.querySelectorAll("button"));
+                var index = buttons.indexOf(document.activeElement);
+                event.preventDefault();
+                event.stopPropagation();
+                if (event.shiftKey) index = index <= 0 ? buttons.length - 1 : index - 1;
+                else index = index < 0 || index === buttons.length - 1 ? 0 : index + 1;
+                buttons[index].focus();
+            }
+        }, true);
+
+        // Captura: roda antes do envio do LPSModal. Nas primeiras etapas o envio vira "continuar"; ao enviar de verdade,
+        // confere todas as etapas e, se o quadro foi trocado e ainda não houve confirmação, abre o diálogo.
         root.addEventListener("submit", function (event) {
-            if (current < total && !submitAnywhere) {
+            if (current < total) {
                 event.preventDefault();
                 event.stopPropagation();
                 goNext();
@@ -156,6 +263,11 @@
                     validate(step);
                     return;
                 }
+            }
+            if (boardChanged() && !confirmFlag.checked) {
+                event.preventDefault();
+                event.stopPropagation();
+                openConfirm();
             }
         }, true);
 
@@ -174,6 +286,8 @@
                 Array.prototype.slice.call(form.children).forEach(function (child) {
                     if (child.classList && child.classList.contains("errorlist") && errorBox) errorBox.appendChild(child);
                 });
+                // O servidor recusou o envio: a confirmação dada não vale para a próxima tentativa.
+                if (boardExists && form.querySelector(".errorlist")) confirmFlag.checked = false;
                 var lists = panels.map(function (panel) { return panel.querySelector(".errorlist"); });
                 for (var index = 0; index < lists.length; index += 1) {
                     if (lists[index]) {

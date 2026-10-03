@@ -336,6 +336,93 @@ class BoardInstantiationService:
         _audit(user, AuditLog.Action.BOARD_CREATED, board, "board", board, new=board.name, extra={"activity_id": activity.pk})
         return board
 
+    # -- trocar o quadro da Demanda ------------------------------------------------------------------
+
+    @staticmethod
+    def current_choice(board):
+        """`(modo, modelo)` do quadro que a Demanda tem agora: com `source_template` é "Usar quadro existente"; senão, em
+        branco. É o quadro REAL que manda (o campo `Activity.board_setup_mode` pode estar vazio ou velho)."""
+        if board is None:
+            return Activity.BoardSetupMode.BLANK, None
+        if board.source_template_id:
+            return Activity.BoardSetupMode.TEMPLATE, board.source_template
+        return Activity.BoardSetupMode.BLANK, None
+
+    @staticmethod
+    def item_count(board):
+        return BoardItem.objects.filter(board=board, is_active=True).count() if board is not None else 0
+
+    @classmethod
+    def is_replacement(cls, board, template):
+        """A escolha (`template`, ou `None` = em branco) é diferente do quadro atual? Sem quadro não há o que trocar."""
+        if board is None:
+            return False
+        return (board.source_template_id or None) != (getattr(template, "pk", None))
+
+    @staticmethod
+    def _wipe(board):
+        """Apaga de vez o conteúdo do quadro, na ordem que os vínculos protegidos exigem (item -> grupo, célula -> coluna,
+        valor -> etiqueta): itens (levam células e valores), colunas (levam etiquetas), grupos e visões."""
+        BoardItem.objects.filter(board=board).delete()
+        BoardColumn.objects.filter(board=board).delete()
+        BoardGroup.objects.filter(board=board).delete()
+        BoardView.objects.filter(board=board).delete()
+
+    @classmethod
+    @transaction.atomic
+    def replace_for_activity(cls, *, user, activity, template=None, confirmed=False):
+        """Troca o quadro da Demanda por um quadro em branco (`template=None`) ou por uma cópia de um modelo.
+
+        - Demanda sem quadro: cria (sem confirmação, não há o que excluir).
+        - Mesma escolha do quadro atual: não faz nada.
+        - Escolha diferente: exige `confirmed=True` (o navegador já pede; aqui é a rede de segurança) e **exclui
+          definitivamente** as tarefas, colunas, grupos e visões do quadro atual; o novo conteúdo nasce no MESMO `Board`
+          (mesmo endereço). Tudo numa transação: se algo falhar, o quadro antigo continua como estava.
+        Devolve `(quadro, itens_excluídos)`."""
+        activity = Activity.objects.select_for_update().select_related("sector", "owner", "created_by").get(pk=activity.pk)
+        board = Board.objects.select_for_update().filter(activity=activity).first()
+        if board is None:
+            board = cls.create_for_activity(user=user, activity=activity, template=template)
+            cls._remember_choice(activity, template)
+            return board, 0
+        if board.kind != Board.Kind.DEMAND:
+            raise BoardError("A Demanda já possui um quadro incompatível.")
+        if not cls.is_replacement(board, template):
+            return board, 0  # mesma escolha: o modelo de origem pode até ter sido desativado depois, e tudo bem
+        cls._validate_template(activity, template)
+        DemandBoardAccess.require_structure(user, board)
+        if not confirmed:
+            raise BoardError(
+                "Confirme a troca do quadro: as tarefas do quadro atual serão excluídas.", needs_confirmation=True
+            )
+        previous = board.source_template.name if board.source_template_id else "Em branco"
+        items_deleted = cls.item_count(board)
+        cls._wipe(board)
+        board.source_template = template
+        board.description = template.description if template else ""
+        board.save(update_fields=["source_template", "description", "updated_at"])
+        if template is None:
+            cls._ensure_default_schema(board, user)
+            BoardView.objects.create(board=board, name="Kanban", type=BoardView.Type.KANBAN, position=POSITION_STEP, settings={}, created_by=user)
+            BoardView.objects.create(board=board, name="Calendário", type=BoardView.Type.CALENDAR, position=POSITION_STEP * 2, settings={}, created_by=user)
+        else:
+            groups, columns = cls._copy_structure(board, template, user)
+            cls._copy_template_items(board, template, groups, columns, user, activity)
+        cls._remember_choice(activity, template)
+        _audit(
+            user, AuditLog.Action.BOARD_UPDATED, board, "board", board, field="quadro de tarefas",
+            old=previous, new=template.name if template else "Em branco",
+            reason="Quadro da Demanda trocado; as tarefas do quadro anterior foram excluídas.",
+            extra={"activity_id": activity.pk, "items_deleted": items_deleted, "replaced": True},
+        )
+        return board, items_deleted
+
+    @staticmethod
+    def _remember_choice(activity, template):
+        activity.board_setup_mode = Activity.BoardSetupMode.TEMPLATE if template else Activity.BoardSetupMode.BLANK
+        activity.board_template = template
+        activity.save(update_fields=["board_setup_mode", "board_template"])
+
 
 class _RetiredDemandBoardTaskService:
     """Compatibilidade privada temporária para referências importadas antigas.

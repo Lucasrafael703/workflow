@@ -42,6 +42,19 @@ test('every collection uses the same filter submission behavior',()=>{
  dom.window.close();
 });
 
+test('changing the demand sector clears etapa and status before submitting',()=>{
+ const dom=new JSDOM('<form data-activity-filters><select data-auto-submit data-demand-sector-filter><option value="1">Comercial</option></select><select data-auto-submit data-demand-sector-dependent><option value="10" selected>Triagem</option></select><select data-auto-submit data-demand-sector-dependent><option value="20" selected>Aguardando</option></select></form>',{runScripts:'outside-only'});
+ const w=dom.window;let submitted=0;const form=w.document.querySelector('form');
+ form.requestSubmit=()=>submitted++;
+ w.eval(code);
+ const [sector,stage,status]=form.querySelectorAll('select');
+ sector.dispatchEvent(new w.Event('change',{bubbles:true}));
+ assert.equal(stage.value,'');
+ assert.equal(status.value,'');
+ assert.equal(submitted,1);
+ dom.window.close();
+});
+
 test('activity search waits for explicit form submission',async()=>{
  const dom=new JSDOM('<form data-activity-filters><input data-activity-search value=""><button type="submit">Buscar</button></form>',{runScripts:'outside-only'});
  const w=dom.window; let submitted=0;

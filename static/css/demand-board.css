@@ -44,7 +44,7 @@
 }
 
 .demand-board__filters {
-    display: grid; grid-template-columns: minmax(260px, 2.3fr) repeat(3, max-content) repeat(4, minmax(130px, 1fr));
+    display: grid; grid-template-columns: minmax(260px, 2.3fr) repeat(2, max-content) repeat(4, minmax(130px, 1fr));
     gap: 8px; align-items: end; margin: 13px 0 14px; padding: 11px;
     border: 1px solid #dce6ef; border-radius: 8px; background: #fff;
     box-shadow: 0 4px 12px rgba(16, 42, 75, .035);
@@ -75,6 +75,26 @@
 .demand-board__quick-filters .is-blocked { color: #455c76; background: #eaf0f6; }
 .demand-board__quick-filters a:hover,
 .demand-board__quick-filters a.is-active { border-color: currentColor; box-shadow: inset 0 0 0 1px currentColor; }
+.demand-board__people-filter { min-width: 235px; }
+.demand-board__people-filter > span { color: #3d566f; font-size: 11px; font-weight: 750; }
+.demand-board__people-picker { position: relative; }
+.demand-board__people-picker > summary {
+    display: flex; align-items: center; justify-content: space-between; min-height: 39px; padding: 0 10px;
+    border: 1px solid #d7e2ec; border-radius: 6px; color: #344f6b; background: #fff; cursor: pointer;
+    font-size: 12px; list-style: none;
+}
+.demand-board__people-picker > summary::-webkit-details-marker { display: none; }
+.demand-board__people-picker > summary::after { content: "⌄"; margin-left: 10px; color: #58708a; font-size: 17px; line-height: 1; }
+.demand-board__people-picker[open] > summary { border-color: var(--primary); border-radius: 6px 6px 0 0; box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent); }
+.demand-board__people-picker[open] > summary::after { transform: rotate(180deg); }
+.demand-board__people-menu {
+    position: absolute; z-index: 30; top: calc(100% - 1px); right: 0; left: 0; display: grid; max-height: 236px;
+    overflow: auto; padding: 5px; border: 1px solid var(--primary); border-radius: 0 0 6px 6px; background: #fff;
+    box-shadow: 0 10px 20px rgba(16, 42, 75, .14);
+}
+.demand-board__people-menu label { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 7px; border-radius: 4px; color: #344f6b; cursor: pointer; font-size: 12px; font-weight: 600; }
+.demand-board__people-menu label:hover { background: #eff6ff; }
+.demand-board__people-menu input { width: 15px; height: 15px; margin: 0; accent-color: var(--primary); }
 .demand-board__clear { grid-column: 1 / -1; justify-self: end; margin: -1px 2px 0 0; color: var(--primary); font-size: 12px; font-weight: 650; }
 
 .demand-board__table-card { overflow: hidden; border: 1px solid #dce6ef; border-radius: 8px; background: #fff; box-shadow: 0 4px 14px rgba(16, 42, 75, .035); }
@@ -173,13 +193,14 @@
 .demand-board__calendar-empty { grid-column: 1 / -1; padding: 48px 20px; border: 1px dashed #c4d3e2; border-radius: 8px; color: #71839a; text-align: center; }
 
 @media (max-width: 1420px) {
-    .demand-board__filters { grid-template-columns: minmax(260px, 2fr) repeat(3, max-content) repeat(3, minmax(125px, 1fr)); }
-    .demand-board__filters .demand-board__filter-field:last-of-type { grid-column: span 1; }
+    .demand-board__filters { grid-template-columns: minmax(260px, 2fr) repeat(2, max-content) repeat(3, minmax(125px, 1fr)); }
+    .demand-board__people-filter { grid-column: span 2; }
 }
 @media (max-width: 1120px) {
     .demand-board__filters { grid-template-columns: repeat(4, minmax(150px, 1fr)); }
     .demand-board__search { grid-column: span 2; }
     .demand-board__quick-filters { display: contents; }
+    .demand-board__people-filter { grid-column: span 2; }
 }
 @media (max-width: 760px) {
     .demand-board__head { flex-direction: column; align-items: stretch; }
@@ -190,8 +211,8 @@
     .demand-board__search { grid-column: 1 / -1; }
     .demand-board__search-control .btn { padding-inline: 11px; }
     .demand-board__quick-filters a { min-width: 0; padding-inline: 8px; }
-    .demand-board__quick-filters a:last-child { grid-column: 1 / -1; }
     .demand-board__filter-field { grid-column: span 1; }
+    .demand-board__people-filter { grid-column: 1 / -1; }
     .demand-board__kanban { grid-auto-columns: minmax(275px, 84vw); }
 }
 @media (max-width: 460px) {
@@ -324,3 +345,31 @@
 .activity-inline-swatch:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
 .activity-inline-swatch[aria-checked="true"] { border-color: #fff; box-shadow: 0 0 0 2px #163252; }
 .activity-inline-preview { display: block; padding: 7px 10px; border-radius: 4px; font-size: 12.5px; font-weight: 650; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* O Kanban de Demandas usa o mesmo motor de cartões dos Quadros, mantendo a
+   moldura, filtros e responsividade próprios da área de Demandas. */
+.demand-board__head-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.demand-board__kanban { display: block; min-height: 0; overflow: visible; padding: 1px 0 10px; }
+.demand-board__kanban .work-kanban { min-height: 536px; }
+.demand-board__kanban .work-kanban__lane { min-width: 245px; }
+.work-kanban__lane { display: flex; flex-direction: column; }
+.work-kanban__add { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 38px; margin-top: auto; padding: 8px; border: 1px dashed #a9cae9; border-radius: 6px; color: #1266c3; font-size: 11.5px; font-weight: 650; text-decoration: none; }
+.work-kanban__add:hover { border-style: solid; color: #0759b4; background: #f0f8ff; }
+.work-kanban__cards.is-drop-target { outline: 2px dashed var(--primary); outline-offset: 3px; border-radius: 6px; }
+.work-card.is-dragging { opacity: .45; }
+.work-card.is-saving { cursor: wait; opacity: .68; }
+.work-card__field--value-only { justify-content: flex-start; }
+.work-card-settings__options { display: grid; gap: 7px; margin: 0; padding: 9px; border: 1px solid var(--border); border-radius: 7px; }
+.work-card-settings__options legend { padding: 0 4px; color: var(--text-2); font-size: 12px; font-weight: 700; }
+.work-card-settings__hint { margin: 2px 0 0; color: var(--text-2); font-size: 12px; }
+.work-card-settings__fields { display: grid; max-height: 300px; overflow: auto; border: 1px solid var(--border); border-radius: 7px; }
+.work-card-settings__field { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.work-card-settings__field:last-child { border-bottom: 0; }
+.work-card-settings__field label { min-width: 0; }
+.work-card-settings__move { display: inline-flex; gap: 2px; }
+.work-card-settings__move .icon-button { width: 26px; height: 26px; }
+@media (max-width: 760px) {
+    .demand-board__head-actions { justify-content: stretch; }
+    .demand-board__head-actions .btn { flex: 1 1 auto; justify-content: center; }
+    .demand-board__kanban .work-kanban { grid-auto-columns: minmax(275px, 84vw); }
+}

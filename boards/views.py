@@ -384,7 +384,7 @@ class DemandTaskBoardView(BoardDetailView):
         board_id = _int_or_none(self.request.GET.get("demanda"))
         selected = next((entry for entry in boards if entry.activity_id == board_id), None)
         if board_id is not None and selected is None:
-            raise Http404("Demanda nÃ£o encontrada.")
+            raise Http404("Demanda não encontrada.")
 
         if selected is None:
             context = TemplateView.get_context_data(self, **kwargs)

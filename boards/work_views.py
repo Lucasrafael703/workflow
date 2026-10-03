@@ -3,6 +3,7 @@
 import json
 from collections import OrderedDict
 
+from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Q
 from django.http import JsonResponse
@@ -17,7 +18,7 @@ from acessos.services import AuthorizationService
 from activities.models import Activity, Task
 from core.colors import EnumColorResolver
 from core.mixins import OrganizationRequiredMixin
-from core.models import ActivityStage, Sector
+from core.models import ActivityStage, Sector, TaskStage, WorkflowStatus
 
 from .domain_defaults import ensure_domain_board
 from .domain_services import DomainBoardConflict, DomainBoardError, DomainBoardMutationService, build_cells
@@ -86,10 +87,21 @@ class DomainWorkBoardView(OrganizationRequiredMixin, TemplateView):
         return [item for item in items if access[(action, item.pk)]]
 
     @staticmethod
-    def _group_items(items, group_by, organization):
+    def _group_items(items, group_by, organization, *, domain=None, show_empty=False, sector_id=None):
+        """Agrupa os registros e, no Kanban, mantém as raias do fluxo visíveis.
+
+        O Kanban dos Quadros sempre mostra as etiquetas/raias vazias quando a
+        visualização pede isso. A tela de Demandas precisa seguir a mesma
+        regra: esconder uma etapa vazia faz o fluxo parecer incompleto e tira
+        o destino do arrastar-e-soltar.
+        """
         groups = OrderedDict()
         demand_priorities = EnumColorResolver(organization, "activity_urgency")
         task_priorities = EnumColorResolver(organization, "task_priority")
+
+        def add_group(key, label, color):
+            return groups.setdefault(key, {"key": key, "label": label, "color": color, "items": []})
+
         for item in items:
             value = getattr(item, group_by, None) if group_by else None
             if group_by == "urgency" and isinstance(item, Activity):
@@ -106,12 +118,77 @@ class DomainWorkBoardView(OrganizationRequiredMixin, TemplateView):
                 color = "#E2E8F0"
             else:
                 key = getattr(value, "pk", None) or "empty"
-                label = getattr(value, "name", None) or "Sem valor"
+                blank_labels = {
+                    "stage": "Sem estágio",
+                    "condition": "Sem status",
+                    "sector": "Sem setor",
+                    "owner": "Sem responsável",
+                    "responsavel": "Sem responsável",
+                }
+                label = getattr(value, "name", None) or blank_labels.get(group_by, "Sem valor")
                 color = getattr(value, "color", "#E2E8F0")
-            if key not in groups:
-                groups[key] = {"key": key, "label": label, "color": color, "items": []}
-            groups[key]["items"].append(item)
-        return list(groups.values())
+            add_group(key, label, color)["items"].append(item)
+
+        # As raias têm uma ordem própria, independente de qual cartão aparece
+        # primeiro no resultado da busca. Isso é especialmente importante ao
+        # ordenar os cartões por prazo.
+        ordered_keys = []
+        if group_by in {"stage", "condition"}:
+            if show_empty or "empty" in groups:
+                add_group("empty", "Sem estágio" if group_by == "stage" else "Sem status", "#94A3B8")
+                ordered_keys.append("empty")
+            if group_by == "stage":
+                model = ActivityStage if domain == DomainBoard.Domain.DEMAND else TaskStage
+                choices = model.objects.filter(organization=organization, is_active=True)
+            else:
+                condition_domain = (
+                    WorkflowStatus.Domain.ACTIVITY
+                    if domain == DomainBoard.Domain.DEMAND
+                    else WorkflowStatus.Domain.TASK
+                )
+                choices = WorkflowStatus.objects.filter(
+                    organization=organization, domain=condition_domain, is_active=True
+                )
+            if sector_id:
+                choices = choices.filter(sector_id=sector_id)
+            for choice in choices.order_by("order", "name", "pk"):
+                if show_empty or choice.pk in groups:
+                    add_group(choice.pk, choice.name, choice.color)
+                    ordered_keys.append(choice.pk)
+        elif group_by == "sector":
+            if show_empty or "empty" in groups:
+                add_group("empty", "Sem setor", "#94A3B8")
+                ordered_keys.append("empty")
+            for sector in Sector.objects.filter(organization=organization, is_active=True).order_by("name", "pk"):
+                if show_empty or sector.pk in groups:
+                    add_group(sector.pk, sector.name, getattr(sector, "color", "#E2E8F0"))
+                    ordered_keys.append(sector.pk)
+        elif group_by in {"owner", "responsavel"}:
+            if show_empty or "empty" in groups:
+                add_group("empty", "Sem responsável", "#E2E8F0")
+                ordered_keys.append("empty")
+            if show_empty:
+                User = get_user_model()
+                for person in User.objects.filter(
+                    profile__organization=organization, is_active=True
+                ).order_by("first_name", "last_name", "username", "pk"):
+                    add_group(person.pk, person.get_full_name() or person.get_username(), "#E2E8F0")
+                    ordered_keys.append(person.pk)
+        elif group_by in {"urgency", "priority"}:
+            if show_empty or "empty" in groups:
+                add_group("empty", "Sem prioridade", "#E2E8F0")
+                ordered_keys.append("empty")
+            choices = Activity.Urgency.choices if group_by == "urgency" else Task.Priority.choices
+            resolver = demand_priorities if group_by == "urgency" else task_priorities
+            for code, default_label in choices:
+                if show_empty or code in groups:
+                    add_group(code, resolver.label_for(code, default_label), resolver.color_for(code))
+                    ordered_keys.append(code)
+
+        # Valores antigos/inativos ainda não podem desaparecer só porque não
+        # pertencem mais ao catálogo ativo. Deixamo-los ao fim para correção.
+        ordered_keys.extend(key for key in groups if key not in ordered_keys)
+        return [groups[key] for key in ordered_keys]
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -127,20 +204,59 @@ class DomainWorkBoardView(OrganizationRequiredMixin, TemplateView):
             fields = [card_field.field for card_field in view.card_fields.all() if card_field.is_visible]
         if not fields:
             fields = list(board.fields.filter(is_active=True))
+        all_fields = list(board.fields.filter(is_active=True))
+        visible_card_fields = [card_field.field for card_field in view.card_fields.all() if card_field.is_visible]
+        card_settings_fields = visible_card_fields + [
+            field for field in all_fields if field.pk not in {visible.pk for visible in visible_card_fields}
+        ]
         items = build_cells(self.get_items(), fields, self.organization)
         group_by = (view.settings or {}).get("group_by", "stage")
         group_field = board.fields.filter(key=group_by, is_active=True).first()
+        move_actions = {
+            DomainBoard.Domain.DEMAND: {
+                "stage": catalog.ATIVIDADE_MOVER_ESTAGIO,
+                "condition": catalog.ATIVIDADE_DEFINIR_CONDICAO,
+                "sector": catalog.ATIVIDADE_EDITAR,
+                "owner": catalog.ATIVIDADE_ALTERAR_DONO,
+                "urgency": catalog.ATIVIDADE_EDITAR,
+            },
+            DomainBoard.Domain.TASK: {
+                "stage": catalog.TAREFA_MOVER_ESTAGIO,
+                "sector": catalog.TAREFA_MOVER_SETOR,
+                "responsavel": catalog.TAREFA_ALTERAR_RESPONSAVEL,
+                "priority": catalog.TAREFA_EDITAR,
+            },
+        }
+        move_action = move_actions.get(self.domain, {}).get(group_by)
+        if view.type == DomainBoardView.Type.KANBAN and move_action:
+            can_move = AuthorizationService.can_many(
+                self.request.user, [(move_action, item) for item in items]
+            )
+            for item in items:
+                item.can_move_kanban = can_move[(move_action, item.pk)]
+        else:
+            for item in items:
+                item.can_move_kanban = False
         context.update(
             nav_active="activities" if self.domain == DomainBoard.Domain.DEMAND else "tasks",
             board=board,
             work_view=view,
             work_views=board.views.filter(is_active=True),
             fields=fields,
-            all_fields=list(board.fields.filter(is_active=True)),
+            all_fields=all_fields,
+            card_settings_fields=card_settings_fields,
             items=items,
-            groups=self._group_items(items, group_by, self.organization),
+            groups=self._group_items(
+                items,
+                group_by,
+                self.organization,
+                domain=self.domain,
+                show_empty=bool((view.settings or {}).get("show_empty", False)),
+                sector_id=self.request.GET.get("setor") or self.request.GET.get("sector") or self.request.GET.get("grupo"),
+            ),
             group_by=group_by,
             group_field=group_field,
+            show_field_names=bool((view.settings or {}).get("show_field_names", True)),
             can_create=AuthorizationService.can(
                 self.request.user,
                 catalog.ATIVIDADE_CRIAR if self.domain == DomainBoard.Domain.DEMAND else catalog.TAREFA_CRIAR,
@@ -215,6 +331,7 @@ class DemandWorkBoardView(DomainWorkBoardView):
             build_filter_toolbar_state,
             visual_filter_choice_groups,
         )
+        from activities.filtering import canonical_filter_querystring
 
         mode_by_type = {
             DomainBoardView.Type.TABLE: "lista",
@@ -230,40 +347,37 @@ class DemandWorkBoardView(DomainWorkBoardView):
             self.organization, "demanda", selected_sector
         )
 
-        # Links de troca de visualização nunca levam um id de visualização
-        # anterior junto. A rota escolhida é que determina Lista/Kanban/Calendário.
-        switch_params = self.request.GET.copy()
-        for name in ("view", "visao", "page", "ano", "mes"):
-            switch_params.pop(name, None)
-
         context.update(activity_filter_context(self.request, self.organization))
         url_name_by_mode = {
             "lista": "activity-list",
             "kanban": "activity-kanban",
             "calendario": "activity-calendar",
         }
+        filter_state = build_filter_toolbar_state(
+            self.request,
+            self.organization,
+            domain="demanda",
+            view_mode=view_mode,
+            sectors=sectors,
+            stage_groups=stage_groups,
+            condition_groups=condition_groups,
+            orderings=[
+                ("prazo", "Prazo mais próximo"),
+                ("recentes", "Mais recentes"),
+                ("titulo", "Demanda (A-Z)"),
+            ],
+        )
         context.update(
             view_mode=view_mode,
-            filter_querystring=switch_params.urlencode(),
+            # As abas sempre usam a URL canônica: elimina parâmetros de
+            # visualização/paginação e também transforma o alias legado
+            # ``responsavel`` em ``pessoa`` (inclusive quando repetido).
+            filter_querystring=canonical_filter_querystring(self.request),
             sectors=sectors,
             stage_choice_groups=stage_groups,
             condition_choice_groups=condition_groups,
-            filter_state=build_filter_toolbar_state(
-                self.request,
-                self.organization,
-                domain="demanda",
-                view_mode=view_mode,
-                sectors=sectors,
-                stage_groups=stage_groups,
-                condition_groups=condition_groups,
-                orderings=[
-                    ("prazo", "Prazo mais próximo"),
-                    ("recentes", "Mais recentes"),
-                    ("titulo", "Demanda (A-Z)"),
-                ],
-            ),
-            demand_lanes=self._lanes(context["activities"]),
-            clear_filters_url=f"{reverse(url_name_by_mode[view_mode])}?tab={context['tab']}",
+            filter_state=filter_state,
+            clear_filters_url=f"{reverse(url_name_by_mode[view_mode])}{filter_state['clear_url']}",
         )
         if view_mode == "lista":
             # Edição inline da tabela: o que cada linha mostra como editável (uma consulta de autorização para a
@@ -409,12 +523,14 @@ class WorkBoardViewSettingsView(OrganizationRequiredMixin, View):
         settings = dict(view.settings or {})
         group_by = data.get("group_by")
         if group_by:
-            allowed = {"stage", "sector", "owner", "responsavel", "urgency", "priority"}
+            allowed = {"stage", "condition", "sector", "owner", "responsavel", "urgency", "priority"}
             if group_by not in allowed or not view.board.fields.filter(key=group_by, is_active=True).exists():
                 return JsonResponse({"success": False, "message": "Campo de agrupamento inválido.", "errors": {}}, status=400)
             settings["group_by"] = group_by
         if "show_empty" in data:
             settings["show_empty"] = bool(data["show_empty"])
+        if "show_field_names" in data:
+            settings["show_field_names"] = bool(data["show_field_names"])
         view.settings = settings
         view.save(update_fields=["settings", "updated_at"])
         return JsonResponse({"success": True, "message": "Visualização atualizada.", "errors": {}})

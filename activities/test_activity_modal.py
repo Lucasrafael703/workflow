@@ -1,4 +1,4 @@
-"""Nova atividade e Editar atividade: uma janela só, em três etapas.
+"""Nova demanda e Editar demanda: a MESMA janela, em quatro etapas.
 
     1. Informações principais   2. Cliente e obra   3. Quadro de tarefas   4. Descrição e arquivos
 
@@ -14,7 +14,9 @@ from django.urls import reverse
 from django.utils import timezone
 
 from acessos import catalog
-from acessos.testing import grant_action
+from acessos.testing import grant_action, grant_actions
+from audit.models import AuditLog
+from boards.models import Board, BoardItem
 from core.models import Client, Company, CostCenter, Sector, Site
 from core.sanitize import sanitize_description
 from core.widgets import CompanyPickerWidget, PersonPickerWidget, RichTextWidget, SitePickerWidget
@@ -94,13 +96,15 @@ class StructureTests(ModalTestCase):
         self.assertNotIn('type="file"', html)
         self.assertNotIn("Arraste", html)
 
-    def test_editing_has_no_board_step(self):
+    def test_editing_has_the_same_four_steps_including_the_board(self):
         grant_action(self.requester, catalog.ATIVIDADE_EDITAR, organization=self.org)
         response = self.client.get(reverse("activity-edit", args=[self.activity.pk]))
         html = response.content.decode()
-        self.assertEqual(html.count("data-step-panel="), 3)
-        self.assertNotIn("Como deseja organizar as tarefas?", html)
-        self.assertEqual([step["number"] for step in response.context["form"].steps], [1, 2, 3])
+        self.assertEqual(html.count("data-step-panel="), 4)
+        self.assertEqual(html.count("data-step-indicator="), 4)
+        self.assertIn("Como deseja organizar as tarefas?", html)
+        self.assertEqual([step["number"] for step in response.context["form"].steps], [1, 2, 3, 4])
+        self.assertEqual([step["key"] for step in response.context["form"].steps], [1, 2, 3, 4])
 
     def test_header_and_footer(self):
         html = self.html()
@@ -193,7 +197,9 @@ class StructureTests(ModalTestCase):
         create_html, edit_html = create.content.decode(), edit.content.decode()
         for name in ("Informações principais", "Cliente e obra", "Descrição e arquivos", "Link / caminho dos arquivos"):
             self.assertIn(name, edit_html)
-        self.assertEqual(create_html.count("data-step-panel="), edit_html.count("data-step-panel=") + 1)  # o quadro só existe ao criar
+        self.assertEqual(create_html.count("data-step-panel="), edit_html.count("data-step-panel="))  # criar e editar: as mesmas etapas
+        for name in ("Quadro de tarefas", "Como deseja organizar as tarefas?", "Começar em branco", "Usar quadro existente"):
+            self.assertIn(name, edit_html)
         self.assertIn("Editar demanda", edit_html)
         self.assertIn("Atualize as informações da demanda.", edit_html)
         self.assertIn("Salvar alterações", edit_html)
@@ -464,12 +470,13 @@ class OpenAtStepTests(ModalTestCase):
         self.assertEqual(response.context["initial_step"], 2)
         self.assertIn('data-initial-step="2"', response.content.decode())
         self.assertEqual(self.client.get(self.edit_url, {"passo": "3"}).context["initial_step"], 3)
+        self.assertEqual(self.client.get(self.edit_url, {"passo": "4"}).context["initial_step"], 4)  # o quadro é a etapa 3 e há uma 4
 
     def test_the_default_is_still_the_first_step(self):
         self.assertEqual(self.client.get(self.edit_url).context["initial_step"], 1)
 
     def test_invalid_values_fall_back_to_the_first_step(self):
-        for value in ("0", "4", "9", "-1", "abc", "", "2.5", "2 OR 1=1"):
+        for value in ("0", "5", "9", "-1", "abc", "", "2.5", "2 OR 1=1"):
             response = self.client.get(self.edit_url, {"passo": value})
             self.assertEqual(response.status_code, 200, value)
             self.assertEqual(response.context["initial_step"], 1, value)
@@ -499,13 +506,16 @@ class OpenAtStepTests(ModalTestCase):
         self.assertEqual((self.activity.client_id, self.activity.site_id, self.activity.cost_center_id),
                          (self.cliente.pk, self.obra.pk, self.centro.pk))
 
-    def test_editing_offers_save_on_every_step_and_creating_does_not(self):
+    def test_editing_and_creating_have_the_same_buttons(self):
+        """Continuar em todas as etapas e o botão final só na última (o JavaScript decide); nada de "salvar em qualquer etapa"."""
         edit_html = self.client.get(self.edit_url).content.decode()
-        self.assertIn(" data-submit-anywhere", edit_html)
-        self.assertRegex(edit_html, r'activity-btn-secondary" data-step-next hidden')  # um só botão primário por etapa
         create_html = self.client.get(reverse("activity-create")).content.decode()
-        self.assertNotIn("data-submit-anywhere", create_html)
-        self.assertRegex(create_html, r'activity-btn-primary" data-step-next hidden')
+        for html in (edit_html, create_html):
+            self.assertNotIn("data-submit-anywhere", html)
+            self.assertRegex(html, r'activity-btn-primary" data-step-next hidden')
+            self.assertEqual(html.count("data-step-submit"), 1)
+        self.assertIn("Salvar alterações", edit_html)
+        self.assertIn("Criar demanda", create_html)
 
 
 class DependentSearchTests(ModalTestCase):
@@ -582,3 +592,231 @@ class WidgetTests(ModalTestCase):
         html = self.client.get(reverse("activity-edit", args=[self.activity.pk])).content.decode()
         self.assertIn('value="2026-10-05"', html)
         self.assertIn('value="16:00"', html)
+
+
+class EditBoardSwapTests(ModalTestCase):
+    """Editar demanda: o passo 3 mostra o quadro real e deixa trocá-lo; trocar exclui as tarefas do quadro atual."""
+
+    def setUp(self):
+        super().setUp()
+        grant_actions(self.requester, [catalog.ATIVIDADE_EDITAR, catalog.QUADRO_CRIAR, catalog.QUADRO_CRIAR_ITEM], organization=self.org)
+        self.edit_url = reverse("activity-edit", args=[self.activity.pk])
+        self.board = self.activity.task_board
+
+    def add_items(self, board, *names):
+        group = board.groups.filter(is_active=True).first()
+        return [
+            BoardItem.objects.create(
+                board=board, group=group, name=name, position=(index + 1) * 1000, created_by=self.requester, updated_by=self.requester
+            )
+            for index, name in enumerate(names)
+        ]
+
+    def make_template(self, name="Modelo", *items):
+        from boards.services import BoardService, ItemService
+
+        template = BoardService.create(user=self.requester, organization=self.org, name=name, sector=self.sector)
+        for item in items:
+            ItemService.create(user=self.requester, board=template, group=template.groups.get(), name=item)
+        return template
+
+    def submit(self, extra=None, **changes):
+        data = self.payload(**changes)
+        data.update(extra or {})
+        return self.client.post(self.edit_url, data, **AJAX)
+
+    def live_items(self, board=None):
+        return BoardItem.objects.filter(board=board or self.board, is_active=True).count()
+
+    # -- o passo mostra o quadro de verdade ------------------------------------------------------
+
+    def test_the_step_shows_the_current_blank_board_and_its_task_count(self):
+        self.add_items(self.board, "A", "B")
+        response = self.client.get(self.edit_url)
+        html = response.content.decode()
+        form = response.context["form"]
+        self.assertEqual((form["board_setup_mode"].value(), form["board_template"].value()), ("BLANK", None))
+        self.assertIn('data-board-exists="1"', html)
+        self.assertIn('data-board-mode="BLANK"', html)
+        self.assertIn('data-board-template=""', html)
+        self.assertIn('data-board-items="2"', html)
+        self.assertIn("Quadro atual:", html)
+        self.assertIn("criado em branco · 2 tarefas", html)
+        self.assertIn("data-board-change-warning", html)
+        self.assertIn("Trocar o quadro exclui as tarefas do quadro atual.", html)
+
+    def test_the_step_shows_the_template_the_board_came_from_not_the_stale_activity_field(self):
+        template = self.make_template("Modelo de obra", "Visitar")
+        self.assertEqual(self.submit({"board_setup_mode": "TEMPLATE", "board_template": template.pk, "confirm_board_replace": "1"}).status_code, 200)
+        Activity.objects.filter(pk=self.activity.pk).update(board_setup_mode="", board_template=None)  # campo velho/vazio
+        response = self.client.get(self.edit_url)
+        html = response.content.decode()
+        form = response.context["form"]
+        self.assertEqual((form["board_setup_mode"].value(), form["board_template"].value()), ("TEMPLATE", template.pk))
+        self.assertIn('data-board-mode="TEMPLATE"', html)
+        self.assertIn(f'data-board-template="{template.pk}"', html)
+        self.assertIn("a partir do modelo “Modelo de obra”", html)
+        self.assertIn("1 tarefa", html)
+        self.assertNotIn("1 tarefas", html)
+
+    def test_the_confirmation_dialog_exists_only_when_editing(self):
+        edit_html = self.client.get(self.edit_url).content.decode()
+        create_html = self.client.get(reverse("activity-create")).content.decode()
+        for marker in ("data-board-confirm", 'role="alertdialog"', "Trocar o quadro de tarefas?", "Trocar quadro e excluir tarefas", "data-board-confirm-cancel", 'name="confirm_board_replace"'):
+            self.assertIn(marker, edit_html, msg=marker)
+            self.assertNotIn(marker, create_html, msg=marker)
+
+    def test_the_dialog_is_not_there_for_who_cannot_swap_the_board(self):
+        html = self.stranger_edit_html()
+        self.assertNotIn("data-board-confirm", html)
+        self.assertNotIn("data-board-exists", html)
+        self.assertNotIn('name="confirm_board_replace"', html)
+
+    # -- regras da troca -------------------------------------------------------------------------
+
+    def test_the_same_choice_saves_the_other_fields_without_asking_and_keeps_the_board(self):
+        self.add_items(self.board, "A", "B")
+        response = self.submit({"board_setup_mode": "BLANK"}, title="Título novo")
+        self.assertEqual(response.status_code, 200)
+        self.activity.refresh_from_db()
+        self.assertEqual(self.activity.title, "Título novo")
+        self.assertEqual(self.activity.task_board.pk, self.board.pk)
+        self.assertEqual(self.live_items(), 2)
+        self.assertFalse(AuditLog.objects.filter(action=AuditLog.Action.BOARD_UPDATED, target_type="board", target_id=self.board.pk).exists())
+
+    def test_a_different_choice_without_confirmation_is_an_error_on_step_three_and_changes_nothing(self):
+        self.add_items(self.board, "A", "B")
+        template = self.make_template("Modelo", "X")
+        for confirm in ({}, {"confirm_board_replace": ""}, {"confirm_board_replace": "false"}, {"confirm_board_replace": "0"}):
+            response = self.submit({"board_setup_mode": "TEMPLATE", "board_template": template.pk, **confirm}, title="Não pode gravar")
+            self.assertEqual(response.status_code, 400, confirm)
+            self.assertIn("board_setup_mode", response.json()["errors"], confirm)
+            self.assertIn("Confirme a troca do quadro", json.dumps(response.json()["errors"], ensure_ascii=False))
+        self.activity.refresh_from_db()
+        self.assertNotEqual(self.activity.title, "Não pode gravar")  # nada foi gravado, nem os outros campos
+        self.assertEqual(self.live_items(), 2)
+        self.assertIsNone(Board.objects.get(pk=self.board.pk).source_template_id)
+        html = self.client.post(self.edit_url, self.payload(board_setup_mode="TEMPLATE", board_template=template.pk)).content.decode()
+        self.assertIn('data-initial-step="3"', html)
+
+    def test_a_blank_choice_from_a_template_board_also_needs_confirmation(self):
+        template = self.make_template("Modelo", "X")
+        self.submit({"board_setup_mode": "TEMPLATE", "board_template": template.pk, "confirm_board_replace": "1"})
+        response = self.submit({"board_setup_mode": "BLANK"})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Board.objects.get(pk=self.board.pk).source_template_id, template.pk)
+        self.assertEqual(self.submit({"board_setup_mode": "BLANK", "confirm_board_replace": "1"}).status_code, 200)
+        self.assertIsNone(Board.objects.get(pk=self.board.pk).source_template_id)
+
+    def test_confirmed_choice_replaces_the_board_in_the_same_address_and_saves_the_other_edits(self):
+        self.add_items(self.board, "A", "B", "C")
+        old_columns = set(self.board.columns.values_list("pk", flat=True))
+        template = self.make_template("Modelo", "Visitar", "Orçar")
+        response = self.submit({"board_setup_mode": "TEMPLATE", "board_template": template.pk, "confirm_board_replace": "1"}, title="Renomeada")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(list(response.json()), ["redirect_url"])
+        self.activity.refresh_from_db()
+        board = self.activity.task_board
+        self.assertEqual(board.pk, self.board.pk)  # mesmo quadro, mesmo endereço
+        self.assertEqual(self.activity.title, "Renomeada")
+        self.assertEqual(self.activity.board_setup_mode, "TEMPLATE")
+        self.assertEqual(self.activity.board_template_id, template.pk)
+        self.assertEqual(sorted(board.items.filter(is_active=True).values_list("name", flat=True)), ["Orçar", "Visitar"])
+        self.assertFalse(set(board.columns.values_list("pk", flat=True)) & old_columns)
+        entry = AuditLog.objects.filter(action=AuditLog.Action.BOARD_UPDATED, target_type="board", target_id=board.pk).latest("pk")
+        self.assertEqual((entry.metadata["items_deleted"], entry.new_value, entry.user_id), (3, "Modelo", self.requester.pk))
+
+    def test_omitting_the_board_fields_never_replaces_the_board(self):
+        template = self.make_template("Modelo", "X")
+        self.submit({"board_setup_mode": "TEMPLATE", "board_template": template.pk, "confirm_board_replace": "1"})
+        data = self.payload(title="Sem escolha de quadro")
+        self.assertNotIn("board_setup_mode", data)
+        response = self.client.post(self.edit_url, data, **AJAX)
+        self.assertEqual(response.status_code, 200)
+        self.activity.refresh_from_db()
+        self.assertEqual(self.activity.title, "Sem escolha de quadro")
+        board = self.activity.task_board
+        self.assertEqual((board.pk, board.source_template_id, self.live_items(board)), (self.board.pk, template.pk, 1))
+
+    def test_inactive_and_foreign_templates_are_refused_and_nothing_is_deleted(self):
+        self.add_items(self.board, "A")
+        inactive = self.make_template("Inativo", "X")
+        Board.objects.filter(pk=inactive.pk).update(is_active=False)
+        foreign = Board.objects.create(organization=self.other_org, name="De fora", kind=Board.Kind.TEMPLATE, created_by=self.requester)
+        for template in (inactive, foreign):
+            response = self.submit({"board_setup_mode": "TEMPLATE", "board_template": template.pk, "confirm_board_replace": "1"})
+            self.assertEqual(response.status_code, 400)
+        self.assertEqual(self.live_items(), 1)
+
+    def test_a_board_failure_rolls_back_the_other_edits(self):
+        from boards.services import BoardError
+
+        self.add_items(self.board, "A")
+        template = self.make_template("Modelo", "X")
+        with mock.patch("boards.demand_services.BoardInstantiationService.replace_for_activity", side_effect=BoardError("O quadro não pôde ser montado.")):
+            response = self.submit({"board_setup_mode": "TEMPLATE", "board_template": template.pk, "confirm_board_replace": "1"}, title="Não deve ficar")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("não pôde ser montado", json.dumps(response.json()["errors"], ensure_ascii=False))
+        self.activity.refresh_from_db()
+        self.assertNotEqual(self.activity.title, "Não deve ficar")  # a edição e a troca valem juntas ou nada
+        self.assertEqual(self.live_items(), 1)
+
+    def test_a_demand_without_a_board_creates_it_without_confirmation(self):
+        Board.objects.filter(activity=self.activity).delete()
+        html = self.client.get(self.edit_url).content.decode()
+        self.assertIn("ainda não tem quadro de tarefas", html)
+        self.assertNotIn("data-board-exists", html)  # nada a excluir: o diálogo nunca aparece
+        template = self.make_template("Modelo", "Visitar")
+        response = self.submit({"board_setup_mode": "TEMPLATE", "board_template": template.pk})
+        self.assertEqual(response.status_code, 200)
+        board = Board.objects.get(activity=self.activity)
+        self.assertEqual((board.source_template_id, self.live_items(board)), (template.pk, 1))
+
+    # -- quem pode trocar ------------------------------------------------------------------------
+
+    def stranger_edit_html(self):
+        """Quem edita a demanda mas não é o responsável, nem quem a criou, nem gerencia quadros."""
+        grant_action(self.member, catalog.ATIVIDADE_EDITAR, organization=self.org)
+        grant_action(self.member, catalog.ATIVIDADE_VISUALIZAR_TODAS, organization=self.org)
+        self.client.force_login(self.member)
+        response = self.client.get(self.edit_url)
+        self.assertEqual(response.status_code, 200)
+        return response.content.decode()
+
+    def test_without_permission_to_manage_the_board_step_three_is_read_only(self):
+        html = self.stranger_edit_html()
+        panel3 = html[html.index('data-step-panel="3"'): html.index('data-step-panel="4"')]
+        self.assertIn("Só o responsável, quem criou a demanda ou quem gerencia quadros pode trocar o quadro.", panel3)
+        self.assertNotIn("data-board-change-warning", panel3)
+        self.assertEqual(panel3.count("disabled"), 3)  # os dois cartões e o seletor de modelo
+
+    def test_a_forged_request_from_who_cannot_manage_the_board_does_not_touch_it(self):
+        self.add_items(self.board, "A", "B")
+        template = self.make_template("Modelo", "X")
+        self.stranger_edit_html()
+        response = self.submit({"board_setup_mode": "TEMPLATE", "board_template": template.pk, "confirm_board_replace": "1"}, title="Pelo membro")
+        self.assertEqual(response.status_code, 200)  # as outras edições valem
+        self.activity.refresh_from_db()
+        self.assertEqual(self.activity.title, "Pelo membro")
+        board = self.activity.task_board
+        self.assertEqual((board.pk, board.source_template_id, self.live_items(board)), (self.board.pk, None, 2))
+
+    def test_a_user_who_manages_boards_can_swap_without_owning_the_demand(self):
+        self.add_items(self.board, "A")
+        template = self.make_template("Modelo", "X")
+        grant_actions(self.member, [catalog.ATIVIDADE_EDITAR, catalog.ATIVIDADE_VISUALIZAR_TODAS, catalog.QUADRO_GERIR_COLUNAS], organization=self.org)
+        self.client.force_login(self.member)
+        html = self.client.get(self.edit_url).content.decode()
+        self.assertIn("data-board-confirm", html)
+        response = self.submit({"board_setup_mode": "TEMPLATE", "board_template": template.pk, "confirm_board_replace": "1"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Board.objects.get(activity=self.activity).source_template_id, template.pk)
+
+    def test_another_organization_cannot_even_open_the_editor(self):
+        self.client.force_login(self.outsider)
+        self.assertEqual(self.client.get(self.edit_url).status_code, 404)
+        template = self.make_template("Modelo", "X")
+        self.add_items(self.board, "A")
+        response = self.client.post(self.edit_url, self.payload(board_setup_mode="TEMPLATE", board_template=template.pk, confirm_board_replace="1"), **AJAX)
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(self.live_items(), 1)

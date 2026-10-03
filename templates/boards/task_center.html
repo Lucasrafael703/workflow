@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% load lps lps_board static %}
+{% block title %}Tarefas — LPS{% endblock %}
+
+{% comment %}
+Painel Tarefas: o que está DENTRO dos Quadros de Demanda em que a pessoa é responsável. Só leitura (a conta é feita em
+boards/task_center.py); "Abrir quadro" leva ao Quadro real da Demanda; "+ Adicionar" cria o item pelo endpoint do quadro.
+{% endcomment %}
+
+{% block content %}
+<section class="task-center" data-task-center aria-labelledby="task-center-title">
+    <header class="task-center__head">
+        <h1 id="task-center-title">Tarefas</h1>
+        <p>Veja o que está nos quadros em que você é responsável e abra o quadro da demanda quando precisar organizar o trabalho.</p>
+    </header>
+
+    <div class="stat-grid task-center__summary" aria-label="Resumo das tarefas">
+        <a class="stat-card" href="{% querystring prazo='overdue' status=None page=None %}">
+            <div class="stat-card__icon stat-card__icon--danger">{% include "_icon.html" with name="alert" %}</div>
+            <div class="value">{{ summary.overdue }}</div><div class="label">Atrasadas</div><div class="hint">Prazo anterior a hoje</div>
+        </a>
+        <a class="stat-card" href="{% querystring prazo='today' status=None page=None %}">
+            <div class="stat-card__icon stat-card__icon--warning">{% include "_icon.html" with name="clock" %}</div>
+            <div class="value">{{ summary.due_today }}</div><div class="label">Vencem hoje</div><div class="hint">Prazo é hoje</div>
+        </a>
+        <a class="stat-card" href="{% querystring status='doing' prazo=None page=None %}">
+            <div class="stat-card__icon stat-card__icon--info">{% include "_icon.html" with name="task" %}</div>
+            <div class="value">{{ summary.doing }}</div><div class="label">Em andamento</div><div class="hint">Já iniciadas</div>
+        </a>
+        <a class="stat-card" href="{% url 'notification-list' %}?filter=mencoes">
+            <div class="stat-card__icon stat-card__icon--primary">{% include "_icon.html" with name="at" %}</div>
+            <div class="value">{{ summary.mentions }}</div><div class="label">Menções</div><div class="hint">Não lidas</div>
+        </a>
+    </div>
+
+    <nav class="task-center__tabs" aria-label="Como visualizar as tarefas">
+        <a href="{% url 'task-list' %}{% if filter_querystring %}?{{ filter_querystring }}{% endif %}" class="{% if view_mode == 'list' %}is-active{% endif %}"{% if view_mode == 'list' %} aria-current="page"{% endif %}>{% include "_icon.html" with name="menu" %} Lista</a>
+        <a href="{% url 'task-kanban' %}{% if filter_querystring %}?{{ filter_querystring }}{% endif %}" class="{% if view_mode == 'kanban' %}is-active{% endif %}"{% if view_mode == 'kanban' %} aria-current="page"{% endif %}>{% include "_icon.html" with name="kanban" %} Kanban</a>
+        <a href="{% url 'task-calendar' %}{% if filter_querystring %}?{{ filter_querystring }}{% endif %}" class="{% if view_mode == 'calendar' %}is-active{% endif %}"{% if view_mode == 'calendar' %} aria-current="page"{% endif %}>{% include "_icon.html" with name="calendar" %} Calendário</a>
+    </nav>
+
+    <form class="task-center__filters" method="get" role="search" aria-label="Filtros de tarefas">
+        <label class="task-center__search">
+            <span class="sr-only">Buscar tarefa</span>
+            {% include "_icon.html" with name="search" %}
+            <input type="search" name="q" value="{{ filters.q }}" placeholder="Buscar tarefa, demanda, cliente ou obra...">
+        </label>
+        {% if can_filter_people %}
+        <label class="task-center__field"><span>Pessoa</span>
+            <select name="pessoa">
+                <option value="">Só minhas</option>
+                <option value="todas"{% if filters.pessoa == 'todas' %} selected{% endif %}>Todas as pessoas</option>
+                {% for person in people_options %}<option value="{{ person.pk }}"{% if filters.pessoa == person.pk|stringformat:'s' %} selected{% endif %}>{{ person.get_full_name|default:person.get_username }}</option>{% endfor %}
+            </select>
+        </label>
+        {% endif %}
+        <label class="task-center__field"><span>Status</span>
+            <select name="status">
+                <option value="">{% if view_mode == 'list' %}Em aberto{% else %}Todos os status{% endif %}</option>
+                <option value="todo"{% if filters.status == 'todo' %} selected{% endif %}>A fazer</option>
+                <option value="doing"{% if filters.status == 'doing' %} selected{% endif %}>Em andamento</option>
+                <option value="done"{% if filters.status == 'done' %} selected{% endif %}>Concluídas</option>
+            </select>
+        </label>
+        <label class="task-center__field"><span>Prazo</span>
+            <select name="prazo">
+                <option value="">Todos os prazos</option>
+                <option value="overdue"{% if filters.prazo == 'overdue' %} selected{% endif %}>Atrasadas</option>
+                <option value="today"{% if filters.prazo == 'today' %} selected{% endif %}>Hoje</option>
+                <option value="week"{% if filters.prazo == 'week' %} selected{% endif %}>Próximos 7 dias</option>
+                <option value="none"{% if filters.prazo == 'none' %} selected{% endif %}>Sem prazo</option>
+            </select>
+        </label>
+        {% if view_mode == 'calendar' %}<input type="hidden" name="semana" value="{{ week_start|date:'Y-m-d' }}">{% endif %}
+        <button class="btn" type="submit">Filtrar</button>
+    </form>
+
+    {% if view_mode == 'list' %}
+    <div class="task-center__card">
+        <table class="task-center__table" aria-label="Lista de tarefas">
+            <thead><tr><th>Nome da Tarefa</th><th>Demanda</th><th>Cliente / Obra</th><th>Responsável</th><th>Status</th><th>Prazo</th><th><span class="sr-only">Ações</span></th></tr></thead>
+            <tbody>
+            {% for row in rows %}
+                <tr data-task-row>
+                    <td class="task-center__name"><strong>{{ row.name }}</strong></td>
+                    <td><span>{{ row.activity.title }}</span>{% if row.activity.code %}<small>{{ row.activity.code }}</small>{% endif %}</td>
+                    <td>{% if row.activity.client %}<span>{{ row.activity.client.name }}</span>{% else %}<span class="muted">Sem cliente</span>{% endif %}{% if row.activity.site %}<small>{{ row.activity.site.name }}</small>{% endif %}</td>
+                    <td>{% if row.person %}<span class="board-person"><span class="board-avatar" aria-hidden="true">{{ row.person|initials }}</span><span class="board-person__name">{{ row.person|person_name }}</span></span>{% else %}<span class="muted">Sem responsável</span>{% endif %}</td>
+                    <td><span class="board-pill" style="background:{{ row.status_color }};color:{{ row.status_color|contrast }}">{{ row.status_label }}</span></td>
+                    <td>{% if row.due %}<span class="board-date{% if row.overdue %} is-overdue{% endif %}"><time datetime="{{ row.due|date:'Y-m-d' }}">{{ row.due|date:'d/m/Y' }}</time>{% if row.overdue %} <span class="board-date__flag">vencido</span>{% endif %}</span>{% else %}<span class="muted">Sem prazo</span>{% endif %}</td>
+                    <td class="task-center__actions"><a class="btn btn--primary btn--sm" href="{{ row.board_url }}">Abrir quadro</a></td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="7" class="task-center__empty"><strong>Nenhuma tarefa encontrada.</strong><span>Quando você for responsável por uma tarefa em um quadro, ela aparece aqui.</span></td></tr>
+            {% endfor %}
+            {% if add_payload.boards %}<tr class="task-center__add-row"><td colspan="7"><button type="button" class="task-center__add" data-task-add data-state="todo">{% include "_icon.html" with name="plus" %} Adicionar tarefa</button></td></tr>{% endif %}
+            </tbody>
+        </table>
+        <footer class="task-center__footer">
+            Mostrando {{ rows|length }} de {{ page_obj.paginator.count }} tarefa{{ page_obj.paginator.count|pluralize }}.
+            {% if page_obj.has_other_pages %}
+            <span class="pagination">
+                {% if page_obj.has_previous %}<a href="{% querystring page=page_obj.previous_page_number %}">Anterior</a>{% endif %}
+                <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+                {% if page_obj.has_next %}<a href="{% querystring page=page_obj.next_page_number %}">Próxima</a>{% endif %}
+            </span>
+            {% endif %}
+        </footer>
+    </div>
+
+    {% elif view_mode == 'kanban' %}
+    <div class="task-center__kanban" aria-label="Tarefas por estado">
+        {% for column in kanban_columns %}
+        <section class="task-center__lane task-center__lane--{{ column.key }}">
+            <header><strong>{{ column.label }}</strong><span>{{ column.count }}</span></header>
+            <div class="task-center__cards">
+                {% for row in column.items %}
+                <article class="task-center__card-item">
+                    <strong>{{ row.name }}</strong>
+                    <span class="task-center__card-demand">{{ row.activity.title }}</span>
+                    <span class="task-center__card-client">{% if row.activity.client %}{{ row.activity.client.name }}{% else %}Sem cliente{% endif %}{% if row.activity.site %} · {{ row.activity.site.name }}{% endif %}</span>
+                    <div class="task-center__card-meta">
+                        {% if row.due %}<span class="board-date{% if row.overdue %} is-overdue{% endif %}"><time datetime="{{ row.due|date:'Y-m-d' }}">{{ row.due|date:'d/m/Y' }}</time>{% if row.overdue %} <span class="board-date__flag">vencido</span>{% endif %}</span>{% else %}<span class="muted">Sem prazo</span>{% endif %}
+                        <span class="board-pill" style="background:{{ row.status_color }};color:{{ row.status_color|contrast }}">{{ row.status_label }}</span>
+                    </div>
+                    <footer>
+                        {% if row.person %}<span class="board-person"><span class="board-avatar" aria-hidden="true">{{ row.person|initials }}</span><span class="board-person__name">{{ row.person|person_name }}</span></span>{% else %}<span class="muted">Sem responsável</span>{% endif %}
+                        <a href="{{ row.board_url }}">Abrir quadro</a>
+                    </footer>
+                </article>
+                {% empty %}<p class="task-center__lane-empty">Nenhuma tarefa.</p>{% endfor %}
+                {% if column.hidden %}<p class="task-center__lane-empty">+ {{ column.hidden }} tarefa{{ column.hidden|pluralize }} — refine os filtros para ver.</p>{% endif %}
+            </div>
+            {% if add_payload.boards %}<button type="button" class="task-center__add" data-task-add data-state="{{ column.key }}">{% include "_icon.html" with name="plus" %} Adicionar</button>{% endif %}
+        </section>
+        {% endfor %}
+    </div>
+
+    {% else %}
+    <div class="task-center__week-bar">
+        <a class="btn btn--sm" href="{% querystring semana=week_previous %}">Anterior</a>
+        <strong>{{ week_start|date:"d/m/Y" }} – {{ week_end|date:"d/m/Y" }}</strong>
+        <a class="btn btn--sm" href="{% querystring semana=week_next %}">Próxima</a>
+        <a class="btn btn--sm" href="{% querystring semana=week_today %}">Esta semana</a>
+        <span class="muted">{{ week_total }} com prazo na semana{% if week_undated %} · Sem prazo: {{ week_undated }}{% endif %}</span>
+    </div>
+    <div class="task-center__week" aria-label="Tarefas da semana">
+        {% for day in week_days %}
+        <section class="task-center__day{% if day.is_today %} is-today{% endif %}{% if day.is_weekend %} is-weekend{% endif %}">
+            <header><strong>{{ day.label }}</strong><span>{{ day.date|date:"d/m" }}</span><small>{{ day.items|length }}</small></header>
+            {% for row in day.items %}
+            <article class="task-center__week-card{% if row.overdue %} is-overdue{% endif %}{% if row.state == 'done' %} is-done{% endif %}">
+                <strong>{{ row.name }}</strong>
+                <small>{{ row.activity.title }}</small>
+                <small>{% if row.activity.client %}{{ row.activity.client.name }}{% endif %}{% if row.activity.site %} · {{ row.activity.site.name }}{% endif %}</small>
+                <span class="board-pill" style="background:{{ row.status_color }};color:{{ row.status_color|contrast }}">{{ row.status_label }}</span>
+                <a href="{{ row.board_url }}">Abrir quadro</a>
+            </article>
+            {% endfor %}
+        </section>
+        {% endfor %}
+    </div>
+    {% endif %}
+</section>
+{{ add_payload|json_script:"task-center-add" }}
+{% endblock %}
+
+{% block scripts %}<script src="{% static 'js/task-center.js' %}?v=20261013a"></script>{% endblock %}

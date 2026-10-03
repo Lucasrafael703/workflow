@@ -301,6 +301,13 @@ class ActivityWizardStep3Form(forms.ModelForm):
         return sanitize_description(self.cleaned_data.get("description"))
 
 
+class ConfirmationCheckbox(forms.CheckboxInput):
+    """Caixa de confirmação estrita: só 1, true ou on confirmam (o padrão do Django trata qualquer texto, até 0, como marcado)."""
+
+    def value_from_datadict(self, data, files, name):
+        return str(data.get(name, "")).strip().lower() in ("1", "true", "on")
+
+
 class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
     """Criar e editar atividade: o mesmo formulário, em quatro etapas.
 
@@ -332,6 +339,10 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
         4: ("Descrição e arquivos", "Informações complementares para a execução da demanda."),
     }
     DESCRIPTION_LIMIT = 2000
+
+    # Só na edição: o navegador confirma antes de trocar o quadro (que exclui as tarefas do quadro atual) e marca esta
+    # caixa; o servidor confere de novo. Sem JavaScript a pessoa marca a caixa à mão. Não é campo do modelo.
+    confirm_board_replace = forms.BooleanField(required=False, widget=ConfirmationCheckbox())
 
     requested_deadline = SplitDateOptionalTimeField(
         label="Prazo de vencimento",
@@ -456,39 +467,58 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
             self.initial["owner"] = user
         if self.initial.get("title") == Activity.DRAFT_TITLE_PLACEHOLDER:
             self.initial["title"] = ""
+        self._setup_board_choice(user)
+
+    def _setup_board_choice(self, user):
+        """Editar uma demanda publicada: o passo "Quadro de tarefas" mostra o quadro REAL que ela tem e só deixa trocá-lo
+        a quem gere a estrutura dele (`DemandBoardAccess.can_manage_structure`); para os demais fica somente leitura."""
+        from boards.demand_services import BoardInstantiationService, DemandBoardAccess
+
+        instance = getattr(self, "instance", None)
+        self.editing_published = bool(
+            instance is not None and instance.pk and instance.status != Activity.Status.RASCUNHO
+        )
+        self.current_board = None
+        self.board_item_count = 0
+        self.board_replace_allowed = True
+        if not self.editing_published:
+            return
+        board = getattr(instance, "task_board", None)  # sem quadro: RelatedObjectDoesNotExist (é um AttributeError)
+        self.current_board = board
+        mode, template = BoardInstantiationService.current_choice(board)
+        self.initial["board_setup_mode"] = mode
+        self.initial["board_template"] = template.pk if template is not None else None
+        if template is not None:
+            # O modelo de origem continua aparecendo (e valendo como "mesma escolha") mesmo se foi desativado depois.
+            self.fields["board_template"].queryset = self.fields["board_template"].queryset | Board.objects.filter(pk=template.pk)
+        self.board_item_count = BoardInstantiationService.item_count(board)
+        if board is not None and user is not None:
+            self.board_replace_allowed = DemandBoardAccess.can_manage_structure(user, board)
+        if not self.board_replace_allowed:
+            for name in ("board_setup_mode", "board_template"):
+                self.fields[name].disabled = True
 
     # -- etapas ------------------------------------------------------------------------
 
     @property
-    def _has_board_step(self):
-        """O passo "Quadro de tarefas" só existe ao criar: uma demanda publicada já tem o seu quadro."""
-        instance = getattr(self, "instance", None)
-        return not (instance is not None and instance.pk and instance.status != Activity.Status.RASCUNHO)
-
-    def _active_steps(self):
-        """`[(número mostrado, número de origem, campos)]`; sem o passo do quadro, a numeração segue sem buraco."""
-        origins = [number for number in self.STEP_FIELDS if number != 3 or self._has_board_step]
-        return [(shown, origin, self.STEP_FIELDS[origin]) for shown, origin in enumerate(origins, start=1)]
-
-    @property
     def steps(self):
-        """Para o template: número, título, descrição e campos de cada etapa."""
+        """Para o template: número, título, descrição e campos de cada etapa. Criar e editar têm as MESMAS quatro."""
         return [
             {
-                "number": shown,
-                "key": origin,
-                "title": self.STEP_TITLES[origin][0],
-                "description": self.STEP_TITLES[origin][1],
+                "number": number,
+                "key": number,
+                "title": self.STEP_TITLES[number][0],
+                "description": self.STEP_TITLES[number][1],
                 "fields": [self[name] for name in names],
             }
-            for shown, origin, names in self._active_steps()
+            for number, names in self.STEP_FIELDS.items()
         ]
 
     def step_with_errors(self):
         """Primeira etapa com erro (1 se não houver): onde a janela deve abrir."""
-        for shown, _origin, names in self._active_steps():
+        for number, names in self.STEP_FIELDS.items():
             if any(self[name].errors for name in names):
-                return shown
+                return number
         return 1
 
     # -- validação -------------------------------------------------------------------------
@@ -522,6 +552,12 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
             self.add_error("site", "Esta obra pertence a outro cliente. Escolha uma obra de quem foi selecionado.")
         if site and cost_center and cost_center.site_id not in (None, site.pk):
             self.add_error("cost_center", "Este centro de custo pertence a outra obra.")
+        if self.editing_published and self.current_board is not None and "board_setup_mode" not in self.data:
+            # Pedido sem a escolha do quadro (cliente antigo ou feito à mão): o quadro fica como está; omitir o campo
+            # nunca pode virar "começar em branco" e apagar tarefas.
+            from boards.demand_services import BoardInstantiationService
+
+            cleaned["board_setup_mode"], cleaned["board_template"] = BoardInstantiationService.current_choice(self.current_board)
         mode = cleaned.get("board_setup_mode") or Activity.BoardSetupMode.BLANK
         cleaned["board_setup_mode"] = mode  # sem escolha = começar em branco (nunca grava vazio)
         template = cleaned.get("board_template")
@@ -531,6 +567,15 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
             self.add_error("board_template", "O modelo pertence a outra organização.")
         if mode == Activity.BoardSetupMode.BLANK:
             cleaned["board_template"] = None
+        if self.editing_published and self.current_board is not None and self.board_replace_allowed:
+            from boards.demand_services import BoardInstantiationService
+
+            if BoardInstantiationService.is_replacement(self.current_board, cleaned.get("board_template")) and not cleaned.get(
+                "confirm_board_replace"
+            ):
+                self.add_error(
+                    "board_setup_mode", "Confirme a troca do quadro: as tarefas do quadro atual serão excluídas."
+                )
         return cleaned
 
 

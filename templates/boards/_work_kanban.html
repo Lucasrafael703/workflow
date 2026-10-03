@@ -1,1 +1,14 @@
-<div class="work-kanban" data-work-kanban>{% if group_field %}<span hidden data-work-group-field="{{ group_field.pk }}"></span>{% endif %}{% for group in groups %}<section class="work-kanban__lane" style="--work-lane-color:{{ group.color }}" data-work-lane data-group-key="{{ group.key }}"><header><strong>{{ group.label }}</strong><span>{{ group.items|length }}</span></header><div class="work-kanban__cards" data-work-card-list>{% for item in group.items %}{% include "boards/_work_kanban_card.html" %}{% empty %}<p class="work-kanban__empty">Nenhuma {{ singular }}</p>{% endfor %}</div></section>{% empty %}<p class="work-empty">Nenhuma {{ singular }} encontrada.</p>{% endfor %}</div>
+<div class="work-kanban" data-work-kanban>
+    {% if group_field %}<span hidden data-work-group-field="{{ group_field.pk }}"></span>{% endif %}
+    {% for group in groups %}
+    <section class="work-kanban__lane" style="--work-lane-color:{{ group.color }}" data-work-lane data-group-key="{{ group.key }}">
+        <header><strong>{{ group.label }}</strong><span>{{ group.items|length }}</span></header>
+        <div class="work-kanban__cards" data-work-card-list>
+            {% for item in group.items %}{% include "boards/_work_kanban_card.html" %}{% empty %}<p class="work-kanban__empty">Nenhuma {{ singular }}</p>{% endfor %}
+        </div>
+        {% if board.domain == "DEMAND" and can_create %}
+        <footer><a class="work-kanban__add" href="{% url 'activity-create' %}?next={{ request.get_full_path|urlencode }}" data-activity-action data-activity-navigate>{% include "_icon.html" with name="plus" %} Adicionar demanda</a></footer>
+        {% endif %}
+    </section>
+    {% empty %}<p class="work-empty">Nenhuma {{ singular }} encontrada.</p>{% endfor %}
+</div>

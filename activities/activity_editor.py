@@ -1,9 +1,10 @@
 """One editor for creation, drafts and changes to published activities.
 
-A atividade é criada e editada na mesma janela de três etapas (ver
+A demanda é criada e editada na mesma janela de quatro etapas (ver
 `ActivityEditorForm` e `activity_form.html`): todas as etapas são campos de um
 único formulário e nada é gravado até o envio final — a criação continua usando
-`ActivityService.save_draft` + `publish_draft` e a edição `update_activity`.
+`ActivityService.save_draft` + `publish_draft` e a edição `update_activity`. Ao editar, o passo do quadro pode
+trocá-lo (`BoardInstantiationService.replace_for_activity`, na mesma transação, com confirmação).
 """
 
 from urllib.parse import urlencode
@@ -20,6 +21,7 @@ from acessos import catalog
 from acessos.services import AuthorizationService
 from core.mixins import OrganizationRequiredMixin
 
+from boards.demand_services import BoardInstantiationService
 from boards.services import BoardError
 
 from .forms import ActivityEditorForm, activity_summary
@@ -133,11 +135,19 @@ class ActivityEditorView(OrganizationRequiredMixin, FormView):
             with transaction.atomic():
                 if self.editing:
                     owner = data.pop("owner")
+                    data.pop("board_setup_mode", None)
+                    template = data.pop("board_template", None)
+                    confirmed = bool(data.pop("confirm_board_replace", False))
                     # Fetch a fresh instance: ModelForm validation mutates its instance.
                     activity.refresh_from_db()
                     ActivityService.update_activity(activity, self.request.user, **data)
                     if owner and owner.pk != activity.owner_id:
                         ActivityService.change_owner(activity, owner, self.request.user)
+                    # O quadro: mesma escolha = nada; outra = troca (exclui as tarefas do quadro atual, já confirmada no
+                    # formulário); demanda antiga sem quadro ganha o dela. Tudo na mesma transação da edição.
+                    BoardInstantiationService.replace_for_activity(
+                        user=self.request.user, activity=activity, template=template, confirmed=confirmed
+                    )
                 else:
                     activity = ActivityService.save_draft(
                         self.organization, self.request.user, activity=activity, **data,
@@ -146,7 +156,11 @@ class ActivityEditorView(OrganizationRequiredMixin, FormView):
                         ActivityService.publish_draft(activity, self.request.user)
         except (ActivityError, BoardError) as exc:
             # Falha ao montar o quadro (modelo indisponível...) vira erro do formulário, não 500; nada é gravado.
-            form.add_error("board_template" if isinstance(exc, BoardError) else None, str(exc))
+            # Pedir confirmação (ou recusar o quadro) aparece no passo 3: no campo do modelo só se ele está à vista.
+            field = None
+            if isinstance(exc, BoardError):
+                field = "board_template" if form.cleaned_data.get("board_template") else "board_setup_mode"
+            form.add_error(field, str(exc))
             return self.form_invalid(form)
 
         return_url = activity_return_url(self.request)

@@ -3,17 +3,23 @@
 {% block title %}Demandas — LPS{% endblock %}
 
 {% block content %}
-<section class="demand-board" aria-labelledby="demand-board-title">
+<section class="demand-board work-board" data-work-board data-board-id="{{ board.pk }}" data-view-id="{{ work_view.pk }}" data-domain="{{ board.domain|lower }}" aria-labelledby="demand-board-title">
     <header class="demand-board__head">
         <div>
             <h1 id="demand-board-title">Demandas</h1>
             <p>Acompanhe cada entrega e abra uma demanda para ver suas tarefas, prazos e conversas.</p>
         </div>
-        {% if can_create %}
-        <a class="btn btn--primary demand-board__create" href="{% url 'activity-create' %}?next={{ request.get_full_path|urlencode }}" data-activity-action data-activity-navigate>
-            {% include "_icon.html" with name="plus" %} Criar demanda
-        </a>
-        {% endif %}
+        <div class="demand-board__head-actions">
+            {% if can_create %}
+            <a class="btn btn--primary demand-board__create" href="{% url 'activity-create' %}?next={{ request.get_full_path|urlencode }}" data-activity-action data-activity-navigate>
+                {% include "_icon.html" with name="plus" %} Criar demanda
+            </a>
+            {% endif %}
+            {% if can_configure and view_mode == 'kanban' %}
+            <button class="btn" type="button" data-work-add-field>{% include "_icon.html" with name="plus" %} Campo</button>
+            <button class="btn" type="button" data-work-card-settings aria-expanded="false">{% include "_icon.html" with name="settings" %} Configurar cartões</button>
+            {% endif %}
+        </div>
     </header>
 
     <nav class="demand-board__view-tabs" aria-label="Como visualizar as demandas">
@@ -37,21 +43,31 @@
     </nav>
 
     {% with fs=filter_state %}
-    <form class="demand-board__filters" method="get" role="search" aria-label="Filtros de demandas">
+    <form class="demand-board__filters" method="get" role="search" aria-label="Filtros de demandas" data-activity-filters>
         <input type="hidden" name="tab" value="{{ fs.tab }}">
         <label class="demand-board__search">
             <span>Buscar demanda</span>
             <span class="demand-board__search-control">{% include "_icon.html" with name="search" %}<input type="search" name="q" value="{{ fs.q }}" placeholder="Digite o nome, cliente ou obra..."><button class="btn" type="submit">Buscar</button></span>
         </label>
         <div class="demand-board__quick-filters" aria-label="Filtros rápidos">
-            <a href="{% querystring prazo='atrasadas' filtro=None page=None %}" class="is-late{% if fs.prazo == 'atrasadas' %} is-active{% endif %}">{% include "_icon.html" with name="clock" %} Atrasadas</a>
-            <a href="{% querystring prazo='hoje' filtro=None page=None %}" class="is-today{% if fs.prazo == 'hoje' %} is-active{% endif %}">{% include "_icon.html" with name="clock" %} Vencem hoje</a>
-            <a href="{% querystring filtro='bloqueadas' prazo=None page=None %}" class="is-blocked{% if fs.filtro == 'bloqueadas' or fs.bloqueio %} is-active{% endif %}">{% include "_icon.html" with name="info" %} Bloqueadas</a>
+            <a href="{% if fs.prazo == 'atrasadas' %}{% querystring prazo=None filtro=None page=None %}{% else %}{% querystring prazo='atrasadas' filtro=None page=None %}{% endif %}" class="is-late{% if fs.prazo == 'atrasadas' %} is-active{% endif %}">{% include "_icon.html" with name="clock" %} Atrasadas</a>
+            <a href="{% if fs.prazo == 'hoje' %}{% querystring prazo=None filtro=None page=None %}{% else %}{% querystring prazo='hoje' filtro=None page=None %}{% endif %}" class="is-today{% if fs.prazo == 'hoje' %} is-active{% endif %}">{% include "_icon.html" with name="clock" %} Vencem hoje</a>
         </div>
-        <label class="demand-board__filter-field"><span>Etapa</span><select name="condicao"><option value="">Todas as etapas</option>{% for sector_name, conditions in condition_choice_groups %}<optgroup label="{{ sector_name }}">{% for condition in conditions %}<option value="{{ condition.pk }}"{% if fs.condicao == condition.pk|stringformat:'s' %} selected{% endif %}>{{ condition.name }}</option>{% endfor %}</optgroup>{% endfor %}</select></label>
-        {% if view_mode == 'lista' %}<label class="demand-board__filter-field"><span>Etapa do quadro</span><select name="estagio"><option value="">Todas as etapas</option>{% for sector_name, stages in stage_choice_groups %}<optgroup label="{{ sector_name }}">{% for stage in stages %}<option value="{{ stage.pk }}"{% if fs.estagio == stage.pk|stringformat:'s' %} selected{% endif %}>{{ stage.name }}</option>{% endfor %}</optgroup>{% endfor %}</select></label>{% endif %}
-        <label class="demand-board__filter-field"><span>Setor responsável</span><select name="setor"><option value="">Todos os setores</option>{% for sector in sectors %}<option value="{{ sector.pk }}"{% if fs.setor == sector.pk|stringformat:'s' %} selected{% endif %}>{{ sector.name }}</option>{% endfor %}</select></label>
-        <label class="demand-board__filter-field"><span>Mostrar primeiro</span><select name="ordem"><option value="prazo"{% if fs.ordem == 'prazo' %} selected{% endif %}>Prazo mais próximo</option><option value="recentes"{% if fs.ordem == 'recentes' %} selected{% endif %}>Mais recentes</option><option value="titulo"{% if fs.ordem == 'titulo' %} selected{% endif %}>Demanda (A-Z)</option></select></label>
+        <label class="demand-board__filter-field"><span>Setor</span><select name="setor" data-auto-submit data-demand-sector-filter><option value="">Todos os setores</option>{% for sector in sectors %}<option value="{{ sector.pk }}"{% if fs.setor == sector.pk|stringformat:'s' %} selected{% endif %}>{{ sector.name }}</option>{% endfor %}</select></label>
+        <label class="demand-board__filter-field"><span>Etapa</span><select name="estagio" data-auto-submit data-demand-sector-dependent><option value="">Todas as etapas</option>{% for sector_name, stages in stage_choice_groups %}<optgroup label="{{ sector_name }}">{% for stage in stages %}<option value="{{ stage.pk }}"{% if fs.estagio == stage.pk|stringformat:'s' %} selected{% endif %}>{{ stage.name }}</option>{% endfor %}</optgroup>{% endfor %}</select></label>
+        <label class="demand-board__filter-field"><span>Status</span><select name="condicao" data-auto-submit data-demand-sector-dependent><option value="">Todos os status</option>{% for sector_name, conditions in condition_choice_groups %}<optgroup label="{{ sector_name }}">{% for condition in conditions %}<option value="{{ condition.pk }}"{% if fs.condicao == condition.pk|stringformat:'s' %} selected{% endif %}>{{ condition.name }}</option>{% endfor %}</optgroup>{% endfor %}</select></label>
+        <div class="demand-board__filter-field demand-board__people-filter">
+            <span id="demand-filter-people-label">Pessoas (Responsáveis)</span>
+            <details class="demand-board__people-picker">
+                <summary aria-labelledby="demand-filter-people-label">
+                    <span>{% if fs.pessoas %}{{ fs.pessoas|length }} pessoa{{ fs.pessoas|length|pluralize }} selecionada{{ fs.pessoas|length|pluralize }}{% else %}Todas as pessoas{% endif %}</span>
+                </summary>
+                <div class="demand-board__people-menu" role="group" aria-labelledby="demand-filter-people-label">
+                    <label><input type="checkbox" name="pessoa" value="sem" data-auto-submit{% if 'sem' in fs.pessoas %} checked{% endif %}> <span>Sem responsável</span></label>
+                    {% for person in fs.people %}<label><input type="checkbox" name="pessoa" value="{{ person.pk }}" data-auto-submit{% if person.pk|stringformat:'s' in fs.pessoas %} checked{% endif %}> <span>{{ person.get_full_name|default:person.get_username }}</span></label>{% endfor %}
+                </div>
+            </details>
+        </div>
         {% if fs.active_count %}<a class="demand-board__clear" href="{{ clear_filters_url }}">Limpar filtros</a>{% endif %}
     </form>
     {% endwith %}
@@ -89,6 +105,8 @@
 
     {% elif view_mode == 'kanban' %}
     <div class="demand-board__kanban" aria-label="Quadro de demandas por etapa">
+        {% include "boards/_work_kanban.html" %}
+        {% comment %}
         {% for lane in demand_lanes %}
         <section class="demand-board__lane" style="--lane-color:{{ lane.color }}">
             <header><strong>{{ lane.label }}</strong><span>{{ lane.items|length }}</span></header>
@@ -108,6 +126,7 @@
             {% if can_create %}<a class="demand-board__lane-add" href="{% url 'activity-create' %}?next={{ request.get_full_path|urlencode }}">{% include "_icon.html" with name="plus" %} Adicionar demanda</a>{% endif %}
         </section>
         {% endfor %}
+        {% endcomment %}
     </div>
 
     {% else %}
@@ -122,6 +141,8 @@
     </div>
     {% endif %}
 </section>
+{% if can_configure and view_mode == 'kanban' %}{% include "boards/_demand_kanban_settings.html" %}{% endif %}
+<div class="work-board__toast" data-work-board-toast role="status" aria-live="polite"></div>
 {% endblock %}
 
-{% block scripts %}{% if view_mode == 'lista' %}<script src="{% static 'js/activity-inline-edit.js' %}?v=20261011b"></script><script src="{% static 'js/activity-inline-options.js' %}?v=20261011b"></script>{% endif %}{% endblock %}
+{% block scripts %}{% if view_mode == 'lista' %}<script src="{% static 'js/activity-inline-edit.js' %}?v=20261011b"></script><script src="{% static 'js/activity-inline-options.js' %}?v=20261011b"></script>{% endif %}{% if view_mode == 'kanban' %}<script src="{% static 'js/work-board.js' %}?v=20261014a"></script>{% endif %}{% endblock %}

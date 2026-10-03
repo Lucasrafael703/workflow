@@ -108,7 +108,17 @@
         form.dataset.activityFiltersBound = "true";
 
         form.querySelectorAll("[data-auto-submit]").forEach(function (field) {
-            field.addEventListener("change", function () { submitFilterForm(form); });
+            field.addEventListener("change", function () {
+                // Etapa e Status só existem dentro de um Setor. Antes de
+                // aplicar a troca de Setor, descartamos as escolhas do setor
+                // anterior para não criar uma interseção impossível na URL.
+                if (field.hasAttribute("data-demand-sector-filter")) {
+                    form.querySelectorAll("[data-demand-sector-dependent]").forEach(function (dependent) {
+                        dependent.value = "";
+                    });
+                }
+                submitFilterForm(form);
+            });
         });
 
     }

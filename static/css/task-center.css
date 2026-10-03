@@ -1,0 +1,100 @@
+/* Tela Tarefas (/tarefas/): painel pessoal sobre os Quadros de Demanda. Usa os tokens e as peças já existentes
+   (.stat-grid/.stat-card, .board-pill, .board-person, .board-date); aqui só o que é próprio do painel. */
+
+.task-center { display: grid; gap: 16px; }
+.task-center__head h1 { margin: 0; font-size: 24px; }
+.task-center__head p { margin: 6px 0 0; color: var(--muted); font-size: 13.5px; }
+.task-center__summary { margin-bottom: 0; }
+
+.task-center__tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--border); }
+.task-center__tabs a { display: inline-flex; align-items: center; gap: 7px; padding: 10px 2px; border-bottom: 2px solid transparent; color: var(--muted); font-size: 13.5px; font-weight: 600; text-decoration: none; }
+.task-center__tabs a svg { width: 15px; height: 15px; }
+.task-center__tabs a:hover { color: var(--text); }
+.task-center__tabs a.is-active { border-bottom-color: var(--primary); color: var(--primary); }
+
+.task-center__filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.task-center__search { position: relative; flex: 1 1 280px; min-width: 220px; }
+.task-center__search svg { position: absolute; top: 50%; left: 11px; width: 15px; height: 15px; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+.task-center__search input { width: 100%; height: 38px; box-sizing: border-box; padding: 0 12px 0 34px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); font: inherit; }
+.task-center__field { display: grid; gap: 3px; color: var(--muted); font-size: 11.5px; font-weight: 600; }
+.task-center__field select { height: 38px; min-width: 150px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); font: inherit; color: var(--text); }
+
+.task-center__card { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+.task-center__table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.task-center__table th, .task-center__table td { padding: 10px 12px; border-bottom: 1px solid #edf2f6; vertical-align: middle; text-align: left; font-size: 12.5px; }
+.task-center__table th { color: #425a76; background: #fbfcfe; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .02em; }
+.task-center__table td small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; }
+.task-center__table td > span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-center__table td > span.board-person, .task-center__table td > span.board-date, .task-center__table td > span.board-pill { display: inline-flex; }
+.task-center__name strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #163252; font-size: 13px; }
+.task-center__actions { text-align: right !important; }
+.task-center__empty { height: 150px; text-align: center !important; }
+.task-center__empty strong, .task-center__empty span { display: block; }
+.task-center__empty span { margin-top: 4px; color: var(--muted); }
+.task-center__footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 14px; color: var(--muted); font-size: 12px; }
+.task-center__footer .pagination { display: inline-flex; gap: 12px; }
+
+.task-center__add { display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px; border: 1px dashed var(--border-strong); border-radius: 7px; background: transparent; color: var(--text-2); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.task-center__add svg { width: 14px; height: 14px; }
+.task-center__add:hover, .task-center__add:focus-visible { background: rgba(27, 98, 196, .06); color: var(--primary); outline: 0; }
+.task-center__add-row td { padding: 8px 12px !important; border-bottom: 0 !important; }
+.task-center__add-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.task-center__add-input, .task-center__add-select { height: 34px; box-sizing: border-box; padding: 0 9px; border: 1px solid var(--border-strong); border-radius: 7px; background: #fff; font: inherit; font-size: 12.5px; }
+.task-center__add-input { flex: 1 1 200px; min-width: 160px; }
+.task-center__add-select { flex: 1 1 200px; min-width: 160px; max-width: 100%; }
+.task-center__add-actions { display: flex; gap: 6px; }
+.task-center__add-error { flex: 1 1 100%; margin: 0; color: var(--danger); font-size: 12px; }
+.task-center__add-error[hidden] { display: none; }
+
+.task-center__kanban { display: grid; grid-template-columns: repeat(3, minmax(260px, 1fr)); gap: 12px; align-items: start; overflow-x: auto; padding-bottom: 8px; }
+.task-center__lane { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 10px; border: 1px solid #dce6ef; border-top: 4px solid var(--lane, #94a3b8); border-radius: 8px; background: #f7fafd; }
+.task-center__lane--todo { --lane: #94a3b8; }
+.task-center__lane--doing { --lane: #2b6fd1; }
+.task-center__lane--done { --lane: #0bb86c; }
+.task-center__lane > header { display: flex; align-items: center; justify-content: space-between; color: #193555; }
+.task-center__lane > header span { display: inline-grid; min-width: 21px; height: 21px; place-items: center; padding: 0 5px; border-radius: 999px; background: #e7eef5; color: #526b84; font-size: 11px; font-weight: 750; }
+.task-center__cards { display: grid; gap: 9px; }
+.task-center__card-item { display: grid; gap: 5px; padding: 11px; border: 1px solid #dce6ef; border-radius: 7px; background: #fff; box-shadow: 0 1px 3px rgba(20, 50, 82, .06); }
+.task-center__card-item > strong { color: #163252; font-size: 13px; }
+.task-center__card-demand, .task-center__card-client { overflow: hidden; color: #5b718a; font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
+.task-center__card-meta, .task-center__card-item footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.task-center__card-item footer a { font-size: 12px; font-weight: 650; }
+.task-center__lane-empty { margin: 0; padding: 6px 2px; color: var(--muted); font-size: 12px; }
+
+.task-center__week-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.task-center__week-bar strong { font-size: 14px; }
+.task-center__week { display: grid; grid-template-columns: repeat(7, minmax(150px, 1fr)); overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--border); gap: 1px; }
+.task-center__day { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 320px; padding: 8px; background: var(--surface); }
+.task-center__day.is-weekend { background: var(--surface-alt, #f8fafc); }
+.task-center__day.is-today { background: #f3f8ff; box-shadow: inset 0 0 0 1px #bcd6f8; }
+.task-center__day > header { display: flex; align-items: baseline; gap: 6px; }
+.task-center__day > header span { color: var(--muted); font-size: 12px; }
+.task-center__day > header small { margin-left: auto; color: var(--muted); font-size: 11px; }
+.task-center__week-card { display: grid; gap: 4px; padding: 9px; border-left: 3px solid var(--primary); border-radius: 6px; background: #f4f7fb; }
+.task-center__week-card.is-overdue { border-left-color: var(--danger); }
+.task-center__week-card.is-done { opacity: .7; border-left-color: #0bb86c; }
+.task-center__week-card strong { overflow: hidden; color: #163252; font-size: 12.5px; text-overflow: ellipsis; }
+.task-center__week-card small { overflow: hidden; color: #5b718a; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.task-center__week-card a { font-size: 12px; font-weight: 650; }
+
+@media (max-width: 900px) {
+    .task-center__kanban { grid-template-columns: repeat(3, minmax(240px, 1fr)); }
+    .task-center__table { table-layout: auto; min-width: 760px; }
+    .task-center__card { overflow-x: auto; }
+}
+@media (max-width: 760px) {
+    .task-center__field select { min-width: 0; width: 100%; }
+    .task-center__field { flex: 1 1 140px; }
+}
+
+/* Prévia do Quadro na ficha da Demanda (templates/activities/_tasks_block.html) */
+.task-preview__summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.task-preview__summary > div { padding: 11px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.task-preview__summary strong { display: block; font-size: 20px; line-height: 1.1; }
+.task-preview__summary span { color: var(--muted); font-size: 12px; }
+.task-preview__table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.task-preview__table th, .task-preview__table td { padding: 9px 10px; border-bottom: 1px solid #edf2f6; text-align: left; vertical-align: middle; font-size: 12.5px; }
+.task-preview__table th { color: #425a76; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .02em; }
+.task-preview__name { overflow: hidden; color: #163252; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.task-preview__more, .task-preview__note { margin: 10px 0 0; font-size: 12px; }
+@media (max-width: 760px) { .task-preview__summary { grid-template-columns: 1fr 1fr; } .task-preview__table { table-layout: auto; } }

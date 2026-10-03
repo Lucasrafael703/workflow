@@ -4,7 +4,7 @@ from core.legacy_redirects import MovedPrefixView
 
 from . import inline_views, kanban, views
 from boards.work_views import DemandWorkBoardView
-from boards.views import DemandTaskBoardView
+from boards.task_center_views import TaskCenterView
 
 urlpatterns = [
     path("", views.HomeView.as_view(), name="home"),
@@ -85,11 +85,11 @@ urlpatterns = [
         name="activity-attachment-delete",
     ),
     # Tarefas
-    path("tarefas/", DemandTaskBoardView.as_view(), name="task-list"),
+    path("tarefas/", TaskCenterView.as_view(view_mode="list"), name="task-list"),
     path("tarefas/lista-legada/", views.RetiredFeatureView.as_view(), name="task-list-legacy"),
     path("tarefas/nova-rapida/", views.RetiredFeatureView.as_view(), name="task-quick-create-standalone"),
-    path("tarefas/kanban/", DemandTaskBoardView.as_view(), name="task-kanban"),
-    path("tarefas/calendario/", DemandTaskBoardView.as_view(), name="task-calendar"),
+    path("tarefas/kanban/", TaskCenterView.as_view(view_mode="kanban"), name="task-kanban"),
+    path("tarefas/calendario/", TaskCenterView.as_view(view_mode="calendar"), name="task-calendar"),
     # Todas as demais rotas de Task permanecem reconhecíveis, porém sem
     # executar operações. A captura fica antes dos padrões históricos abaixo.
     re_path(r"^tarefas/.+$", views.RetiredFeatureView.as_view(), name="task-legacy-retired"),

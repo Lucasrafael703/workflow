@@ -17,13 +17,14 @@
         document.documentElement.classList.add("sidebar--collapsed");
     }
     </script>
-<link rel="stylesheet" href="{% static 'css/activity-workspace.css' %}?v=20261012a">
+<link rel="stylesheet" href="{% static 'css/activity-workspace.css' %}?v=20261013a">
 <link rel="stylesheet" href="{% static 'css/intake.css' %}?v=20261001a">
 <link rel="stylesheet" href="{% static 'css/task-modal.css' %}?v=20261001a">
 <link rel="stylesheet" href="{% static 'css/kanban.css' %}?v=20261003a">
 <link rel="stylesheet" href="{% static 'css/boards.css' %}?v=20261012a">
 <link rel="stylesheet" href="{% static 'css/work-board.css' %}?v=20261009a">
-<link rel="stylesheet" href="{% static 'css/demand-board.css' %}?v=20261011f">
+<link rel="stylesheet" href="{% static 'css/demand-board.css' %}?v=20261016-filters">
+<link rel="stylesheet" href="{% static 'css/task-center.css' %}?v=20261013a">
 <link rel="stylesheet" href="{% static 'css/demand-conversation.css' %}?v=20261010a">
 <link rel="stylesheet" href="{% static 'css/notification-page.css' %}?v=20261010a">
 </head>
@@ -329,7 +330,7 @@
 {% if user.is_authenticated %}
 <script src="{% static 'js/shell.js' %}?v=20260926d"></script>
 <script src="{% static 'js/modal.js' %}?v=20261001-dinamica1"></script>
-<script src="{% static 'js/activity-steps.js' %}?v=20261012a"></script>
+<script src="{% static 'js/activity-steps.js' %}?v=20261013a"></script>
 <script src="{% static 'js/person-picker.js' %}?v=20261005-sector-colors"></script>
 <script src="{% static 'js/person-multi-picker.js' %}?v=20260929a"></script>
 <script src="{% static 'js/tag-picker.js' %}?v=20260926a"></script>
@@ -340,7 +341,7 @@
 <script src="{% static 'js/color-palette-picker.js' %}?v=20260926a"></script>
 {% endif %}
 {% if user.is_authenticated %}
-<script src="{% static 'js/activity-workspace.js' %}?v=20261004-filtros3"></script>
+<script src="{% static 'js/activity-workspace.js' %}?v=20261016-demand-filters"></script>
 <script src="{% static 'js/workspace-filters.js' %}?v=20261004b"></script>
 {% endif %}
 {% block scripts %}{% endblock %}

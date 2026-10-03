@@ -278,17 +278,7 @@ def _boards_nav(user, organization):
 
 
 def _open_task_count(user):
-    """Tarefas em aberto em que a pessoa é executora — o que ela precisa tocar."""
-    from activities.models import Task
+    """Tarefas em aberto em que a pessoa é responsável nos Quadros de Demanda — o que ela precisa tocar."""
+    from boards.task_center import open_task_count
 
-    return Task.objects.filter(
-        executors__user=user,
-        executors__removed_at__isnull=True,
-        status__in=[
-            Task.Status.NAO_INICIADA,
-            Task.Status.DISPONIVEL,
-            Task.Status.EM_FILA,
-            Task.Status.EM_EXECUCAO,
-            Task.Status.DEVOLVIDA,
-        ],
-    ).distinct().count()
+    return open_task_count(user)

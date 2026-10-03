@@ -1,1 +1,12 @@
-<article class="work-card" draggable="true" data-work-card data-item-id="{{ item.pk }}" data-work-updated-at="{{ item.updated_at|date:'c' }}"><div class="work-card__title">{% if board.domain == "DEMAND" %}<a class="js-open-drawer" href="{% url 'activity-detail' item.pk %}" data-drawer-url="{% url 'activity-drawer' item.pk %}">{{ item.title }}</a>{% else %}<a class="js-open-drawer" href="{% url 'task-detail' item.pk %}" data-drawer-url="{% url 'task-drawer' item.pk %}">{{ item.title }}</a>{% endif %}<span aria-hidden="true">⋯</span></div>{% for cell in item.work_cells %}{% if cell.key != "title" %}<div class="work-card__field"><small>{{ cell.field.label }}</small>{% if cell.sector %}{% include "_sector_badge.html" with sector=cell.sector variant="compact" %}{% elif cell.color %}<span class="work-pill" style="--work-pill-bg:{{ cell.color }};--work-pill-text:{{ cell.text_color }}">{{ cell.text }}</span>{% else %}<span>{{ cell.text }}</span>{% endif %}</div>{% endif %}{% endfor %}</article>
+<article class="work-card"{% if item.can_move_kanban %} draggable="true"{% endif %} data-work-card data-item-id="{{ item.pk }}" data-work-updated-at="{{ item.updated_at|date:'c' }}">
+    <div class="work-card__title">
+        {% if board.domain == "DEMAND" %}<a href="{% url 'activity-detail' item.pk %}?next={{ request.get_full_path|urlencode }}">{{ item.title }}</a>{% else %}<a href="{% url 'task-detail' item.pk %}">{{ item.title }}</a>{% endif %}
+        <span aria-hidden="true">⋯</span>
+    </div>
+    {% for cell in item.work_cells %}{% if cell.key != "title" %}
+    <div class="work-card__field{% if not show_field_names %} work-card__field--value-only{% endif %}">
+        {% if show_field_names %}<small>{{ cell.field.label }}</small>{% endif %}
+        {% if cell.sector %}{% include "_sector_badge.html" with sector=cell.sector variant="compact" %}{% elif cell.color %}<span class="work-pill" style="--work-pill-bg:{{ cell.color }};--work-pill-text:{{ cell.text_color }}">{{ cell.text }}</span>{% else %}<span>{{ cell.text }}</span>{% endif %}
+    </div>
+    {% endif %}{% endfor %}
+</article>

@@ -17,7 +17,7 @@ QUICK_FILTERS = {
 }
 
 FORM_FILTER_FIELDS = {
-    "q", "tab", "setor", "pessoa", "condicao", "estagio", "filtro", "cliente", "obra",
+    "q", "tab", "setor", "pessoa", "responsavel", "condicao", "estagio", "filtro", "cliente", "obra",
     "tag", "participante", "prazo", "bloqueio", "concluidas", "status", "ordem", "dir", "visao", "ano",
     "mes", "page", "grupo", "sector", "sort",
 }
@@ -29,6 +29,17 @@ def _first(params, *names):
         if value not in (None, ""):
             return value
     return ""
+
+
+def _values(params, *names):
+    """Read a repeatable query parameter, keeping legacy aliases working."""
+    for name in names:
+        values = [value for value in params.getlist(name) if value not in (None, "")]
+        if values:
+            # A native <select multiple> can submit the same value more than
+            # once in crafted URLs; the filter state should stay predictable.
+            return list(dict.fromkeys(values))
+    return []
 
 
 def normalize_workspace_filters(request, *, default_order="prazo"):
@@ -61,6 +72,7 @@ def normalize_workspace_filters(request, *, default_order="prazo"):
         "q": params.get("q", "").strip(),
         "tab": params.get("tab", "minhas"),
         "pessoa": _first(params, "pessoa", "responsavel"),
+        "pessoas": _values(params, "pessoa", "responsavel"),
         "setor": _first(params, "setor", "sector", "grupo"),
         "condicao": params.get("condicao", ""),
         "estagio": params.get("estagio", ""),
@@ -98,6 +110,13 @@ def canonical_filter_querystring(request, *, keep_calendar=False):
         params["setor"] = state["setor"]
     else:
         params.pop("setor", None)
+
+    if state["pessoas"]:
+        params.setlist("pessoa", state["pessoas"])
+        params.pop("responsavel", None)
+    else:
+        params.pop("pessoa", None)
+        params.pop("responsavel", None)
 
     if request.GET.get("ordem") or request.GET.get("sort"):
         params["ordem"] = state["ordem"]
@@ -164,7 +183,7 @@ def filter_state_for_template(request, *, domain, view_mode, sectors, people=Non
             "calendar_month": month or state["mes"],
             "active_count": sum(
                 bool(state[key])
-                for key in ("q", "pessoa", "setor", "condicao", "estagio", "filtro", "cliente", "obra", "tag", "participante", "prazo", "bloqueio", "concluidas", "status")
+                for key in ("q", "pessoas", "setor", "condicao", "estagio", "filtro", "cliente", "obra", "tag", "participante", "prazo", "bloqueio", "concluidas", "status")
             ) + int(state["ordem"] != default_order),
             "filter_querystring": canonical_filter_querystring(
                 request, keep_calendar=bool(state["ano"] or state["mes"])

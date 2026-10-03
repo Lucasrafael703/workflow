@@ -249,7 +249,7 @@ class ActivityWorkspaceTests(ViewTestCase):
     def test_picker_uses_full_editor_and_same_validation(self):
         response = self.client.get(reverse("activity-mini-create"), HTTP_X_REQUESTED_WITH="XMLHttpRequest")
         self.assertTemplateUsed(response, "activities/activity_form.html")
-        self.assertContains(response, "Informações do cliente")
+        self.assertContains(response, "Cliente e obra")
         response = self.client.post(reverse("activity-mini-create"), self.payload(), HTTP_X_REQUESTED_WITH="XMLHttpRequest")
         self.assertEqual(response.status_code, 200)
         self.assertTrue(Activity.objects.filter(pk=response.json()["id"], status=Activity.Status.ABERTA).exists())
