@@ -20,6 +20,14 @@ class VisibleHiddenInput(forms.HiddenInput):
     #: nome do símbolo do sprite (`#i-<nome>`) desenhado no botão; `None` = lupa.
     icon = None
 
+    def id_for_label(self, id_):
+        """Liga o rótulo ao botão visível, não ao valor oculto do campo."""
+        return f"{id_}-picker-trigger" if id_ else ""
+
+    def trigger_id_attr(self, attrs):
+        trigger_id = self.id_for_label((attrs or {}).get("id"))
+        return format_html(' id="{}"', trigger_id) if trigger_id else ""
+
     def _icon(self):
         return sprite_icon(self.icon) if self.icon else _SEARCH_ICON
 
@@ -72,6 +80,7 @@ class PersonPickerWidget(VisibleHiddenInput):
 
     def render(self, name, value, attrs=None, renderer=None):
         hidden_html = super().render(name, value, attrs, renderer)
+        trigger_id_attr = self.trigger_id_attr(attrs)
         label = self._label_for(value)
         search_url = reverse_lazy(self.search_url_name)
 
@@ -82,7 +91,7 @@ class PersonPickerWidget(VisibleHiddenInput):
         return format_html(
             '<div class="person-picker" data-person-picker data-search-url="{search_url}"{create_attr}{sector_attr} data-placeholder="{placeholder}" data-empty-label="{empty_label}">'
             '{hidden_html}'
-            '<button type="button" class="person-picker__trigger" aria-haspopup="listbox" aria-expanded="false">'
+            '<button{trigger_id_attr} type="button" class="person-picker__trigger" aria-haspopup="listbox" aria-expanded="false">'
             '<span class="person-picker__icon">{icon}</span>'
             '<span class="person-picker__label{label_class}">{label}</span>'
             "</button>"
@@ -93,6 +102,7 @@ class PersonPickerWidget(VisibleHiddenInput):
             placeholder=self.placeholder,
             empty_label=self.selection_label,
             hidden_html=hidden_html,
+            trigger_id_attr=trigger_id_attr,
             icon=self._icon(),
             label_class=label_class,
             label=label or self.selection_label,
@@ -133,6 +143,7 @@ class ClientPickerWidget(VisibleHiddenInput):
 
     def render(self, name, value, attrs=None, renderer=None):
         hidden_html = super().render(name, value, attrs, renderer)
+        trigger_id_attr = self.trigger_id_attr(attrs)
         label = self._label_for(value)
         search_url = reverse_lazy(self.search_url_name)
 
@@ -144,7 +155,7 @@ class ClientPickerWidget(VisibleHiddenInput):
             ' data-create-label="Cadastrar cliente" data-placeholder="Buscar cliente..."'
             ' data-empty-label="Selecionar cliente"{create_attr}>'
             '{hidden_html}'
-            '<button type="button" class="person-picker__trigger" aria-haspopup="listbox" aria-expanded="false">'
+            '<button{trigger_id_attr} type="button" class="person-picker__trigger" aria-haspopup="listbox" aria-expanded="false">'
             '<span class="person-picker__icon">{icon}</span>'
             '<span class="person-picker__label{label_class}">{label}</span>'
             "</button>"
@@ -152,6 +163,7 @@ class ClientPickerWidget(VisibleHiddenInput):
             search_url=search_url,
             create_attr=create_attr,
             hidden_html=hidden_html,
+            trigger_id_attr=trigger_id_attr,
             icon=self._icon(),
             label_class=label_class,
             label=label or "Selecionar cliente",
@@ -185,6 +197,7 @@ class ActivityPickerWidget(VisibleHiddenInput):
 
     def render(self, name, value, attrs=None, renderer=None):
         hidden_html = super().render(name, value, attrs, renderer)
+        trigger_id_attr = self.trigger_id_attr(attrs)
         label = self._label_for(value)
         search_url = reverse_lazy(self.search_url_name)
 
@@ -195,7 +208,7 @@ class ActivityPickerWidget(VisibleHiddenInput):
             '<div class="person-picker" data-person-picker data-search-url="{search_url}"'
             ' data-create-label="Criar nova demanda"{create_attr}>'
             '{hidden_html}'
-            '<button type="button" class="person-picker__trigger" aria-haspopup="listbox" aria-expanded="false">'
+            '<button{trigger_id_attr} type="button" class="person-picker__trigger" aria-haspopup="listbox" aria-expanded="false">'
             '<span class="person-picker__icon">{icon}</span>'
             '<span class="person-picker__label{label_class}">{label}</span>'
             "</button>"
@@ -203,6 +216,7 @@ class ActivityPickerWidget(VisibleHiddenInput):
             search_url=search_url,
             create_attr=create_attr,
             hidden_html=hidden_html,
+            trigger_id_attr=trigger_id_attr,
             icon=self._icon(),
             label_class=label_class,
             label=label or "Selecionar demanda",
@@ -250,6 +264,7 @@ class _SimpleSearchPickerWidget(VisibleHiddenInput):
 
     def render(self, name, value, attrs=None, renderer=None):
         hidden_html = super().render(name, value, attrs, renderer)
+        trigger_id_attr = self.trigger_id_attr(attrs)
         label = self._label_for(value)
         search_url = reverse_lazy(self.search_url_name)
         selected_color = ""
@@ -275,7 +290,7 @@ class _SimpleSearchPickerWidget(VisibleHiddenInput):
             ' data-empty-label="{empty_label}" data-selected-color="{selected_color}"'
             ' data-selected-text-color="{selected_text_color}"{create_attr}>'
             "{hidden_html}"
-            '<button type="button" class="person-picker__trigger" aria-haspopup="listbox" aria-expanded="false">'
+            '<button{trigger_id_attr} type="button" class="person-picker__trigger" aria-haspopup="listbox" aria-expanded="false">'
             '<span class="person-picker__icon">{icon}</span>'
             '<span class="person-picker__label{label_class}">{label}</span>'
             "</button>"
@@ -288,6 +303,7 @@ class _SimpleSearchPickerWidget(VisibleHiddenInput):
             empty_label=self.empty_label,
             create_attr=create_attr,
             hidden_html=hidden_html,
+            trigger_id_attr=trigger_id_attr,
             icon=self._icon(),
             label_class=label_class,
             label=label or self.empty_label,
