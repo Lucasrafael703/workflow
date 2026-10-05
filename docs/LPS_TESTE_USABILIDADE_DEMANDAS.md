@@ -2,7 +2,7 @@
 
 > **Objetivo desta rodada não é construir o Workspace completo. É provar que uma pessoa consegue operar Demandas em um único contexto, sem precisar reaprender a interface ou perder seu estado.**
 > Este roteiro e os critérios foram definidos **antes** de ver qualquer resultado. **Só se avança para o Calendário (1D) e para a extração de abstrações (1E) se o critério de passagem for atendido**; senão, corrige-se a 1A e o teste se repete com outras pessoas.
-> O **Kanban** (1C) foi feito antes, por pedido explícito (ele passa a ser o mesmo de Quadros), atrás da mesma flag: ver `LPS_WORKSPACE_DEMANDAS.md` §8. Ele não é mais "legado" neste teste: as falhas dele têm origem própria (**K**).
+> O **Kanban** (1C) foi feito antes, por pedido explícito (ele é o mesmo de Quadros, o mesmo código, **no ar com ou sem a flag**): ver `LPS_WORKSPACE_DEMANDAS.md` §8. Ele não é mais "legado" neste teste: as falhas dele têm origem própria (**K**).
 
 ## 1. Preparação (quem conduz)
 
@@ -31,6 +31,7 @@
 | T5 | *"**Limpe tudo** e ache as demandas do cliente **Santa Isabel**."* | sim | Limpar filtros → Filtros → Cliente (digitar 3 letras) → Aplicar |
 | T6 | *"Mude o **prazo** de uma demanda."* | não | Clicar no prazo da linha (edição inline) |
 | T7 | *"No **Kanban**, passe uma demanda para a **próxima etapa**."* | não | Arrastar o cartão para outra raia ou usar o ⋯ → "Mover para…". Em celular só o menu existe. Origem esperada das falhas: **K** |
+| T8 | *"Ainda no **Kanban**, mude a **prioridade** de uma demanda e depois **crie uma nova** já na etapa *Negociação*."* | não | Clicar na pílula de prioridade do cartão (mesmo editor da Lista) e usar o **+ Adicionar demanda** da raia *Negociação* (a janela abre com a etapa e o setor preenchidos). Mede se a pessoa descobre que o cartão **edita no lugar** e que a raia **cria na etapa**. Origem esperada das falhas: **K** |
 
 **Pergunta final (compreensão):** *"Com suas palavras: o que são a Lista, o Kanban e o Calendário? Em que eles se parecem e em que se diferem?"* — **Compreendeu** se explica que são **os mesmos dados** (o mesmo conjunto de demandas) apresentados de formas diferentes.
 
@@ -60,6 +61,7 @@ Participante: ______ Perfil: ______ Data: ______ Dispositivo: ______
 | T5 | | | | | | | |
 | T6 | | | | | | | |
 | T7 | | | | | | | |
+| T8 | | | | | | | |
 | Pergunta final | Compreendeu? (S/N) | | | | | | |
 
 Anote também: o nome que a pessoa deu a cada controle (Escopo, Mostrar, Filtros, Agrupar, Ordenar), o que ela esperava encontrar e não achou, e qualquer coisa que a surpreendeu.
@@ -77,8 +79,9 @@ Abaixo do critério: corrige-se a 1A (linguagem, filtros, colunas, navegação),
 
 ## 7. O que a 1A tem de propósito "incompleto" (para não surpreender quem conduz)
 
-- O **Kanban** já é o novo (o de Quadros: raias de cabeçalho colorido, cartões com borda na cor da raia, ⋯ "Mover para…"); falhas ali são **K**. O **Calendário** é o conteúdo antigo (lista de prazos) **dentro do shell novo**; falhas ali são **V**.
-- No Kanban, **"+ Adicionar demanda"** de cada raia abre o assistente de sempre **sem** levar a etapa da raia (isso é uma rodada própria). Se alguém esperar que a demanda já nasça naquela etapa, anote como **K** e a necessidade.
+- O **Kanban** já é o novo (o de Quadros: raias de cabeçalho colorido, cartões com borda na cor da raia, ⋯ "Mover para…", **título que renomeia no lugar**, campos do cartão que **se editam clicando**, ⋮ da raia e **+ Adicionar** por raia); falhas ali são **K**. O **Calendário** é o conteúdo antigo (lista de prazos) **dentro do shell novo**; falhas ali são **V**.
+- No Kanban, **"+ Adicionar demanda"** de cada raia abre a janela **Nova demanda** já com a etapa (ou status, setor, responsável, prioridade) da raia. Se alguém esperar criar **só digitando o nome** na própria raia (como em Quadros), anote como **K** e a necessidade: a janela de quatro etapas é a mesma de sempre, de propósito.
+- Abrir a ficha pelo cartão é clicando no **código** (DEM-…) ou em ⋯ → *Abrir demanda*; **clicar no título renomeia**. Se alguém clicar no título esperando abrir a demanda, anote como **K**.
 - O menu de ações da linha (Concluir/Cancelar/Reabrir) não existe na Lista: está na ficha. Se alguém procurar, anote como **L** e a necessidade.
 - "Mostrar" tem só **Em aberto** e **Concluídas** (sem "Todas").
 - Os nomes **Escopo** e **Mostrar** são provisórios: anote como a pessoa os chama.

@@ -185,6 +185,9 @@ class OrganizationScopedFormMixin:
             selected_sector_id = self.data.get("sector")
         elif getattr(self, "instance", None) is not None:
             selected_sector_id = getattr(self.instance, "sector_id", None)
+        if not selected_sector_id and not self.is_bound:
+            initial_sector = self.initial.get("sector")  # demanda nova aberta de uma raia do Kanban
+            selected_sector_id = getattr(initial_sector, "pk", initial_sector)
         if "stage" in fields:
             model = ActivityStage if getattr(getattr(self, "_meta", None), "model", None) is Activity else TaskStage
             queryset = model.objects.filter(organization=organization, is_active=True)
@@ -409,7 +412,11 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
             "cost_center": CostCenterPickerWidget(icon="dollar", filter_field_id="id_site", filter_param="site"),
             "external_requester": forms.TextInput(attrs={"class": "activity-input", "placeholder": "Nome do solicitante"}),
             "address": forms.TextInput(
-                attrs={"class": "activity-input", "placeholder": "Ex.: Rua, número, complemento, bairro, cidade"}
+                attrs={
+                    "class": "activity-input",
+                    "placeholder": "Ex.: Rua, número, complemento, bairro, cidade",
+                    "autocomplete": "street-address",
+                }
             ),
             "description": RichTextWidget(
                 placeholder="Descreva aqui os detalhes da demanda, orientações, observações e outras informações "
@@ -464,7 +471,7 @@ class ActivityEditorForm(OrganizationScopedFormMixin, forms.ModelForm):
         if not can_change_owner:
             fields["owner"].help_text = "A transferência de responsabilidade exige permissão específica."
         if drafting and not self.is_bound and not self.instance.pk:
-            self.initial["owner"] = user
+            self.initial.setdefault("owner", user)
         if self.initial.get("title") == Activity.DRAFT_TITLE_PLACEHOLDER:
             self.initial["title"] = ""
         self._setup_board_choice(user)

@@ -10,6 +10,7 @@ trocá-lo (`BoardInstantiationService.replace_for_activity`, na mesma transaçã
 from urllib.parse import urlencode
 
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.http import Http404, JsonResponse
@@ -20,6 +21,7 @@ from django.views.generic import FormView
 from acessos import catalog
 from acessos.services import AuthorizationService
 from core.mixins import OrganizationRequiredMixin
+from core.models import ActivityStage, Sector, WorkflowStatus
 
 from boards.demand_services import BoardInstantiationService
 from boards.services import BoardError
@@ -30,6 +32,43 @@ from .navigation import activity_detail_url, activity_return_url
 from .services import ActivityError, ActivityService
 
 DRAFT_ACTIONS = {"rascunho", "sair", "continuar"}
+
+
+def _pk(value):
+    return int(value) if str(value or "").isdigit() else None
+
+
+def creation_presets(params, organization):
+    """Valores iniciais da janela "Nova demanda" quando ela abre de uma raia do Kanban (`?setor=&etapa=&condicao=&urgencia=&pessoa=`).
+
+    Só vale o que existe na organização e combina entre si; o resto é ignorado em silêncio (a janela abre normal, como sem o
+    parâmetro), porque um endereço antigo ou editado à mão nunca deve impedir de criar. Etapa e status são de UM setor: se o setor
+    não veio, o dela é o setor da demanda; se veio outro, ela é ignorada. A janela continua sendo quem valida tudo ao enviar."""
+    initial = {}
+    sector = Sector.objects.filter(pk=_pk(params.get("setor")), organization=organization, is_active=True).first() if _pk(params.get("setor")) else None
+    stage_id, condition_id = _pk(params.get("etapa")), _pk(params.get("condicao"))
+    stage = ActivityStage.objects.filter(pk=stage_id, organization=organization, is_active=True).first() if stage_id else None
+    condition = (
+        WorkflowStatus.objects.filter(pk=condition_id, organization=organization, domain=WorkflowStatus.Domain.ACTIVITY, is_active=True).first()
+        if condition_id else None
+    )
+    for option in (stage, condition):
+        if option is not None and sector is None:
+            sector = Sector.objects.filter(pk=option.sector_id, organization=organization, is_active=True).first()
+    if sector is not None:
+        initial["sector"] = sector.pk
+        if stage is not None and stage.sector_id == sector.pk:
+            initial["stage"] = stage.pk
+        if condition is not None and condition.sector_id == sector.pk:
+            initial["condition"] = condition.pk
+    if params.get("urgencia") in Activity.Urgency.values:
+        initial["urgency"] = params["urgencia"]
+    person_id = _pk(params.get("pessoa"))
+    if person_id:
+        person = get_user_model().objects.filter(pk=person_id, profile__organization=organization, is_active=True).first()
+        if person is not None:
+            initial["owner"] = person
+    return initial
 
 
 class ActivityEditorView(OrganizationRequiredMixin, FormView):
@@ -55,6 +94,12 @@ class ActivityEditorView(OrganizationRequiredMixin, FormView):
         if self._activity and self._activity.status == Activity.Status.RASCUNHO and self._activity.created_by_id != self.request.user.pk:
             raise Http404
         return self._activity
+
+    def get_initial(self):
+        initial = super().get_initial()
+        if not self.editing and self.request.method == "GET" and not self.request.GET.get("pk"):
+            initial.update(creation_presets(self.request.GET, self.organization))
+        return initial
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()

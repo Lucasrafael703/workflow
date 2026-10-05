@@ -4,6 +4,7 @@ Kit do Kanban — a ÚNICA marcação do Kanban do sistema (Quadros e Demandas).
 
   kanban = {
     "item_label": "demanda",            # usado nos rótulos de acessibilidade
+    "menu_label": "Opções da demanda",  # opcional: o início do rótulo do ⋯ do cartão (padrão: "Opções da <item_label>")
     "show_field_names": False,          # mostra o nome de cada campo no cartão
     "empty_title" / "empty_text": ...,  # estado "nenhuma raia" (ou "empty_template": um parcial que o substitui)
     "lanes": [ {
@@ -14,6 +15,7 @@ Kit do Kanban — a ÚNICA marcação do Kanban do sistema (Quadros e Demandas).
         "sector",                       # sublinha opcional (nome do setor) quando raias de grupos diferentes se misturam
         "option_id",                    # opcional: data-option-id (a etiqueta/etapa que a raia representa)
         "menu",                         # opcional: True mostra o ⋮ da raia (data-lane-menu)
+        "menu_attrs",                   # opcional: pares (nome, valor) no botão ⋮ (ex.: data-lane-menu-items com os itens em JSON)
         "total",                        # opcional: texto da soma no cabeçalho ("" = vazia; None = a raia não tem soma)
         "count", "empty_text",
         "add": {"label", "href", "attrs": [(nome, valor)]},   # rodapé opcional (link se houver href; senão botão)
@@ -24,6 +26,7 @@ Kit do Kanban — a ÚNICA marcação do Kanban do sistema (Quadros e Demandas).
             "title_editable",           # o título é editado no lugar (clicar/Enter); com `url` o link vai para outro lugar
             "title_label",              # rótulo de acessibilidade do título editável (padrão: item_label)
             "attrs": [(nome, valor)],   # atributos extras do <article> (ex.: data-activity-id)
+            "link": {"text", "url", "label"},  # opcional: link discreto sob o título (Demandas: o código que abre a ficha)
             "fields": [ {"kind", "label", ...} ],                       # ver kanban/_fields.html
             "fields_template": "..."                                    # opcional: outro corpo de campos
         } ]

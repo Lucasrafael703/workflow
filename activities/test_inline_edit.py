@@ -1169,3 +1169,109 @@ class StageConditionQueryTests(OptionBase):
         for index in range(12):
             self.activity(f"Mais {index}", self.editor)
         self.assertEqual(queries(), few)
+
+
+# ---------------------------------------------------------------------------
+# Prioridade e a versão: o que o cartão do Kanban precisa da edição inline
+# ---------------------------------------------------------------------------
+
+
+class UrgencyAndVersionTests(InlineBase):
+    def options(self, activity, user=None, field="urgency"):
+        self.client.force_login(user or self.editor)
+        return self.client.get(reverse("activity-inline-options", args=[activity.pk]), {"campo": field}, **AJAX)
+
+    def test_the_priority_is_changed_through_the_service_and_audited(self):
+        self.a1.urgency = Activity.Urgency.BAIXA
+        self.a1.save(update_fields=["urgency"])
+        response = self.post(self.a1, field="urgency", value="ALTA")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual((data["value"], data["display"]["id"], data["display"]["name"]), ("ALTA", "ALTA", "Alta"))
+        self.assertRegex(data["display"]["color"], r"^#[0-9A-Fa-f]{6}$")
+        self.assertRegex(data["display"]["text_color"], r"^#[0-9A-Fa-f]{6}$")
+        self.a1.refresh_from_db()
+        self.assertEqual(self.a1.urgency, Activity.Urgency.ALTA)
+        self.assertTrue(self.audit(self.a1, field_name="urgência").exists() or self.audit(self.a1).exists())
+
+    def test_the_same_priority_writes_nothing(self):
+        before = self.audit(self.a1).count()
+        response = self.post(self.a1, field="urgency", value=self.a1.urgency)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.audit(self.a1).count(), before)
+
+    def test_an_unknown_priority_is_a_400(self):
+        for value in ("", "URGENTISSIMA", "alta"):
+            with self.subTest(value=value):
+                response = self.post(self.a1, field="urgency", value=value)
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.json()["error"], "Escolha a prioridade.")
+
+    def test_who_cannot_edit_gets_403_and_nothing_changes(self):
+        before = self.a1.urgency
+        response = self.post(self.a1, user=self.reader, field="urgency", value="ALTA")
+        self.assertEqual(response.status_code, 403)
+        self.a1.refresh_from_db()
+        self.assertEqual(self.a1.urgency, before)
+
+    def test_a_finished_demand_does_not_change_priority(self):
+        for done in (self.a_done, self.a_cancel):
+            response = self.post(done, field="urgency", value="ALTA")
+            self.assertEqual(response.status_code, 400, done.title)
+
+    def test_another_organization_is_a_404(self):
+        self.assertEqual(self.post(self.a_foreign, field="urgency", value="ALTA").status_code, 404)
+
+    def test_the_options_are_the_three_priorities_with_the_organizations_colors(self):
+        response = self.options(self.a1)
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual([item["id"] for item in body["items"]], ["BAIXA", "MEDIA", "ALTA"])
+        self.assertEqual([item["name"] for item in body["items"]], ["Baixa", "Média", "Alta"])
+        self.assertEqual(body["current_id"], self.a1.urgency)
+        self.assertEqual((body["allow_clear"], body["can_create"], body["can_manage"]), (False, False, False))
+
+    def test_a_custom_color_of_the_organization_reaches_the_options(self):
+        from core.models import EnumColor
+
+        EnumColor.objects.create(organization=self.org, domain="activity_urgency", code="ALTA", color="#7C3AED")
+        items = {item["id"]: item for item in self.options(self.a1).json()["items"]}
+        self.assertEqual(items["ALTA"]["color"], "#7C3AED")
+
+    def test_the_options_need_the_edit_permission_and_an_open_demand(self):
+        self.assertEqual(self.options(self.a1, user=self.reader).status_code, 403)
+        self.assertEqual(self.options(self.a_done).status_code, 400)
+
+    def test_the_options_cost_one_color_query_for_the_three_priorities(self):
+        self.options(self.a1)
+        with CaptureQueriesContext(connection) as captured:
+            self.options(self.a1)
+        colors = [query for query in captured if "core_enumcolor" in query["sql"]]
+        self.assertEqual(len(colors), 1)
+
+    def test_flags_offer_the_priority_to_who_can_edit_an_open_demand_only(self):
+        self.assertTrue(inline_flags(self.editor, [self.a1])[0].inline["urgency"])
+        self.assertFalse(inline_flags(self.reader, [self.fresh(self.a1)])[0].inline["urgency"])
+        self.assertFalse(inline_flags(self.editor, [self.fresh(self.a_done)])[0].inline["urgency"])
+        self.assertFalse(inline_flags(self.editor, [self.fresh(self.a_draft)])[0].inline["urgency"])
+
+    def fresh(self, activity):
+        return Activity.objects.get(pk=activity.pk)
+
+    def test_every_save_answers_with_the_version_so_the_card_keeps_it_current(self):
+        payloads = (
+            {"field": "title", "value": "Novo título"},
+            {"field": "urgency", "value": "ALTA"},
+            {"field": "requested_deadline", "date": "2026-10-14", "time": ""},
+            {"field": "owner", "value": str(self.novo.pk)},
+        )
+        for payload in payloads:
+            with self.subTest(field=payload["field"]):
+                data = self.post(self.a1, **payload).json()
+                self.a1.refresh_from_db()
+                self.assertEqual(data["updated_at"], self.a1.updated_at.isoformat())
+
+    def test_the_version_answers_even_when_nothing_changed(self):
+        data = self.post(self.a1, field="urgency", value=self.a1.urgency).json()
+        self.a1.refresh_from_db()
+        self.assertEqual(data["updated_at"], self.a1.updated_at.isoformat())

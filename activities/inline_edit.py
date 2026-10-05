@@ -23,6 +23,7 @@ from django.utils import timezone
 
 from acessos import catalog
 from acessos.services import AuthorizationService
+from core.colors import EnumColorResolver, get_contrast_text
 from core.models import ActivityStage, Sector, WorkflowStatus
 from core.services import (
     ActivityStageService,
@@ -63,6 +64,16 @@ def option_data(obj):
     if obj is None:
         return None
     return {"id": obj.pk, "name": obj.name, "color": obj.color, "text_color": obj.text_color}
+
+
+def urgency_data(organization, code, resolver=None):
+    """Prioridade para a tela, no mesmo formato de `option_data`: `id` é o código (BAIXA/MEDIA/ALTA) e a cor é a que a
+    organização configurou (com a cor do texto calculada aqui, como nas demais opções). `resolver` evita uma consulta
+    por prioridade quando se montam as três de uma vez."""
+    resolver = resolver or EnumColorResolver(organization, "activity_urgency")
+    label = dict(Activity.Urgency.choices).get(code, code)
+    color = resolver.color_for(code)
+    return {"id": code, "name": resolver.label_for(code, label), "color": color, "text_color": get_contrast_text(color)}
 
 
 def deadline_display(value):
@@ -168,6 +179,7 @@ def inline_flags(user, activities):
             "stage": can_stage,
             "condition": can_condition,
             "owner": can_owner,
+            "urgency": can_edit,
             "requested_deadline": can_edit,
             "deadline_date": date_text,
             "deadline_time": time_text,
@@ -224,6 +236,18 @@ def inline_options(user, activity, field):
             "manage_url": f"{reverse('config-etapas-status')}?domain={OPTION_FIELDS[field][1]}&sector={sector.pk}" if can_manage else "",
             "sector_name": sector.name,
             "items": [option_data(option) for option in options[:OPTION_LIMIT]],
+        }
+    if field == "urgency":
+        require_action(user, catalog.ATIVIDADE_EDITAR, activity)
+        ActivityTransitionPolicy.assert_allowed(activity, "edit", user)
+        resolver = EnumColorResolver(activity.organization, "activity_urgency")
+        return {
+            "current_id": activity.urgency,
+            "allow_clear": False,
+            "can_create": False,
+            "can_manage": False,  # as três prioridades são fixas; só a cor se configura (em Configurações)
+            "manage_url": "",
+            "items": [urgency_data(activity.organization, code, resolver) for code, _label in Activity.Urgency.choices],
         }
     if field == "sector":
         require_action(user, catalog.ATIVIDADE_EDITAR, activity)
@@ -315,6 +339,7 @@ class ActivityInlineService:
             "title": cls._title,
             "owner": cls._owner,
             "requested_deadline": cls._deadline,
+            "urgency": cls._urgency,
             "sector": cls._sector,
             "stage": cls._stage,
             "condition": cls._condition,
@@ -327,7 +352,8 @@ class ActivityInlineService:
             raise ActivityError("Este campo não pode ser editado por aqui.")
         extra = handler(user, activity, data) or {}  # o que só esta gravação sabe (ex.: o setor recém-criado)
         activity.refresh_from_db()
-        return {**cls.serialize(activity, field), **extra}
+        # `updated_at`: o Kanban guarda a versão no cartão e a devolve ao mover (conflito de versão); sem isto ela ficaria velha.
+        return {**cls.serialize(activity, field), "updated_at": activity.updated_at.isoformat(), **extra}
 
     # -- campos -------------------------------------------------------------------------------
 
@@ -376,6 +402,16 @@ class ActivityInlineService:
         if (condition.pk if condition else None) == activity.condition_id:
             return None
         ActivityService.set_condition(activity, condition, user)
+        return None
+
+    @staticmethod
+    def _urgency(user, activity, data):
+        value = (data.get("value") or "").strip()
+        if value not in Activity.Urgency.values:
+            raise ActivityError("Escolha a prioridade.")
+        if value == activity.urgency:
+            return None  # nada a gravar: sem auditoria à toa
+        ActivityService.update_activity(activity, user, urgency=value)
         return None
 
     @staticmethod
@@ -428,6 +464,8 @@ class ActivityInlineService:
                     "avatar_class": f"avatar--{avatar_color(owner)}" if owner else "",
                 },
             }
+        if field == "urgency":
+            return {"value": activity.urgency, "display": urgency_data(activity.organization, activity.urgency)}
         if field == "stage":
             return {"value": activity.stage_id or "", "display": option_data(activity.stage)}
         if field == "condition":

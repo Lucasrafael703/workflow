@@ -1,0 +1,10 @@
+{% comment %}Estado "nenhuma raia" do Kanban de Quadros (usado pelo kit via `kanban.empty_template`; herda `group_column` do contexto).{% endcomment %}
+<div class="kanban-state">
+    {% if group_column %}
+    <h3>Nenhuma raia para mostrar</h3>
+    <p>A coluna <strong>{{ group_column.name }}</strong> não tem etiquetas ativas. Adicione etiquetas na tabela do quadro.</p>
+    {% else %}
+    <h3>Escolha por qual coluna agrupar</h3>
+    <p>O Kanban usa uma coluna de <strong>Status</strong> ou de <strong>Lista suspensa</strong> para formar as raias. Este quadro ainda não tem nenhuma: crie uma no Quadro principal e volte aqui.</p>
+    {% endif %}
+</div>

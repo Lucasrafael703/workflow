@@ -1,10 +1,8 @@
-"""Kit do Kanban (templates/kanban/*): o MODELO é o Kanban de Quadros e o kit emite as mesmas classes e atributos.
+"""Kit do Kanban (templates/kanban/*): a ÚNICA marcação do Kanban do sistema (o modelo visual é o de Quadros).
 
-Dois grupos de testes: o contrato do kit (dados simples -> marcação) e a PARIDADE com o Kanban de Quadros, que impede
-a marcação de divergir em silêncio enquanto Quadros ainda tem a sua própria cópia (a migração dele é uma rodada futura).
+Dois grupos de testes: o contrato do kit (dados simples -> marcação) e a prova de que Quadros desenha por ele.
 """
 
-from html.parser import HTMLParser
 from types import SimpleNamespace
 
 from django.template.loader import render_to_string
@@ -13,6 +11,7 @@ from django.urls import reverse
 
 from core.models import Sector
 
+from .services import ViewService
 from .testing import BoardTestCase
 
 
@@ -210,6 +209,10 @@ class ContractV2Tests(SimpleTestCase):
         self.assertIn('class="kanban-card__title is-empty" data-card-title tabindex="0" role="textbox"', empty)
         self.assertIn(">Sem título<", empty)
 
+    def test_the_card_menu_label_can_be_set_by_the_host(self):
+        self.assertIn('aria-label="Opções da tarefa Orçamento Aurora"', render(lane(), menu_label="Opções da tarefa"))
+        self.assertIn('aria-label="Opções da demanda Orçamento Aurora"', render(lane()))  # sem o aviso do anfitrião: "Opções da <item_label>"
+
     def test_the_editable_title_label_defaults_to_the_item_label(self):
         self.assertIn('role="textbox" aria-label="demanda"', render(lane(cards=[card(title_editable=True)])))
 
@@ -240,47 +243,41 @@ class ContractV2Tests(SimpleTestCase):
         self.assertIn('<dd class="kanban-field__value">', html)
 
 
-class _Skeleton(HTMLParser):
-    """A primeira ocorrência de cada elemento estrutural: tag, atributos data-* e classes (sem os de estado)."""
+class QuadrosUsesTheKitTests(BoardTestCase):
+    """Quadros e Demandas desenham o Kanban pela MESMA marcação (`templates/kanban/*`); Quadros só traduz os dados
+    (`board_kanban`, em `boards/templatetags/lps_board.py`). Não existe mais uma cópia a comparar."""
 
-    TRACK = (
-        "kanban-lane", "kanban-lane__head", "kanban-lane__title", "kanban-lane__count", "kanban-lane__body", "kanban-lane__empty",
-        "kanban-card", "kanban-card__head", "kanban-card__title", "kanban-card__menu", "kanban-card__fields", "kanban-field",
-    )
+    def kanban_page(self, user=None):
+        self.login(user or self.admin)
+        return self.client.get(reverse("board-view-detail", args=[self.kanban.pk]))
 
-    def __init__(self):
-        super().__init__()
-        self.found = {}
+    def test_the_page_and_the_lanes_fragment_render_through_the_kit(self):
+        response = self.kanban_page()
+        for template in ("kanban/_lanes.html", "kanban/_lane.html", "kanban/_card.html", "kanban/_fields.html"):
+            self.assertTemplateUsed(response, template)
+        fragment = self.client.post(reverse("board-view-lanes", args=[self.kanban.pk]), data="{}", content_type="application/json")
+        self.assertTemplateUsed(fragment, "kanban/_lane.html")
+        self.assertTemplateUsed(fragment, "kanban/_card.html")
 
-    def handle_starttag(self, tag, attrs):
-        classes = set((dict(attrs).get("class") or "").split())
-        data = {name for name, _value in attrs if name.startswith("data-")}
-        for name in self.TRACK:
-            if name in classes and name not in self.found:
-                self.found[name] = (tag, data, {c for c in classes if not c.startswith("is-")})
+    def test_the_old_quadros_card_partial_is_gone(self):
+        self.assertTemplateNotUsed(self.kanban_page(), "boards/_kanban_card.html")
 
+    def test_quadros_features_come_through_the_same_markup(self):
+        html = self.kanban_page().content.decode()
+        self.assertIn(f'data-option-id="{self.novo.pk}"', html)                        # a etiqueta que a raia representa
+        self.assertIn("data-lane-menu", html)                                         # ⋮ da raia para quem gere colunas
+        self.assertIn('data-card-title tabindex="0" role="textbox"', html)             # o título edita no lugar
+        self.assertIn("data-card-menu", html)
+        self.assertIn('aria-label="Opções da tarefa ', html)                           # o texto de sempre de Quadros
+        self.assertRegex(html, r'<dd class="kanban-field__value is-editable" data-cell="" data-item-id="\d+" data-column-id="\d+" data-type="[A-Z]+" data-value="[^"]*" tabindex="0">')
 
-def skeleton(html):
-    parser = _Skeleton()
-    parser.feed(html)
-    return parser.found
+    def test_a_viewer_gets_the_same_cards_without_anything_editable(self):
+        html = self.kanban_page(self.viewer).content.decode()
+        for marker in ("data-lane-menu", "data-card-menu", 'draggable="true"', 'role="textbox"', "is-editable"):
+            self.assertNotIn(marker, html, marker)
+        self.assertIn("Arena Norte", html)
 
-
-class ParityWithTheBoardsKanbanTests(BoardTestCase):
-    """Se alguém mudar a marcação de Quadros (o modelo) sem refletir no kit, ou vice-versa, este teste acusa."""
-
-    def test_the_kit_emits_the_same_structure_as_the_boards_kanban(self):
-        self.login(self.admin)
-        model_html = self.client.get(reverse("board-view-detail", args=[self.kanban.pk])).content.decode()
-        model = skeleton(model_html)
-        kit = skeleton(render(lane(cards=[card(fields=[{"kind": "text", "label": "Obra", "text": "Arena"}])])))
-        self.assertEqual(set(model), set(_Skeleton.TRACK), "a página de Quadros precisa ter todos os elementos estruturais")
-        for name in _Skeleton.TRACK:
-            model_tag, model_data, model_classes = model[name]
-            kit_tag, kit_data, kit_classes = kit[name]
-            if name == "kanban-card__title":
-                self.assertIn(kit_tag, ("a", "span"))  # o kit usa link para a ficha; Quadros edita o título no lugar
-            else:
-                self.assertEqual(kit_tag, model_tag, name)
-            self.assertLessEqual(model_data - {"data-option-id"}, kit_data, f"{name}: atributos que Quadros tem e o kit não")
-            self.assertLessEqual(model_classes, kit_classes, f"{name}: classes que Quadros tem e o kit não")
+    def test_the_total_line_only_exists_when_the_view_sums_a_column(self):
+        self.assertNotIn("data-lane-total", self.kanban_page().content.decode())
+        ViewService.update(user=self.admin, view=self.kanban, settings={"sum_column": self.col["moeda"].pk})
+        self.assertIn("data-lane-total", self.kanban_page().content.decode())

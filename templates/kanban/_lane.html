@@ -3,7 +3,7 @@
     <header class="kanban-lane__head">
         <span class="kanban-lane__title" data-lane-title>{{ lane.label }}</span>
         <span class="kanban-lane__count" data-lane-count title="Itens nesta raia">{{ lane.count }}</span>
-        {% if lane.menu %}<button type="button" class="kanban-lane__menu" data-lane-menu aria-haspopup="menu" aria-label="Opções da raia {{ lane.label }}">{% include "_icon.html" with name="more" %}</button>{% endif %}
+        {% if lane.menu %}<button type="button" class="kanban-lane__menu" data-lane-menu{% for name, value in lane.menu_attrs %} {{ name }}="{{ value }}"{% endfor %} aria-haspopup="menu" aria-label="Opções da raia {{ lane.label }}">{% include "_icon.html" with name="more" %}</button>{% endif %}
     </header>
     {% if lane.sector %}<p class="kanban-lane__meta">{{ lane.sector }}</p>{% endif %}
     {% if lane.total is not None %}<p class="kanban-lane__total" data-lane-total>{% if lane.total %}{{ lane.total }}{% else %}&nbsp;{% endif %}</p>{% endif %}

@@ -1,0 +1,17 @@
+{% comment %}
+Região do Kanban de Demandas: o componente ÚNICO do sistema (templates/kanban/*, o mesmo de Quadros), usado pela tela de
+sempre (boards/demand_work_board.html) e pelo Workspace (workspace/demandas.html). Aqui só ficam os dados que o adaptador
+(static/js/demand-kanban.js) precisa:
+  data-move-url    endereço de gravação do agrupamento, com `/itens/0/valor/` no lugar do id (o adaptador troca o 0 pelo id do cartão)
+  data-rename-url  o mesmo, para o título (renomear no lugar)
+  data-group-by    agrupamento efetivo (pede confirmação ao mover por setor)
+  data-inline-url / -sentinel / data-people-url / data-options-url   os mesmos endereços da edição inline da Lista: os campos do
+                   cartão (Responsável, Prazo, Setor, Etapa, Status, Prioridade) editam com activity-inline-edit.js
+As raias vêm de `kanban` (boards/demand_kanban.py); `?fragmento=raias` devolve só `kanban/_lanes.html` para redesenhar.
+Quem pode configurar o quadro recebe também `kanban_config` (JSON): os dados do diálogo "Configurar cartões" (o mesmo de Quadros).
+{% endcomment %}
+<div class="kanban-scroll" data-kanban data-group-by="{{ group_by }}" data-inline-url="{% url 'activity-inline-update' 999999999 %}" data-inline-sentinel="999999999" data-people-url="{% url 'person-search' %}" data-options-url="{% url 'activity-inline-options' 999999999 %}"{% if group_field %} data-move-url="{% url 'workboard-value' board.pk group_field.pk 0 %}"{% endif %}{% if title_field %} data-rename-url="{% url 'workboard-value' board.pk title_field.pk 0 %}"{% endif %} aria-label="Demandas em raias, agrupadas por {{ group_label|lower }}">
+    <div class="kanban-lanes" data-kanban-lanes>{% include "kanban/_lanes.html" %}</div>
+</div>
+<div id="activity-inline-overlay-root" class="activity-inline-overlay-root" aria-live="polite"></div>
+{% if kanban_config %}{{ kanban_config|json_script:"kanban-config" }}{% endif %}

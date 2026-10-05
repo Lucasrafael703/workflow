@@ -100,11 +100,14 @@ class DomainWorkBoardTests(TestCase):
         self.client.force_login(self.user)
         response = self.client.get(reverse("activity-kanban"))
 
+        board = ensure_domain_board(self.org, DomainBoard.Domain.DEMAND)
+        stage_field = board.fields.get(key="stage")
         self.assertContains(response, 'data-work-board')
-        self.assertContains(response, 'data-work-card')
+        self.assertContains(response, 'data-card ')  # o cartão do componente único (antes: data-work-card)
         self.assertContains(response, 'draggable="true"')
         self.assertContains(response, "Adicionar demanda")
-        self.assertContains(response, 'data-work-group-field')
+        # a tela diz ao navegador em qual campo gravar o agrupamento (antes: data-work-group-field)
+        self.assertContains(response, f'data-move-url="/quadros/dominio/{board.pk}/campos/{stage_field.pk}/itens/0/valor/"')
         self.assertContains(response, "Triagem")
         self.assertContains(response, "Revisão")
 
@@ -115,7 +118,8 @@ class DomainWorkBoardTests(TestCase):
         self.client.force_login(self.user)
         page = self.client.get(reverse("activity-kanban"))
         self.assertContains(page, "Configurar cartões")
-        self.assertContains(page, 'data-work-card-settings-form')
+        self.assertContains(page, "data-kanban-config")  # o botão que abre o diálogo compartilhado com Quadros (antes: o painel lateral)
+        self.assertContains(page, 'id="kanban-config"')  # os dados do diálogo
 
         response = self.client.post(
             reverse("workboard-view-settings", args=[view.pk]),
@@ -186,7 +190,7 @@ class DomainWorkBoardTests(TestCase):
         view.refresh_from_db()
         self.assertEqual(view.settings["group_by"], "condition")
         page = self.client.get(reverse("activity-kanban"))
-        self.assertContains(page, f'data-work-group-field="{condition_field.pk}"')
+        self.assertContains(page, f'data-move-url="/quadros/dominio/{board.pk}/campos/{condition_field.pk}/itens/0/valor/"')
         self.assertContains(page, "Aguardando cliente")
         self.assertContains(page, "Em revisão")
 

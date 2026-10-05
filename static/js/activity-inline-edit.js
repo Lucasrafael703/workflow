@@ -1,4 +1,7 @@
-/* Edição inline da lista de Demandas (/demandas/): clicar no dado e editá-lo ali mesmo.
+/* Edição inline de Demandas: clicar no dado e editá-lo ali mesmo. Vale para a LISTA (`[data-activity-list]`, uma linha por
+   demanda) e para o KANBAN (`[data-kanban]`, os campos do cartão): a "superfície" decide só como LER o valor de um campo e como
+   DESENHÁ-LO; pop-overs, gravação otimista, revisão por célula e erros são os mesmos. Na tabela o valor é lido do desenho; no
+   cartão ele mora em `data-inline-model` (JSON) e o desenho é o do kit (templates/kanban/_fields.html).
 
    O servidor decide tudo (autorização, validação, auditoria, notificação): este arquivo só liga o comportamento.
    Cada gravação é otimista (a célula muda na hora) e volta ao valor confirmado, com aviso, se o servidor recusar.
@@ -10,10 +13,10 @@
    - sucesso é silencioso (só um realce curto); erro mostra um aviso curto (role="alert");
    - um único pop-over aberto, ancorado com position:fixed na camada global, que acompanha scroll e resize e fecha
      por clique fora ou Esc.
-   Os endereços vêm de data-* da tabela (`data-activity-list`), com um id fictício que `fillUrl` troca pelo real.
+   Os endereços vêm de data-* da raiz (`data-activity-list` ou `data-kanban`), com um id fictício que `fillUrl` troca pelo real.
    Editores de campo mais ricos (Setor, Estágio e Status: static/js/activity-inline-options.js) entram por
    `LPSInlineEdit.use(plugin)`: o plugin recebe a mesma infraestrutura (estado, gravação otimista, pop-over) e registra
-   o seu editor. Exporta window.LPSInlineEdit ({helpers, init, boot, use}) para os testes. */
+   o seu editor (`api.registerEditor` na tabela; `api.registerCardField` no cartão). Exporta window.LPSInlineEdit ({helpers, init, boot, use}) para os testes. */
 (function () {
     "use strict";
 
@@ -66,6 +69,13 @@
         // linked(cell) -> [{cell, field}], derive(data) -> {field: model}}
         var editors = {};
         var listeners = []; // fn(field, data, cell): depois de uma gravação aplicada (ex.: o prazo muda a linha de atraso)
+        // Superfície: a tabela da Lista ou o Kanban. No cartão cada campo tem o seu editor em `cardFields` (mesmo contrato).
+        var surface = table.hasAttribute("data-kanban") ? "card" : "table";
+        var cardFields = {};
+
+        function editorFor(field) {
+            return surface === "card" ? (cardFields[field] || null) : (editors[field] || null);
+        }
 
         // -- DOM ----------------------------------------------------------------------------------
 
@@ -95,7 +105,8 @@
         // -- modelo de cada campo (o que a célula mostra) --------------------------------------------
 
         function readModel(cell, field) {
-            if (editors[field]) return editors[field].read(cell);
+            var editor = editorFor(field);
+            if (editor) return editor.read(cell);
             if (field === "title") {
                 return {value: cell.dataset.inlineValue != null ? cell.dataset.inlineValue : cell.textContent};
             }
@@ -117,7 +128,8 @@
         }
 
         function render(cell, field, model) {
-            if (editors[field]) { editors[field].render(cell, model); return; }
+            var editor = editorFor(field);
+            if (editor) { editor.render(cell, model); return; }
             if (field === "title") {
                 cell.textContent = model.value;
                 cell.dataset.inlineValue = model.value;
@@ -144,7 +156,8 @@
         }
 
         function modelFromResponse(field, data) {
-            if (editors[field]) return editors[field].fromResponse(data);
+            var editor = editorFor(field);
+            if (editor && editor.fromResponse) return editor.fromResponse(data);
             var display = data.display || {};
             if (field === "title") return {value: display.text != null ? display.text : data.value};
             if (field === "owner") {
@@ -156,9 +169,12 @@
 
         // -- rede e avisos ---------------------------------------------------------------------------
 
-        /** Endereço de uma rota da linha: o `data-*` da tabela tem um id fictício que é trocado pelo id da demanda. */
+        /** A linha (ou o cartão) da demanda de uma célula. */
+        function rowOf(cell) { return cell.closest("[data-activity-id]"); }
+
+        /** Endereço de uma rota da linha: o `data-*` da raiz tem um id fictício que é trocado pelo id da demanda. */
         function rowUrl(cell, attr) {
-            return fillUrl(table.dataset[attr], table.dataset.inlineSentinel, cell.closest("tr").dataset.activityId);
+            return fillUrl(table.dataset[attr], table.dataset.inlineSentinel, rowOf(cell).dataset.activityId);
         }
 
         function request(cell, formData) {
@@ -219,7 +235,7 @@
         function save(cell, field, formData, optimistic, hooks) {
             hooks = hooks || {};
             var state = stateOf(cell);
-            var editor = editors[field];
+            var editor = editorFor(field);
             var linked = editor && editor.linked ? editor.linked(cell) : [];
             var blocked = state.busy || linked.some(function (item) { return stateOf(item.cell).busy; });
             if (blocked) {
@@ -454,6 +470,59 @@
             openPopover(cell, form, "Editar o prazo");
         }
 
+        // -- campos do cartão do Kanban ---------------------------------------------------------------------------------
+        // O servidor desenha o cartão (templates/kanban/_fields.html) com o modelo de cada campo editável em `data-inline-model`.
+        // Aqui só o desenho otimista de Responsável e Prazo; Setor, Etapa, Status e Prioridade ficam em activity-inline-options.js.
+        // Depois de uma gravação o servidor ainda redesenha as raias quando o campo muda a raia do cartão (demand-kanban.js).
+
+        function cardModel(cell) {
+            try { return JSON.parse(cell.getAttribute("data-inline-model") || "null"); } catch (error) { return null; }
+        }
+
+        function keepCardModel(cell, model) {
+            cell.setAttribute("data-inline-model", JSON.stringify(model));
+        }
+
+        /** As iniciais do kit (`lps_board.initials`): a inicial do primeiro e do último nome. */
+        function kitInitials(name) {
+            var words = String(name || "").trim().split(/\s+/).filter(Boolean);
+            if (!words.length) return "?";
+            return (words[0].charAt(0) + (words.length > 1 ? words[words.length - 1].charAt(0) : "")).toUpperCase();
+        }
+
+        function renderCardOwner(cell, model) {
+            cell.textContent = "";
+            if (model && model.value) {
+                cell.appendChild(el("span", {class: "board-person"}, [
+                    el("span", {class: "board-avatar", "aria-hidden": "true", text: kitInitials(model.text)}),
+                    el("span", {class: "board-person__name", text: model.text})
+                ]));
+            } else {
+                var avatar = el("span", {class: "board-avatar board-avatar--empty", "aria-hidden": "true"});
+                avatar.innerHTML = '<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><use href="#i-user"></use></svg>';
+                cell.appendChild(el("span", {class: "board-person board-person--empty"}, [avatar, el("span", {class: "sr-only", text: "Sem responsável"})]));
+            }
+            keepCardModel(cell, model);
+        }
+
+        function renderCardDeadline(cell, model) {
+            cell.textContent = "";
+            if (!model || !model.text || model.text === "Sem prazo") {
+                cell.appendChild(el("span", {class: "board-empty", text: "—"}));
+            } else {
+                var date = el("span", {class: "board-date" + (model.isLate ? " is-overdue" : ""), text: model.text});
+                if (model.isLate) {
+                    date.appendChild(doc.createTextNode(" "));
+                    date.appendChild(el("span", {class: "board-date__flag", text: "vencido"}));  // atraso é selo, nunca fundo
+                }
+                cell.appendChild(date);
+            }
+            keepCardModel(cell, model);
+        }
+
+        cardFields.owner = {read: cardModel, render: renderCardOwner};
+        cardFields.requested_deadline = {read: cardModel, render: renderCardDeadline};
+
         // -- eventos ------------------------------------------------------------------------------------
 
         function openEditor(cell) {
@@ -464,7 +533,7 @@
             if (field === "title") openTitleEditor(cell);
             else if (field === "owner") openOwnerEditor(cell);
             else if (field === "requested_deadline") openDeadlineEditor(cell);
-            else if (editors[field] && editors[field].open) editors[field].open(cell);
+            else if (editorFor(field) && editorFor(field).open) editorFor(field).open(cell);
         }
 
         table.addEventListener("click", function (event) {
@@ -491,14 +560,31 @@
         win.addEventListener("scroll", reposition, true);
 
         var api = {
-            table: table, overlay: overlay, doc: doc, win: win, el: el, helpers: helpers,
+            table: table, overlay: overlay, doc: doc, win: win, el: el, helpers: helpers, surface: surface, rowOf: rowOf,
             stateOf: stateOf, save: save, getJSON: getJSON, postJSON: postJSON, showError: showError,
             /** Dá a uma célula um valor já confirmado pelo servidor (ex.: a opção que outra linha acabou de editar). */
             setConfirmed: function (cell, field, model) { stateOf(cell).model = model; render(cell, field, model); },
             onSaved: function (listener) { listeners.push(listener); },
             openPopover: openPopover, closePopover: closePopover, reposition: reposition,
             isOpen: function (pop) { return !!active && active.pop === pop; },
-            registerEditor: function (field, editor) { editors[field] = editor; }
+            registerEditor: function (field, editor) { editors[field] = editor; },
+            /** Editor de um campo do CARTÃO (mesmo contrato de `registerEditor`; só vale na superfície do Kanban). */
+            registerCardField: function (field, editor) { cardFields[field] = editor; },
+            /** As células da página que mostram a mesma opção (por exemplo, a etapa que acabou de ser renomeada). */
+            optionCells: function (field, id) {
+                var selector = surface === "card" ? '[data-inline-field="' + field + '"]' : 'td[data-column="' + field + '"]';
+                return Array.prototype.filter.call(table.querySelectorAll(selector), function (node) { return node.dataset.optionId === String(id); });
+            },
+            /** As células de Etapa e Status da mesma demanda: o servidor as redefine quando o setor muda. */
+            linkedCells: function (cell) {
+                var row = rowOf(cell);
+                var found = [];
+                ["stage", "condition"].forEach(function (field) {
+                    var node = row && row.querySelector(surface === "card" ? '[data-inline-field="' + field + '"]' : 'td[data-column="' + field + '"]');
+                    if (node) found.push({cell: node, field: field});
+                });
+                return found;
+            }
         };
         plugins.forEach(function (plugin) { plugin(api); });
         return {closePopover: closePopover, openEditor: openEditor, stateOf: stateOf, api: api};
@@ -511,7 +597,7 @@
     }
 
     function boot() {
-        var table = document.querySelector("[data-activity-list]");
+        var table = document.querySelector("[data-activity-list], [data-kanban][data-inline-url]");
         var overlay = document.getElementById("activity-inline-overlay-root");
         if (!table || !overlay || window.LPSInlineEdit.instance) return;
         window.LPSInlineEdit.instance = init(table, overlay, document, window);

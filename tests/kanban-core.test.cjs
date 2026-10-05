@@ -44,7 +44,23 @@ stage = render([
     group(20, 'A fazer', [item(5, sector_id=2)], sector_id=2),
 ], 'stage')
 owner = render([group('empty', 'Sem responsável'), group(1, 'ana', [item(1)]), group(2, 'bia', [item(2)])], 'owner')
-print(json.dumps({'stage': stage, 'owner': owner}))
+def v2_card(pk, title, **extra):
+    base = {'id': pk, 'title': title, 'url': '', 'updated_at': '2026-10-03T10:00:00+00:00', 'scope': '', 'can_move': True, 'menu': True,
+            'title_editable': True, 'title_label': 'Obra', 'attrs': [],
+            'fields': [{'kind': 'text', 'label': 'Cliente', 'text': 'Shopping Norte', 'editable': True, 'css': 'text',
+                        'attrs': [('data-cell', ''), ('data-item-id', pk), ('data-column-id', 11), ('data-type', 'TEXT'), ('data-value', 'Shopping Norte')]}]}
+    base.update(extra)
+    return base
+
+v2 = render_to_string('kanban/_lanes.html', {'kanban': {
+    'item_label': 'obra', 'show_field_names': False, 'lanes': [
+        {'key': '1', 'label': 'Novo', 'color': '#C4C4C4', 'is_blank': False, 'accepts': True, 'scope': '', 'sector': '', 'option_id': 1, 'menu': True,
+         'total': 'R$ 10,00', 'count': 2, 'empty_text': 'Nenhum item. Arraste um cartão para cá.', 'add': {'label': 'Adicionar obra', 'attrs': []},
+         'cards': [v2_card(101, 'Arena Norte'), v2_card(102, 'Hospital Vida', can_move=False, title_editable=False)]},
+        {'key': '2', 'label': 'Ganho', 'color': '#00C875', 'is_blank': False, 'accepts': True, 'scope': '', 'sector': '', 'option_id': 2, 'menu': True,
+         'total': '', 'count': 0, 'empty_text': 'Nenhum item. Arraste um cartão para cá.', 'add': {'label': 'Adicionar obra', 'attrs': []}, 'cards': []},
+    ]}})
+print(json.dumps({'stage': stage, 'owner': owner, 'v2': v2}))
 `], {cwd: root, encoding: "utf8"}).trim());
 
 const script = readFileSync(path.join(root, "static/js/kanban-core.js"), "utf8");
@@ -77,7 +93,7 @@ function setup(t, {html = fixtures.stage, adapter = {}} = {}) {
         drag(card) { h.fire(card, "dragstart"); },
         over(lane) { return h.fire(lane.querySelector("[data-lane-body]"), "dragover"); },
         drop(lane) { return h.fire(lane.querySelector("[data-lane-body]"), "drop"); },
-        tick: () => new Promise((resolve) => window.setTimeout(resolve, 5)),
+        tick: () => new Promise((resolve) => setTimeout(resolve, 5)),  // o do Node: os testes trocam window.setTimeout
     };
     return h;
 }
@@ -357,9 +373,12 @@ test("beforeMove também vale para o menu", async (t) => {
     assert.deepEqual(h.ids(10), ["1", "2", "3"]);
 });
 
-test("um cartão sem destino não tem ⋯ (nada desabilitado)", (t) => {
-    const h = setup(t);
-    assert.equal(h.card(3).querySelector("[data-card-menu]"), null);
+test("um cartão sem destino tem o ⋯ só pelas ações do anfitrião: nunca 'Mover para', nunca desabilitado", (t) => {
+    const h = setup(t, {adapter: {menuItems() { return [{label: "Abrir demanda", icon: "eye", onClick() {}}]; }}});
+    assert.equal(h.card(3).hasAttribute("draggable"), false, "concluída: não arrasta");
+    h.card(3).querySelector("[data-card-menu]").click();
+    assert.deepEqual([...h.document.querySelectorAll(".board-pop .board-menu__item")].map((n) => n.textContent), ["Abrir demanda"]);
+    assert.equal(h.document.querySelector(".board-menu__label"), null);
     assert.equal(h.document.querySelectorAll("[disabled]").length, 0);
 });
 
@@ -472,4 +491,318 @@ test("a confirmação prende o Tab dentro dela", (t) => {
     assert.equal(h.document.activeElement, stops[0], "do último volta ao primeiro");
     tab(true);
     assert.equal(h.document.activeElement, stops[2]);
+});
+
+// -- contrato v2: movimento síncrono, aviso silencioso, renomear, ações do anfitrião, configurar cartões, primitivas --------
+
+const v2 = (t, adapter = {}) => setup(t, {html: fixtures.v2, adapter});
+const enter = (h, node) => node.dispatchEvent(new h.window.KeyboardEvent("keydown", {key: "Enter", bubbles: true, cancelable: true}));
+const escape = (h, node) => node.dispatchEvent(new h.window.KeyboardEvent("keydown", {key: "Escape", bubbles: true, cancelable: true}));
+
+test("v2: sem confirmação o cartão se mexe no mesmo instante, antes de qualquer espera", (t) => {
+    const h = v2(t);
+    h.drag(h.card(101));
+    h.drop(h.lane(2));
+    assert.deepEqual(h.ids(2), ["101"], "nada de esperar um microtask: o cartão já está na raia nova");
+    assert.deepEqual([h.count(1), h.count(2)], ["1", "1"]);
+});
+
+test("v2: um movimento 'silent' não avisa; o padrão avisa", async (t) => {
+    const h = v2(t);
+    h.drag(h.card(101));
+    h.drop(h.lane(2));
+    h.calls[0].resolve({silent: true});
+    await h.tick();
+    assert.deepEqual(h.toasts(), [], "Quadros nunca avisou sucesso ao mover e continua assim");
+    h.drag(h.card(101));
+    h.drop(h.lane(1));
+    h.calls[1].resolve({});
+    await h.tick();
+    assert.deepEqual(h.toasts(), ["Movido para “Novo”."]);
+});
+
+test("v2: clicar no título editável renomeia no lugar e grava com a versão do cartão", async (t) => {
+    const renames = [];
+    const h = v2(t, {rename(ctx) { renames.push({itemId: ctx.itemId, title: ctx.title, previous: ctx.previous}); return Promise.resolve({updatedAt: "2026-10-03T12:00:00+00:00"}); }});
+    h.card(101).querySelector("[data-card-title]").click();
+    const input = h.card(101).querySelector(".board-inline-input");
+    assert.equal(input.value, "Arena Norte");
+    input.value = "Arena Sul";
+    enter(h, input);
+    assert.equal(h.card(101).querySelector("[data-card-title]").textContent, "Arena Sul", "o título muda na hora");
+    await h.tick();
+    assert.deepEqual(renames, [{itemId: "101", title: "Arena Sul", previous: "Arena Norte"}]);
+    assert.equal(h.card(101).dataset.updatedAt, "2026-10-03T12:00:00+00:00", "a próxima gravação leva a versão nova");
+});
+
+test("v2: se o servidor recusa o novo título, o texto antigo volta com a mensagem", async (t) => {
+    const h = v2(t, {rename() { return Promise.reject(new Error("O título não pode ficar vazio.")); }});
+    h.card(101).querySelector("[data-card-title]").click();
+    const input = h.card(101).querySelector(".board-inline-input");
+    input.value = "x";
+    enter(h, input);
+    await h.tick();
+    assert.equal(h.card(101).querySelector("[data-card-title]").textContent, "Arena Norte");
+    assert.deepEqual(h.toasts(), ["O título não pode ficar vazio."]);
+});
+
+test("v2: Esc e título igual não gravam nada; o servidor pode devolver o título que valeu", async (t) => {
+    const calls = [];
+    const h = v2(t, {rename(ctx) { calls.push(ctx.title); return Promise.resolve({title: "Arena Sul (ajustado)"}); }});
+    const open = () => { h.card(101).querySelector("[data-card-title]").click(); return h.card(101).querySelector(".board-inline-input"); };
+    let input = open();
+    input.value = "Outro";
+    escape(h, input);
+    input = open();
+    enter(h, input);  // não mudou
+    await h.tick();
+    assert.deepEqual(calls, []);
+    assert.equal(h.card(101).querySelector("[data-card-title]").textContent, "Arena Norte");
+    input = open();
+    input.value = "Arena Sul";
+    enter(h, input);
+    await h.tick();
+    assert.equal(h.card(101).querySelector("[data-card-title]").textContent, "Arena Sul (ajustado)");
+});
+
+test("v2: título vazio vira 'Sem título' e é gravado vazio (quem não aceita recusa no servidor)", async (t) => {
+    const calls = [];
+    const h = v2(t, {rename(ctx) { calls.push(ctx.title); return Promise.resolve({}); }});
+    h.card(101).querySelector("[data-card-title]").click();
+    const input = h.card(101).querySelector(".board-inline-input");
+    input.value = "   ";
+    enter(h, input);
+    await h.tick();
+    assert.deepEqual(calls, [""]);
+    assert.equal(h.card(101).querySelector("[data-card-title]").textContent, "Sem título");
+    assert.equal(h.card(101).querySelector("[data-card-title]").classList.contains("is-empty"), true);
+});
+
+test("v2: o título que não é editável (sem role=textbox) não abre edição", (t) => {
+    const h = v2(t, {rename() { throw new Error("não devia chamar"); }});
+    h.card(102).querySelector("[data-card-title]").click();
+    assert.equal(h.card(102).querySelector(".board-inline-input"), null);
+});
+
+test("v2: Enter no título focado também renomeia; startRename funciona por chamada (depois de criar um cartão)", (t) => {
+    const h = v2(t, {rename() { return Promise.resolve({}); }});
+    enter(h, h.card(101).querySelector("[data-card-title]"));
+    assert.ok(h.card(101).querySelector(".board-inline-input"));
+    // um cartão vindo do servidor sem o role (marcação mínima): a chamada direta não exige o role, o gatilho por clique sim
+    h.api.redraw('<section data-lane data-lane-key="9" data-lane-label="X"><div data-lane-body><article data-card data-item-id="300"><span data-card-title class="is-empty">Sem título</span></article><p data-lane-empty hidden></p></div></section>');
+    h.api.startRename(h.card(300));
+    assert.ok(h.card(300).querySelector(".board-inline-input"));
+    assert.equal(h.card(300).querySelector(".board-inline-input").value, "", "estava vazio: a edição começa vazia, não em 'Sem título'");
+});
+
+test("v2: sem adapter.rename o núcleo não abre edição", (t) => {
+    const h = v2(t);
+    h.card(101).querySelector("[data-card-title]").click();
+    assert.equal(h.card(101).querySelector(".board-inline-input"), null);
+});
+
+test("v2: o ⋯ junta 'Mover para' e as ações do anfitrião, com ícone, separador e perigo", (t) => {
+    const done = [];
+    const h = v2(t, {menuItems(ctx) {
+        return [{label: "Renomear", icon: "file-text", onClick: () => done.push("renomear " + ctx.itemId)}, {label: "Excluir item", icon: "trash", danger: true, onClick: () => done.push("excluir")}];
+    }});
+    h.card(101).querySelector("[data-card-menu]").click();
+    const pop = h.document.querySelector(".board-pop");
+    assert.deepEqual([...pop.querySelectorAll(".board-menu__label, .board-menu__item, .board-menu__sep")].map((n) => n.className.split(" ")[0] + ":" + n.textContent.trim()),
+        ["board-menu__label:Mover para", "board-menu__item:Ganho", "board-menu__sep:", "board-menu__item:Renomear", "board-menu__item:Excluir item"]);
+    assert.equal(pop.querySelector(".is-danger span").textContent, "Excluir item");
+    assert.equal(pop.querySelectorAll("svg use")[1].getAttribute("href"), "#i-file-text");
+    [...pop.querySelectorAll(".board-menu__item")].find((n) => n.textContent === "Renomear").click();
+    assert.deepEqual(done, ["renomear 101"]);
+    assert.equal(h.document.querySelector(".board-pop"), null, "escolher fecha o menu");
+});
+
+test("v2: um cartão que não arrasta mostra só as ações do anfitrião (sem 'Mover para')", (t) => {
+    const h = v2(t, {menuItems() { return [{label: "Excluir item", icon: "trash", danger: true}]; }});
+    h.card(102).querySelector("[data-card-menu]").click();
+    assert.deepEqual([...h.document.querySelectorAll(".board-pop .board-menu__item")].map((n) => n.textContent), ["Excluir item"]);
+    assert.equal(h.document.querySelector(".board-menu__label"), null);
+});
+
+test("v2: sem destino e sem ação o ⋯ avisa em vez de abrir um menu vazio", (t) => {
+    const h = v2(t);
+    h.card(102).querySelector("[data-card-menu]").click();
+    assert.equal(h.document.querySelector(".board-pop"), null);
+    assert.deepEqual(h.toasts(), ["Não há ações disponíveis para este cartão."]);
+});
+
+test("v2: o ⋮ da raia abre os itens do anfitrião, fecha ao clicar de novo e escolher fecha", (t) => {
+    const seen = [];
+    const done = [];
+    const h = v2(t, {laneMenu(ctx) {
+        seen.push([ctx.laneKey, ctx.lane.dataset.laneLabel, ctx.anchor.hasAttribute("data-lane-menu")]);
+        return [{label: "Renomear etiqueta", icon: "file-text", onClick: () => done.push("renomear")}, {label: "Editar etiquetas", onClick: () => done.push("editar")}];
+    }});
+    const button = h.lane(1).querySelector("[data-lane-menu]");
+    button.click();
+    const pop = h.document.querySelector(".board-pop");
+    assert.equal(pop.getAttribute("aria-label"), "Opções da raia Novo");
+    assert.deepEqual([...pop.querySelectorAll(".board-menu__item")].map((n) => n.textContent), ["Renomear etiqueta", "Editar etiquetas"]);
+    assert.deepEqual(seen, [["1", "Novo", true]]);
+    assert.equal(button.getAttribute("aria-expanded"), "true");
+    button.click();
+    assert.equal(h.document.querySelector(".board-pop"), null, "o mesmo botão de novo fecha");
+    button.click();
+    [...h.document.querySelectorAll(".board-menu__item")].find((n) => n.textContent === "Editar etiquetas").click();
+    assert.deepEqual(done, ["editar"]);
+    assert.equal(h.document.querySelector(".board-pop"), null);
+});
+
+test("v2: o ⋮ da raia sem itens não abre menu vazio, e sem o gancho o núcleo nem o intercepta", (t) => {
+    const empty = v2(t, {laneMenu() { return []; }});
+    empty.lane(1).querySelector("[data-lane-menu]").click();
+    assert.equal(empty.document.querySelector(".board-pop"), null);
+    assert.deepEqual(empty.toasts(), [], "sem itens, sem aviso: o servidor só mostra o botão quando há o que oferecer");
+
+    const bare = v2(t);
+    const click = bare.fire(bare.lane(1).querySelector("[data-lane-menu]"), "click");
+    assert.equal(bare.document.querySelector(".board-pop"), null);
+    assert.equal(click.defaultPrevented, false);
+});
+
+test("v2: o '+ Adicionar' chama o anfitrião com a raia; sem o gancho o link segue o endereço dele", (t) => {
+    const asked = [];
+    const h = v2(t, {addCard(ctx) { asked.push([ctx.lane.dataset.laneKey, ctx.anchor.hasAttribute("data-kanban-add")]); }});
+    const click = h.fire(h.lane(2).querySelector("[data-kanban-add]"), "click");
+    assert.deepEqual(asked, [["2", true]]);
+    assert.equal(click.defaultPrevented, true);
+
+    const link = setup(t);  // Demandas: o "+ Adicionar" é um link para a janela "Nova demanda"
+    const anchor = link.lane(10).querySelector("a[data-kanban-add]");
+    assert.match(anchor.getAttribute("href"), /^\/demandas\/nova\/\?etapa=10&setor=1$/);
+    assert.equal(link.fire(anchor, "click").defaultPrevented, false, "o núcleo não atrapalha o link");
+});
+
+test("v2: as primitivas do núcleo servem ao anfitrião (menu avulso, janela, edição de texto)", (t) => {
+    const h = v2(t);
+    const picked = [];
+    h.api.openMenu(h.lane(1).querySelector("[data-lane-menu]"), [{label: "Renomear etiqueta", icon: "file-text", onClick: () => picked.push("r")}, {separator: true}, {label: "Editar etiquetas", onClick: () => picked.push("e")}], "Opções da raia Novo");
+    assert.equal(h.document.querySelector(".board-pop").getAttribute("aria-label"), "Opções da raia Novo");
+    h.document.querySelectorAll(".board-menu__item")[1].click();
+    assert.deepEqual(picked, ["e"]);
+
+    const dialog = h.window.LPSKanbanCore.ui.openDialog("Etiquetas", h.document.createElement("p"), [{label: "Concluir", kind: "primary"}]);
+    dialog.error("Algo deu errado.");
+    assert.equal(h.document.querySelector(".board-dialog__error").textContent, "Algo deu errado.");
+    assert.equal(h.document.querySelector(".board-dialog__error").hidden, false);
+    escape(h, h.document);
+    assert.equal(h.document.querySelector(".board-dialog"), null);
+
+    const target = h.card(101).querySelector("[data-card-title]");
+    const committed = [];
+    h.window.LPSKanbanCore.ui.inlineEdit(target, {value: "Arena Norte", onCommit: (v) => committed.push(v)});
+    const input = h.card(101).querySelector(".board-inline-input");
+    input.value = "Novo";
+    enter(h, input);
+    assert.deepEqual(committed, ["Novo"]);
+    assert.equal(target.style.display, "");
+});
+
+// os objetos criados dentro do jsdom têm outro protótipo: comparar só a estrutura
+const plain = (value) => JSON.parse(JSON.stringify(value));
+
+function configSpec(saved, extra = {}) {
+    return Object.assign({
+        controls: [
+            {type: "check", key: "show_empty", label: "Mostrar raias vazias", value: true},
+            {type: "select", key: "sum_column", label: "Somar valor no cabeçalho da raia", choices: [["", "Não somar"], ["15", "Valor"]], value: "15", parse: (v) => (v ? Number(v) : null)},
+            {type: "check", key: "show_field_names", label: "Mostrar o nome de cada campo no cartão", value: false},
+        ],
+        fields: [{id: 11, name: "Cliente"}, {id: 12, name: "Responsável"}, {id: 13, name: "Status"}, {id: 14, name: "Prazo"}],
+        selected: [13, 11],
+        save: (change) => { saved.push(change); return Promise.resolve(); },
+    }, extra);
+}
+const controlBoxes = (h) => [...h.document.querySelectorAll(".kanban-config__controls input[type=checkbox]")].filter((box) => !box.closest(".kanban-config__field"));
+
+test("v2: Configurar cartões — controles gravam sozinhos, com o valor já convertido", (t) => {
+    const saved = [];
+    const h = v2(t);
+    const dialog = h.api.openConfig(configSpec(saved));
+    assert.equal(dialog.root.classList.contains("board-dialog--wide"), true);
+    assert.equal(h.document.querySelector(".board-dialog h2").textContent, "Configurar cartões");
+    const [empty, names] = controlBoxes(h);
+    assert.equal(empty.checked, true);
+    assert.equal(names.checked, false);
+    empty.checked = false;
+    empty.dispatchEvent(new h.window.Event("change", {bubbles: true}));
+    const select = h.document.querySelector(".kanban-config__controls select");
+    assert.equal(select.value, "15");
+    select.value = "";
+    select.dispatchEvent(new h.window.Event("change", {bubbles: true}));
+    names.checked = true;
+    names.dispatchEvent(new h.window.Event("change", {bubbles: true}));
+    assert.deepEqual(plain(saved), [{show_empty: false}, {sum_column: null}, {show_field_names: true}]);
+});
+
+function captureTimers(h) {
+    const timers = [];
+    h.window.setTimeout = (fn, ms) => { timers.push({fn, ms}); return timers.length; };
+    h.window.clearTimeout = (id) => { if (timers[id - 1]) timers[id - 1].fn = () => {}; };
+    return timers;
+}
+
+test("v2: Configurar cartões — os campos do cartão vêm primeiro, mudam de ordem e gravam UMA vez depois da pausa", async (t) => {
+    const saved = [];
+    const h = v2(t);
+    const timers = captureTimers(h);
+    h.api.openConfig(configSpec(saved));
+    const labels = () => [...h.document.querySelectorAll(".kanban-config__field label")].map((n) => n.textContent.trim());
+    assert.deepEqual(labels(), ["Status", "Cliente", "Responsável", "Prazo"], "os do cartão primeiro, na ordem do cartão");
+    const boxes = () => [...h.document.querySelectorAll(".kanban-config__field input[type=checkbox]")];
+    assert.deepEqual(boxes().map((b) => b.checked), [true, true, false, false]);
+    boxes()[2].checked = true;
+    boxes()[2].dispatchEvent(new h.window.Event("change", {bubbles: true}));
+    [...h.document.querySelectorAll(".kanban-config__field button")].find((n) => n.getAttribute("aria-label") === "Subir Responsável").click();
+    assert.equal(saved.length, 0, "ainda esperando a pausa");
+    timers.filter((timer) => timer.ms === 250).forEach((timer) => timer.fn());
+    await h.tick();
+    assert.deepEqual(plain(saved), [{card_fields: [13, 12, 11]}], "Responsável subiu e entrou; uma única gravação");
+    assert.equal([...h.document.querySelectorAll(".kanban-config__field button")][0].disabled, true, "o primeiro não sobe");
+});
+
+test("v2: Configurar cartões — a pré-visualização é o primeiro cartão sem nada editável e acompanha o redesenho", (t) => {
+    const h = v2(t);
+    h.api.openConfig(configSpec([]));
+    const preview = () => h.document.querySelector(".kanban-config__preview .kanban-card");
+    assert.ok(preview());
+    assert.equal(preview().classList.contains("is-preview"), true);
+    assert.equal(preview().getAttribute("draggable"), null);
+    assert.equal(preview().querySelector("[data-cell]"), null);
+    assert.equal(preview().querySelector("[tabindex]"), null);
+    assert.equal(preview().querySelector(".is-editable"), null);
+    assert.equal(preview().querySelector("[data-card-title]").textContent, "Arena Norte");
+    h.api.redraw(fixtures.v2.replace("Arena Norte", "Arena Renomeada"));
+    assert.equal(preview().querySelector("[data-card-title]").textContent, "Arena Renomeada");
+    h.api.redraw('<div class="kanban-state"></div>');
+    assert.match(h.document.querySelector(".kanban-config__preview").textContent, /Ainda não há cartões para mostrar/);
+});
+
+test("v2: Configurar cartões — fechar a janela cancela a gravação pendente", (t) => {
+    const saved = [];
+    const h = v2(t);
+    const timers = captureTimers(h);
+    h.api.openConfig(configSpec(saved));
+    const box = h.document.querySelector(".kanban-config__field input[type=checkbox]");
+    box.checked = false;
+    box.dispatchEvent(new h.window.Event("change", {bubbles: true}));
+    [...h.document.querySelectorAll(".board-dialog__foot .btn")].find((n) => n.textContent === "Concluir").click();
+    timers.forEach((timer) => timer.fn());
+    assert.deepEqual(saved, []);
+    assert.equal(h.document.querySelector(".board-dialog"), null);
+});
+
+test("v2: Configurar cartões — se gravar falha, o aviso vem do núcleo", async (t) => {
+    const h = v2(t);
+    h.api.openConfig(configSpec([], {save: () => Promise.reject(new Error("Sem permissão."))}));
+    const [empty] = controlBoxes(h);
+    empty.checked = false;
+    empty.dispatchEvent(new h.window.Event("change", {bubbles: true}));
+    await h.tick();
+    assert.deepEqual(h.toasts(), ["Sem permissão."]);
 });

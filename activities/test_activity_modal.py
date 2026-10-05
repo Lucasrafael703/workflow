@@ -17,7 +17,7 @@ from acessos import catalog
 from acessos.testing import grant_action, grant_actions
 from audit.models import AuditLog
 from boards.models import Board, BoardItem
-from core.models import Client, Company, CostCenter, Sector, Site
+from core.models import ActivityStage, Client, Company, CostCenter, Sector, Site, WorkflowStatus
 from core.sanitize import sanitize_description
 from core.widgets import CompanyPickerWidget, PersonPickerWidget, RichTextWidget, SitePickerWidget
 
@@ -128,6 +128,20 @@ class StructureTests(ModalTestCase):
             self.assertIn(label, html, msg=label)
         for name in ("client", "site", "cost_center", "external_requester", "address", "description", "files_location"):
             self.assertEqual(html.count(f'name="{name}"'), 1, msg=name)
+
+    def test_picker_labels_target_visible_triggers_and_keep_hidden_input_ids(self):
+        html = self.html()
+        for name in ("owner", "sector", "company", "client", "site", "cost_center"):
+            trigger_id = f"id_{name}-picker-trigger"
+            self.assertIn(f'for="{trigger_id}"', html, msg=name)
+            self.assertIn(f'<button id="{trigger_id}" type="button" class="person-picker__trigger"', html, msg=name)
+            self.assertRegex(html, rf'<input[^>]+type="hidden"[^>]+name="{name}"[^>]+id="id_{name}"', msg=name)
+        self.assertIn('data-filter-field="id_client" data-filter-param="client"', html)
+        self.assertIn('data-filter-field="id_site" data-filter-param="site"', html)
+
+    def test_address_declares_its_autocomplete_token(self):
+        html = self.html()
+        self.assertRegex(html, r'<input[^>]+name="address"[^>]+autocomplete="street-address"[^>]+id="id_address"')
 
     def test_helper_texts_and_placeholders(self):
         html = self.html()
@@ -519,6 +533,113 @@ class OpenAtStepTests(ModalTestCase):
             self.assertEqual(html.count("data-step-submit"), 1)
         self.assertIn("Salvar alterações", edit_html)
         self.assertIn("Criar demanda", create_html)
+
+
+class NewDemandFromALaneTests(ModalTestCase):
+    """"+ Adicionar" de uma raia do Kanban abre esta janela já com o setor, a etapa, o status, a prioridade ou o responsável da raia."""
+
+    def setUp(self):
+        super().setUp()
+        self.engenharia = Sector.objects.create(organization=self.org, name="Engenharia")
+        self.cotacao = ActivityStage.objects.create(organization=self.org, sector=self.sector, name="Cotação", order=1, is_default=True)
+        self.aprovacao = ActivityStage.objects.create(organization=self.org, sector=self.sector, name="Aprovação", order=2)
+        self.projeto = ActivityStage.objects.create(organization=self.org, sector=self.engenharia, name="Projeto", order=1, is_default=True)
+        self.aguardando = WorkflowStatus.objects.create(
+            organization=self.org, sector=self.sector, domain=WorkflowStatus.Domain.ACTIVITY, name="Aguardando fornecedor", order=1, color="#3B82F6",
+        )
+        self.url = reverse("activity-create")
+
+    def initial(self, **params):
+        response = self.client.get(self.url, params)
+        self.assertEqual(response.status_code, 200, params)
+        return response.context["form"].initial, response.context["form"]
+
+    def test_the_window_opens_with_every_value_the_lane_brings(self):
+        initial, form = self.initial(
+            setor=self.sector.pk, etapa=self.aprovacao.pk, condicao=self.aguardando.pk, urgencia="ALTA", pessoa=self.member.pk,
+        )
+        self.assertEqual((initial["sector"], initial["stage"], initial["condition"], initial["urgency"]),
+                         (self.sector.pk, self.aprovacao.pk, self.aguardando.pk, "ALTA"))
+        self.assertEqual(initial["owner"], self.member)
+        self.assertEqual(sorted(form.fields["stage"].queryset.values_list("name", flat=True)), ["Aprovação", "Cotação"])  # só as do setor
+        self.assertEqual(list(form.fields["condition"].queryset.values_list("name", flat=True)), ["Aguardando fornecedor"])
+
+    def test_the_stage_or_the_status_alone_bring_their_sector(self):
+        initial, _form = self.initial(etapa=self.aprovacao.pk)
+        self.assertEqual((initial["sector"], initial["stage"]), (self.sector.pk, self.aprovacao.pk))
+        initial, _form = self.initial(condicao=self.aguardando.pk)
+        self.assertEqual((initial["sector"], initial["condition"]), (self.sector.pk, self.aguardando.pk))
+
+    def test_a_stage_of_another_sector_is_ignored_but_the_sector_stays(self):
+        initial, form = self.initial(setor=self.engenharia.pk, etapa=self.aprovacao.pk, condicao=self.aguardando.pk)
+        self.assertEqual(initial["sector"], self.engenharia.pk)
+        self.assertFalse(initial.get("stage"))
+        self.assertFalse(initial.get("condition"))
+        self.assertEqual(list(form.fields["stage"].queryset.values_list("name", flat=True)), ["Projeto"])
+
+    def test_without_parameters_nothing_changes(self):
+        initial, form = self.initial()
+        self.assertEqual(initial["owner"], self.requester)  # a pessoa que cria é a responsável de sempre
+        for name in ("sector", "stage", "condition"):
+            self.assertFalse(initial.get(name), name)
+        self.assertFalse(initial.get("urgency"))
+        self.assertEqual(form.fields["stage"].queryset.count(), 0)  # etapa só depois de escolher o setor, como sempre
+
+    def test_values_that_do_not_exist_or_are_not_ours_are_ignored_without_breaking_the_window(self):
+        foreign_sector = Sector.objects.create(organization=self.other_org, name="De fora")
+        foreign_stage = ActivityStage.objects.create(organization=self.other_org, sector=foreign_sector, name="Fora", order=1)
+        inactive = ActivityStage.objects.create(organization=self.org, sector=self.sector, name="Antiga", order=3, is_active=False)
+        task_status = WorkflowStatus.objects.create(
+            organization=self.org, sector=self.sector, domain=WorkflowStatus.Domain.TASK, name="Da tarefa", order=1, color="#3B82F6",
+        )
+        plain, _form = self.initial()
+        for params in (
+            {"setor": 999999}, {"setor": "abc"}, {"setor": "1 OR 1=1"}, {"setor": foreign_sector.pk}, {"etapa": foreign_stage.pk},
+            {"etapa": inactive.pk}, {"condicao": task_status.pk}, {"urgencia": "ENORME"}, {"urgencia": ""}, {"pessoa": self.outsider.pk},
+            {"pessoa": 999999}, {"pessoa": "x"}, {"pessoa": ""},
+        ):
+            with self.subTest(params=params):
+                initial, _form = self.initial(**params)
+                self.assertEqual(initial, plain)  # abre exatamente como sem o parâmetro
+
+    def test_a_person_that_is_inactive_is_ignored(self):
+        self.member.is_active = False
+        self.member.save()
+        initial, _form = self.initial(pessoa=self.member.pk)
+        self.assertEqual(initial["owner"], self.requester)
+
+    def test_the_values_only_apply_to_a_new_demand(self):
+        edit_url = reverse("activity-edit", args=[self.activity.pk])
+        grant_action(self.requester, catalog.ATIVIDADE_EDITAR, organization=self.org)
+        response = self.client.get(edit_url, {"setor": self.engenharia.pk, "urgencia": "ALTA", "pessoa": self.member.pk})
+        initial = response.context["form"].initial
+        self.assertEqual(initial["owner"], self.requester.pk)
+        self.assertEqual(initial["urgency"], self.activity.urgency)
+        self.assertNotEqual(initial.get("sector"), self.engenharia.pk)
+
+    def test_resuming_a_draft_keeps_the_draft_values(self):
+        draft = self.client.post(self.url, self.payload(title="Rascunho", acao="rascunho", sector=self.sector.pk, urgency="BAIXA"), **AJAX)
+        self.assertEqual(draft.status_code, 200)
+        draft_pk = Activity.objects.get(title="Rascunho").pk
+        response = self.client.get(self.url, {"pk": draft_pk, "setor": self.engenharia.pk, "urgencia": "ALTA"})
+        form = response.context["form"]
+        self.assertEqual((form["sector"].value(), form["urgency"].value()), (self.sector.pk, "BAIXA"))
+
+    def test_what_the_window_shows_is_what_gets_created(self):
+        initial, _form = self.initial(etapa=self.aprovacao.pk, condicao=self.aguardando.pk, urgencia="ALTA", pessoa=self.member.pk)
+        response = self.client.post(self.url, {
+            "title": "Cotar gerador", "acao": "publicar", "owner": initial["owner"].pk, "sector": initial["sector"], "stage": initial["stage"],
+            "condition": initial["condition"], "urgency": initial["urgency"],
+        }, **AJAX)
+        self.assertEqual(response.status_code, 200, response.content)
+        created = Activity.objects.get(title="Cotar gerador")
+        self.assertEqual((created.sector_id, created.stage_id, created.condition_id, created.urgency, created.owner_id),
+                         (self.sector.pk, self.aprovacao.pk, self.aguardando.pk, "ALTA", self.member.pk))
+
+    def test_the_rendered_window_marks_the_values(self):
+        html = self.client.get(self.url, {"etapa": self.aprovacao.pk, "urgencia": "ALTA"}).content.decode()
+        self.assertRegex(html, r'<option value="%d" selected>Aprovação</option>' % self.aprovacao.pk)
+        self.assertRegex(html, r'value="ALTA"[^>]*checked')
 
 
 class DependentSearchTests(ModalTestCase):

@@ -109,11 +109,11 @@ class SameShellTests(WorkspaceBase):
     def test_personalize_exists_only_in_the_kanban_for_who_can_configure(self):
         grant_actions(self.ana, [catalog.QUADRO_GERIR_COLUNAS], organization=self.org)
         self.client.force_login(self.ana)
-        self.assertContains(self.page("activity-kanban"), "data-work-card-settings")
-        self.assertNotContains(self.page("activity-list"), "data-work-card-settings")
-        self.assertNotContains(self.page("activity-calendar"), "data-work-card-settings")
+        self.assertContains(self.page("activity-kanban"), "data-kanban-config")
+        self.assertNotContains(self.page("activity-list"), "data-kanban-config")
+        self.assertNotContains(self.page("activity-calendar"), "data-kanban-config")
         self.client.force_login(self.leitor)
-        self.assertNotContains(self.page("activity-kanban"), "data-work-card-settings")
+        self.assertNotContains(self.page("activity-kanban"), "data-kanban-config")
 
     def test_each_view_only_changes_the_content_area(self):
         lista, kanban, calendario = (self.page(name).content.decode() for name in VIEWS)

@@ -1,4 +1,4 @@
-{% comment %}Configuração do Kanban de Demandas, no mesmo contrato dos Quadros.{% endcomment %}
+{% comment %}Painel "Adicionar campo" do Kanban de Demandas. Configurar os cartões é o diálogo compartilhado com Quadros (kanban-core.js), aberto por `data-kanban-config`.{% endcomment %}
 <aside class="work-card-settings" data-work-add-field-panel hidden aria-label="Adicionar campo">
     <div class="work-card-settings__head"><strong>Adicionar campo</strong><button type="button" class="icon-button" data-work-add-field-close aria-label="Fechar">×</button></div>
     <form data-work-add-field-form data-url="{% url 'workboard-field-create' board.pk %}">
@@ -16,29 +16,5 @@
         <label>Nome<input name="label" required maxlength="120"></label>
         <label>Tipo<select name="type"><option value="TEXT">Texto</option><option value="NUMBER">Número</option><option value="CURRENCY">Moeda</option><option value="DATETIME">Data e hora</option><option value="SELECT">Lista</option><option value="BOOLEAN">Confirmação</option></select></label>
         <button class="btn btn--primary" type="submit">Adicionar</button>
-    </form>
-</aside>
-
-<aside class="work-card-settings" data-work-card-settings-panel hidden aria-label="Configurar cartões">
-    <div class="work-card-settings__head"><strong>Configurar cartões</strong><button type="button" class="icon-button" data-work-card-settings-close aria-label="Fechar">×</button></div>
-    <form data-work-card-settings-form data-url="{% url 'workboard-card-fields' work_view.pk %}" data-settings-url="{% url 'workboard-view-settings' work_view.pk %}">
-        <fieldset class="work-card-settings__options">
-            <legend>Visualização</legend>
-            <label><input type="checkbox" name="show_empty"{% if work_view.settings.show_empty %} checked{% endif %}> Mostrar raias vazias</label>
-            <label><input type="checkbox" name="show_field_names"{% if show_field_names %} checked{% endif %}> Mostrar o nome dos campos</label>
-        </fieldset>
-        <p class="work-card-settings__hint">Escolha e ordene os campos mostrados em cada cartão.</p>
-        <div class="work-card-settings__fields" data-work-card-field-list>
-            {% for field in card_settings_fields %}
-            <div class="work-card-settings__field" data-work-card-field>
-                <label><input type="checkbox" name="field_ids" value="{{ field.pk }}"{% for card_field in work_view.card_fields.all %}{% if card_field.field_id == field.pk and card_field.is_visible %} checked{% endif %}{% endfor %}> <span>{{ field.label }}</span></label>
-                <span class="work-card-settings__move">
-                    <button type="button" class="icon-button" data-work-card-field-move="up" aria-label="Subir {{ field.label }}" title="Subir">↑</button>
-                    <button type="button" class="icon-button" data-work-card-field-move="down" aria-label="Descer {{ field.label }}" title="Descer">↓</button>
-                </span>
-            </div>
-            {% endfor %}
-        </div>
-        <button class="btn btn--primary" type="submit">Salvar cartões</button>
     </form>
 </aside>

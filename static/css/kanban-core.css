@@ -21,14 +21,30 @@
 .kanban-lane__title:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; }  /* foco devolvido à raia quando o filtro tirou o cartão */
 
 a.kanban-add { text-decoration: none; }
+/* link discreto sob o título (Demandas: o código que abre a ficha, já que o título renomeia no lugar) */
+a.kanban-card__code { display: inline-block; margin: 1px 4px 0; font-size: 11.5px; color: var(--muted); text-decoration: none; font-variant-numeric: tabular-nums; }
+a.kanban-card__code:hover, a.kanban-card__code:focus-visible { color: var(--primary); text-decoration: underline; }
 a.kanban-card__title { color: var(--text); text-decoration: none; }
 a.kanban-card__title:hover { color: var(--primary); text-decoration: underline; }
 
-/* Só no Workspace */
-.ws .kanban-lane .kanban-card:hover { border-left-color: var(--lane-color, #C4C4C4); }
-.ws .kanban-lane .kanban-card:not([draggable="true"]) { cursor: auto; }
-.ws .kanban-lane { max-height: max(420px, calc(100vh - 360px)); }  /* o modelo desconta 290px; a barra do Workspace é mais alta */
-.ws .kanban-lane[data-lane-closed] .kanban-lane__empty { border-style: solid; }
-/* Em toque o ⋯ é a ÚNICA forma de mover (não há arrastar): sempre visível e com alvo maior que os 24px do mouse */
-@media (hover: none) { .ws .kanban-card__menu { opacity: 1; width: 36px; height: 36px; margin: -4px -4px -4px 0; } }
-@media (max-width: 720px) { .ws .kanban-lane { max-height: none; } }
+/* Campos editáveis do cartão de Demandas (activity-inline-edit.js): o mesmo retorno visual da Lista enquanto grava */
+.kanban-field__value.is-saving { opacity: .6; cursor: progress; }
+.kanban-field__value.is-saved { animation: activity-inline-saved 1.1s ease-out; }
+.kanban-field__value.is-error { outline: 2px solid var(--danger); outline-offset: 1px; border-radius: 4px; }
+.kanban-field__value.is-editing { background: #eef4fc; }
+.kanban-field__value[data-inline-field]:focus-visible { outline: 2px solid rgba(27, 98, 196, .6); outline-offset: 1px; border-radius: 4px; }
+
+/* Correções do modelo, valem em TODOS os Kanbans (o componente é um só): o hover mantém a cor da borda da raia, `grab`
+   só em cartão que arrasta e, em toque, o ⋯ (a única forma de mover) fica sempre visível e com alvo maior que os 24px do mouse. */
+.kanban-lane .kanban-card:hover { border-left-color: var(--lane-color, #C4C4C4); }
+.kanban-lane .kanban-card:not([draggable="true"]) { cursor: auto; }
+.kanban-lane[data-lane-closed] .kanban-lane__empty { border-style: solid; }
+@media (hover: none) {
+    .kanban-card__menu { opacity: 1; width: 36px; height: 36px; margin: -4px -4px -4px 0; }
+    .kanban-lane__menu { opacity: 1; width: 36px; height: 36px; margin: -6px -4px -6px 0; }  /* o ⋮ da raia: mesmo alvo de toque, sem engordar o cabeçalho */
+}
+
+/* A altura da raia depende do que fica acima dela: o modelo (Quadros) desconta 290px; as telas de Demandas têm cabeçalho,
+   abas e barra de filtros, mais altos. */
+.ws .kanban-lane, .demand-board .kanban-lane { max-height: max(420px, calc(100vh - 360px)); }
+@media (max-width: 720px) { .ws .kanban-lane, .demand-board .kanban-lane { max-height: none; } }

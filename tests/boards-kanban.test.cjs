@@ -145,6 +145,7 @@ const FULL = renderFixture();
 const EDITOR = renderFixture({view: true, edit: false, delete: false, manage_columns: false, create_item: true, edit_item: true, delete_item: false});
 const VIEWER = renderFixture({view: true, edit: false, delete: false, manage_columns: false, create_item: false, edit_item: false, delete_item: false});
 const script = readFileSync(path.join(root, "static/js/boards.js"), "utf8");
+const coreScript = readFileSync(path.join(root, "static/js/kanban-core.js"), "utf8");  // o Kanban é o componente único: carrega antes do boards.js
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const flush = async () => { for (let i = 0; i < 8; i += 1) await tick(); };
 
@@ -188,6 +189,7 @@ function setup(t, {fixture = FULL, respond} = {}) {
     let timerId = 0;
     w.setTimeout = (fn, ms) => { timerId += 1; timers.push({id: timerId, fn, ms}); return timerId; };
     w.clearTimeout = id => { const index = timers.findIndex(timer => timer.id === id); if (index >= 0) timers.splice(index, 1); };
+    w.eval(coreScript);
     w.eval(script);
     if (!w.LPSBoards.instance) w.LPSBoards.boot();
     const $ = selector => w.document.querySelector(selector);

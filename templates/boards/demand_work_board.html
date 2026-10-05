@@ -17,7 +17,7 @@
             {% endif %}
             {% if can_configure and view_mode == 'kanban' %}
             <button class="btn" type="button" data-work-add-field>{% include "_icon.html" with name="plus" %} Campo</button>
-            <button class="btn" type="button" data-work-card-settings aria-expanded="false">{% include "_icon.html" with name="settings" %} Configurar cartões</button>
+            <button class="btn" type="button" data-kanban-config aria-haspopup="dialog">{% include "_icon.html" with name="settings" %} Configurar cartões</button>
             {% endif %}
         </div>
     </header>
@@ -104,30 +104,7 @@
     <div id="activity-inline-overlay-root" class="activity-inline-overlay-root" aria-live="polite"></div>
 
     {% elif view_mode == 'kanban' %}
-    <div class="demand-board__kanban" aria-label="Quadro de demandas por etapa">
-        {% include "boards/_work_kanban.html" %}
-        {% comment %}
-        {% for lane in demand_lanes %}
-        <section class="demand-board__lane" style="--lane-color:{{ lane.color }}">
-            <header><strong>{{ lane.label }}</strong><span>{{ lane.items|length }}</span></header>
-            <div class="demand-board__cards">
-                {% for activity in lane.items %}
-                <article class="demand-board__card">
-                    <div class="demand-board__card-head"><a href="{% url 'activity-detail' activity.pk %}?next={{ request.get_full_path|urlencode }}">{{ activity.title }}</a><a href="{% url 'activity-detail' activity.pk %}?next={{ request.get_full_path|urlencode }}" aria-label="Abrir {{ activity.title }}">{% include "_icon.html" with name="more" %}</a></div>
-                    <p>{% if activity.client %}{{ activity.client.name }}{% else %}Sem cliente{% endif %}{% if activity.site %} · {{ activity.site.name }}{% endif %}</p>
-                    <div class="demand-board__card-tags">{% if activity.sector %}{% include "_sector_badge.html" with sector=activity.sector variant="compact" %}{% endif %}<span class="demand-board__card-condition" style="--card-condition:{{ activity.condition_color }}">{{ activity.condition_name }}</span></div>
-                    <div class="demand-board__card-facts"><span>{% if activity.owner %}<i class="avatar avatar--{{ activity.owner|avatar_color }}">{{ activity.owner.get_full_name|default:activity.owner.get_username|slice:':2'|upper }}</i>{{ activity.owner.get_full_name|default:activity.owner.get_username }}{% else %}Sem responsável{% endif %}</span><span class="{% if activity.is_overdue %}is-late{% endif %}">{% include "_icon.html" with name="clock" %}{% if activity.requested_deadline %}{{ activity.requested_deadline|date:'d/m/Y' }}{% else %}Sem prazo{% endif %}</span></div>
-                    <div class="demand-board__card-progress"><strong>{{ activity.done_tasks }} de {{ activity.total_tasks }} tarefas</strong><span><i style="width:{{ activity.progress_percent }}%"></i></span><em>{{ activity.progress_percent }}%</em></div>
-                </article>
-                {% empty %}
-                <div class="demand-board__lane-empty">Nenhuma demanda nesta etapa.</div>
-                {% endfor %}
-            </div>
-            {% if can_create %}<a class="demand-board__lane-add" href="{% url 'activity-create' %}?next={{ request.get_full_path|urlencode }}">{% include "_icon.html" with name="plus" %} Adicionar demanda</a>{% endif %}
-        </section>
-        {% endfor %}
-        {% endcomment %}
-    </div>
+    {% include "boards/_demand_kanban.html" %}
 
     {% else %}
     <div class="demand-board__calendar" aria-label="Demandas por prazo">
@@ -143,6 +120,7 @@
 </section>
 {% if can_configure and view_mode == 'kanban' %}{% include "boards/_demand_kanban_settings.html" %}{% endif %}
 <div class="work-board__toast" data-work-board-toast role="status" aria-live="polite"></div>
+{% if view_mode == 'kanban' %}<div class="board-toast-area" data-board-toasts role="status" aria-live="polite"></div>{% endif %}
 {% endblock %}
 
-{% block scripts %}{% if view_mode == 'lista' %}<script src="{% static 'js/activity-inline-edit.js' %}?v=20261011b"></script><script src="{% static 'js/activity-inline-options.js' %}?v=20261011b"></script>{% endif %}{% if view_mode == 'kanban' %}<script src="{% static 'js/work-board.js' %}?v=20261014a"></script>{% endif %}{% endblock %}
+{% block scripts %}{% if view_mode == 'lista' %}<script src="{% static 'js/activity-inline-edit.js' %}?v=20261016a"></script><script src="{% static 'js/activity-inline-options.js' %}?v=20261016a"></script>{% endif %}{% if view_mode == 'kanban' %}<script src="{% static 'js/work-board.js' %}?v=20261014a"></script><script src="{% static 'js/activity-inline-edit.js' %}?v=20261016a"></script><script src="{% static 'js/activity-inline-options.js' %}?v=20261016a"></script><script src="{% static 'js/kanban-core.js' %}?v=20261016d"></script><script src="{% static 'js/demand-kanban.js' %}?v=20261016d"></script>{% endif %}{% endblock %}

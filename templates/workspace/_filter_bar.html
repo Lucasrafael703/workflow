@@ -44,7 +44,7 @@ Todos os formulários reenviam o resto do estado como campos ocultos (ws.*.hidde
         {% if ws.view == 'kanban' and can_configure %}
         <span class="ws-personalize" role="group" aria-label="Personalizar o Kanban">
             <button class="btn" type="button" data-work-add-field>{% include "_icon.html" with name="plus" %} Campo</button>
-            <button class="btn" type="button" data-work-card-settings aria-expanded="false">{% include "_icon.html" with name="settings" %} Personalizar</button>
+            <button class="btn" type="button" data-kanban-config aria-haspopup="dialog">{% include "_icon.html" with name="settings" %} Personalizar</button>
         </span>
         {% endif %}
     </div>

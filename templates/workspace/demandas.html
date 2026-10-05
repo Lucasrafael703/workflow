@@ -5,8 +5,8 @@
 {% comment %}
 Workspace de Demandas (flag WORKSPACE_V2): UM shell para as três visualizações. Cabeçalho, abas, barra de busca/filtros e
 avisos são os MESMOS em Lista, Kanban e Calendário; só a área de conteúdo (`ws__content`) muda. Nesta fase a Lista é o
-renderizador novo; o Kanban usa o kit de templates/kanban (o mesmo modelo visual de Quadros) e o Calendário ainda usa o
-conteúdo antigo, mas DENTRO deste shell.
+renderizador novo; o Kanban é o componente único de templates/kanban (o mesmo de Quadros; parcial boards/_demand_kanban.html,
+igual ao da tela de sempre) e o Calendário ainda usa o conteúdo antigo, mas DENTRO deste shell.
 O contexto `ws` vem de boards/demand_workspace.py; os dados continuam os de sempre (DemandWorkBoardView).
 {% endcomment %}
 
@@ -19,7 +19,7 @@ O contexto `ws` vem de boards/demand_workspace.py; os dados continuam os de semp
 
     <div class="ws__content" data-ws-content>
         {% if ws.view == 'lista' %}{% include "workspace/_lista.html" %}
-        {% elif ws.view == 'kanban' %}{% include "workspace/_kanban.html" %}
+        {% elif ws.view == 'kanban' %}{% include "boards/_demand_kanban.html" %}
         {% else %}{% include "workspace/_calendario.html" %}{% endif %}
     </div>
 </section>
@@ -30,6 +30,6 @@ O contexto `ws` vem de boards/demand_workspace.py; os dados continuam os de semp
 
 {% block scripts %}
 <script src="{% static 'js/workspace.js' %}?v=20261015b"></script>
-{% if ws.view == 'lista' %}<script src="{% static 'js/activity-inline-edit.js' %}?v=20261011b"></script><script src="{% static 'js/activity-inline-options.js' %}?v=20261011b"></script>{% endif %}
-{% if ws.view == 'kanban' %}<script src="{% static 'js/work-board.js' %}?v=20261014a"></script><script src="{% static 'js/kanban-core.js' %}?v=20261016a"></script><script src="{% static 'js/demand-kanban.js' %}?v=20261016a"></script>{% endif %}
+{% if ws.view == 'lista' %}<script src="{% static 'js/activity-inline-edit.js' %}?v=20261016a"></script><script src="{% static 'js/activity-inline-options.js' %}?v=20261016a"></script>{% endif %}
+{% if ws.view == 'kanban' %}<script src="{% static 'js/work-board.js' %}?v=20261014a"></script><script src="{% static 'js/activity-inline-edit.js' %}?v=20261016a"></script><script src="{% static 'js/activity-inline-options.js' %}?v=20261016a"></script><script src="{% static 'js/kanban-core.js' %}?v=20261016d"></script><script src="{% static 'js/demand-kanban.js' %}?v=20261016d"></script>{% endif %}
 {% endblock %}

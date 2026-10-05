@@ -1,4 +1,6 @@
-/* Editores "de opções" da lista de Demandas (/demandas/): as células coloridas Setor, Estágio e Status.
+/* Editores "de opções" de Demandas: as células coloridas Setor, Estágio e Status (e a Prioridade, só no Kanban).
+   Valem na LISTA (/demandas/) e nos CARTÕES do Kanban: o pop-over é o mesmo; só mudam a leitura e o desenho do valor
+   (na tabela, do desenho; no cartão, de `data-inline-model`, com o desenho do kit templates/kanban/_fields.html).
 
    Plugin de static/js/activity-inline-edit.js (que traz o estado por célula, a gravação otimista com revisão, o pop-over
    único e os avisos de erro). Aqui só ficam o desenho dessas células e os pop-overs de escolha:
@@ -45,6 +47,11 @@
             preview: "Novo status", search: "Pesquisar status...", loading: "Carregando status...",
             empty: "Este setor ainda não tem status.", noMatch: "Nenhum status encontrado.", defaultColor: DEFAULT_BG,
             edit: "Editar status", editTitle: "Editar status", placeholder: "Sem status", clear: "Sem status"
+        },
+        // As três prioridades são fixas: só se escolhe (sem criar nem editar; a cor se configura em Configurações).
+        urgency: {
+            title: "Escolher a prioridade", search: "Pesquisar prioridade...", loading: "Carregando prioridades...",
+            empty: "Nenhuma prioridade.", noMatch: "Nenhuma prioridade encontrada.", defaultColor: DEFAULT_BG, placeholder: "Sem prioridade"
         }
     };
 
@@ -147,17 +154,6 @@
                 cell.dataset.optionId = model ? model.id : "";
                 syncTitle(chip);
             };
-        }
-
-        /** As células de Estágio e Status da mesma linha: o servidor as redefine quando o setor muda. */
-        function linkedCells(cell) {
-            var row = cell.closest("tr");
-            var found = [];
-            ["stage", "condition"].forEach(function (field) {
-                var td = row && row.querySelector('td[data-column="' + field + '"]');
-                if (td) found.push({cell: td, field: field});
-            });
-            return found;
         }
 
         /** Segunda linha do Status: "Vencida há N dias", derivada do prazo (o servidor diz se está vencida e há quantos dias). */
@@ -423,10 +419,9 @@
 
         /** Propaga a opção editada a todas as células da página que a mostram (mesmo id), sem recarregar. */
         function propagate(field, model) {
-            var cells = api.table.querySelectorAll('td[data-column="' + field + '"][data-option-id="' + model.id + '"]');
-            Array.prototype.forEach.call(cells, function (td) {
-                if (api.stateOf(td).busy) return;
-                api.setConfirmed(td, field, model);
+            api.optionCells(field, model.id).forEach(function (node) {
+                if (api.stateOf(node).busy) return;
+                api.setConfirmed(node, field, model);
             });
         }
 
@@ -518,18 +513,85 @@
             };
         }
 
+        /** Trocar o setor redefine etapa e status: o servidor devolve os dois novos valores em `derived`. */
+        function sectorDerive(data) {
+            var derived = data.derived || {};
+            var out = {};
+            if ("stage" in derived) out.stage = optionModel(derived.stage);
+            if ("condition" in derived) out.condition = optionModel(derived.condition);
+            return out;
+        }
+
+        // -- cartão do Kanban ----------------------------------------------------------------------------
+
+        function cardModel(cell) {
+            var raw;
+            try { raw = JSON.parse(cell.getAttribute("data-inline-model") || "null"); } catch (error) { raw = null; }
+            if (!raw || raw.id === null || raw.id === undefined || raw.id === "") return null;
+            return {
+                id: String(raw.id), name: String(raw.name || ""), color: safeColor(raw.color, DEFAULT_BG),
+                textColor: safeColor(raw.textColor || raw.text_color, DEFAULT_TEXT)
+            };
+        }
+
+        function keepModel(cell, model) {
+            cell.setAttribute("data-inline-model", JSON.stringify(model));
+            cell.dataset.optionId = model ? model.id : "";
+        }
+
+        /** O texto do kit (`lps_board.contrast`): a MESMA fórmula do desenho feito pelo servidor, para a pílula não mudar de cor ao editar. */
+        function kitContrast(hex) {
+            var value = String(hex || "").replace("#", "");
+            if (value.length !== 6) return "#1F2937";
+            var red = parseInt(value.slice(0, 2), 16), green = parseInt(value.slice(2, 4), 16), blue = parseInt(value.slice(4, 6), 16);
+            return (0.299 * red + 0.587 * green + 0.114 * blue) / 255 > 0.62 ? "#1F2937" : "#FFFFFF";
+        }
+
+        function renderCardPill(cell, model) {
+            cell.textContent = "";
+            if (!model) cell.appendChild(el("span", {class: "board-empty", text: "—"}));
+            else cell.appendChild(el("span", {class: "board-pill", style: "background:" + model.color + ";color:" + kitContrast(model.color), text: model.name}));
+            keepModel(cell, model);
+        }
+
+        function renderCardSector(cell, model) {
+            cell.textContent = "";
+            if (!model) {
+                cell.appendChild(el("span", {class: "board-empty", text: "—"}));
+            } else {
+                cell.appendChild(el("span", {
+                    class: "sector-badge sector-badge--compact", title: model.name, text: model.name, "data-sector-id": model.id,
+                    style: "--sector-color: " + model.color + "; --sector-text-color: " + model.textColor + ";"
+                }));
+            }
+            keepModel(cell, model);
+        }
+
+        function cardEditor(field, render) {
+            return {
+                read: cardModel, render: render,
+                fromResponse: function (data) { return optionModel(data.display); },
+                open: openEditor(field)
+            };
+        }
+
+        if (api.surface === "card") {
+            api.registerCardField("stage", cardEditor("stage", renderCardPill));
+            api.registerCardField("condition", cardEditor("condition", renderCardPill));
+            api.registerCardField("urgency", cardEditor("urgency", renderCardPill));
+            var sectorCard = cardEditor("sector", renderCardSector);
+            sectorCard.derive = sectorDerive;
+            sectorCard.linked = api.linkedCells;
+            api.registerCardField("sector", sectorCard);
+            return;
+        }
+
         api.registerEditor("sector", {
             read: readSector,
             render: renderSector,
             fromResponse: function (data) { return optionModel(data.display); },
-            derive: function (data) {
-                var derived = data.derived || {};
-                var out = {};
-                if ("stage" in derived) out.stage = optionModel(derived.stage);
-                if ("condition" in derived) out.condition = optionModel(derived.condition);
-                return out;
-            },
-            linked: linkedCells,
+            derive: sectorDerive,
+            linked: api.linkedCells,
             open: openEditor("sector")
         });
         api.registerEditor("stage", optionEditor("stage"));
@@ -539,7 +601,7 @@
         api.onSaved(function (field, data, cell) {
             if (field !== "requested_deadline") return;
             var display = data.display || {};
-            setLate(cell.closest("tr"), !!display.is_late, data.derived && data.derived.overdue_days);
+            setLate(api.rowOf(cell), !!display.is_late, data.derived && data.derived.overdue_days);
         });
     }
 

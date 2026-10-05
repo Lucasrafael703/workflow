@@ -907,8 +907,10 @@
         }
 
         function startItemRename(row) {
-            var nameEl = row.querySelector("[data-item-name], [data-card-title]");
-            if (!perms.edit_item || !nameEl) return;
+            if (!perms.edit_item) return;
+            if (row.matches("[data-card]")) { if (kanbanCore) kanbanCore.startRename(row); return; }  // o título do cartão é do núcleo
+            var nameEl = row.querySelector("[data-item-name]");
+            if (!nameEl) return;
             var wasEmpty = nameEl.classList.contains("is-empty");
             var previous = wasEmpty ? "" : nameEl.textContent;
             inlineEdit(nameEl, {
@@ -1402,28 +1404,19 @@
         }
 
         // -- Kanban -----------------------------------------------------------------------------
-        // O Kanban lê os mesmos itens do quadro; o servidor distribui os cartões nas raias. Aqui só se liga o
-        // comportamento: arrastar o cartão grava a etiqueta da coluna agrupadora (pelo mesmo endpoint da célula),
-        // e tudo que muda a distribuição (agrupar por, etiquetas, configuração do cartão) pede as raias de novo.
+        // O Kanban é o componente ÚNICO do sistema (static/js/kanban-core.js + templates/kanban/*, o mesmo de Demandas):
+        // arrastar, menu "Mover para…", renomear o título no lugar, contagem, desfazer, redesenho e "Configurar cartões"
+        // são dele. Aqui ficam só as ligações de Quadros: como gravar (a célula agrupadora, o nome do item), as etiquetas
+        // da raia, excluir e criar. Tudo que muda a distribuição (agrupar por, etiquetas, configuração do cartão) pede
+        // as raias de novo (o servidor é quem sabe distribuir os itens).
 
         var lanesRoot = page.querySelector("[data-kanban-lanes]");
         var kanban = lanesRoot ? meta.kanban : null;
-        var configState = null;
-
-        function lanesList() { return lanesRoot ? qa("[data-lane]", lanesRoot) : []; }
+        var kanbanCore = null;
 
         function queryState() {
             var params = new win.URLSearchParams(win.location.search);
             return {q: params.get("q") || "", pessoa: params.get("pessoa") || ""};
-        }
-
-        function updateLaneCount(lane) {
-            var body = lane.querySelector("[data-lane-body]");
-            var count = qa("[data-card]", body).length;
-            var counter = lane.querySelector("[data-lane-count]");
-            if (counter) counter.textContent = String(count);
-            var empty = lane.querySelector("[data-lane-empty]");
-            if (empty) empty.hidden = count > 0;
         }
 
         function syncKanbanControls() {
@@ -1438,20 +1431,16 @@
         }
 
         function applyLanes(payload) {
-            if (!payload || typeof payload.lanes_html !== "string") return;
-            lanesRoot.innerHTML = payload.lanes_html;
+            // o HTML das raias quem troca é o núcleo (preservando rolagem e foco); aqui só o que o servidor diz sobre o quadro
             meta.columns = payload.columns;
             kanban.settings = payload.settings;
             kanban.group_column_id = payload.group_column_id;
             kanban.sum_column_id = payload.sum_column_id;
             kanban.card_column_ids = payload.card_column_ids;
             syncKanbanControls();
-            if (configState) configState.updatePreview();
         }
 
-        function refreshKanban() {
-            return request(url("view_lanes", {id: kanban.view.id}), queryState()).then(applyLanes, fail);
-        }
+        function refreshKanban() { return kanbanCore.reload(); }
 
         function updateView(settings) {
             return request(url("view_update", {id: kanban.view.id}), {settings: settings}).then(function (payload) {
@@ -1461,26 +1450,6 @@
                 fail(error);
                 syncKanbanControls();
             });
-        }
-
-        function moveCard(card, targetLane) {
-            var fromLane = card.closest("[data-lane]");
-            if (!kanban || !fromLane || !targetLane || fromLane === targetLane || !kanban.group_column_id) return null;
-            var value = targetLane.dataset.optionId ? Number(targetLane.dataset.optionId) : "";
-            var next = card.nextElementSibling;
-            var fromBody = fromLane.querySelector("[data-lane-body]");
-            targetLane.querySelector("[data-lane-body]").insertBefore(card, targetLane.querySelector("[data-lane-empty]"));
-            updateLaneCount(fromLane);
-            updateLaneCount(targetLane);
-            return request(url("cell_update", {id: card.dataset.itemId, column: kanban.group_column_id}), {value: value}).then(
-                function () { return refreshKanban(); },
-                function (error) {
-                    fromBody.insertBefore(card, next && next.parentNode === fromBody ? next : fromBody.querySelector("[data-lane-empty]"));
-                    updateLaneCount(fromLane);
-                    updateLaneCount(targetLane);
-                    fail(error);
-                }
-            );
         }
 
         function addCard(lane) {
@@ -1506,26 +1475,10 @@
                 if (payload === null) return;
                 request(url("item_delete", {id: card.dataset.itemId}), payload).then(function () {
                     card.parentNode.removeChild(card);
-                    updateLaneCount(lane);
+                    kanbanCore.updateCount(lane);
                     return refreshKanban();
                 }, fail);
             });
-        }
-
-        function openCardMenu(anchor, card) {
-            var lane = card.closest("[data-lane]");
-            var items = [];
-            if (perms.edit_item && kanban.group_column_id) {
-                var targets = lanesList().filter(function (candidate) { return candidate !== lane; });
-                if (targets.length) items.push({heading: "Mover para"});
-                targets.forEach(function (target) {
-                    items.push({label: target.dataset.laneLabel, icon: "arrow-right", onClick: function () { moveCard(card, target); }});
-                });
-                if (targets.length) items.push({separator: true});
-            }
-            if (perms.edit_item) items.push({label: "Renomear", icon: "file-text", onClick: function () { startItemRename(card); }});
-            if (perms.delete_item) items.push({label: "Excluir item", icon: "trash", danger: true, onClick: function () { deleteCard(card); }});
-            openMenu(anchor, items, "Opções do item");
         }
 
         function renameLane(lane) {
@@ -1551,103 +1504,61 @@
             }), {label: "Cores da raia"});
         }
 
-        function openLaneMenu(anchor, lane) {
-            openMenu(anchor, [
-                {label: "Renomear etiqueta", icon: "file-text", onClick: function () { renameLane(lane); }},
-                {label: "Mudar a cor", icon: "sliders", onClick: function () { recolorLane(anchor, lane); }},
+        function laneMenuItems(ctx) {
+            return [
+                {label: "Renomear etiqueta", icon: "file-text", onClick: function () { renameLane(ctx.lane); }},
+                {label: "Mudar a cor", icon: "sliders", onClick: function () { recolorLane(ctx.anchor, ctx.lane); }},
                 {label: "Editar etiquetas", icon: "list-ul", onClick: function () { openLabels(kanban.group_column_id); }}
-            ], "Opções da raia " + lane.dataset.laneLabel);
+            ];
         }
 
         function openKanbanConfig() {
-            var settings = function () { return kanban.settings; };
-            var root = el("div", {class: "kanban-config"});
-            var controls = el("div", {class: "kanban-config__controls"});
-            var preview = el("div", {class: "kanban-config__preview", "aria-label": "Pré-visualização do cartão"});
-            var timer = null;
-
-            function check(label, key) {
-                var input = el("input", {type: "checkbox"});
-                input.checked = !!settings()[key];
-                input.addEventListener("change", function () { var change = {}; change[key] = input.checked; updateView(change); });
-                controls.appendChild(el("label", {class: "board-field board-field--check"}, [input, el("span", {text: label})]));
-            }
-            function select(label, key, choices, current, transform) {
-                var control = el("select", {"aria-label": label});
-                choices.forEach(function (choice) { control.appendChild(el("option", {value: choice[0], text: choice[1]})); });
-                control.value = current;
-                control.addEventListener("change", function () { var change = {}; change[key] = transform ? transform(control.value) : control.value; updateView(change); });
-                controls.appendChild(el("label", {class: "board-field"}, [el("span", {text: label}), control]));
-            }
-
-            check("Mostrar raias vazias", "show_empty");
-            select("Raia “Em branco” (itens sem etiqueta)", "blank_lane",
-                [["auto", "Só quando houver itens"], ["always", "Sempre"], ["never", "Nunca"]], settings().blank_lane);
+            var settings = kanban.settings;
             var summable = meta.columns.filter(function (column) { return kanban.summable_ids.indexOf(column.id) >= 0; });
-            select("Somar valor no cabeçalho da raia", "sum_column",
-                [["", "Não somar"]].concat(summable.map(function (column) { return [String(column.id), column.name]; })),
-                kanban.sum_column_id ? String(kanban.sum_column_id) : "", function (value) { return value ? Number(value) : null; });
-            check("Mostrar o nome de cada campo no cartão", "show_field_names");
-
-            // campos do cartão: marcados primeiro, na ordem do cartão; os demais depois, na ordem do quadro
-            var chosen = kanban.card_column_ids.slice();
-            var rest = meta.columns.map(function (column) { return column.id; }).filter(function (id) { return chosen.indexOf(id) < 0; });
-            var order = chosen.concat(rest);
-            var checked = {};
-            chosen.forEach(function (id) { checked[id] = true; });
-            var fields = el("div", {class: "kanban-config__fields", role: "list"});
-
-            function saveFields() {
-                win.clearTimeout(timer);
-                timer = win.setTimeout(function () {
-                    updateView({card_fields: order.filter(function (id) { return checked[id]; })});
-                }, 250);
-            }
-            function renderFields() {
-                fields.textContent = "";
-                order.forEach(function (id, index) {
-                    var column = columnMeta(id);
-                    if (!column) return;
-                    var box = el("input", {type: "checkbox", "aria-label": "Mostrar " + column.name + " no cartão"});
-                    box.checked = !!checked[id];
-                    box.addEventListener("change", function () { checked[id] = box.checked; saveFields(); });
-                    var up = el("button", {type: "button", class: "btn btn--ghost btn--sm", "aria-label": "Subir " + column.name, text: "↑"});
-                    var down = el("button", {type: "button", class: "btn btn--ghost btn--sm", "aria-label": "Descer " + column.name, text: "↓"});
-                    up.disabled = index === 0;
-                    down.disabled = index === order.length - 1;
-                    up.addEventListener("click", function () { order.splice(index - 1, 0, order.splice(index, 1)[0]); renderFields(); saveFields(); });
-                    down.addEventListener("click", function () { order.splice(index + 1, 0, order.splice(index, 1)[0]); renderFields(); saveFields(); });
-                    fields.appendChild(el("div", {class: "kanban-config__field", role: "listitem"}, [
-                        el("label", {}, [box, el("span", {text: column.name})]), el("span", {class: "kanban-config__move"}, [up, down])
-                    ]));
-                });
-            }
-            renderFields();
-            controls.appendChild(el("p", {class: "board-pop__title", text: "Campos do cartão"}));
-            controls.appendChild(fields);
-
-            function updatePreview() {
-                preview.textContent = "";
-                preview.appendChild(el("p", {class: "board-pop__title", text: "Pré-visualização"}));
-                var first = lanesRoot.querySelector("[data-card]");
-                if (!first) { preview.appendChild(el("p", {class: "board-field__hint", text: "Ainda não há cartões para mostrar."})); return; }
-                var copy = first.cloneNode(true);
-                copy.removeAttribute("draggable");
-                copy.classList.add("is-preview");
-                qa("[tabindex]", copy).forEach(function (node) { node.removeAttribute("tabindex"); });
-                qa("[data-cell]", copy).forEach(function (node) { node.removeAttribute("data-cell"); });
-                preview.appendChild(copy);
-            }
-            configState = {updatePreview: updatePreview};
-            updatePreview();
-
-            root.appendChild(controls);
-            root.appendChild(preview);
-            var dialog = openDialog("Configurar cartões", root, [{label: "Concluir", kind: "primary"}]);
-            dialog.root.classList.add("board-dialog--wide");
-            dialog.onClose = function () { win.clearTimeout(timer); configState = null; };
+            kanbanCore.openConfig({
+                controls: [
+                    {type: "check", key: "show_empty", label: "Mostrar raias vazias", value: settings.show_empty},
+                    {type: "select", key: "blank_lane", label: "Raia “Em branco” (itens sem etiqueta)", value: settings.blank_lane,
+                        choices: [["auto", "Só quando houver itens"], ["always", "Sempre"], ["never", "Nunca"]]},
+                    {type: "select", key: "sum_column", label: "Somar valor no cabeçalho da raia",
+                        choices: [["", "Não somar"]].concat(summable.map(function (column) { return [String(column.id), column.name]; })),
+                        value: kanban.sum_column_id ? String(kanban.sum_column_id) : "", parse: function (value) { return value ? Number(value) : null; }},
+                    {type: "check", key: "show_field_names", label: "Mostrar o nome de cada campo no cartão", value: settings.show_field_names}
+                ],
+                fields: meta.columns.map(function (column) { return {id: column.id, name: column.name}; }),
+                selected: kanban.card_column_ids,
+                save: updateView
+            });
         }
 
+        if (kanban) {
+            if (!win.LPSKanbanCore) throw new Error("static/js/kanban-core.js precisa ser carregado antes de boards.js");
+            kanbanCore = win.LPSKanbanCore.init(lanesRoot.closest(".kanban-scroll") || lanesRoot.parentNode, {
+                // arrastar um cartão grava a etiqueta da coluna agrupadora pelo mesmo endpoint da célula (mesma permissão e auditoria)
+                move: function (ctx) {
+                    var value = ctx.to.dataset.optionId ? Number(ctx.to.dataset.optionId) : "";
+                    return request(url("cell_update", {id: ctx.itemId, column: kanban.group_column_id}), {value: value}).then(function () {
+                        return {silent: true}; // Quadros nunca avisou sucesso ao mover: as raias redesenhadas são o aviso
+                    });
+                },
+                reload: function () {
+                    return request(url("view_lanes", {id: kanban.view.id}), queryState()).then(function (payload) {
+                        if (!payload || typeof payload.lanes_html !== "string") return null;
+                        applyLanes(payload);
+                        return payload.lanes_html;
+                    });
+                },
+                rename: function (ctx) { return request(url("item_rename", {id: ctx.itemId}), {name: ctx.title}); },
+                laneMenu: laneMenuItems,
+                addCard: function (ctx) { addCard(ctx.lane); },
+                menuItems: function (ctx) {
+                    var items = [];
+                    if (perms.edit_item) items.push({label: "Renomear", icon: "file-text", onClick: function () { kanbanCore.startRename(ctx.card); }});
+                    if (perms.delete_item) items.push({label: "Excluir item", icon: "trash", danger: true, onClick: function () { deleteCard(ctx.card); }});
+                    return items;
+                }
+            });
+        }
         if (kanban) {
             var groupSelect = page.querySelector("[data-kanban-group-by]");
             if (groupSelect) groupSelect.addEventListener("change", function () { updateView({group_by: groupSelect.value ? Number(groupSelect.value) : null}); });
@@ -2241,19 +2152,7 @@
                 return;
             }
             if (kanban) {
-                if ((node = target.closest("[data-card-menu]"))) {
-                    if (popover && popover.anchor === node) { closePopover(true); return; }
-                    openCardMenu(node, node.closest("[data-card]"));
-                    return;
-                }
-                if ((node = target.closest("[data-lane-menu]"))) {
-                    if (popover && popover.anchor === node) { closePopover(true); return; }
-                    openLaneMenu(node, node.closest("[data-lane]"));
-                    return;
-                }
-                if ((node = target.closest("[data-kanban-add]"))) { addCard(node.closest("[data-lane]")); return; }
                 if ((node = target.closest("[data-kanban-config]"))) { openKanbanConfig(); return; }
-                if ((node = target.closest("[data-card-title]"))) { startItemRename(node.closest("[data-card]")); return; }
                 if ((node = target.closest("[data-lane-title]"))) {
                     if (event.detail >= 2) renameLane(node.closest("[data-lane]"));
                     return;
@@ -2347,7 +2246,6 @@
                 return;
             }
             if (node.matches && node.matches("[data-item-name]") && event.key === "Enter") { event.preventDefault(); startItemRename(node.closest("tr")); return; }
-            if (node.matches && node.matches("[data-card-title]") && event.key === "Enter") { event.preventDefault(); startItemRename(node.closest("[data-card]")); return; }
             if (node.matches && node.matches("[data-group-title]") && event.key === "Enter") { event.preventDefault(); startGroupRename(node.closest("[data-group]")); }
         });
 
@@ -2369,16 +2267,6 @@
                 if (event.dataTransfer) {
                     event.dataTransfer.effectAllowed = "move";
                     event.dataTransfer.setData("text/plain", "calcard:" + calCard.dataset.itemId);
-                }
-                return;
-            }
-            var card = event.target.closest && event.target.closest("[data-card]");
-            if (card && kanban && perms.edit_item) {
-                drag = {kind: "card", id: Number(card.dataset.itemId), el: card, lane: card.closest("[data-lane]")};
-                card.classList.add("is-dragging");
-                if (event.dataTransfer) {
-                    event.dataTransfer.effectAllowed = "move";
-                    event.dataTransfer.setData("text/plain", "card:" + card.dataset.itemId);
                 }
                 return;
             }
@@ -2412,14 +2300,6 @@
                 if (overDay !== drag.day) overDay.classList.add("is-drop-target");
                 return;
             }
-            if (drag.kind === "card") {
-                var overLane = event.target.closest("[data-lane]");
-                if (!overLane) return;
-                event.preventDefault();
-                clearDropMarks();
-                if (overLane !== drag.lane) overLane.classList.add("is-drop-target");
-                return;
-            }
             if (drag.kind === "column") {
                 var header = event.target.closest("th[data-column-th]");
                 if (!header || Number(header.dataset.columnId) === drag.id) return;
@@ -2450,12 +2330,6 @@
                 var dropDay = event.target.closest("[data-cal-day]");
                 endDrag();
                 if (dropDay) moveCalCard(current.el, dropDay);
-                return;
-            }
-            if (current.kind === "card") {
-                var dropLane = event.target.closest("[data-lane]");
-                endDrag();
-                if (dropLane) moveCard(current.el, dropLane);
                 return;
             }
             var side;
@@ -2580,7 +2454,7 @@
 
         return {
             request: request, openColumnMenu: openColumnMenu, openTypePicker: openTypePicker, addColumn: addColumn,
-            saveCell: saveCell, columnMeta: columnMeta, toast: toast, refreshKanban: refreshKanban, moveCard: moveCard,
+            saveCell: saveCell, columnMeta: columnMeta, toast: toast, refreshKanban: refreshKanban, moveCard: function (card, lane) { return kanbanCore.move(card, lane); },
             refreshCalendar: refreshCalendar, openDrawer: openDrawer, moveCalCard: moveCalCard
         };
     }

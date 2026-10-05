@@ -1,7 +1,8 @@
 <article class="kanban-card" data-card data-item-id="{{ card.id }}"{% if card.scope %} data-card-scope="{{ card.scope }}"{% endif %}{% if card.updated_at %} data-updated-at="{{ card.updated_at }}"{% endif %}{% for name, value in card.attrs %} {{ name }}="{{ value }}"{% endfor %}{% if card.can_move %} draggable="true"{% endif %}>
     <header class="kanban-card__head">
         {% if card.title_editable %}<span class="kanban-card__title{% if not card.title %} is-empty{% endif %}" data-card-title tabindex="0" role="textbox" aria-label="{{ card.title_label|default:kanban.item_label }}">{{ card.title|default:"Sem título" }}</span>{% elif card.url %}<a class="kanban-card__title" data-card-title href="{{ card.url }}" draggable="false">{{ card.title }}</a>{% else %}<span class="kanban-card__title{% if not card.title %} is-empty{% endif %}" data-card-title>{{ card.title|default:"Sem título" }}</span>{% endif %}
-        {% if card.menu %}<button type="button" class="kanban-card__menu" data-card-menu aria-haspopup="menu" aria-label="Opções da {{ kanban.item_label|lower }} {{ card.title }}">{% include "_icon.html" with name="more" %}</button>{% endif %}
+        {% if card.menu %}<button type="button" class="kanban-card__menu" data-card-menu aria-haspopup="menu" aria-label="{% if kanban.menu_label %}{{ kanban.menu_label }}{% else %}Opções da {{ kanban.item_label|lower }}{% endif %} {{ card.title }}">{% include "_icon.html" with name="more" %}</button>{% endif %}
     </header>
+    {% if card.link %}<a class="kanban-card__code" href="{{ card.link.url }}" draggable="false" aria-label="{{ card.link.label }}">{{ card.link.text }}</a>{% endif %}
     {% include card.fields_template|default:"kanban/_fields.html" %}
 </article>

@@ -15,7 +15,7 @@ from django.views import View
 from django.views.generic import TemplateView
 
 from acessos import catalog
-from acessos.services import AuthorizationService
+from acessos.services import AuthorizationService, ResourceContext
 from activities.filtering import normalize_workspace_filters
 from activities.models import Activity, Task
 from core.colors import EnumColorResolver
@@ -261,6 +261,7 @@ class DomainWorkBoardView(OrganizationRequiredMixin, TemplateView):
             fields=fields,
             all_fields=all_fields,
             card_settings_fields=card_settings_fields,
+            card_selected_ids=[field.pk for field in visible_card_fields],
             items=items,
             groups=self._group_items(
                 items,
@@ -318,8 +319,13 @@ class DemandWorkBoardView(DomainWorkBoardView):
 
     def wants_lanes_fragment(self):
         """O Kanban redesenha as raias depois de mover um cartão: `?fragmento=raias` devolve só elas (mesma autorização,
-        mesmo recorte). Só no Workspace e só na visão Kanban; nas outras o parâmetro é ignorado."""
-        return self.use_workspace() and self.request.GET.get("fragmento") == "raias"
+        mesmo recorte, com ou sem Workspace). Só vale na visão Kanban; nas outras o parâmetro é ignorado."""
+        return self.request.GET.get("fragmento") == "raias"
+
+    def sector_list(self):
+        if not hasattr(self, "_sector_list"):
+            self._sector_list = list(Sector.objects.filter(organization=self.organization, is_active=True).order_by("name"))
+        return self._sector_list
 
     def requested_group_by(self):
         if not self.use_workspace():
@@ -379,10 +385,16 @@ class DemandWorkBoardView(DomainWorkBoardView):
 
         from .demand_workspace import GROUPINGS
 
+        from activities.inline_edit import inline_flags
+
         request = self.request
         items = context["items"]
         group_by = context["group_by"]
         context["group_label"] = dict(GROUPINGS).get(group_by, group_by)
+        # O que a pessoa pode editar em cada cartão (uma consulta de autorização para todos): o título renomeia no lugar.
+        inline_flags(request.user, items)
+        title_field = next((field for field in context["all_fields"] if field.key == "title"), None)
+        context["title_field"] = title_field
         if context["group_field"] is None:  # sem o campo do agrupamento não há para onde gravar: ninguém arrasta
             for item in items:
                 item.can_move_kanban = False
@@ -393,35 +405,78 @@ class DemandWorkBoardView(DomainWorkBoardView):
                 allowed = AuthorizationService.can_many(request.user, [(catalog.ATIVIDADE_DEFINIR_ETAPA, item) for item in pending])
                 for item in pending:
                     item.can_move_kanban = allowed[(catalog.ATIVIDADE_DEFINIR_ETAPA, item.pk)]
-        # No Workspace o nome dos campos só aparece se a pessoa pediu (igual a Quadros); o painel Personalizar lê o mesmo valor.
+        # O nome dos campos só aparece se a pessoa pediu (igual a Quadros); o painel de configuração lê o mesmo valor.
         show_field_names = bool((context["work_view"].settings or {}).get("show_field_names", False))
         context["show_field_names"] = show_field_names
         params = request.GET.copy()
         params.pop("fragmento", None)  # o endereço que a ficha usa para voltar é o da página, nunca o do fragmento
         query = params.urlencode()
         return_url = f"{request.path}?{query}" if query else request.path
+        if context["can_configure"]:
+            context["kanban_config"] = self.kanban_config(context, show_field_names)
+        sectors_by_pk = {sector.pk: sector for sector in sectors}
+        filtered_sector = normalize_workspace_filters(request)["setor"]
+        creatable = {}  # (setor, responsável) -> a pessoa pode criar demanda ali? (uma consulta por combinação, não por cartão)
+        manageable = {}
+
+        def can_create_in(sector_id, owner_id=None):
+            key = (sector_id, owner_id)
+            if key not in creatable:
+                context_for_new = ResourceContext.for_new(
+                    self.organization, sector=sectors_by_pk.get(sector_id), owner=owner_id if owner_id else request.user
+                )
+                creatable[key] = AuthorizationService.can(request.user, catalog.ATIVIDADE_CRIAR, context_for_new)
+            return creatable[key]
+
+        def can_manage(kind, sector_id):
+            key = (kind, sector_id)
+            if key not in manageable:
+                action = catalog.ETAPA_GERIR if kind == "stage" else catalog.CONDICAO_GERIR
+                manageable[key] = sector_id in sectors_by_pk and AuthorizationService.can(request.user, action, sectors_by_pk[sector_id])
+            return manageable[key]
+
         context["kanban"] = build_demand_kanban(
             groups=context["groups"],
             group_by=group_by,
             sectors_by_id={sector.pk: sector.name for sector in sectors},
             show_field_names=show_field_names,
-            can_create=context["can_create"],
+            can_rename=title_field is not None,
+            can_create=AuthorizationService.can_anywhere(request.user, catalog.ATIVIDADE_CRIAR),  # a mesma regra da janela "Nova demanda"
             create_url=f"{reverse('activity-create')}?next={quote(return_url)}",
             return_url=return_url,
+            can_create_in=can_create_in,
+            can_manage=can_manage,
+            default_sector_id=int(filtered_sector) if str(filtered_sector).isdigit() and int(filtered_sector) in sectors_by_pk else None,
+            config_url=reverse("config-etapas-status"),
         )
+
+    @staticmethod
+    def kanban_config(context, show_field_names):
+        """Dados do diálogo "Configurar cartões" (o mesmo de Quadros, `LPSKanbanCore.openConfig`), como JSON na página. O Título
+        é sempre o título do cartão: não aparece na lista de campos e é regravado como primeiro campo ao salvar a ordem."""
+        from .demand_kanban import CARD_LABELS
+
+        view = context["work_view"]
+        title = next((field for field in context["all_fields"] if field.key == "title"), None)
+        return {
+            "fields_url": reverse("workboard-card-fields", args=[view.pk]),
+            "settings_url": reverse("workboard-view-settings", args=[view.pk]),
+            "settings": {"show_empty": bool((view.settings or {}).get("show_empty", False)), "show_field_names": show_field_names},
+            "fields": [
+                {"id": field.pk, "name": CARD_LABELS.get(field.key, field.label)}
+                for field in context["card_settings_fields"] if field.key != "title"
+            ],
+            "selected": [pk for pk in context["card_selected_ids"] if not title or pk != title.pk],
+            "always": [title.pk] if title else [],
+        }
 
     def workspace_context(self, context, view_mode):
         """Contexto do shell novo (flag `WORKSPACE_V2`): só a barra; os dados já vieram da consulta de sempre."""
         from .demand_workspace import build_workspace
 
         User = get_user_model()
-        sectors = list(Sector.objects.filter(organization=self.organization, is_active=True).order_by("name"))
+        sectors = self.sector_list()
         context["view_mode"] = view_mode
-        if view_mode == "kanban":
-            self.kanban_context(context, sectors)
-            if self.wants_lanes_fragment():
-                self._lanes_fragment = True  # só as raias: a barra, as abas e os avisos não são desenhados
-                return context
         people = list(User.objects.filter(profile__organization=self.organization, is_active=True).order_by("first_name", "username"))
         grouped_list = view_mode == "lista" and self.requested_group_by() is not None
         context["ws"] = build_workspace(
@@ -450,6 +505,13 @@ class DemandWorkBoardView(DomainWorkBoardView):
             DomainBoardView.Type.CALENDAR: "calendario",
         }
         view_mode = mode_by_type.get(context["work_view"].type, "lista")
+        if view_mode == "kanban":
+            # O Kanban é o componente único do sistema (templates/kanban/*) e é o MESMO na tela de sempre e no Workspace.
+            context["view_mode"] = view_mode
+            self.kanban_context(context, self.sector_list())
+            if self.wants_lanes_fragment():
+                self._lanes_fragment = True  # só as raias: a barra, as abas e os avisos não são desenhados
+                return context
         if self.use_workspace():
             return self.workspace_context(context, view_mode)
 

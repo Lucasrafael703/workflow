@@ -274,7 +274,7 @@ class UserFormAjaxTests(TestCase):
         self.assertIn("username", data["errors"])
 
     def test_initial_name_prefills_only_the_person_name_on_create(self):
-        response = self.client.get(reverse("user-create"), {"initial_name": "Ribeiro Caram"})
+        response = self.client.get(reverse("user-quick-create"), {"initial_name": "Ribeiro Caram"})  # a rota do "Cadastrar pessoa" dos seletores
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["form"].initial["first_name"], "Ribeiro Caram")
         self.assertNotIn("email", response.context["form"].initial)
