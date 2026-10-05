@@ -125,8 +125,15 @@ do editor de Demanda e dos quadros.
 
 | Caminho | View | Ação |
 |---|---|---|
-| `usuarios/` | `UserListView` (`user-list`) | `usuario.visualizar` |
-| `usuarios/novo/`, `<pk>/` | `UserFormView` (`user-create`, `user-edit`) | `usuario.editar` |
+| `usuarios/` | `access_views.UserListView` (`user-list`) | `usuario.visualizar` |
+| `usuarios/novo/` | `access_views.UserEditorView` (`user-create`) | `usuario.criar` |
+| `usuarios/<pk>/` | `access_views.UserEditorView` (`user-edit`) | `usuario.editar` (grupo e telas: também `seguranca.gerir_autorizacoes`) |
+| `usuarios/novo-rapido/` | `UserFormView` (`user-quick-create`) | `usuario.editar` — cadastro em janela, usado pelos seletores de pessoa de outras telas; cria só a pessoa, sem acessos |
+| `grupos-de-acesso/` | `AccessGroupsView` (`access-groups`) | `seguranca.gerir_perfis` (só leitura sem `seguranca.gerir_autorizacoes`) |
+| `grupos-de-acesso/comparar/` | `AccessGroupsCompareView` (`access-groups-compare`) | `seguranca.gerir_perfis` |
+| `grupos-de-acesso/novo/` | `AccessGroupCreateView` (`access-group-create`) | `seguranca.gerir_autorizacoes` |
+| `grupos-de-acesso/<pk>/salvar/` | `AccessGroupSaveView` (`access-group-save`) | `seguranca.gerir_autorizacoes` |
+| `grupos-de-acesso/<pk>/inativar/` | `AccessGroupInactivateView` (`access-group-inactivate`) | `seguranca.gerir_autorizacoes` |
 | `usuarios/<pk>/acessos/` | `UserAccessView` (`user-access`) | `seguranca.gerir_autorizacoes` |
 | `usuarios/<pk>/acessos/<assignment_pk>/remover/` | `UserAccessRemoveView` (`user-access-remove`) | `seguranca.gerir_autorizacoes` |
 | `usuarios/<pk>/concessoes/` | `UserGrantActionView` (`user-grant`) | `seguranca.gerir_autorizacoes` |

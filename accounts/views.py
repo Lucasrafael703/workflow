@@ -1,5 +1,6 @@
 from django.contrib import messages
-from django.contrib.auth import get_user_model
+from django.contrib.auth import get_user_model, update_session_auth_hash
+from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.mail import send_mail
 from django.shortcuts import redirect
@@ -134,3 +135,29 @@ class ChangeVerificationEmailView(PendingVerificationMixin, FormView):
         _send_verification_email(self.pending_user, verification)
         messages.success(self.request, "E-mail atualizado. Enviamos um novo código.")
         return redirect("verify-email")
+
+
+class RequiredPasswordChangeView(LoginRequiredMixin, FormView):
+    """Troca obrigatória após uma senha provisória (ver `ForcePasswordChangeMiddleware`)."""
+
+    template_name = "accounts/password_change_required.html"
+    form_class = PasswordChangeForm
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated and not request.user.profile.must_change_password:
+            return redirect("home")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["user"] = self.request.user
+        return kwargs
+
+    def form_valid(self, form):
+        user = form.save()
+        update_session_auth_hash(self.request, user)
+        profile = user.profile
+        profile.must_change_password = False
+        profile.save(update_fields=["must_change_password"])
+        messages.success(self.request, "Senha criada. Bem-vindo à LPS!")
+        return redirect("home")

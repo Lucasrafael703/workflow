@@ -209,8 +209,8 @@ espelhadas em `static/js/color-utils.js`.
 
 | Model | Campos relevantes | Constraints / regras |
 |---|---|---|
-| `Profile` | `user` 1:1 (CASCADE, `profile`), `organization` (null, PROTECT, `members`), `phone`, `main_sector` (null, SET_NULL, sem `related_name`), `created_at` | Criado vazio por signal (`accounts/signals.py`) ao criar um `User`. `main_sector` é só o filtro padrão das telas (Regras 05 §29). |
-| `UserSector` | `user` (CASCADE, `sector_memberships`), `sector` (CASCADE, `user_memberships`), `role` (`MEMBRO` padrão, `GESTOR`), `joined_at`, `removed_at` (null) | Único por (user, sector) **enquanto** `removed_at` é nulo (constraint parcial `unique_active_user_sector`) — sair e voltar abre novo período. Ordenação `-joined_at`. Ser GESTOR não concede autorização por si só. Salvar/apagar invalida o cache de escopos do motor de autorização (signal). |
+| `Profile` | `user` 1:1 (CASCADE, `profile`), `organization` (null, PROTECT, `members`), `phone`, `main_sector` (null, SET_NULL), `must_change_password`, `created_at` | Criado vazio por signal (`accounts/signals.py`) ao criar um `User`. `main_sector` é só o filtro padrão das telas (Regras 05 §29). `must_change_password` liga com a senha provisória e desliga quando a pessoa escolhe a própria (doc 07). |
+| `UserSector` | `user` (CASCADE, `sector_memberships`), `sector` (CASCADE, `user_memberships`), `role` (`MEMBRO`, `GESTOR`), `joined_at`, `removed_at` (null) | Único por (user, sector) **enquanto** `removed_at` é nulo (constraint parcial `unique_active_user_sector`) — sair e voltar abre novo período. Ordenação `-joined_at`. Ser GESTOR não concede autorização por si só. Salvar/apagar invalida o cache de escopos do motor de autorização (signal). |
 | `EmailVerification` | `user` 1:1 (CASCADE, `email_verification`), `code` (6 dígitos), `created_at`, `expires_at`, `attempts`, `confirmed_at` (null) | `CODE_TTL`=15 min, `RESEND_COOLDOWN`=60 s, `MAX_ATTEMPTS`=5. `issue(user)` substitui o código anterior (mesma linha). |
 
 ---

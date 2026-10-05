@@ -4,60 +4,110 @@
 {% block content %}
 <div class="page-head">
     <div class="page-head__text">
+        <div class="breadcrumb">Administração<span>›</span>Usuários</div>
         <h1>Usuários</h1>
-        <p class="sub">Quem acessa a LPS, com quais perfis e em qual escopo.</p>
+        <p class="sub">Quem acessa o sistema, em qual equipe trabalha e quais telas pode abrir.</p>
     </div>
     <div class="page-head__actions">
-        <a href="{% url 'user-create' %}" class="btn btn--primary">
-            {% include "_icon.html" with name="plus" %} Novo usuário
-        </a>
+        {% if can_groups %}
+        <a href="{% url 'access-groups' %}" class="btn">{% include "_icon.html" with name="shield" %} Grupos de acesso</a>
+        {% endif %}
+        {% if can_create %}
+        <a href="{% url 'user-create' %}" class="btn btn--primary">{% include "_icon.html" with name="plus" %} Novo usuário</a>
+        {% endif %}
     </div>
 </div>
 
-<form method="get">
-    <div class="toolbar">
-        <div class="toolbar__search">
-            {% include "_icon.html" with name="search" %}
-            <input type="search" name="q" value="{{ search }}" placeholder="Nome, usuário ou e-mail…">
-        </div>
-        <button type="submit" class="btn">Buscar</button>
-        {% if search %}<a href="{% url 'user-list' %}" class="btn btn--ghost">Limpar</a>{% endif %}
+{% if full_count %}
+<div class="access-alert" role="status">
+    <span class="access-alert__icon">{% include "_icon.html" with name="alert" %}</span>
+    <span class="access-alert__text">
+        <strong>{{ full_count }} pessoa{{ full_count|pluralize }} {% if full_count == 1 %}está{% else %}estão{% endif %} como Administrador.</strong>
+        Se {% if full_count == 1 %}ela só precisa{% else %}elas só precisam{% endif %} de algumas telas, mova para um grupo mais restrito.
+    </span>
+    {% if only_full %}
+    <a href="{% url 'user-list' %}?situacao=todos" class="access-alert__link">Ver todas</a>
+    {% else %}
+    <a href="{% url 'user-list' %}?situacao=todos&amp;acesso=total" class="access-alert__link">Revisar</a>
+    {% endif %}
+</div>
+{% endif %}
+
+<form method="get" class="toolbar access-filters">
+    {% if team_id %}<input type="hidden" name="equipe" value="{{ team_id }}">{% endif %}
+    <div class="toolbar__search">
+        {% include "_icon.html" with name="search" %}
+        <input type="search" name="q" value="{{ search }}" placeholder="Buscar por nome, usuário ou e-mail" aria-label="Buscar usuários">
     </div>
+    <label class="inline" for="f-grupo">Grupo</label>
+    <select id="f-grupo" name="grupo" onchange="this.form.submit()">
+        <option value="">Todos</option>
+        {% for group in groups %}<option value="{{ group.pk }}"{% if group_id == group.pk|stringformat:"s" %} selected{% endif %}>{{ group.name }}</option>{% endfor %}
+    </select>
+    <label class="inline" for="f-situacao">Situação</label>
+    <select id="f-situacao" name="situacao" onchange="this.form.submit()">
+        {% for value, label in situations %}<option value="{{ value }}"{% if situation == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+    <button type="submit" class="btn">Buscar</button>
+    {% if search or group_id or team_id or situation != "ativos" or only_full %}<a href="{% url 'user-list' %}" class="btn btn--ghost">Limpar</a>{% endif %}
 </form>
+
+<div class="access-chips" role="group" aria-label="Filtrar por equipe">
+    {% for chip in team_chips %}
+    <a href="{{ chip.url }}" class="access-chip{% if chip.active %} is-active{% endif %}"{% if chip.active %} aria-current="true"{% endif %}>{{ chip.label }}</a>
+    {% endfor %}
+</div>
 
 <div class="card card--flush">
     <div class="table-wrap">
-        <table class="responsive lps-sheet lps-sheet--compact">
-            <thead><tr><th>Usuário</th><th>E-mail</th><th>Perfis</th><th>Etapa</th><th class="col-actions">Ações</th></tr></thead>
+        <table class="responsive access-table">
+            <thead>
+                <tr>
+                    <th>Pessoa</th>
+                    <th>Equipe</th>
+                    <th>Grupo de acesso</th>
+                    <th>Telas</th>
+                    <th>Situação</th>
+                    <th class="col-actions"><span class="sr-only">Ações</span></th>
+                </tr>
+            </thead>
             <tbody>
-            {% for item in users %}
+            {% for row in rows %}
             <tr>
-                <td data-label="Usuário">
-                    <span class="title">{{ item.get_full_name|default:item.username }}</span>
-                    <div class="muted small">{{ item.username }}</div>
+                <td data-label="Pessoa">
+                    <div class="person-cell">
+                        <span class="avatar-initials" aria-hidden="true">{{ row.initials }}</span>
+                        <span>
+                            <a href="{% if can_edit %}{% url 'user-edit' row.user.pk %}{% else %}#{% endif %}" class="title">{{ row.user.get_full_name|default:row.user.username }}</a>
+                            <span class="muted small person-cell__mail">{{ row.user.email|default:row.user.username }}</span>
+                        </span>
+                    </div>
                 </td>
-                <td data-label="E-mail">{{ item.email|default:"—" }}</td>
-                <td data-label="Perfis">
-                    {% for assignment in item.access_profiles.all %}{% if assignment.is_active %}
-                        {{ assignment.profile.name }} <span class="muted small">({{ assignment.scope.label }})</span>{% if not forloop.last %}<br>{% endif %}
-                    {% endif %}{% empty %}<span class="muted">—</span>{% endfor %}
+                <td data-label="Equipe">
+                    {% for team in row.teams %}{% include "_sector_badge.html" with sector=team variant="compact" %} {% empty %}<span class="muted">—</span>{% endfor %}
                 </td>
-                <td data-label="Etapa">
-                    {% if item.is_active %}<span class="dot-state dot-state--success"></span>Ativo
-                    {% else %}<span class="dot-state"></span><span class="muted">Inativo</span>{% endif %}
+                <td data-label="Grupo de acesso">
+                    {% if row.superuser %}<span class="group-badge group-badge--gold" title="Acesso total à plataforma, ignora os grupos">Super usuário</span>{% endif %}
+                    {% for group, color in row.groups %}<span class="group-badge group-badge--{% if row.full %}gold{% else %}{{ color }}{% endif %}">{{ group.name }}</span> {% empty %}{% if not row.superuser %}<span class="muted">Sem grupo</span>{% endif %}{% endfor %}
+                </td>
+                <td data-label="Telas">
+                    {% if row.all_screens %}Todas{% else %}{{ row.screens }} tela{{ row.screens|pluralize }}{% endif %}
+                    {% if row.individual %}<div class="small access-individual">+{{ row.individual }} individua{{ row.individual|pluralize:"l,is" }}</div>{% endif %}
+                </td>
+                <td data-label="Situação">
+                    <span class="state state--{{ row.state.0 }}"><span class="state__dot"></span>{{ row.state.1 }}</span>
                 </td>
                 <td data-label="Ações" class="col-actions">
-                    <a href="{% url 'user-edit' item.pk %}">Editar</a> ·
-                    <a href="{% url 'user-access' item.pk %}">Acessos</a>
+                    {% if can_edit %}<a href="{% url 'user-edit' row.user.pk %}">Editar</a>{% endif %}
                 </td>
             </tr>
             {% empty %}
-            <tr><td colspan="5">
+            <tr><td colspan="6">
                 <div class="empty-state">
                     <div class="empty-state__icon">{% include "_icon.html" with name="users" %}</div>
-                    <h3>Nenhum usuário nesta organização</h3>
-                    <p>Cadastre as pessoas que vão operar a LPS e defina o perfil de cada uma.</p>
-                    <a href="{% url 'user-create' %}" class="btn btn--primary">Cadastrar usuário</a>
+                    <h3>Nenhuma pessoa encontrada</h3>
+                    <p>Ajuste a busca ou os filtros{% if can_create %}, ou cadastre quem vai usar a LPS{% endif %}.</p>
+                    {% if can_create %}<a href="{% url 'user-create' %}" class="btn btn--primary">Novo usuário</a>{% endif %}
                 </div>
             </td></tr>
             {% endfor %}
@@ -68,6 +118,7 @@
 
 <div class="hint-bar">
     {% include "_icon.html" with name="info" %}
-    <span>Em <strong>Acessos</strong> você vê por que a pessoa tem cada permissão: qual perfil concedeu e em qual escopo.</span>
+    <span>Quem aparece como <strong>Super usuário</strong> ignora os grupos e enxerga tudo. Abra a pessoa para escolher um grupo e,
+    se for o caso, desmarcar o super usuário.</span>
 </div>
 {% endblock %}

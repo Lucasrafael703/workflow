@@ -744,12 +744,18 @@ class AccessService:
         scope = AccessService._resolve_scope(
             organization, scope_type, sector, company, site, cost_center, relation
         )
+        return AccessService.assign_profile_to_scope(user, profile, scope, granted_by)
+
+    @staticmethod
+    @transaction.atomic
+    def assign_profile_to_scope(user, profile, scope, granted_by):
+        """Atribui o perfil num escopo que já existe (as telas de acesso escolhem o escopo pronto)."""
         assignment, created = UserProfile.objects.get_or_create(
             user=user,
             profile=profile,
             scope=scope,
             is_active=True,
-            defaults={"organization": organization, "created_by": granted_by},
+            defaults={"organization": profile.organization, "created_by": granted_by},
         )
         if created:
             AccessService._audit(
@@ -784,12 +790,18 @@ class AccessService:
         scope = AccessService._resolve_scope(
             organization, scope_type, sector, company, site, cost_center, relation
         )
+        return AccessService.grant_action_to_scope(user, action, scope, granted_by)
+
+    @staticmethod
+    @transaction.atomic
+    def grant_action_to_scope(user, action, scope, granted_by):
+        """Concessão direta num escopo que já existe (ajuste individual das telas de acesso)."""
         grant, created = UserAction.objects.get_or_create(
             user=user,
             action=action,
             scope=scope,
             is_active=True,
-            defaults={"organization": organization, "created_by": granted_by},
+            defaults={"organization": user.profile.organization, "created_by": granted_by},
         )
         if created:
             AccessService._audit(

@@ -253,19 +253,19 @@ class UserFormAjaxTests(TestCase):
 
     def test_ajax_request_returns_json_without_redirect(self):
         response = self.client.post(
-            reverse("user-create"), self._payload(), HTTP_X_REQUESTED_WITH="XMLHttpRequest"
+            reverse("user-quick-create"), self._payload(), HTTP_X_REQUESTED_WITH="XMLHttpRequest"
         )
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.content)
         self.assertTrue(User.objects.filter(pk=data["id"], username="novapessoa").exists())
 
     def test_non_ajax_request_still_redirects(self):
-        response = self.client.post(reverse("user-create"), self._payload())
+        response = self.client.post(reverse("user-quick-create"), self._payload())
         self.assertRedirects(response, reverse("user-list"))
 
     def test_ajax_invalid_data_returns_json_errors_without_creating_user(self):
         response = self.client.post(
-            reverse("user-create"),
+            reverse("user-quick-create"),
             self._payload(username=""),
             HTTP_X_REQUESTED_WITH="XMLHttpRequest",
         )
