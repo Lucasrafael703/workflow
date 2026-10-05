@@ -318,7 +318,7 @@ class BoardInstantiationService:
     @classmethod
     @transaction.atomic
     def create_for_activity(cls, *, user, activity, template=None):
-        activity = Activity.objects.select_for_update().select_related("sector", "owner", "created_by").get(pk=activity.pk)
+        activity = Activity.objects.select_for_update(of=("self",)).select_related("sector", "owner", "created_by").get(pk=activity.pk)
         existing = Board.objects.filter(activity=activity).first()
         if existing is not None:
             if existing.kind != Board.Kind.DEMAND:
@@ -379,7 +379,7 @@ class BoardInstantiationService:
           definitivamente** as tarefas, colunas, grupos e visões do quadro atual; o novo conteúdo nasce no MESMO `Board`
           (mesmo endereço). Tudo numa transação: se algo falhar, o quadro antigo continua como estava.
         Devolve `(quadro, itens_excluídos)`."""
-        activity = Activity.objects.select_for_update().select_related("sector", "owner", "created_by").get(pk=activity.pk)
+        activity = Activity.objects.select_for_update(of=("self",)).select_related("sector", "owner", "created_by").get(pk=activity.pk)
         board = Board.objects.select_for_update().filter(activity=activity).first()
         if board is None:
             board = cls.create_for_activity(user=user, activity=activity, template=template)
