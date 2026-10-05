@@ -1,7 +1,8 @@
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
-from django.db.models import Count, Q
+from django.db.models import Case, CharField, Count, F, Q, Value, When
+from django.db.models.functions import Concat, Lower, Trim
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
@@ -172,7 +173,13 @@ class PersonSearchView(OrganizationRequiredMixin, View):
         term = request.GET.get("q", "").strip()
         queryset = User.objects.filter(
             profile__organization=self.organization, is_active=True
-        ).order_by("first_name", "username")
+        ).annotate(
+            _picker_name=Case(
+                When(Q(first_name="") & Q(last_name=""), then=F("username")),
+                default=Trim(Concat("first_name", Value(" "), "last_name")),
+                output_field=CharField(),
+            )
+        ).order_by(Lower("_picker_name"), Lower("username"))
         if "sector" in request.GET:
             sector_id = request.GET.get("sector", "").strip()
             try:
@@ -209,7 +216,9 @@ class ClientSearchView(OrganizationRequiredMixin, View):
 
     def get(self, request):
         term = request.GET.get("q", "").strip()
-        queryset = Client.objects.filter(organization=self.organization, is_active=True).order_by("name")
+        queryset = Client.objects.filter(
+            organization=self.organization, is_active=True
+        ).order_by(Lower("name"), "name")
         if term:
             queryset = queryset.filter(
                 Q(name__icontains=term) | Q(document__icontains=term)
@@ -235,7 +244,9 @@ class _SimpleSearchView(OrganizationRequiredMixin, View):
 
     def get(self, request):
         term = request.GET.get("q", "").strip()
-        queryset = self.model.objects.filter(organization=self.organization, is_active=True).order_by("name")
+        queryset = self.model.objects.filter(
+            organization=self.organization, is_active=True
+        ).order_by(Lower("name"), "name")
         queryset = self.filter_queryset(queryset)
         if term:
             queryset = queryset.filter(name__icontains=term)
@@ -342,6 +353,10 @@ class CadastroFormView(OrganizationRequiredMixin, ActionRequiredMixin, FormView)
         instance = self.get_instance()
         if instance is not None and not self.request.POST:
             kwargs["initial"] = self.initial_from(instance)
+        elif instance is None and not self.request.POST:
+            initial_name = self.request.GET.get("initial_name", "").strip()
+            if initial_name:
+                kwargs["initial"] = {"name": initial_name}
         if self.form_class in (SiteForm, CostCenterForm, ActivityStageForm, TaskStageForm, WorkflowStatusForm):
             kwargs["organization"] = self.organization
         return kwargs
@@ -1454,6 +1469,13 @@ class UserFormView(OrganizationRequiredMixin, ActionRequiredMixin, FormView):
         kwargs = super().get_form_kwargs()
         kwargs["organization"] = self.organization
         kwargs["instance"] = self.get_instance()
+        if kwargs["instance"] is None and not self.request.POST:
+            initial_name = self.request.GET.get("initial_name", "").strip()
+            if initial_name:
+                # Para pessoas, o texto pesquisado preenche somente o nome.
+                # E-mail, usuário e senha continuam escolhas explícitas e
+                # validações normais do formulário.
+                kwargs["initial"] = {"first_name": initial_name}
         return kwargs
 
     def get_context_data(self, **kwargs):

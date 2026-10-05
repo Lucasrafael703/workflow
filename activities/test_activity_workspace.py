@@ -14,7 +14,7 @@ from acessos import catalog
 from acessos.testing import grant_action
 from audit.models import AuditLog
 from core.models import ActivityStage, Client, Site
-from .models import Activity, OwnerChangeLog
+from .models import Activity, ActivityPendency, OwnerChangeLog
 from .test_views import ViewTestCase
 
 
@@ -338,3 +338,241 @@ class ActivityWorkspaceTests(ViewTestCase):
         response = self.client.post(reverse("activity-mini-create"), {"title": "Seletor legado"}, HTTP_X_REQUESTED_WITH="XMLHttpRequest")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(Activity.objects.get(pk=response.json()["id"]).owner_id, self.requester.pk)
+
+    def preview(self, *, total, done, in_progress=0, todo=0):
+        return {
+            "total": total,
+            "done": done,
+            "in_progress": in_progress,
+            "todo": todo,
+            "unread_mentions": 0,
+            "rows": [],
+            "more": 0,
+            "board_url": reverse("activity-list"),
+        }
+
+    def open_pendency(self, reason):
+        self.activity.status = Activity.Status.PENDENTE
+        self.activity.save(update_fields=["status"])
+        return ActivityPendency.objects.create(
+            activity=self.activity,
+            reason=reason,
+            comment="Aguardando decisão",
+            decision_deadline=timezone.now(),
+            opened_by=self.requester,
+            previous_owner=self.requester,
+        )
+
+    @patch("boards.demand_preview.DemandBoardPreviewQuery.build")
+    def test_empty_board_does_not_promote_completion_and_keeps_generic_finalize(self, preview_build):
+        grant_action(self.requester, catalog.ATIVIDADE_CONCLUIR, organization=self.org)
+        preview_build.return_value = self.preview(total=0, done=0)
+
+        response = self.client.get(reverse("activity-detail", args=[self.activity.pk]))
+
+        ui = response.context["activity_ui"]
+        self.assertIsNone(ui["primary_action"])
+        self.assertTrue(ui["secondary_actions"]["finalize"]["visible"])
+        self.assertContains(response, "Finalizar demanda")
+        self.assertNotContains(response, "Concluir demanda")
+        self.assertContains(response, reverse("activity-finalize", args=[self.activity.pk]) + '"')
+
+    def test_legacy_activity_without_board_uses_existing_legacy_readiness(self):
+        grant_action(self.requester, catalog.ATIVIDADE_CONCLUIR, organization=self.org)
+        self.activity.task_board.delete()
+        self.task.status = self.task.Status.CONCLUIDA
+        self.task.save(update_fields=["status"])
+
+        response = self.client.get(reverse("activity-detail", args=[self.activity.pk]))
+
+        self.assertIsNone(response.context["board_preview"])
+        self.assertTrue(response.context["is_ready_to_complete"])
+        self.assertEqual(response.context["activity_ui"]["primary_action"]["key"], "complete")
+
+    @patch("activities.views.process_state.process_panel")
+    @patch("boards.demand_preview.DemandBoardPreviewQuery.build")
+    def test_ready_board_with_unmet_required_criteria_has_no_completion_primary(
+        self, preview_build, process_panel
+    ):
+        grant_action(self.requester, catalog.ATIVIDADE_CONCLUIR, organization=self.org)
+        preview_build.return_value = self.preview(total=2, done=2)
+        process_panel.return_value = {"unmet_required_criteria": ["Aceite do cliente"]}
+
+        response = self.client.get(reverse("activity-detail", args=[self.activity.pk]))
+
+        self.assertFalse(response.context["is_ready_to_complete"])
+        self.assertIsNone(response.context["activity_ui"]["primary_action"])
+        self.assertTrue(response.context["activity_ui"]["secondary_actions"]["finalize"]["visible"])
+        self.assertContains(response, "Finalizar demanda")
+        self.assertNotContains(response, "Concluir demanda")
+
+    @patch("boards.demand_preview.DemandBoardPreviewQuery.build")
+    def test_ready_board_completion_uses_canonical_finalize_route(self, preview_build):
+        grant_action(self.requester, catalog.ATIVIDADE_CONCLUIR, organization=self.org)
+        preview_build.return_value = self.preview(total=1, done=1)
+
+        response = self.client.get(reverse("activity-detail", args=[self.activity.pk]))
+
+        ui = response.context["activity_ui"]
+        self.assertEqual(ui["primary_action"]["key"], "complete")
+        self.assertEqual(
+            ui["primary_action"]["url"],
+            reverse("activity-finalize", args=[self.activity.pk]) + "?outcome=SUCESSO",
+        )
+        self.assertNotIn(reverse("activity-complete", args=[self.activity.pk]), ui["primary_action"]["url"])
+        self.assertContains(response, "Concluir demanda")
+
+    def test_cancel_only_permission_does_not_show_completion(self):
+        grant_action(self.requester, catalog.ATIVIDADE_CANCELAR, organization=self.org)
+
+        response = self.client.get(reverse("activity-detail", args=[self.activity.pk]))
+
+        ui = response.context["activity_ui"]
+        self.assertIsNone(ui["primary_action"])
+        self.assertFalse(ui["secondary_actions"]["finalize"]["visible"])
+        self.assertTrue(ui["overflow_actions"]["cancel"]["visible"])
+        self.assertNotContains(response, "Concluir demanda")
+        self.assertContains(response, "Cancelar demanda")
+
+    def test_complete_only_permission_does_not_show_cancel_outside_overflow(self):
+        grant_action(self.requester, catalog.ATIVIDADE_CONCLUIR, organization=self.org)
+
+        response = self.client.get(reverse("activity-detail", args=[self.activity.pk]))
+
+        self.assertFalse(response.context["activity_ui"]["overflow_actions"]["cancel"]["visible"])
+        self.assertNotContains(response, "Cancelar demanda")
+
+    def test_overflow_menu_keeps_accessibility_contract(self):
+        grant_action(self.requester, catalog.ATIVIDADE_CANCELAR, organization=self.org)
+
+        response = self.client.get(reverse("activity-detail", args=[self.activity.pk]))
+
+        self.assertContains(response, 'aria-label="Mais ações da demanda"')
+        self.assertContains(response, 'aria-haspopup="menu"')
+        self.assertContains(response, 'aria-expanded="false"')
+        self.assertContains(response, "event.key === \"Escape\"")
+        self.assertContains(response, "if (!root.contains(event.target)) closeMenu(true)")
+        self.assertContains(response, 'trigger.setAttribute("aria-expanded", String(open))')
+        self.assertContains(response, "if (returnFocus) trigger.focus()")
+
+    def test_approval_action_requires_approval_pendency(self):
+        grant_action(self.requester, catalog.ATIVIDADE_APROVAR_PENDENCIA, organization=self.org)
+        self.open_pendency(ActivityPendency.Reason.MATERIAL)
+
+        response = self.client.get(reverse("activity-detail", args=[self.activity.pk]))
+
+        self.assertIsNone(response.context["activity_ui"]["primary_action"])
+        self.assertNotContains(response, "Aprovar")
+
+    def test_approval_action_is_primary_for_approval_pendency(self):
+        grant_action(self.requester, catalog.ATIVIDADE_APROVAR_PENDENCIA, organization=self.org)
+        pendency = self.open_pendency(ActivityPendency.Reason.APROVACAO_GESTOR)
+
+        response = self.client.get(reverse("activity-detail", args=[self.activity.pk]))
+
+        action = response.context["activity_ui"]["primary_action"]
+        self.assertEqual(action["key"], "approve")
+        self.assertEqual(action["url"], reverse("activity-approve-pendency", args=[self.activity.pk]))
+        self.assertTrue(pendency.requires_approval)
+        self.assertContains(response, "Aprovar")
+
+    def test_concluded_activity_only_offers_reopen(self):
+        grant_action(self.requester, catalog.ATIVIDADE_REABRIR, organization=self.org)
+        Activity.objects.filter(pk=self.activity.pk).update(
+            status=Activity.Status.CONCLUIDA,
+            completed_by=self.requester,
+            completed_at=timezone.now(),
+        )
+
+        response = self.client.get(reverse("activity-detail", args=[self.activity.pk]))
+
+        ui = response.context["activity_ui"]
+        self.assertEqual(ui["primary_action"]["key"], "reopen")
+        self.assertFalse(ui["secondary_actions"]["edit"]["visible"])
+        self.assertFalse(ui["secondary_actions"]["change_owner"]["visible"])
+        self.assertFalse(ui["secondary_actions"]["change_deadline"]["visible"])
+        self.assertFalse(ui["secondary_actions"]["mark_pending"]["visible"])
+        self.assertNotContains(response, "Alterar responsável")
+        self.assertNotContains(response, "Alterar prazo")
+        self.assertContains(response, "Reabrir demanda")
+
+    def test_cancelled_activity_has_no_operational_action_panel(self):
+        Activity.objects.filter(pk=self.activity.pk).update(
+            status=Activity.Status.CANCELADA,
+            cancelled_reason="Desistiu",
+        )
+
+        response = self.client.get(reverse("activity-detail", args=[self.activity.pk]))
+
+        self.assertFalse(response.context["activity_ui"]["has_action_panel"])
+        self.assertNotContains(response, "Ações da demanda")
+        self.assertNotContains(response, "Cancelar demanda")
+        self.assertNotContains(response, "Reabrir demanda")
+
+    def test_assume_remains_a_direct_post_form(self):
+        self.activity.sector = self.sector
+        self.activity.save(update_fields=["sector"])
+        grant_action(self.member, catalog.ATIVIDADE_ASSUMIR, organization=self.org)
+        self.client.force_login(self.member)
+        response = self.client.get(reverse("activity-detail", args=[self.activity.pk]))
+
+        html = response.content.decode()
+        self.assertIn(f'action="{reverse("activity-claim", args=[self.activity.pk])}"', html)
+        self.assertIn("Assumir", html)
+        self.assertNotIn(f'href="{reverse("activity-claim", args=[self.activity.pk])}"', html)
+
+    def test_primary_action_is_a_single_value_with_explicit_precedence(self):
+        from .views import build_activity_ui
+
+        cases = (
+            (Activity.Status.CONCLUIDA, None, True, "reopen"),
+            (Activity.Status.PENDENTE, self.open_pendency(ActivityPendency.Reason.APROVACAO_GESTOR), True, "approve"),
+        )
+        for status, pendency, ready, expected in cases:
+            self.activity.status = status
+            self.activity.save(update_fields=["status"])
+            ui = build_activity_ui(
+                activity=self.activity,
+                board_preview=None,
+                is_ready_to_complete=ready,
+                process_panel=None,
+                open_pendency=pendency,
+                return_url=reverse("activity-list"),
+                can_complete=True,
+                can_cancel=True,
+                can_reopen=True,
+                can_approve=True,
+                can_edit=True,
+                can_change_owner=True,
+                can_change_deadline=True,
+                can_mark_pending=True,
+                can_assumir=True,
+                is_overdue=False,
+                overdue_days=0,
+            )
+            self.assertTrue(ui["primary_action"] is None or isinstance(ui["primary_action"], dict))
+            self.assertEqual(ui["primary_action"]["key"], expected)
+
+        self.activity.status = Activity.Status.ABERTA
+        self.activity.save(update_fields=["status"])
+        ui = build_activity_ui(
+            activity=self.activity,
+            board_preview=None,
+            is_ready_to_complete=True,
+            process_panel=None,
+            open_pendency=None,
+            return_url=reverse("activity-list"),
+            can_complete=True,
+            can_cancel=True,
+            can_reopen=True,
+            can_approve=True,
+            can_edit=True,
+            can_change_owner=True,
+            can_change_deadline=True,
+            can_mark_pending=True,
+            can_assumir=True,
+            is_overdue=False,
+            overdue_days=0,
+        )
+        self.assertEqual(ui["primary_action"]["key"], "complete")
+        self.assertIsInstance(ui["primary_action"], dict)

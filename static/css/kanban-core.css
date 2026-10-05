@@ -1,0 +1,34 @@
+/* ========================================================================
+   Kit do Kanban (templates/kanban/*): o modelo é o Kanban de Quadros e as classes `.kanban-*` vêm de boards.css —
+   este arquivo NÃO as redefine. Só traz o que o modelo não tem (sublinha de setor, progresso, links no lugar de
+   botões) e, dentro do Workspace (`.ws`), as correções de três defeitos do modelo (Quadros fica como está até migrar):
+     1. no hover o cartão perdia a cor da borda esquerda (a regra do kanban.css legado vence a da raia);
+     2. `cursor: grab` aparecia em cartão que não arrasta;
+     3. o ⋯ do cartão só aparecia no hover: em toque ficava invisível.
+   ======================================================================== */
+
+.kanban-lane__meta {
+    margin: 0; padding: 6px 12px; font-size: 12px; font-weight: 600; color: var(--text-2);
+    background: var(--surface); border-bottom: 1px solid var(--board-line);
+}
+.kanban-progress { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; }
+.kanban-progress__bar { flex: 0 0 64px; height: 6px; overflow: hidden; border-radius: 3px; background: #e5edf5; }
+.kanban-progress__bar i { display: block; height: 100%; background: var(--primary); }
+.kanban-progress__text { color: var(--text-2); font-size: 12px; font-variant-numeric: tabular-nums; }
+.kanban-progress__none { color: var(--muted); }
+
+.kanban-card.is-saving { opacity: .6; }  /* gravando: o cartão já está na raia nova, mas ainda não foi confirmado */
+.kanban-lane__title:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; }  /* foco devolvido à raia quando o filtro tirou o cartão */
+
+a.kanban-add { text-decoration: none; }
+a.kanban-card__title { color: var(--text); text-decoration: none; }
+a.kanban-card__title:hover { color: var(--primary); text-decoration: underline; }
+
+/* Só no Workspace */
+.ws .kanban-lane .kanban-card:hover { border-left-color: var(--lane-color, #C4C4C4); }
+.ws .kanban-lane .kanban-card:not([draggable="true"]) { cursor: auto; }
+.ws .kanban-lane { max-height: max(420px, calc(100vh - 360px)); }  /* o modelo desconta 290px; a barra do Workspace é mais alta */
+.ws .kanban-lane[data-lane-closed] .kanban-lane__empty { border-style: solid; }
+/* Em toque o ⋯ é a ÚNICA forma de mover (não há arrastar): sempre visível e com alvo maior que os 24px do mouse */
+@media (hover: none) { .ws .kanban-card__menu { opacity: 1; width: 36px; height: 36px; margin: -4px -4px -4px 0; } }
+@media (max-width: 720px) { .ws .kanban-lane { max-height: none; } }

@@ -1,5 +1,52 @@
 # LPS — Especificação da Visualização por Calendário
 
+## Status de implementação (03/10/2026)
+
+A visualização Calendário está **em grande parte implementada** como visão do motor de Quadros (`BoardView` do tipo Calendário), com mês, cartões, criar no dia, arrastar
+entre dias, gaveta, hora opcional, busca, filtro por pessoa e configuração que salva sozinha; cobre quase toda a "primeira versão obrigatória" (§113). Ela vale para o **Quadro
+de cada Demanda** (itens = tarefas). As telas de lista `/demandas/calendario/` e `/tarefas/calendario/` **não** usam essa visão: a primeira é uma lista de demandas por prazo e a segunda é uma
+semana somente de leitura. Na interface, Atividade virou **Demanda**, "Situação" virou **Etapa** e "Condição" virou **Status** (o código segue `Activity`/`Task`).
+Legenda: **Implementado**, **Parcial**, **Não implementado**, **Divergente**.
+
+| Requisito / bloco | Status | Onde está no código |
+|---|---|---|
+| Calendário como visão dos mesmos itens, sem dados próprios (§1, §2, §4) | Implementado | `boards/calendar_view.py` (docstring do módulo), `BoardView.Type.CALENDAR` em `boards/models.py` |
+| Escolha da coluna de Data; exigir coluna de Data (§5, §56) | Implementado | `clean_calendar_settings`, `complete_new_settings`; aba "+" cria a coluna de Data no ato (`boards.js`) |
+| Múltiplos Calendários com Datas diferentes (§57) | Implementado | Várias visões por quadro (`ViewService`, `board-view-create`); `boards/test_calendar.py` |
+| Data com ou sem hora, fuso local (§6–§8, §42–§44, §96–§97) | Implementado | `item_when`, configuração "Exibir horário" da coluna; pop-over de data em `boards.js` |
+| Escala temporal (§15) | Parcial | Só **Mês** (`PERIODS = ("month",)`); semana/dia/agenda não existem na visão de Quadro |
+| Grade mensal, dias de outros meses, hoje, Hoje/anterior/próximo (§14, §16–§18, §89) | Implementado | `build_month`, `grid_range`, `shift_month`; `board-view-calendar` troca o mês sem recarregar (`?mes=`) |
+| Hover "+ Adicionar", criar no dia, janela por cima do calendário (§19–§24) | Implementado | `board_calendar.html`, `_calendar_day.html`, `boards.js`; `board-item-create` com `initial` (tudo ou nada) |
+| Cartão: título, campos, limite, personalização (§27–§31) | Implementado | `_calendar_card.html`; `card_fields` (até 6, padrão 3, `MAX_CARD_FIELDS`) |
+| Cor por Status/Lista, grupo ou sem cor; cor nunca única informação (§32–§34, §79–§80) | Implementado | `color_by`, `entry_color`; renomear/recolorir a etiqueta reflete (testes) |
+| Clique no cartão abre a gaveta; clique no campo edita (§35–§37) | Implementado | `boards/_item_drawer.html`, `board-item-detail` |
+| Arrastar entre dias, otimista, autosave, volta com aviso (§38–§41, §74) | Implementado | `boards.js` (modo `[data-cal-body]`), grava só a célula de data pelo serviço da tabela; `BOARD_CELL_UPDATED` com data anterior e nova |
+| Remover hora / remover data (§44, §45) | Implementado | Pop-over de data ("Limpar horário", "Limpar data") |
+| Itens sem Data e colocar no calendário (§46, §47) | Parcial | Contador e lista "Sem data" (`PANEL_LIMIT = 100`); colocar no calendário é editando a data ou criando pelo dia |
+| Muitos itens no dia e `+ N mais` (§48, §49) | Implementado | `MAX_VISIBLE_PER_DAY = 3`, lista em pop-over |
+| Pesquisa e filtro por Pessoa; mantidos ao mudar de mês (§50–§51) | Implementado | `?q` e `?pessoa` nos links do mês |
+| Filtros genéricos, composição e filtros salvos (§52–§54) | Não implementado | Só busca e pessoa; no Quadro não há filtros por Status/Grupo salvos |
+| Finais de semana ocultos e aviso (§58–§59) | Implementado | `show_weekends`, aviso e dias bloqueados |
+| Concluídos (§60) | Implementado | `show_completed` (só o Status decide); atrasados fora do mês em lista própria |
+| Cancelados (§61) | Não implementado | Não há tratamento próprio para itens cancelados |
+| Tarefas: prazo solicitado × comprometido (§3.2, §62, §64–§65) | Divergente | O quadro tem as colunas de Data que o modelo criar (`starter_templates.py`: "Prazo"); os dois prazos de `Task` só existem no modelo legado |
+| Templates padrão de Demandas e Tarefas com Calendário (§63, §64) | Parcial | O Kanban nasce em todo quadro; o Calendário **não** nasce pronto, é criado pela aba "+" |
+| Atraso e priorização visual (§66–§68) | Parcial | Marcador "Atrasada" só em coluna de prazo (`is_deadline`); sem priorização visual própria |
+| Reagendamento e auditoria (§69–§72) | Implementado | Mover grava a data anterior e a nova no log; item não é concluído ao mudar de dia |
+| Permissões e multi-organização (§73–§75) | Implementado | `quadro.editar_item`/`quadro.criar_item`; leitor não arrasta; 404 entre organizações (`boards/test_calendar.py`) |
+| Atualização entre visualizações (§76–§80) | Implementado | Calendário, Tabela e Kanban leem as mesmas células |
+| Tempo estimado e sessões de trabalho (§82, §83) | Não implementado | — |
+| Conflito de edição (§92) | Parcial | Há controle de versão nas visões de domínio (`DomainBoardConflict`, `data-work-updated-at`); o Calendário de Quadro não trata conflito |
+| Teclado e acessibilidade (§93, §94) | Parcial | Foco devolvido, Escape em duas etapas, "+ Adicionar" visível sem mouse; não há navegação por setas entre os dias do calendário (as setas existem nas células da tabela) |
+| Duplicar e compartilhar visualização (§102, §103) | Não implementado | Existem criar, renomear e excluir (`board-view-*`) |
+| Excluir a visão não apaga itens; renomear (§100, §101) | Implementado | `ViewDeleteView`, `ViewUpdateView` |
+| Integrações externas, recorrência, Gantt (§110–§112) | Não implementado | Fora da primeira versão, como a especificação prevê |
+| Calendário de Demandas na lista `/demandas/calendario/` (§3.1, §104, §123) | Divergente | Lista de cartões por `requested_deadline` (`demand_work_board.html`, `DemandWorkBoardView`), sem grade nem arrastar |
+| Calendário de Tarefas de todos os quadros `/tarefas/calendario/` (§105, §124) | Divergente | Semana somente de leitura, com contador "Sem prazo" (`TaskCenterQuery.week`, `task_center.html`) |
+
+> **Divergência:** a especificação trata Demandas e Tarefas como dois Quadros, cada um com seu Calendário. No código, o Calendário completo existe nos Quadros (hoje um por Demanda); as telas
+> globais de Demandas e de Tarefas oferecem apenas as versões simplificadas descritas acima.
+
 ## 1. Objetivo
 
 A visualização por **Calendário** organiza os mesmos itens do Quadro em uma linha do tempo baseada em uma coluna do tipo Data.
@@ -51,15 +98,15 @@ Consequências:
 
 # 3. Relação com a arquitetura atual da LPS
 
-Hoje a LPS já possui calendários para Atividades e Tarefas dentro do app `activities`.
+Hoje a LPS já possui calendários para Demandas (antes Atividades) e Tarefas: os dois simplificados em `/demandas/calendario/` e `/tarefas/calendario/` e o Calendário configurável dos Quadros (app `boards`).
 
-A documentação atual estabelece que Lista, Kanban e Calendário de Atividades utilizam o mesmo filtro de dados.
+A documentação atual estabelece que Lista, Kanban e Calendário de Demandas utilizam o mesmo filtro de dados (`activities/filtering.py`, barra `_workspace_filter_toolbar.html`).
 
 A evolução proposta mantém esse princípio, mas transforma o Calendário em uma visualização configurável do novo motor de Quadros.
 
 ## 3.1 Demandas
 
-Na interface, **Atividade passa a ser chamada de Demanda**.
+Na interface, **Atividade passa a ser chamada de Demanda** (já é assim desde 01/10/2026, inclusive nas URLs `/demandas/…`).
 
 Internamente, enquanto a migração arquitetural não estiver concluída:
 

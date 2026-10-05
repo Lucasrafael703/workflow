@@ -217,7 +217,10 @@ class StructureTests(ModalTestCase):
             self.assertIn("data-activity-navigate", html, msg=name)
         grant_action(self.requester, catalog.ATIVIDADE_EDITAR, organization=self.org)
         detail = self.client.get(reverse("activity-detail", args=[self.activity.pk])).content.decode()
-        self.assertRegex(detail, r'activity-edit[^>]*data-activity-action data-activity-navigate|data-activity-action data-activity-navigate[^>]*menu-dots__item')
+        self.assertRegex(
+            detail,
+            r'activity-actions-card[^>]*>[\s\S]*?data-activity-action data-activity-navigate',
+        )
 
 
 class ValidationTests(ModalTestCase):

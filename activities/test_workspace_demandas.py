@@ -118,8 +118,8 @@ class SameShellTests(WorkspaceBase):
     def test_each_view_only_changes_the_content_area(self):
         lista, kanban, calendario = (self.page(name).content.decode() for name in VIEWS)
         self.assertIn("data-activity-list", lista)
-        self.assertNotIn("data-work-kanban", lista)
-        self.assertIn("data-work-kanban", kanban)
+        self.assertNotIn("data-kanban-lanes", lista)
+        self.assertIn("data-kanban-lanes", kanban)
         self.assertNotIn("data-activity-list", kanban)
         self.assertIn("demand-board__calendar", calendario)
 

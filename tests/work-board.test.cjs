@@ -39,3 +39,20 @@ test("manual search has no automatic input handler", () => {
   input.dispatchEvent(new dom.window.Event("input", {bubbles: true}));
   assert.ok(true);
 });
+
+test("o token CSRF é lido mesmo quando não é o primeiro cookie", async () => {
+  let headers;
+  const dom = boot((url, init) => {
+    headers = init.headers;
+    return Promise.resolve({ok: true, json: () => Promise.resolve({success: true, message: "Salvo."})});
+  });
+  dom.window.document.cookie = "sessionid=abc";
+  dom.window.document.cookie = "csrftoken=tok123";
+  const cell = dom.window.document.getElementById("work-cell-9-7");
+  cell.dispatchEvent(new dom.window.MouseEvent("click", {bubbles: true}));
+  const input = dom.window.document.querySelector(".work-cell__editor");
+  input.value = "Outro";
+  input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {key: "Enter", bubbles: true}));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(headers["X-CSRFToken"], "tok123");
+});

@@ -1109,6 +1109,13 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .person-picker__trigger:focus, .person-picker.is-open .person-picker__trigger {
     outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(27, 98, 196, .13);
 }
+.person-picker__trigger:focus-visible,
+.person-picker__search:focus-visible,
+.person-picker__option:focus-visible,
+.person-picker__create:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
 .person-picker__icon { flex: 0 0 auto; width: 16px; height: 16px; color: var(--muted); }
 .person-picker__label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .person-picker__label.muted { color: var(--muted); }
@@ -1123,12 +1130,28 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     padding: 10px 12px; font: inherit; background: var(--surface); color: var(--text);
 }
 .person-picker__search:focus { outline: none; background: var(--surface-alt); }
-.person-picker__results { list-style: none; margin: 0; padding: 4px; max-height: 240px; overflow-y: auto; }
+.person-picker__search:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: -2px;
+}
+.person-picker__results {
+    --picker-row-height: 40px;
+    list-style: none;
+    margin: 0;
+    padding: 4px;
+    max-height: calc(var(--picker-row-height) * 8);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
 .person-picker__option {
-    display: block; width: 100%; text-align: left; padding: 8px 10px; border: none;
+    display: flex; align-items: center; min-height: var(--picker-row-height); width: 100%; text-align: left; padding: 8px 10px; border: none;
     background: none; border-radius: var(--radius-sm); font: inherit; cursor: pointer; color: var(--text);
 }
-.person-picker__option:hover, .person-picker__option.is-active { background: var(--primary-soft); }
+.person-picker__option:hover { background: var(--primary-soft); }
+.person-picker__option.is-active {
+    background: var(--primary-soft);
+    box-shadow: inset 3px 0 0 var(--primary);
+}
 .person-picker__empty { padding: 14px 12px; color: var(--muted); font-size: 13px; text-align: center; }
 .person-picker__create {
     display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
@@ -1965,11 +1988,128 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .ad-header__context strong { color: var(--text); font-weight: 600; }
 .ad-header__badges { display: flex; gap: 8px; flex-wrap: wrap; }
 .ad-header__side {
-    min-width: 448px;
+    min-width: min(100%, 680px);
     display: grid;
     gap: 10px;
     align-items: stretch;
 }
+
+/* Resumo acionável do topo: informação e ação ficam no mesmo objeto, e o
+   espaço antes ocupado apenas pelo overflow passa a carregar a próxima ação. */
+.activity-summary-tools {
+    display: grid;
+    grid-template-columns: minmax(155px, .8fr) minmax(175px, .9fr) minmax(260px, 1.35fr);
+    gap: 10px;
+    align-items: stretch;
+    min-width: 0;
+}
+.activity-info-card,
+.activity-actions-card {
+    min-width: 0;
+    padding: 14px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: var(--ad-card-shadow);
+}
+.activity-info-card {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+}
+.activity-info-card__header {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .035em;
+    text-transform: uppercase;
+}
+.activity-info-card__icon {
+    display: inline-flex;
+    width: 16px;
+    height: 16px;
+    align-items: center;
+    justify-content: center;
+    color: var(--primary);
+}
+.activity-info-card__icon svg { width: 15px; height: 15px; }
+.activity-info-card__value-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    min-height: 28px;
+}
+.activity-info-card__value {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text);
+    font-size: 13.5px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.activity-info-card__value svg {
+    width: 15px;
+    height: 15px;
+    flex: 0 0 auto;
+}
+.activity-info-card__value--danger {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--danger);
+}
+.activity-info-card__value.muted { color: var(--muted); font-weight: 500; }
+.activity-info-card__meta { color: var(--muted); font-size: 12px; }
+.activity-info-card .avatar { width: 28px; height: 28px; flex: 0 0 28px; font-size: 11px; }
+.activity-info-card .btn {
+    width: 100%;
+    min-height: 34px;
+    justify-content: center;
+    padding: 6px 10px;
+    font-size: 12.5px;
+}
+.activity-info-card .btn svg { width: 14px; height: 14px; }
+.activity-actions-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow: visible;
+}
+.activity-actions-card__primary {
+    min-height: 42px;
+    justify-content: center;
+    border-radius: 8px;
+    font-size: 13.5px;
+}
+.activity-actions-card__secondary {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.activity-actions-card__secondary form { display: contents; }
+.activity-actions-card__secondary .btn {
+    min-height: 36px;
+    justify-content: center;
+    padding: 6px 10px;
+    font-size: 12.5px;
+}
+.activity-actions-card__secondary .menu-dots { margin-left: auto; }
+.activity-actions-card__secondary .menu-dots__trigger {
+    width: 36px;
+    height: 36px;
+}
+.activity-summary-tools a:focus-visible,
+.activity-summary-tools button:focus-visible {
+    outline: 3px solid rgba(27, 98, 196, .32);
+    outline-offset: 2px;
+}
+.activity-actions-card .menu-dots__popup { top: calc(100% + 6px); }
 .ad-owner-deadline {
     display: grid;
     grid-template-columns: repeat(2, minmax(150px, auto));
@@ -2227,13 +2367,14 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     .ad-header__top,
     .split--history,
     .ad-situation__layout { grid-template-columns: 1fr; }
-    .ad-header__side { flex-wrap: wrap; }
+    .ad-header__side { width: 100%; min-width: 0; }
     .side-scroll { position: static; max-height: none; overflow: visible; }
 }
 
 @media (max-width: 760px) {
     .ad-header__side,
     .ad-header__actions { width: 100%; min-width: 0; }
+    .activity-summary-tools { grid-template-columns: 1fr; }
     .ad-owner-deadline,
     .ad-header__actions { display: grid; grid-template-columns: 1fr; }
     .ad-owner-deadline__item + .ad-owner-deadline__item {
@@ -2255,6 +2396,11 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     .ad-details-card .info-grid > div:nth-child(3n) {
         border-right: 0;
     }
+    .activity-actions-card__secondary { display: grid; grid-template-columns: 1fr; }
+    .activity-actions-card__secondary .btn,
+    .activity-actions-card__secondary .menu-dots,
+    .activity-actions-card__secondary .menu-dots__trigger { width: 100%; }
+    .activity-actions-card__secondary .menu-dots { margin-left: 0; }
 }
 
 /* Popup único de "Finalizar atividade": um resultado explícito por cartão,

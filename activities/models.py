@@ -2,7 +2,7 @@ import re
 
 from django.conf import settings
 from django.core.files.storage import FileSystemStorage
-from django.db import models, transaction
+from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 
 
@@ -333,9 +333,21 @@ class Activity(models.Model):
         is_new = self._state.adding
         super().save(*args, **kwargs)
         if is_new and not self.code:
-            with transaction.atomic():
-                self.code = self._generate_code()
-                super().save(update_fields=["code"])
+            # O código é exclusivo. Duas criações simultâneas podem ler o
+            # mesmo último número antes de uma delas gravá-lo; no PostgreSQL a
+            # segunda tentativa recebe uma violação de unicidade. Cada tentativa
+            # fica em seu próprio savepoint para consultar novamente e escolher o
+            # próximo número, sem transformar a criação da demanda em erro 500.
+            last_error = None
+            for _attempt in range(3):
+                try:
+                    with transaction.atomic():
+                        self.code = self._generate_code()
+                        super().save(update_fields=["code"])
+                    return
+                except IntegrityError as exc:
+                    last_error = exc
+            raise last_error
 
 
 class OwnerChangeLog(models.Model):

@@ -489,16 +489,18 @@ class ReopenViewTests(ReopenTestCase):
         )
         return reverse("activity-detail", args=[self.activity.pk])
 
-    def test_concluded_activity_shows_the_button_in_the_status_notice(self):
+    def test_concluded_activity_shows_the_button_in_summary_actions(self):
         detail = self.concluded_activity()
         reopen_url = reverse("activity-reopen", args=[self.activity.pk])
         self.login(self.owner)
         response = self.client.get(detail)
         self.assertTrue(response.context["can_reopen"])
         html = response.content.decode()
-        notice = html[html.index("Concluída em") - 200 : html.index("Concluída em") + 500]
-        self.assertIn(reopen_url, notice)
-        self.assertIn("Reabrir demanda", notice)
+        actions = html[html.index("Ações da demanda") : html.index("Ações da demanda") + 1200]
+        self.assertIn(reopen_url, actions)
+        self.assertIn("Reabrir demanda", actions)
+        notice = html[html.index("Concluída em") : html.index("Concluída em") + 240]
+        self.assertNotIn(reopen_url, notice)
 
     def test_button_is_hidden_from_those_without_atividade_reabrir(self):
         detail = self.concluded_activity()

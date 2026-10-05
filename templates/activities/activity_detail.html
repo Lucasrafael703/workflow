@@ -31,53 +31,7 @@
             </div>
 
             <div class="ad-header__side">
-                <div class="ad-owner-deadline">
-                    <div class="ad-owner-deadline__item">
-                        <span class="k">{% include "_icon.html" with name="users" %} Responsável</span>
-                        <span class="v">
-                            <span class="avatar avatar--{{ activity.owner|avatar_color }}">{{ activity.owner.get_full_name|default:activity.owner.get_username|slice:":1"|upper }}</span>
-                            {{ activity.owner.get_full_name|default:activity.owner.get_username }}
-                        </span>
-                    </div>
-                    <div class="ad-owner-deadline__item">
-                        <span class="k">{% include "_icon.html" with name="clock" %} Prazo</span>
-                        {% if is_overdue %}
-                        <span class="v ad-overdue-flag">{% include "_icon.html" with name="alert" %} Atrasada há {{ overdue_days }} dia{{ overdue_days|pluralize }}</span>
-                        <span class="ad-owner-deadline__original">{{ activity.requested_deadline|date:"d/m/Y H:i" }}</span>
-                        {% else %}
-                        <span class="v{% if not activity.requested_deadline %} muted{% endif %}">{{ activity.requested_deadline|date:"d/m/Y H:i"|default:"Sem prazo" }}</span>
-                        {% endif %}
-                    </div>
-                </div>
-
-                <div class="ad-header__actions">
-                    {% if can_assumir %}
-                    <form method="post" action="{% url 'activity-claim' activity.pk %}">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn--primary">{% include "_icon.html" with name="check" %} Assumir</button>
-                    </form>
-                    {% endif %}
-                    {% if is_menu_active %}
-                    <div class="menu-dots js-menu-dots">
-                        <button type="button" class="menu-dots__trigger" title="Mais ações">{% include "_icon.html" with name="more" %}</button>
-                        <div class="menu-dots__popup" hidden>
-                            {% if activity.status != "CONCLUIDA" and activity.status != "CANCELADA" %}
-                            {% if can_edit %}<a href="{% url 'activity-edit' activity.pk %}?next={{ return_url|urlencode }}" data-activity-action data-activity-navigate class="menu-dots__item">Editar</a>{% endif %}
-                            {% if can_change_owner %}<a href="{% url 'activity-change-owner' activity.pk %}" data-activity-action class="menu-dots__item">Transferir responsável</a>{% endif %}
-                            {% if can_edit %}<a href="{% url 'activity-change-deadline' activity.pk %}" data-activity-action class="menu-dots__item">Alterar prazo</a>{% endif %}
-                            {% if can_mark_pending %}<a href="{% url 'activity-mark-pending' activity.pk %}" class="menu-dots__item" data-activity-action>Marcar como pendente</a>{% endif %}
-                            {% if can_finalize %}
-                            <div class="menu-dots__divider"></div>
-                            <a href="{% url 'activity-finalize' activity.pk %}?outcome=SUCESSO" class="menu-dots__item" data-activity-action>Concluir</a>
-                            <a href="{% url 'activity-finalize' activity.pk %}?outcome=CANCELADO" class="menu-dots__item menu-dots__item--danger" data-activity-action>Cancelar</a>
-                            {% endif %}
-                            {% elif can_reopen %}
-                            <a href="{% url 'activity-reopen' activity.pk %}" data-activity-action class="menu-dots__item">Reabrir demanda</a>
-                            {% endif %}
-                        </div>
-                    </div>
-                    {% endif %}
-                </div>
+                {% include "activities/_activity_summary_actions.html" %}
             </div>
         </div>
     </header>
@@ -93,13 +47,6 @@
                 {% if open_pendency.decision_deadline %} · Prazo para decisão: {{ open_pendency.decision_deadline|date:"d/m/Y H:i" }}{% endif %}
             </div>
         </div>
-        {% if can_approve_pendency %}
-        <div class="pendency-banner__actions">
-            <a href="{% url 'activity-approve-pendency' activity.pk %}" class="btn btn--primary btn--sm" data-activity-action>
-                {% include "_icon.html" with name="check" %} Aprovar
-            </a>
-        </div>
-        {% endif %}
     </div>
     {% endif %}
 
@@ -108,7 +55,6 @@
     {% elif activity.status == "CONCLUIDA" %}
     <div class="message message--success" style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap">
         <span>Concluída em {{ activity.completed_at|date:"d/m/Y H:i" }} por {{ activity.completed_by.get_username }}.</span>
-        {% if can_reopen %}<a href="{% url 'activity-reopen' activity.pk %}" data-activity-action class="btn btn--sm">Reabrir demanda</a>{% endif %}
     </div>
     {% endif %}
 
@@ -342,12 +288,28 @@
     document.querySelectorAll(".js-menu-dots").forEach(function (root) {
         var trigger = root.querySelector(".menu-dots__trigger");
         var popup = root.querySelector(".menu-dots__popup");
+        function closeMenu(returnFocus) {
+            popup.hidden = true;
+            trigger.setAttribute("aria-expanded", "false");
+            if (returnFocus) trigger.focus();
+        }
+        function toggleMenu() {
+            var open = popup.hidden;
+            popup.hidden = !open;
+            trigger.setAttribute("aria-expanded", String(open));
+        }
         trigger.addEventListener("click", function (event) {
             event.stopPropagation();
-            popup.hidden = !popup.hidden;
+            toggleMenu();
         });
         document.addEventListener("click", function (event) {
-            if (!root.contains(event.target)) popup.hidden = true;
+            if (!root.contains(event.target)) closeMenu(true);
+        });
+        document.addEventListener("keydown", function (event) {
+            if (event.key === "Escape" && !popup.hidden) {
+                event.preventDefault();
+                closeMenu(true);
+            }
         });
     });
 

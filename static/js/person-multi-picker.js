@@ -1,7 +1,7 @@
 /* Seletor de múltiplas pessoas (participantes) com busca e chips
    removíveis — mesma estrutura de tag-picker.js, mas buscando pessoas
-   (person-search, mesmo endpoint do person-picker.js) e exigindo 3+
-   caracteres antes de buscar (mesma regra do person-picker.js). Clicar um
+   (person-search, mesmo endpoint do person-picker.js). A lista inicial abre
+   sem texto e a busca começa na primeira letra. Clicar um
    resultado ADICIONA um chip; cada chip tem um "×" para remover. O
    <select multiple hidden> continua sendo a fonte de verdade submetida
    pelo form. */
@@ -9,8 +9,8 @@
     "use strict";
 
     var DEBOUNCE_MS = 250;
-    var MIN_CHARS = 3;
     var AVATAR_COLOR_COUNT = 6;
+    var pickerSequence = 0;
 
     function initials(name) {
         return (name || "").slice(0, 2).toUpperCase();
@@ -27,11 +27,19 @@
         var addButton = root.querySelector(".person-multi-picker__add");
         var searchUrl = root.getAttribute("data-search-url");
         var excludeFieldId = root.getAttribute("data-exclude-field");
+        var createUrl = root.getAttribute("data-create-url");
+        var createLabel = root.getAttribute("data-create-label") || "Cadastrar novo usuário";
 
         var popup = null;
         var results = [];
         var activeIndex = -1;
         var debounceTimer = null;
+        var activeRequest = null;
+        var requestSequence = 0;
+        var searchInput = null;
+        var createButton = null;
+        var suppressFocusOpen = false;
+        var pointerDown = false;
 
         function selectedIds() {
             return Array.prototype.map.call(select.selectedOptions, function (opt) {
@@ -97,8 +105,14 @@
 
         function closePopup() {
             if (!popup) return;
+            clearTimeout(debounceTimer);
+            if (activeRequest && activeRequest.abort) activeRequest.abort();
+            activeRequest = null;
+            requestSequence += 1;
             popup.remove();
             popup = null;
+            searchInput = null;
+            createButton = null;
             document.removeEventListener("click", onDocumentClick, true);
         }
 
@@ -106,15 +120,36 @@
             if (!root.contains(event.target)) closePopup();
         }
 
+        function focusAdjacent(reverse) {
+            var candidates = Array.prototype.filter.call(
+                document.querySelectorAll(
+                    "a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), " +
+                    "select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"
+                ),
+                function (element) {
+                    return !element.closest(".person-picker__popup") && !element.hidden;
+                }
+            );
+            var addIndex = candidates.indexOf(addButton);
+            var target = addIndex === -1
+                ? null
+                : candidates[addIndex + (reverse ? -1 : 1)];
+            closePopup();
+            if (target) target.focus();
+            else addButton.blur();
+        }
+
         function renderMessage(text) {
             results = [];
             activeIndex = -1;
             var resultsEl = popup.querySelector(".person-picker__results");
             resultsEl.innerHTML = "";
+            resultsEl.setAttribute("aria-busy", text === "Buscando..." ? "true" : "false");
             var empty = document.createElement("div");
             empty.className = "person-picker__empty";
             empty.textContent = text;
             resultsEl.appendChild(empty);
+            if (createButton) createButton.hidden = text !== "Nenhum resultado encontrado";
         }
 
         function renderResults(list) {
@@ -126,9 +161,10 @@
             activeIndex = -1;
             var resultsEl = popup.querySelector(".person-picker__results");
             resultsEl.innerHTML = "";
+            resultsEl.setAttribute("aria-busy", "false");
 
             if (available.length === 0) {
-                renderMessage("Nada encontrado.");
+                renderMessage("Nenhum resultado encontrado");
                 return;
             }
 
@@ -136,6 +172,9 @@
                 var option = document.createElement("button");
                 option.type = "button";
                 option.className = "person-picker__option";
+                option.id = resultsEl.id + "-option-" + index;
+                option.setAttribute("role", "option");
+                option.setAttribute("aria-selected", "false");
                 option.textContent = person.name;
                 option.addEventListener("click", function () {
                     add(person);
@@ -148,25 +187,65 @@
 
         function setActive(index) {
             var options = popup.querySelectorAll(".person-picker__option");
-            options.forEach(function (el) { el.classList.remove("is-active"); });
+            options.forEach(function (el) {
+                el.classList.remove("is-active");
+                el.setAttribute("aria-selected", "false");
+            });
             if (index >= 0 && index < options.length) {
                 options[index].classList.add("is-active");
+                options[index].setAttribute("aria-selected", "true");
                 options[index].scrollIntoView({ block: "nearest" });
+                if (searchInput) searchInput.setAttribute("aria-activedescendant", options[index].id);
+            } else if (searchInput) {
+                searchInput.removeAttribute("aria-activedescendant");
             }
             activeIndex = index;
         }
 
         function search(term) {
-            if (term.trim().length < MIN_CHARS) {
-                renderMessage("Digite ao menos " + MIN_CHARS + " letras para buscar.");
-                return;
-            }
-            fetch(searchUrl + "?q=" + encodeURIComponent(term), {
+            if (!popup) return;
+            if (activeRequest && activeRequest.abort) activeRequest.abort();
+            var sequence = ++requestSequence;
+            var controller = window.AbortController ? new AbortController() : null;
+            activeRequest = controller;
+            renderMessage("Buscando...");
+            var requestOptions = {
                 headers: { "X-Requested-With": "XMLHttpRequest" },
-            })
-                .then(function (response) { return response.json(); })
-                .then(function (data) { renderResults(data.results || []); })
-                .catch(function () { renderResults([]); });
+            };
+            if (controller) requestOptions.signal = controller.signal;
+            fetch(searchUrl + "?q=" + encodeURIComponent(term), requestOptions)
+                .then(function (response) {
+                    if (response && response.ok === false) throw new Error("search_failed");
+                    return response.json();
+                })
+                .then(function (data) {
+                    if (!popup || sequence !== requestSequence) return;
+                    activeRequest = null;
+                    renderResults(data.results || []);
+                })
+                .catch(function (error) {
+                    if (error && error.name === "AbortError") return;
+                    if (!popup || sequence !== requestSequence) return;
+                    activeRequest = null;
+                    renderMessage("Não foi possível carregar as opções. Tente novamente.");
+                });
+        }
+
+        function openCreateModal(initialName) {
+            if (!createUrl || !window.LPSModal) return;
+            var targetUrl = createUrl;
+            if (initialName) {
+                try {
+                    var parsedUrl = new URL(createUrl, window.location.href);
+                    parsedUrl.searchParams.set("initial_name", initialName);
+                    targetUrl = parsedUrl.toString();
+                } catch (error) {
+                    targetUrl = createUrl;
+                }
+            }
+            window.LPSModal.open(targetUrl, {
+                onSuccess: function (person) { add(person); },
+            });
         }
 
         function openPopup() {
@@ -174,12 +253,30 @@
 
             popup = document.createElement("div");
             popup.className = "person-picker__popup";
+            var resultsId = "person-multi-picker-results-" + (++pickerSequence);
             popup.innerHTML =
-                '<input type="text" class="person-picker__search" placeholder="Buscar participante...">' +
-                '<div class="person-picker__results"></div>';
+                '<input type="text" class="person-picker__search" placeholder="Buscar participante..." role="combobox" aria-expanded="true" aria-haspopup="listbox" aria-autocomplete="list" autocomplete="off">' +
+                '<div class="person-picker__results" role="listbox"></div>';
             root.appendChild(popup);
 
-            var searchInput = popup.querySelector(".person-picker__search");
+            searchInput = popup.querySelector(".person-picker__search");
+            searchInput.setAttribute("aria-controls", resultsId);
+            popup.querySelector(".person-picker__results").id = resultsId;
+            if (createUrl) {
+                createButton = document.createElement("button");
+                createButton.type = "button";
+                createButton.className = "person-picker__create";
+                createButton.hidden = true;
+                createButton.innerHTML =
+                    '<svg width="15" height="15" viewBox="0 0 20 20" aria-hidden="true"><use href="#i-plus"></use></svg>' +
+                    "<span>" + createLabel + "</span>";
+                createButton.addEventListener("click", function () {
+                    var initialName = searchInput ? searchInput.value.trim() : "";
+                    closePopup();
+                    openCreateModal(initialName);
+                });
+                popup.appendChild(createButton);
+            }
             searchInput.addEventListener("input", function () {
                 clearTimeout(debounceTimer);
                 var term = searchInput.value;
@@ -200,14 +297,27 @@
                     }
                 } else if (event.key === "Escape") {
                     closePopup();
+                    suppressFocusOpen = true;
+                    addButton.focus();
+                    setTimeout(function () { suppressFocusOpen = false; }, 0);
+                } else if (event.key === "Tab") {
+                    event.preventDefault();
+                    focusAdjacent(event.shiftKey);
                 }
             });
 
             searchInput.focus();
-            renderMessage("Digite ao menos " + MIN_CHARS + " letras para buscar.");
             document.addEventListener("click", onDocumentClick, true);
+            search("");
         }
 
+        addButton.addEventListener("pointerdown", function () {
+            pointerDown = true;
+            setTimeout(function () { pointerDown = false; }, 0);
+        });
+        addButton.addEventListener("focus", function () {
+            if (!pointerDown && !suppressFocusOpen && !popup) openPopup();
+        });
         addButton.addEventListener("click", function () {
             if (popup) closePopup();
             else openPopup();

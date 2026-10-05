@@ -1,0 +1,85 @@
+{% load lps %}
+<div class="activity-summary-tools" aria-label="Resumo e ações da demanda">
+    <article class="activity-info-card activity-owner-card">
+        <div class="activity-info-card__header">
+            <span class="activity-info-card__icon" aria-hidden="true">{% include "_icon.html" with name="users" %}</span>
+            <span class="activity-info-card__label">Responsável</span>
+        </div>
+        <div class="activity-info-card__value-row">
+            <span class="avatar avatar--{{ activity.owner|avatar_color }}" aria-hidden="true">{{ activity.owner.get_full_name|default:activity.owner.get_username|slice:":1"|upper }}</span>
+            <strong class="activity-info-card__value">{{ activity.owner.get_full_name|default:activity.owner.get_username }}</strong>
+        </div>
+        {% if activity_ui.owner.can_change %}
+        <a href="{{ activity_ui.owner.url }}" class="btn btn--block" data-activity-action>
+            {% include "_icon.html" with name="settings" %} Alterar
+        </a>
+        {% endif %}
+    </article>
+
+    <article class="activity-info-card activity-deadline-card{% if activity_ui.deadline.is_overdue %} is-overdue{% endif %}">
+        <div class="activity-info-card__header">
+            <span class="activity-info-card__icon" aria-hidden="true">{% include "_icon.html" with name="calendar" %}</span>
+            <span class="activity-info-card__label">Prazo</span>
+        </div>
+        {% if activity_ui.deadline.is_overdue %}
+        <div class="activity-info-card__value activity-info-card__value--danger">
+            {% include "_icon.html" with name="alert" %} Atrasada há {{ activity_ui.deadline.overdue_days }} dia{{ activity_ui.deadline.overdue_days|pluralize }}
+        </div>
+        <div class="activity-info-card__meta">{{ activity.requested_deadline|date:"d/m/Y H:i" }}</div>
+        {% else %}
+        <div class="activity-info-card__value{% if not activity.requested_deadline %} muted{% endif %}">
+            {{ activity.requested_deadline|date:"d/m/Y H:i"|default:"Sem prazo" }}
+        </div>
+        {% endif %}
+        {% if activity_ui.deadline.can_change %}
+        <a href="{{ activity_ui.deadline.url }}" class="btn btn--block" data-activity-action>
+            {% include "_icon.html" with name="settings" %} Alterar
+        </a>
+        {% endif %}
+    </article>
+
+    {% if activity_ui.has_action_panel %}
+    <article class="activity-actions-card">
+        <div class="activity-info-card__header">
+            <span class="activity-info-card__icon" aria-hidden="true">{% include "_icon.html" with name="settings" %}</span>
+            <span class="activity-info-card__label">Ações da demanda</span>
+        </div>
+
+        {% if activity_ui.primary_action %}
+        <a href="{{ activity_ui.primary_action.url }}" class="btn btn--primary btn--block activity-actions-card__primary" data-activity-action>
+            {% include "_icon.html" with name=activity_ui.primary_action.icon %} {{ activity_ui.primary_action.label }}
+        </a>
+        {% endif %}
+
+        <div class="activity-actions-card__secondary">
+            {% if activity_ui.claim.visible %}
+            <form method="post" action="{{ activity_ui.claim.url }}">
+                {% csrf_token %}
+                <button type="submit" class="btn">{% include "_icon.html" with name="check" %} Assumir</button>
+            </form>
+            {% endif %}
+            {% if activity_ui.secondary_actions.edit.visible %}
+            <a href="{{ activity_ui.secondary_actions.edit.url }}?next={{ activity_ui.secondary_actions.edit.next|urlencode }}" class="btn" data-activity-action data-activity-navigate>Editar</a>
+            {% endif %}
+            {% if activity_ui.secondary_actions.mark_pending.visible %}
+            <a href="{{ activity_ui.secondary_actions.mark_pending.url }}" class="btn" data-activity-action>Marcar pendente</a>
+            {% endif %}
+            {% if activity_ui.secondary_actions.finalize.visible %}
+            <a href="{{ activity_ui.secondary_actions.finalize.url }}" class="btn" data-activity-action>Finalizar demanda</a>
+            {% endif %}
+            {% if activity_ui.has_overflow_actions %}
+            <div class="menu-dots js-menu-dots">
+                <button type="button" class="menu-dots__trigger" aria-label="Mais ações da demanda" aria-haspopup="menu" aria-expanded="false">
+                    {% include "_icon.html" with name="more" %}
+                </button>
+                <div class="menu-dots__popup" role="menu" hidden>
+                    {% if activity_ui.overflow_actions.cancel.visible %}
+                    <a href="{{ activity_ui.overflow_actions.cancel.url }}" role="menuitem" class="menu-dots__item menu-dots__item--danger" data-activity-action>Cancelar demanda</a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </article>
+    {% endif %}
+</div>

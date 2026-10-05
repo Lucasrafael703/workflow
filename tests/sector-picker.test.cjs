@@ -57,6 +57,37 @@ test('seletor de setor mostra a cor, atualiza o hidden e respeita teclado', asyn
     assert.equal(trigger.getAttribute('aria-expanded'), 'false');
 });
 
+test('picker abre com a lista inicial e pesquisa a partir de uma letra', async t => {
+    const dom = setup();
+    t.after(() => dom.window.close());
+    const calls = [];
+    dom.window.fetch = async (url) => {
+        calls.push(url);
+        return {json: async () => ({results: [
+            {id: 7, name: calls.length === 1 ? 'Alfa' : 'Ribeiro', color: '#FACC15'},
+        ]})};
+    };
+
+    const root = dom.window.document.querySelector('[data-person-picker]');
+    const trigger = root.querySelector('.person-picker__trigger');
+    trigger.click();
+    await wait(10);
+
+    assert.equal(new URL(calls[0], 'http://localhost').searchParams.get('q'), '');
+    assert.equal(root.querySelector('.person-picker__search').getAttribute('role'), 'combobox');
+    assert.equal(root.querySelector('.person-picker__results').getAttribute('role'), 'listbox');
+    assert.equal(root.querySelector('.person-picker__option').textContent, 'Alfa');
+
+    const search = root.querySelector('.person-picker__search');
+    search.value = 'R';
+    search.dispatchEvent(new dom.window.Event('input', {bubbles: true}));
+    await wait(300);
+
+    assert.equal(new URL(calls[1], 'http://localhost').searchParams.get('q'), 'R');
+    assert.equal(root.querySelector('.person-picker__option').textContent, 'Ribeiro');
+    assert.equal(root.querySelector('.person-picker__option').getAttribute('aria-selected'), 'false');
+});
+
 /* Seletores de Cliente/Obra do painel de filtros do Workspace: `data-allow-empty` oferece "Todos os ..." para limpar. */
 function setupLookup({allowEmpty}) {
     const dom = new JSDOM(`<!doctype html><body>

@@ -1,0 +1,19 @@
+{% load lps_board %}
+<section class="kanban-lane{% if lane.is_blank %} is-blank{% endif %}" data-lane data-lane-key="{{ lane.key }}"{% if lane.option_id %} data-option-id="{{ lane.option_id }}"{% endif %} data-lane-label="{{ lane.label }}"{% if lane.scope %} data-lane-scope="{{ lane.scope }}"{% endif %}{% if not lane.accepts %} data-lane-closed{% endif %} style="--lane-color:{{ lane.color }};--lane-text:{{ lane.color|contrast }}" aria-label="{{ lane.label }}{% if lane.sector %} — {{ lane.sector }}{% endif %}">
+    <header class="kanban-lane__head">
+        <span class="kanban-lane__title" data-lane-title>{{ lane.label }}</span>
+        <span class="kanban-lane__count" data-lane-count title="Itens nesta raia">{{ lane.count }}</span>
+        {% if lane.menu %}<button type="button" class="kanban-lane__menu" data-lane-menu aria-haspopup="menu" aria-label="Opções da raia {{ lane.label }}">{% include "_icon.html" with name="more" %}</button>{% endif %}
+    </header>
+    {% if lane.sector %}<p class="kanban-lane__meta">{{ lane.sector }}</p>{% endif %}
+    {% if lane.total is not None %}<p class="kanban-lane__total" data-lane-total>{% if lane.total %}{{ lane.total }}{% else %}&nbsp;{% endif %}</p>{% endif %}
+    <div class="kanban-lane__body" data-lane-body>
+        {% for card in lane.cards %}{% include "kanban/_card.html" %}{% endfor %}
+        <p class="kanban-lane__empty" data-lane-empty{% if lane.cards %} hidden{% endif %}>{{ lane.empty_text }}</p>
+    </div>
+    {% if lane.add %}
+    <footer class="kanban-lane__foot">
+        {% if lane.add.href %}<a class="kanban-add" data-kanban-add href="{{ lane.add.href }}"{% for name, value in lane.add.attrs %} {{ name }}="{{ value }}"{% endfor %}>{% include "_icon.html" with name="plus" %} {{ lane.add.label }}</a>{% else %}<button type="button" class="kanban-add" data-kanban-add{% for name, value in lane.add.attrs %} {{ name }}="{{ value }}"{% endfor %}>{% include "_icon.html" with name="plus" %} {{ lane.add.label }}</button>{% endif %}
+    </footer>
+    {% endif %}
+</section>

@@ -199,6 +199,19 @@ class PersonSearchViewTests(TestCase):
         self.assertIn("paulo", usernames)
         self.assertIn("jennifer", usernames)
 
+    def test_results_are_alphabetical_by_display_name_and_capped_at_twenty(self):
+        for index in range(25):
+            person = User.objects.create_user(
+                f"person-{index:02d}", password="x", first_name=f"Pessoa {index:02d}"
+            )
+            person.profile.organization = self.org
+            person.profile.save(update_fields=["organization"])
+
+        results = self._search("")
+        names = [result["name"] for result in results]
+        self.assertEqual(len(results), 20)
+        self.assertEqual(names, sorted(names, key=str.casefold))
+
     def test_sector_filter_returns_only_active_members(self):
         sector = Sector.objects.create(organization=self.org, name="Comercial")
         UserSector.objects.create(user=self.jennifer, sector=sector)
@@ -259,6 +272,37 @@ class UserFormAjaxTests(TestCase):
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.content)
         self.assertIn("username", data["errors"])
+
+    def test_initial_name_prefills_only_the_person_name_on_create(self):
+        response = self.client.get(reverse("user-create"), {"initial_name": "Ribeiro Caram"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["form"].initial["first_name"], "Ribeiro Caram")
+        self.assertNotIn("email", response.context["form"].initial)
+
+
+class CadastroInitialNameTests(TestCase):
+    def setUp(self):
+        self.org = Organization.objects.create(name="Biasi")
+        self.admin = User.objects.create_user("admin", password="x")
+        self.admin.profile.organization = self.org
+        self.admin.profile.save(update_fields=["organization"])
+        grant_action(self.admin, catalog.CLIENTE_GERIR, organization=self.org)
+        self.client.force_login(self.admin)
+
+    def test_initial_name_prefills_a_new_client_form(self):
+        response = self.client.get(reverse("client-create"), {"initial_name": "Construtora ABC"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["form"].initial["name"], "Construtora ABC")
+
+    def test_initial_name_does_not_override_an_existing_client(self):
+        from .models import Client
+
+        client = Client.objects.create(organization=self.org, name="Cliente atual")
+        response = self.client.get(
+            reverse("client-edit", args=[client.pk]), {"initial_name": "Ignorar"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["form"].initial["name"], "Cliente atual")
 
 
 class EnumColorServiceOverrideTests(TestCase):

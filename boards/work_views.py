@@ -2,6 +2,7 @@
 
 import json
 from collections import OrderedDict
+from urllib.parse import quote
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
@@ -109,8 +110,13 @@ class DomainWorkBoardView(OrganizationRequiredMixin, TemplateView):
         demand_priorities = EnumColorResolver(organization, "activity_urgency")
         task_priorities = EnumColorResolver(organization, "task_priority")
 
-        def add_group(key, label, color):
-            return groups.setdefault(key, {"key": key, "label": label, "color": color, "items": []})
+        def add_group(key, label, color, choice=None):
+            # `sector_id`/`is_active` (só etapa e status) dizem ao Kanban do Workspace onde a raia aceita soltar cartões;
+            # chaves a mais não afetam a tela de sempre.
+            group = {"key": key, "label": label, "color": color, "items": []}
+            if choice is not None and group_by in {"stage", "condition"}:
+                group.update(sector_id=getattr(choice, "sector_id", None), is_active=getattr(choice, "is_active", True))
+            return groups.setdefault(key, group)
 
         for item in items:
             value = getattr(item, group_by, None) if group_by else None
@@ -137,7 +143,7 @@ class DomainWorkBoardView(OrganizationRequiredMixin, TemplateView):
                 }
                 label = getattr(value, "name", None) or blank_labels.get(group_by, "Sem valor")
                 color = getattr(value, "color", "#E2E8F0")
-            add_group(key, label, color)["items"].append(item)
+            add_group(key, label, color, value)["items"].append(item)
 
         # As raias têm uma ordem própria, independente de qual cartão aparece
         # primeiro no resultado da busca. Isso é especialmente importante ao
@@ -163,7 +169,7 @@ class DomainWorkBoardView(OrganizationRequiredMixin, TemplateView):
                 choices = choices.filter(sector_id=sector_id)
             for choice in choices.order_by("order", "name", "pk"):
                 if show_empty or choice.pk in groups:
-                    add_group(choice.pk, choice.name, choice.color)
+                    add_group(choice.pk, choice.name, choice.color, choice)
                     ordered_keys.append(choice.pk)
         elif group_by == "sector":
             if show_empty or "empty" in groups:
@@ -297,6 +303,7 @@ class DemandWorkBoardView(DomainWorkBoardView):
     domain = DomainBoard.Domain.DEMAND
     template_name = "boards/demand_work_board.html"
     workspace_template_name = "workspace/demandas.html"
+    lanes_fragment_template = "kanban/_lanes.html"
 
     def use_workspace(self):
         """Workspace (shell único) ligado para esta pessoa? Flag `WORKSPACE_V2`; desligada = a tela de sempre."""
@@ -305,7 +312,14 @@ class DemandWorkBoardView(DomainWorkBoardView):
         return self._use_workspace
 
     def get_template_names(self):
+        if getattr(self, "_lanes_fragment", False):
+            return [self.lanes_fragment_template]
         return [self.workspace_template_name if self.use_workspace() else self.template_name]
+
+    def wants_lanes_fragment(self):
+        """O Kanban redesenha as raias depois de mover um cartão: `?fragmento=raias` devolve só elas (mesma autorização,
+        mesmo recorte). Só no Workspace e só na visão Kanban; nas outras o parâmetro é ignorado."""
+        return self.use_workspace() and self.request.GET.get("fragmento") == "raias"
 
     def requested_group_by(self):
         if not self.use_workspace():
@@ -359,15 +373,57 @@ class DemandWorkBoardView(DomainWorkBoardView):
             })
         return lanes
 
+    def kanban_context(self, context, sectors):
+        """Raias e cartões do Kanban no formato do kit (`kanban/_lanes.html`); a montagem fica em `demand_kanban.py`."""
+        from .demand_kanban import build_demand_kanban
+
+        from .demand_workspace import GROUPINGS
+
+        request = self.request
+        items = context["items"]
+        group_by = context["group_by"]
+        context["group_label"] = dict(GROUPINGS).get(group_by, group_by)
+        if context["group_field"] is None:  # sem o campo do agrupamento não há para onde gravar: ninguém arrasta
+            for item in items:
+                item.can_move_kanban = False
+        elif group_by == "stage":
+            # O serviço aceita mover a etapa com `ATIVIDADE_DEFINIR_ETAPA` OU `ATIVIDADE_MOVER_ESTAGIO`; a base só olha a segunda.
+            pending = [item for item in items if not item.can_move_kanban]
+            if pending:
+                allowed = AuthorizationService.can_many(request.user, [(catalog.ATIVIDADE_DEFINIR_ETAPA, item) for item in pending])
+                for item in pending:
+                    item.can_move_kanban = allowed[(catalog.ATIVIDADE_DEFINIR_ETAPA, item.pk)]
+        # No Workspace o nome dos campos só aparece se a pessoa pediu (igual a Quadros); o painel Personalizar lê o mesmo valor.
+        show_field_names = bool((context["work_view"].settings or {}).get("show_field_names", False))
+        context["show_field_names"] = show_field_names
+        params = request.GET.copy()
+        params.pop("fragmento", None)  # o endereço que a ficha usa para voltar é o da página, nunca o do fragmento
+        query = params.urlencode()
+        return_url = f"{request.path}?{query}" if query else request.path
+        context["kanban"] = build_demand_kanban(
+            groups=context["groups"],
+            group_by=group_by,
+            sectors_by_id={sector.pk: sector.name for sector in sectors},
+            show_field_names=show_field_names,
+            can_create=context["can_create"],
+            create_url=f"{reverse('activity-create')}?next={quote(return_url)}",
+            return_url=return_url,
+        )
+
     def workspace_context(self, context, view_mode):
         """Contexto do shell novo (flag `WORKSPACE_V2`): só a barra; os dados já vieram da consulta de sempre."""
         from .demand_workspace import build_workspace
 
         User = get_user_model()
         sectors = list(Sector.objects.filter(organization=self.organization, is_active=True).order_by("name"))
+        context["view_mode"] = view_mode
+        if view_mode == "kanban":
+            self.kanban_context(context, sectors)
+            if self.wants_lanes_fragment():
+                self._lanes_fragment = True  # só as raias: a barra, as abas e os avisos não são desenhados
+                return context
         people = list(User.objects.filter(profile__organization=self.organization, is_active=True).order_by("first_name", "username"))
         grouped_list = view_mode == "lista" and self.requested_group_by() is not None
-        context["view_mode"] = view_mode
         context["ws"] = build_workspace(
             self.request,
             organization=self.organization,

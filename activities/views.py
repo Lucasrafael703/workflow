@@ -95,6 +95,151 @@ def _is_ajax(request):
     return request.headers.get("X-Requested-With") == "XMLHttpRequest"
 
 
+def build_activity_ui(
+    *,
+    activity,
+    board_preview,
+    is_ready_to_complete,
+    process_panel,
+    open_pendency,
+    return_url,
+    can_complete,
+    can_cancel,
+    can_reopen,
+    can_approve,
+    can_edit,
+    can_change_owner,
+    can_change_deadline,
+    can_mark_pending,
+    can_assumir,
+    is_overdue,
+    overdue_days,
+):
+    """Prepara somente dados de apresentação para o cabeçalho da demanda.
+
+    A prontidão vem da ficha (incluindo o override do Quadro da Demanda e
+    critérios de aceite). Nenhuma regra de negócio, contagem ou autorização é
+    recalculada aqui; os serviços continuam sendo a autoridade final.
+    """
+    del board_preview, process_panel  # já foram calculados pela DetailView
+
+    status = activity.status
+    is_terminal = status in (Activity.Status.CONCLUIDA, Activity.Status.CANCELADA)
+    is_open_state = not is_terminal
+
+    primary_action = None
+    if status == Activity.Status.CONCLUIDA and can_reopen:
+        primary_action = {
+            "key": "reopen",
+            "label": "Reabrir demanda",
+            "url": reverse("activity-reopen", args=[activity.pk]),
+            "icon": "back",
+        }
+    elif (
+        status == Activity.Status.PENDENTE
+        and open_pendency is not None
+        and open_pendency.requires_approval
+        and can_approve
+    ):
+        primary_action = {
+            "key": "approve",
+            "label": "Aprovar",
+            "url": reverse("activity-approve-pendency", args=[activity.pk]),
+            "icon": "check",
+            "modal": True,
+        }
+    elif (
+        status in (Activity.Status.ABERTA, Activity.Status.EM_ANDAMENTO)
+        and is_ready_to_complete
+        and can_complete
+    ):
+        primary_action = {
+            "key": "complete",
+            "label": "Concluir demanda",
+            "url": reverse("activity-finalize", args=[activity.pk]) + "?outcome=SUCESSO",
+            "icon": "check",
+            "modal": True,
+        }
+
+    secondary_actions = {
+        "edit": {
+            "visible": is_open_state and can_edit,
+            "url": reverse("activity-edit", args=[activity.pk]),
+            "next": return_url,
+            "modal": True,
+            "navigate": True,
+            "label": "Editar",
+        },
+        "change_owner": {
+            "visible": is_open_state and can_change_owner,
+            "url": reverse("activity-change-owner", args=[activity.pk]),
+            "modal": True,
+            "label": "Alterar responsável",
+        },
+        "change_deadline": {
+            "visible": is_open_state and can_change_deadline,
+            "url": reverse("activity-change-deadline", args=[activity.pk]),
+            "modal": True,
+            "label": "Alterar prazo",
+        },
+        "mark_pending": {
+            "visible": is_open_state and can_mark_pending,
+            "url": reverse("activity-mark-pending", args=[activity.pk]),
+            "modal": True,
+            "label": "Marcar pendente",
+        },
+        "finalize": {
+            "visible": (
+                is_open_state
+                and can_complete
+                and primary_action is None
+            ),
+            "url": reverse("activity-finalize", args=[activity.pk]),
+            "modal": True,
+            "label": "Finalizar demanda",
+        },
+    }
+
+    overflow_actions = {
+        "cancel": {
+            "visible": is_open_state and can_cancel,
+            "url": reverse("activity-finalize", args=[activity.pk]) + "?outcome=CANCELADO",
+            "modal": True,
+            "label": "Cancelar demanda",
+            "danger": True,
+        },
+    }
+
+    owner = {
+        "can_change": secondary_actions["change_owner"]["visible"],
+        "url": secondary_actions["change_owner"]["url"],
+    }
+    deadline = {
+        "can_change": secondary_actions["change_deadline"]["visible"],
+        "url": secondary_actions["change_deadline"]["url"],
+        "is_overdue": is_overdue,
+        "overdue_days": overdue_days,
+    }
+
+    has_secondary_actions = any(item["visible"] for item in secondary_actions.values())
+    has_overflow_actions = any(item["visible"] for item in overflow_actions.values())
+
+    return {
+        "owner": owner,
+        "deadline": deadline,
+        "primary_action": primary_action,
+        "secondary_actions": secondary_actions,
+        "overflow_actions": overflow_actions,
+        "has_secondary_actions": has_secondary_actions,
+        "has_overflow_actions": has_overflow_actions,
+        "has_action_panel": bool(primary_action or has_secondary_actions or has_overflow_actions or can_assumir),
+        "claim": {
+            "visible": is_open_state and can_assumir,
+            "url": reverse("activity-claim", args=[activity.pk]),
+        },
+    }
+
+
 class RetiredFeatureView(View):
     """Resposta explícita para URLs operacionais removidas.
 
@@ -1483,8 +1628,23 @@ class ActivityDetailView(OrganizationRequiredMixin, DetailView):
             Activity.Status.ABERTA,
             Activity.Status.EM_ANDAMENTO,
         ) and can(user, catalog.ATIVIDADE_MARCAR_PENDENTE, activity)
-        can_finalize = can(user, catalog.ATIVIDADE_CONCLUIR, activity) or can(
-            user, catalog.ATIVIDADE_CANCELAR, activity
+        can_complete = can(user, catalog.ATIVIDADE_CONCLUIR, activity)
+        can_cancel = can(user, catalog.ATIVIDADE_CANCELAR, activity)
+        can_approve = can(user, catalog.ATIVIDADE_APROVAR_PENDENCIA, activity)
+        can_change_deadline = can_edit
+        can_assumir = (
+            activity.sector_id in my_sector_ids
+            and activity.owner_id != user.id
+            and is_open
+            and can(user, catalog.ATIVIDADE_ASSUMIR, activity)
+        )
+        open_pendency = (
+            activity.pendencies.select_related("opened_by", "previous_owner")
+            .filter(status=ActivityPendency.Status.ABERTA)
+            .order_by("-opened_at")
+            .first()
+            if activity.status == Activity.Status.PENDENTE
+            else None
         )
 
         # Painel do processo aplicado (Regras 12 §28): reaproveita as tarefas já
@@ -1568,31 +1728,15 @@ class ActivityDetailView(OrganizationRequiredMixin, DetailView):
                     "previous_owner", "new_owner", "changed_by"
                 ),
                 "can_change_owner": can_change_owner,
-                "can_assumir": (
-                    activity.sector_id in my_sector_ids
-                    and activity.owner_id != user.id
-                    and activity.status not in (Activity.Status.CONCLUIDA, Activity.Status.CANCELADA)
-                    and can(user, catalog.ATIVIDADE_ASSUMIR, activity)
-                ),
-                "can_cancel": can(user, catalog.ATIVIDADE_CANCELAR, activity),
+                "can_assumir": can_assumir,
+                "can_cancel": can_cancel,
                 "can_reopen": can_reopen,
-                "can_complete": can(user, catalog.ATIVIDADE_CONCLUIR, activity),
-                # Finalizar (popup único) aparece para quem pode concluir OU
-                # cancelar — o popup decide o resultado real, não o botão.
-                "can_finalize": can_finalize,
+                "can_complete": can_complete,
+                "can_approve": can_approve,
+                "can_change_deadline": can_change_deadline,
                 "can_mark_pending": can_mark_pending,
-                "can_approve_pendency": (
-                    activity.status == Activity.Status.PENDENTE
-                    and can(user, catalog.ATIVIDADE_APROVAR_PENDENCIA, activity)
-                ),
-                "open_pendency": (
-                    activity.pendencies.select_related("opened_by", "previous_owner")
-                    .filter(status=ActivityPendency.Status.ABERTA)
-                    .order_by("-opened_at")
-                    .first()
-                    if activity.status == Activity.Status.PENDENTE
-                    else None
-                ),
+                "can_approve_pendency": can_approve,
+                "open_pendency": open_pendency,
                 "can_edit": can_edit,
                 "can_add_task": can(user, catalog.TAREFA_CRIAR, activity),
                 "can_message": can(user, catalog.COMUNICACAO_PARTICIPAR, activity),
@@ -1600,10 +1744,6 @@ class ActivityDetailView(OrganizationRequiredMixin, DetailView):
                 "can_manage_attachments": can_edit,
                 "message_kind_choices": MessageKind.choices,
                 "message_visibility_choices": visibility_choices,
-                "is_menu_active": (
-                    (is_open and (can_edit or can_change_owner or can_mark_pending or can_finalize))
-                    or (not is_open and can_reopen)
-                ),
             }
         )
         # A fonte das tarefas é o Quadro da Demanda (a Task antiga ficou só como histórico): o progresso, "pronta para
@@ -1627,6 +1767,30 @@ class ActivityDetailView(OrganizationRequiredMixin, DetailView):
                 is_ready_to_complete=all_done and not unmet_required_criteria,
                 is_blocked_by_criteria=all_done and bool(unmet_required_criteria),
             )
+        context["activity_ui"] = build_activity_ui(
+            activity=activity,
+            board_preview=preview,
+            is_ready_to_complete=context["is_ready_to_complete"],
+            process_panel=process_panel,
+            open_pendency=open_pendency,
+            return_url=context["return_url"],
+            can_complete=can_complete,
+            can_cancel=can_cancel,
+            can_reopen=can_reopen,
+            can_approve=(
+                can_approve
+                and open_pendency is not None
+                and open_pendency.requires_approval
+            ),
+            can_edit=can_edit,
+            can_change_owner=can_change_owner,
+            can_change_deadline=can_change_deadline,
+            can_mark_pending=can_mark_pending,
+            can_assumir=can_assumir,
+            is_overdue=is_overdue,
+            overdue_days=overdue_days,
+        )
+        context["is_menu_active"] = context["activity_ui"]["has_overflow_actions"]
         return context
 
 

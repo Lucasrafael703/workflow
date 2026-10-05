@@ -499,7 +499,8 @@ class PersonMultiPickerWidget(forms.SelectMultiple):
         )
 
         return format_html(
-            '<div class="person-multi-picker" data-person-multi-picker data-search-url="{search_url}"{create_attr}>'
+            '<div class="person-multi-picker" data-person-multi-picker data-search-url="{search_url}"'
+            ' data-create-label="Cadastrar novo usuário"{create_attr}>'
             '{select_html}'
             '<div class="person-multi-picker__chips">{chips}'
             '<button type="button" class="person-multi-picker__add">'

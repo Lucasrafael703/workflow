@@ -9,6 +9,7 @@ import importlib
 import pathlib
 import re
 import tempfile
+from unittest import mock
 
 from django.apps import apps
 from django.conf import settings
@@ -116,6 +117,24 @@ class CodigoDaDemandaTests(ProcessTestCase):
         year = timezone.now().year
         self.assertEqual(self.activity.code, f"DEM-{year}-00001")
         self.assertEqual(self.new_activity(title="Outra").code, f"DEM-{year}-00002")
+
+    def test_code_generation_retries_a_unique_collision(self):
+        year = timezone.now().year
+        next_code = f"DEM-{year}-99999"
+        activity = Activity(
+            organization=self.org,
+            title="Demanda criada ao mesmo tempo",
+            owner=self.owner,
+            created_by=self.owner,
+        )
+
+        with mock.patch.object(
+            Activity, "_generate_code", side_effect=[self.activity.code, next_code]
+        ) as generate_code:
+            activity.save()
+
+        self.assertEqual(activity.code, next_code)
+        self.assertEqual(generate_code.call_count, 2)
 
     def test_code_search_term_swaps_only_the_old_prefix_of_a_code(self):
         for typed, expected in (

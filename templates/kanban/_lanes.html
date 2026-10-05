@@ -1,0 +1,37 @@
+{% comment %}
+Kit do Kanban — a ÚNICA marcação do Kanban do sistema (Quadros e Demandas). O modelo visual é o de Quadros
+(static/css/boards.css, `.kanban-*`); quem usa o kit só entrega DADOS simples, nunca marcação própria:
+
+  kanban = {
+    "item_label": "demanda",            # usado nos rótulos de acessibilidade
+    "show_field_names": False,          # mostra o nome de cada campo no cartão
+    "empty_title" / "empty_text": ...,  # estado "nenhuma raia" (ou "empty_template": um parcial que o substitui)
+    "lanes": [ {
+        "key", "label", "color",        # cor sólida do cabeçalho; o texto sai por |contrast
+        "is_blank",                     # raia "Em branco" (.is-blank)
+        "accepts",                      # False = não aceita soltar (data-lane-closed)
+        "scope",                        # "" = qualquer cartão; senão só cartões com o mesmo data-card-scope
+        "sector",                       # sublinha opcional (nome do setor) quando raias de grupos diferentes se misturam
+        "option_id",                    # opcional: data-option-id (a etiqueta/etapa que a raia representa)
+        "menu",                         # opcional: True mostra o ⋮ da raia (data-lane-menu)
+        "total",                        # opcional: texto da soma no cabeçalho ("" = vazia; None = a raia não tem soma)
+        "count", "empty_text",
+        "add": {"label", "href", "attrs": [(nome, valor)]},   # rodapé opcional (link se houver href; senão botão)
+        "cards": [ {
+            "id", "title", "url", "updated_at", "scope",
+            "can_move",                 # draggable + opção "Mover para" do menu
+            "menu",                     # mostra o ⋯ do cartão (data-card-menu)
+            "title_editable",           # o título é editado no lugar (clicar/Enter); com `url` o link vai para outro lugar
+            "title_label",              # rótulo de acessibilidade do título editável (padrão: item_label)
+            "attrs": [(nome, valor)],   # atributos extras do <article> (ex.: data-activity-id)
+            "fields": [ {"kind", "label", ...} ],                       # ver kanban/_fields.html
+            "fields_template": "..."                                    # opcional: outro corpo de campos
+        } ]
+    } ]
+  }
+{% endcomment %}{% for lane in kanban.lanes %}{% include "kanban/_lane.html" %}{% empty %}
+{% if kanban.empty_template %}{% include kanban.empty_template %}{% else %}<div class="kanban-state">
+    <h3>{{ kanban.empty_title|default:"Nenhuma raia para mostrar" }}</h3>
+    {% if kanban.empty_text %}<p>{{ kanban.empty_text }}</p>{% endif %}
+</div>{% endif %}
+{% endfor %}

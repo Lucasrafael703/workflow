@@ -5,7 +5,7 @@
     "use strict";
 
     function csrf() {
-        var match = document.cookie.match(/(?:^|;\\s*)csrftoken=([^;]+)/);
+        var match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
         return match ? decodeURIComponent(match[1]) : "";
     }
 

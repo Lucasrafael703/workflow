@@ -34,7 +34,7 @@ GROUPINGS = (
     ("condition", "Status"),
     ("sector", "Setor"),
     ("owner", "Responsável"),
-    ("urgency", "Urgência"),
+    ("urgency", "Prioridade"),  # o resto do sistema (campo, cartão, raia em branco) já diz "Prioridade"
 )
 GROUPING_KEYS = {key for key, _label in GROUPINGS}
 

@@ -1,4 +1,10 @@
-{% comment %}Kanban de Demandas: nesta fase, o conteúdo de sempre (raias, arrastar) DENTRO do shell novo. Agrupar/Ordenar vêm da barra.{% endcomment %}
-<div class="demand-board__kanban" aria-label="Demandas em raias, agrupadas por {{ group_by }}">
-    {% include "boards/_work_kanban.html" %}
+{% comment %}
+Kanban de Demandas no formato do kit (templates/kanban/*), o MESMO de Quadros: raias de 292px, cabeçalho sólido, cartão com
+borda na cor da raia, menu "Mover para…". Aqui só ficam os dados que o adaptador (static/js/demand-kanban.js) precisa:
+  data-move-url   endereço de gravação com `/itens/0/valor/` no lugar do id (o adaptador troca o 0 pelo id do cartão)
+  data-group-by   agrupamento efetivo (pede confirmação ao mover por setor)
+As raias vêm de `kanban` (boards/demand_kanban.py); `?fragmento=raias` devolve só `kanban/_lanes.html` para redesenhar.
+{% endcomment %}
+<div class="kanban-scroll" data-kanban data-group-by="{{ group_by }}"{% if group_field %} data-move-url="{% url 'workboard-value' board.pk group_field.pk 0 %}"{% endif %} aria-label="Demandas em raias, agrupadas por {{ group_label|lower }}">
+    <div class="kanban-lanes" data-kanban-lanes>{% include "kanban/_lanes.html" %}</div>
 </div>

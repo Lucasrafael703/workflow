@@ -1,7 +1,8 @@
 # Teste de usabilidade do Workspace de Demandas (fase 1B)
 
 > **Objetivo desta rodada não é construir o Workspace completo. É provar que uma pessoa consegue operar Demandas em um único contexto, sem precisar reaprender a interface ou perder seu estado.**
-> Este roteiro e os critérios foram definidos **antes** de ver qualquer resultado. **Só se avança para o Kanban (1C) se o critério de passagem for atendido**; senão, corrige-se a 1A e o teste se repete com outras pessoas.
+> Este roteiro e os critérios foram definidos **antes** de ver qualquer resultado. **Só se avança para o Calendário (1D) e para a extração de abstrações (1E) se o critério de passagem for atendido**; senão, corrige-se a 1A e o teste se repete com outras pessoas.
+> O **Kanban** (1C) foi feito antes, por pedido explícito (ele passa a ser o mesmo de Quadros), atrás da mesma flag: ver `LPS_WORKSPACE_DEMANDAS.md` §8. Ele não é mais "legado" neste teste: as falhas dele têm origem própria (**K**).
 
 ## 1. Preparação (quem conduz)
 
@@ -29,6 +30,7 @@
 | T4 | *"Abra uma demanda e **volte**: o recorte (visão, busca, filtros) precisa estar como estava."* | sim | Abrir uma demanda e usar "voltar" (da ficha ou do navegador) |
 | T5 | *"**Limpe tudo** e ache as demandas do cliente **Santa Isabel**."* | sim | Limpar filtros → Filtros → Cliente (digitar 3 letras) → Aplicar |
 | T6 | *"Mude o **prazo** de uma demanda."* | não | Clicar no prazo da linha (edição inline) |
+| T7 | *"No **Kanban**, passe uma demanda para a **próxima etapa**."* | não | Arrastar o cartão para outra raia ou usar o ⋯ → "Mover para…". Em celular só o menu existe. Origem esperada das falhas: **K** |
 
 **Pergunta final (compreensão):** *"Com suas palavras: o que são a Lista, o Kanban e o Calendário? Em que eles se parecem e em que se diferem?"* — **Compreendeu** se explica que são **os mesmos dados** (o mesmo conjunto de demandas) apresentados de formas diferentes.
 
@@ -40,7 +42,8 @@ Toda hesitação, erro ou ajuda recebe uma **origem** (campo obrigatório). Isto
 |---|---|---|---|
 | **S** — Shell/navegação/filtros | cabeçalho, abas, barra, estado preservado ao trocar de visão — é o que o Workspace promete | não achou "Filtros"; achou que "Escopo" era um filtro; perdeu o filtro ao trocar de aba | **sim** |
 | **L** — Lista nova | a tabela, colunas, edição inline, agrupar | não entendeu a coluna Demanda; não achou o prazo | **sim** |
-| **V** — Visualização legada | conteúdo do **Kanban** ou do **Calendário antigos** dentro do shell | achou o cartão do Kanban confuso; o Calendário "é só uma lista" | **não** (vai para o backlog das fases 1C/1D) |
+| **K** — Kanban novo (o mesmo de Quadros) | raias, cartões, arrastar e o menu "Mover para…" | não percebeu que o ⋯ move o cartão; achou os campos do cartão poucos | **não** conta contra o shell; vai para o backlog do Kanban. **Erro crítico aqui ainda bloqueia** (mover um cartão sem querer ou sem perceber para onde ele foi) |
+| **V** — Visualização legada | conteúdo do **Calendário antigo** dentro do shell | o Calendário "é só uma lista" | **não** (vai para o backlog da fase 1D) |
 
 **Erro crítico** (pesa mais que qualquer demora): a pessoa **acredita ver um recorte que não é o que está na tela** — por exemplo acha que filtrou só o Comercial e está vendo outra coisa; não percebe que o escopo é "Minhas"; perde o filtro sem notar — **ou altera um dado sem querer**. Oito segundos procurando um botão **não** é crítico.
 
@@ -56,6 +59,7 @@ Participante: ______ Perfil: ______ Data: ______ Dispositivo: ______
 | T4 | | | | | | | |
 | T5 | | | | | | | |
 | T6 | | | | | | | |
+| T7 | | | | | | | |
 | Pergunta final | Compreendeu? (S/N) | | | | | | |
 
 Anote também: o nome que a pessoa deu a cada controle (Escopo, Mostrar, Filtros, Agrupar, Ordenar), o que ela esperava encontrar e não achou, e qualquer coisa que a surpreendeu.
@@ -68,12 +72,13 @@ Só se avança à fase 1C se **todas** forem verdadeiras:
 2. **≥ 4 de 5 demonstram a compreensão** (Lista, Kanban e Calendário = os mesmos dados);
 3. **nenhum erro crítico de origem S ou L**, mesmo que 4 de 5 tenham concluído. **Qualquer erro crítico bloqueia a passagem.**
 
-Falhas de origem **V** não contam contra o Workspace: vão para o backlog.
+Falhas de origem **K** e **V** não contam contra o Workspace (shell): vão para o backlog da visão correspondente, **exceto** um erro crítico de origem K, que bloqueia como qualquer outro.
 Abaixo do critério: corrige-se a 1A (linguagem, filtros, colunas, navegação), registra-se o que mudou abaixo e **repete-se o teste com outras pessoas**.
 
 ## 7. O que a 1A tem de propósito "incompleto" (para não surpreender quem conduz)
 
-- **Kanban e Calendário** são o conteúdo antigo (raias; lista de prazos) **dentro do shell novo**. Falhas ali são **V**.
+- O **Kanban** já é o novo (o de Quadros: raias de cabeçalho colorido, cartões com borda na cor da raia, ⋯ "Mover para…"); falhas ali são **K**. O **Calendário** é o conteúdo antigo (lista de prazos) **dentro do shell novo**; falhas ali são **V**.
+- No Kanban, **"+ Adicionar demanda"** de cada raia abre o assistente de sempre **sem** levar a etapa da raia (isso é uma rodada própria). Se alguém esperar que a demanda já nasça naquela etapa, anote como **K** e a necessidade.
 - O menu de ações da linha (Concluir/Cancelar/Reabrir) não existe na Lista: está na ficha. Se alguém procurar, anote como **L** e a necessidade.
 - "Mostrar" tem só **Em aberto** e **Concluídas** (sem "Todas").
 - Os nomes **Escopo** e **Mostrar** são provisórios: anote como a pessoa os chama.

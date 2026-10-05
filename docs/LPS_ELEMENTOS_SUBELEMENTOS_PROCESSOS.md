@@ -1,5 +1,48 @@
 # LPS — Elementos, Subelementos e Integração com Processos
 
+## Status de implementação (03/10/2026)
+
+Este documento é uma **especificação**; o código (HEAD `add5acd`) implementa só parte dela, e de forma diferente da proposta.
+Na interface, Atividade virou **Demanda** (o código segue `Activity`), "Situação" virou **Etapa** e "Condição" virou **Status**; "Etapa" neste
+documento continua significando a **etapa do Processo** (`ProcessStep`), que não é a Etapa de fluxo da Demanda. Em vez de Elemento/Subelemento
+num mesmo Quadro, cada Demanda ganhou o **seu próprio Quadro** (`Board` com `kind=DEMAND`, `Activity.task_board`, criado em branco ou copiado de um
+modelo `kind=TEMPLATE`), e as tarefas são **itens planos** (`BoardItem`) desse quadro, sem `parent`. O app `processes` está **desativado**: desde 02/10/2026
+`/processos/*` e `/demandas/<pk>/processo/aplicar/` respondem 410, e a `Task` antiga ficou só como histórico (`/tarefas/<pk>/…` também responde 410). Os modelos e o
+serviço de aplicação de processo continuam no código, sem tela. Legenda: **Implementado**, **Parcial**, **Não implementado**, **Divergente**.
+
+| Requisito / bloco | Status | Onde está no código |
+|---|---|---|
+| Demanda como Elemento (§3, §6.1) | Implementado | `activities.Activity`; lista em `/demandas/` sobre `boards.DomainBoard` (`domain=DEMAND`) com campos próprios (`DomainBoardField`, `DomainCustomValue`) |
+| Esquema de colunas próprio por nível (§3.2, §4.3, §5) | Divergente | Cada Demanda tem um Quadro com colunas próprias (`BoardColumn`, 8 tipos ativos: Texto, Número, Moeda, Data, Pessoa, Status, Lista suspensa, Sinal de confirmação); o esquema da lista de Demandas é outro (`DomainBoardField`) |
+| Tarefa como Subelemento ligado ao pai (§4, §8, §40, §193) | Divergente | Tarefa = `BoardItem` do Quadro da Demanda (`boards/models.py`); não há relação pai × filho entre itens nem `Task` por item; o vínculo é Quadro ↔ `Activity` (`OneToOneField`) |
+| Profundidade de um nível (§7) | Parcial | Ocorre por construção (Demanda → itens do seu quadro); itens não têm filhos |
+| Exclusão do pai e mover filho (§8.1, §8.2) | Parcial | Excluir a Demanda remove o Quadro (`on_delete=CASCADE`); mover item só entre grupos do mesmo quadro (`ItemMoveView`) |
+| Tabela com Subelementos expansíveis, cabeçalhos próprios do filho (§9–§12, §170–§172) | Não implementado | Existe a Tabela do quadro de cada Demanda (`boards/board_detail.html`, `boards.js`) e a prévia de até 5 tarefas na ficha (`boards/demand_preview.py`) |
+| Kanban de Demandas com filhos expansíveis (§13–§17) | Não implementado | Há Kanban da lista de Demandas (`work-board.js`) e Kanban dentro do Quadro de cada Demanda (`board_kanban.html`), mas separados e sem expandir filhos |
+| Calendário de Demandas e de Tarefas (§19) | Parcial | Calendário mensal por quadro (`board_calendar.html`); `/demandas/calendario/` é uma lista por prazo; `/tarefas/calendario/` é semanal (`boards/task_center.py`) |
+| Status independentes e Status do filho não move o pai (§5.2, §16) | Implementado | Demanda: Etapa + Status do setor (`workflow-picker.js`); tarefa: coluna Status do quadro; nenhuma regra automática move o pai |
+| Painel Gestão × Operação (§18, §165–§167) | Parcial | `/demandas/` (gestão) e `/tarefas/` (o que está nos quadros em que a pessoa é responsável: `boards/task_center.py`, `task_center_views.py`) |
+| Processo como blueprint versionado: `Process`, `ProcessVersion`, `ProcessInput`, `ProcessCriterion`, `ProcessStep` (§20–§23, §31–§33) | Implementado (desativado) | `processes/models.py`; versão publicada imutável (testes em `processes/tests.py`); telas `process_*.html` inacessíveis (410) |
+| Aplicar Processo à Demanda, gravar `process_version`, fixar versão (§28, §69, §71, §193 itens 5–6) | Implementado (desativado) | `activities/process_application.py` (`ProcessApplicationService.apply`), `Activity.process_version`; rota `activity-process-apply` responde 410 |
+| Gerar Subelementos a partir das etapas (§41–§52, Fase 3) | Divergente | O serviço cria objetos `Task` (com `process_step`, `depends_on` e fila), não itens do quadro; congelado |
+| Dependências e disponibilidade (§47–§50) | Parcial | Uma dependência por tarefa (`Task.depends_on`, `TaskService.pending_dependency`); só no modelo legado |
+| Inputs e critérios de aceite do Processo (§35–§39, §58–§59, Fase 4) | Implementado (desativado) | `processes.ActivityInputValue`, `ActivityCriterionCheck`; `ActivityProcessService.update_input/set_criterion`; sem tela |
+| Output e evidência (§56–§57) | Parcial | Campos de output/evidência na versão do Processo (`ProcessVersion`); sem tela ativa |
+| Trocar ou remover Processo (§72, §73) | Não implementado | Não há serviço nem rota |
+| Subelemento manual e origem manual × processo (§52–§55) | Parcial | Itens manuais são o caso normal do quadro; a origem não é registrada |
+| Template de Elemento e de Subelemento (§76–§77) | Divergente | Substituído por **modelos de quadro** (`Board.kind=TEMPLATE`, `boards/starter_templates.py`, `BoardInstantiationService` em `boards/demand_services.py`, escolha no passo 3 do Nova demanda; trocar o quadro apaga as tarefas, com confirmação) |
+| Progresso e conclusão da Demanda a partir dos filhos (§60–§65, Fase 5) | Parcial | Ficha: total/concluídas, "pronta para concluir" lidos do quadro (`ActivityDetailView`, `DemandBoardPreviewQuery`); sem rollup, fórmula ou coluna Relação (tipos reservados) |
+| Rollups, Fórmula, indicadores, Dashboard (§66–§68, §136–§138, §162) | Não implementado | Tipos `FORMULA`, `RELATION`, `AI_EXTRACT` existem só como reservados em `BoardColumn.Type` |
+| Permissões (§86–§89, §180–§182) | Parcial | Ações `quadro.*` em `acessos/catalog.py`; `DemandBoardAccess` decide quem gere a estrutura e os itens de cada Quadro de Demanda |
+| Auditoria e histórico (§90–§92) | Implementado | `audit.AuditLog` com `BOARD_*` (itens, células, colunas, visões); histórico do quadro em `board_history.html` |
+| Multi-organização (§94) | Implementado | Todo `Board`/`DomainBoard` tem `organization`; testes de isolamento em `boards/test_views.py` |
+| Aprendizado do Processo, Processo condicional e com caminhos, automações (§132–§135, §155–§159, Fase 6) | Não implementado | — |
+| Linguagem da interface (§197) | Parcial | Interface e URLs dizem Demanda/Etapa/Status (`/demandas/`); o código mantém `Activity`, `Task` |
+
+> **Divergência:** este documento propõe Subelementos **dentro** do Quadro do pai. A implementação atual separa os níveis: a Demanda é uma linha de
+> `/demandas/` e o Quadro dela contém as tarefas como itens planos. Qualquer requisito de expansão, rollup ou herança de contexto
+> (§9–§17, §66, §96, §141–§147) continua válido como proposta, mas precisa de decisão de produto antes de ser construído.
+
 ## 1. Objetivo
 
 Este documento define o conceito oficial de:
@@ -24,7 +67,7 @@ O objetivo é permitir que a LPS seja flexível como um Quadro dinâmico, sem pe
 
 # 2. Estado atual da LPS
 
-## 2.1 Atividade e Tarefa
+## 2.1 Atividade (hoje Demanda) e Tarefa
 
 Na arquitetura atual:
 
@@ -48,6 +91,9 @@ Portanto, no Quadro de Demandas:
 Elemento    = Demanda
 Subelemento = Tarefa
 ```
+
+> **Divergência (03/10/2026):** a interface já usa Demanda, mas a Tarefa deixou de ser a `Task` filha da `Activity`: as tarefas viram itens
+> (`BoardItem`) do Quadro de cada Demanda e a `Task` ficou como histórico (rotas `/tarefas/<pk>/…` respondem 410).
 
 ---
 
@@ -79,7 +125,7 @@ Uma versão de Processo possui:
 
 ---
 
-## 2.3 Situação incompleta atual
+## 2.3 Lacuna registrada na época (histórico)
 
 A documentação atual registra uma lacuna importante:
 
@@ -101,6 +147,10 @@ porém o sistema ainda não:
 - registra os critérios de aceite durante a execução.
 
 Portanto, a integração descrita neste documento é uma **evolução arquitetural proposta**, não um comportamento já implementado.
+
+> **Divergência (03/10/2026):** a lacuna acima foi fechada no backend e depois desativada. `ProcessApplicationService.apply` aplica uma versão,
+> gera tarefas e registra inputs e critérios (`activities/process_application.py`), mas as rotas e telas de Processo respondem 410 desde 02/10/2026
+> e o fluxo novo de tarefas passa pelos Quadros por Demanda.
 
 ---
 
